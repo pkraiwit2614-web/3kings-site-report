@@ -1,0 +1,9 @@
+import './globals.css'
+import type { Metadata } from 'next'
+import type { ReactNode } from 'react'
+
+export const metadata: Metadata = { title: '3 Kings Site Report', description: 'Daily site reporting and management dashboard' }
+
+export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
+  return <html lang="th"><body>{children}</body></html>
+}
