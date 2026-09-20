@@ -2,10 +2,10 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { ReactNode, useEffect, useState } from 'react'
+import { ReactNode, useEffect, useMemo, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 
-const nav = [
+const baseNav = [
   ['/', 'Dashboard'], ['/reports/new', 'Daily Report'], ['/schedule', 'Schedule'], ['/materials', 'Materials'],
   ['/procurement', 'Purchasing'], ['/reports', 'History'], ['/weekly', 'Weekly Report']
 ]
@@ -15,6 +15,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [userName, setUserName] = useState('')
   const [role, setRole] = useState('')
   const [ready, setReady] = useState(false)
+  const nav = useMemo(() => role === 'manager' ? [...baseNav, ['/users', 'Users & Access']] : baseNav, [role])
 
   useEffect(() => {
     const supabase = getSupabase()
@@ -36,6 +37,6 @@ export default function AppShell({ children }: { children: ReactNode }) {
       <div className="userbox"><b>{userName}</b><span>{role}</span><button onClick={signOut}>ออกจากระบบ</button></div>
     </aside>
     <main className="main">{children}</main>
-    <nav className="mobile-nav">{nav.slice(0,5).map(([href,label]) => <Link key={href} className={path===href?'active':''} href={href}>{label.split(' ')[0]}</Link>)}</nav>
+    <nav className="mobile-nav">{baseNav.slice(0,5).map(([href,label]) => <Link key={href} className={path===href?'active':''} href={href}>{label.split(' ')[0]}</Link>)}</nav>
   </div>
 }
