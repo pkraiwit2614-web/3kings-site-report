@@ -172,7 +172,7 @@ async function parseMaterials(buffer: Buffer) {
 
   const procurement: Record<string, unknown>[] = []
   let procurementSheet = ''
-  let pRows: Awaited<ReturnType<typeof readSheet>> | null = null
+  let pRows: any = null
   for (const candidate of PROCUREMENT_SHEETS) {
     try {
       pRows = await readSheet(buffer, candidate)
@@ -184,7 +184,7 @@ async function parseMaterials(buffer: Buffer) {
   }
   if (!pRows || !procurementSheet) throw new Error('Purchasing sheet not found')
 
-  const ph = pRows.findIndex((r) => r.some((v) => normalizeHeader(v) === 'ผู้ขาย/ผู้รับเหมา'))
+  const ph = pRows.findIndex((r: unknown[]) => r.some((v) => normalizeHeader(v) === 'ผู้ขาย/ผู้รับเหมา'))
   if (ph >= 0) {
     const pHeaders = pRows[ph] as unknown[]
     for (let i = ph + 1; i < pRows.length; i++) {
