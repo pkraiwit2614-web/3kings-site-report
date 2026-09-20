@@ -9,6 +9,8 @@ import {getSupabase} from '@/lib/supabase'
 import {dateTH,pct} from '@/lib/format'
 import type {Project} from '@/lib/types'
 
+const phaseLabel:Record<string,string>={before:'ก่อนทำ',during:'ระหว่างทำ',after:'หลังทำ',other:'อื่น ๆ'}
+
 export default function ReportsPage(){
   const[rows,setRows]=useState<any[]>([])
   const[projects,setProjects]=useState<Project[]>([])
@@ -34,12 +36,12 @@ export default function ReportsPage(){
   },[])
 
   return <AppShell>
-    <PageHeader title="Report History" subtitle="Daily Reports + Photo Evidence ล่าสุดจากทุก Site"/>
+    <PageHeader title="Report History" subtitle="ประวัติรายงานการทำงานประจำวัน พร้อมรายการงานและรูปประกอบจากทุก Site / Plot"/>
     <div className="stack">{rows.map(r=><div className="panel report-card" key={r.id}>
-      <div className="row between"><div><h2>{projects.find(p=>p.id===r.project_id)?.code||'-'} • {dateTH(r.report_date)}</h2><p>{r.summary||'ไม่มีสรุปเพิ่มเติม'}</p></div><div className="right"><StatusBadge value={r.status}/><b>{pct(r.overall_progress)}</b></div></div>
-      <div className="mini-grid"><span>Manpower <b>{r.total_manpower||0}</b></span><span>Work items <b>{r.report_items?.length||0}</b></span><span>Photos <b>{r.report_photos?.length||0}</b></span></div>
+      <div className="row between"><div><h2>{projects.find(p=>p.id===r.project_id)?.code||'-'} • {dateTH(r.report_date)}</h2><p>{r.summary||'ไม่มีสรุปเพิ่มเติม'}</p></div><div className="right"><StatusBadge value={r.status}/><b>Progress {pct(r.overall_progress)}</b></div></div>
+      <div className="mini-grid"><span>กำลังคน <b>{r.total_manpower||0} คน</b></span><span>รายการงาน <b>{r.report_items?.length||0} งาน</b></span><span>รูปประกอบ <b>{r.report_photos?.length||0} รูป</b></span></div>
       {(r.report_items||[]).slice(0,6).map((x:any)=><div className="subitem" key={x.id}><span>{x.work_item}</span><b>{Math.round((x.actual_progress||0)*100)}%</b></div>)}
-      {!!r.report_photos?.length && <div className="photo-grid">{r.report_photos.map((photo:any)=>photo.signed_url && <figure key={photo.id}><Image src={photo.signed_url} alt={photo.caption||'Site photo'} width={640} height={480} sizes="(max-width: 760px) 50vw, 220px"/><figcaption><b>{photo.phase}</b>{photo.caption ? ` • ${photo.caption}` : ''}</figcaption></figure>)}</div>}
+      {!!r.report_photos?.length && <div className="photo-grid">{r.report_photos.map((photo:any)=>photo.signed_url && <figure key={photo.id}><Image src={photo.signed_url} alt={photo.caption||'รูปหน้างาน'} width={640} height={480} sizes="(max-width: 760px) 50vw, 220px"/><figcaption><b>{phaseLabel[photo.phase]||photo.phase||'รูปหน้างาน'}</b>{photo.caption ? ` • ${photo.caption}` : ''}</figcaption></figure>)}</div>}
     </div>)}</div>
   </AppShell>
 }
