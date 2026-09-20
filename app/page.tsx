@@ -36,17 +36,19 @@ export default function DashboardPage() {
     load().catch(()=>setLoading(false))
   }, [])
 
+  const workTasks = useMemo(() => tasks.filter(t=>t.source_task_no!=='1'), [tasks])
+
   const projectStats = useMemo(() => projects.map(p => {
-    const list = tasks.filter(t=>t.project_id===p.id && t.source_task_no!=='1')
+    const list = workTasks.filter(t=>t.project_id===p.id)
     const avgActual = list.length ? list.reduce((a,b)=>a+(b.actual_progress||0),0)/list.length : 0
     const avgPlan = list.length ? list.reduce((a,b)=>a+(b.current_plan_progress||0),0)/list.length : 0
     const delayed = list.filter(t=>(t.delay_days||0)>0 && (t.actual_progress||0)<1).length
     const blockers = list.filter(t=>Boolean(t.blocker?.trim())).length
     return { p, avgActual, avgPlan, delayed, blockers, taskCount:list.length }
-  }), [projects,tasks])
+  }), [projects,workTasks])
 
-  const delayedTotal = tasks.filter(t=>(t.delay_days||0)>0 && (t.actual_progress||0)<1).length
-  const blockersTotal = tasks.filter(t=>Boolean(t.blocker?.trim())).length
+  const delayedTotal = workTasks.filter(t=>(t.delay_days||0)>0 && (t.actual_progress||0)<1).length
+  const blockersTotal = workTasks.filter(t=>Boolean(t.blocker?.trim())).length
   const reportToday = reports.filter(r=>r.report_date===new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Bangkok'})).length
 
   return <AppShell><PageHeader title="Management Dashboard" subtitle="ภาพรวมหน้างานจาก Schedule + Daily Report + Purchasing จริง" action={<Link href="/reports/new" className="button primary">+ Daily Report</Link>} />
@@ -55,7 +57,7 @@ export default function DashboardPage() {
         <div className="kpi"><span>Active Sites</span><b>{projects.length}</b><small>โครงการ/Plot ที่เปิดใช้งาน</small></div>
         <div className="kpi"><span>Reports Today</span><b>{reportToday}</b><small>รายงานประจำวันนี้</small></div>
         <div className="kpi"><span>Delayed Tasks</span><b>{delayedTotal}</b><small>งานเลย Planned End และยังไม่ครบ 100%</small></div>
-        <div className="kpi"><span>Open Blockers</span><b>{blockersTotal}</b><small>รายการที่ระบุปัญหา/อุปสรรค</small></div>
+        <div className="kpi"><span>Open Blockers</span><b>{blockersTotal}</b><small>รายการงานย่อยที่ระบุปัญหา/อุปสรรค</small></div>
       </section>
       <section className="panel"><div className="panel-head"><h2>Site / Plot Status</h2><span className="muted">Progress เป็น Task Average เพื่อไม่อ้างเป็น Earned Value</span></div>
         <div className="project-grid">{projectStats.map(x=><Link href={`/projects/${x.p.id}`} key={x.p.id} className="project-card">
@@ -67,7 +69,7 @@ export default function DashboardPage() {
       </section>
       <div className="two-col">
         <section className="panel"><div className="panel-head"><h2>Critical Follow-up</h2><Link href="/schedule">ดูทั้งหมด</Link></div>
-          <div className="stack">{tasks.filter(t=>((t.delay_days||0)>0 || t.blocker) && (t.actual_progress||0)<1).sort((a,b)=>(b.delay_days||0)-(a.delay_days||0)).slice(0,8).map(t=><div className="list-row" key={t.id}><div><b>{t.task_name}</b><small>{projects.find(p=>p.id===t.project_id)?.code} • {t.area||'-'}</small></div><div className="right"><StatusBadge value={t.site_status}/><small>{t.delay_days||0} วัน</small></div></div>)}</div>
+          <div className="stack">{workTasks.filter(t=>((t.delay_days||0)>0 || t.blocker) && (t.actual_progress||0)<1).sort((a,b)=>(b.delay_days||0)-(a.delay_days||0)).slice(0,8).map(t=><div className="list-row" key={t.id}><div><b>{t.task_name}</b><small>{projects.find(p=>p.id===t.project_id)?.code} • {t.area||'-'}</small></div><div className="right"><StatusBadge value={t.site_status}/><small>{t.delay_days||0} วัน</small></div></div>)}</div>
         </section>
         <section className="panel"><div className="panel-head"><h2>Purchasing Follow-up</h2><Link href="/procurement">ดูทั้งหมด</Link></div>
           <div className="stack">{proc.slice(0,8).map(x=><div className="list-row" key={x.id}><div><b>{x.item_name}</b><small>{x.vendor||'-'} • {x.expected_delivery_text||'ยังไม่ระบุ ETA'}</small></div><StatusBadge value={x.current_status}/></div>)}</div>
