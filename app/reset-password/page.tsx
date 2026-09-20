@@ -52,6 +52,6 @@ export default function ResetPasswordPage(){
       <button className="primary" disabled={loading}>{loading?'กำลังบันทึก…':'บันทึกรหัสผ่านใหม่'}</button>
     </form>:<div className="notice">{message}</div>}
     {ready&&message&&<div className="notice">{message}</div>}
-    <button type="button" className="link-button" onClick={()=>router.replace('/login')}>← กลับไปหน้า Login</button>
+    <button type="button" className="button" onClick={()=>router.replace('/login')}>← กลับไปหน้า Login</button>
   </div></div>
 }
