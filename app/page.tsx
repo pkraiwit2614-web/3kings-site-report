@@ -51,28 +51,28 @@ export default function DashboardPage() {
   const blockersTotal = workTasks.filter(t=>Boolean(t.blocker?.trim())).length
   const reportToday = reports.filter(r=>r.report_date===new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Bangkok'})).length
 
-  return <AppShell><PageHeader title="Management Dashboard" subtitle="ภาพรวมหน้างานจาก Schedule + Daily Report + Purchasing จริง" action={<Link href="/reports/new" className="button primary">+ Daily Report</Link>} />
+  return <AppShell><PageHeader title="Management Dashboard" subtitle="ภาพรวมหน้างานจากกำหนดแผนงาน + รายงานประจำวัน + สถานะจัดซื้อจริง" action={<Link href="/reports/new" className="button primary">+ รายงานประจำวัน</Link>} />
     {loading ? <div className="panel">กำลังโหลดข้อมูล…</div> : <>
       <section className="kpi-grid">
-        <div className="kpi"><span>Active Sites</span><b>{projects.length}</b><small>โครงการ/Plot ที่เปิดใช้งาน</small></div>
-        <div className="kpi"><span>Reports Today</span><b>{reportToday}</b><small>รายงานประจำวันนี้</small></div>
-        <div className="kpi"><span>Delayed Tasks</span><b>{delayedTotal}</b><small>งานเลย Planned End และยังไม่ครบ 100%</small></div>
-        <div className="kpi"><span>Open Blockers</span><b>{blockersTotal}</b><small>รายการงานย่อยที่ระบุปัญหา/อุปสรรค</small></div>
+        <div className="kpi"><span>Active Sites</span><b>{projects.length}</b><small>โครงการ / Plot / พื้นที่ส่วนกลางที่เปิดใช้งาน</small></div>
+        <div className="kpi"><span>Reports Today</span><b>{reportToday}</b><small>รายงานการทำงานที่ส่งวันนี้</small></div>
+        <div className="kpi"><span>Delayed Tasks</span><b>{delayedTotal}</b><small>จำนวนงานที่เลยกำหนดตามแผนและยังไม่เสร็จ 100%</small></div>
+        <div className="kpi"><span>Open Blockers</span><b>{blockersTotal}</b><small>จำนวนงานที่มีปัญหา / เงื่อนไขค้างต้องติดตาม</small></div>
       </section>
-      <section className="panel"><div className="panel-head"><h2>Site / Plot Status</h2><span className="muted">Progress เป็น Task Average เพื่อไม่อ้างเป็น Earned Value</span></div>
+      <section className="panel"><div className="panel-head"><h2>Site / Plot Status</h2><span className="muted">Progress เป็นค่าเฉลี่ยจากรายการงาน ไม่ใช่ Earned Value ตาม BOQ</span></div>
         <div className="project-grid">{projectStats.map(x=><Link href={`/projects/${x.p.id}`} key={x.p.id} className="project-card">
-          <div className="row between"><div><b>{x.p.code}</b><h3>{x.p.name}</h3></div><span className="pill">{x.taskCount} tasks</span></div>
-          <div className="progress-row"><span>Plan {pct(x.avgPlan)}</span><span>Actual {pct(x.avgActual)}</span></div>
+          <div className="row between"><div><b>{x.p.code}</b><h3>{x.p.name}</h3></div><span className="pill">{x.taskCount} งาน</span></div>
+          <div className="progress-row"><span>ตามแผน {pct(x.avgPlan)}</span><span>หน้างานจริง {pct(x.avgActual)}</span></div>
           <div className="bar"><i style={{width:pct(x.avgActual)}} /></div>
-          <div className="mini-grid"><span><b>{x.delayed}</b> Delayed</span><span><b>{x.blockers}</b> Blockers</span><span><b>{dateTH(x.p.target_handover)}</b> Handover</span></div>
+          <div className="mini-grid"><span><b>{x.delayed}</b> งานล่าช้า</span><span><b>{x.blockers}</b> งานติดอุปสรรค</span><span><b>{dateTH(x.p.target_handover)}</b> เป้าส่งมอบ</span></div>
         </Link>)}</div>
       </section>
       <div className="two-col">
         <section className="panel"><div className="panel-head"><h2>Critical Follow-up</h2><Link href="/schedule">ดูทั้งหมด</Link></div>
-          <div className="stack">{workTasks.filter(t=>((t.delay_days||0)>0 || t.blocker) && (t.actual_progress||0)<1).sort((a,b)=>(b.delay_days||0)-(a.delay_days||0)).slice(0,8).map(t=><div className="list-row" key={t.id}><div><b>{t.task_name}</b><small>{projects.find(p=>p.id===t.project_id)?.code} • {t.area||'-'}</small></div><div className="right"><StatusBadge value={t.site_status}/><small>{t.delay_days||0} วัน</small></div></div>)}</div>
+          <div className="stack">{workTasks.filter(t=>((t.delay_days||0)>0 || t.blocker) && (t.actual_progress||0)<1).sort((a,b)=>(b.delay_days||0)-(a.delay_days||0)).slice(0,8).map(t=><div className="list-row" key={t.id}><div><b>{t.task_name}</b><small>{projects.find(p=>p.id===t.project_id)?.code} • {t.area||'-'}</small><p>{t.blocker||t.next_action||'ยังไม่ระบุรายละเอียดติดตาม'}</p></div><div className="right"><StatusBadge value={t.site_status}/><small>ล่าช้า {t.delay_days||0} วัน</small></div></div>)}</div>
         </section>
         <section className="panel"><div className="panel-head"><h2>Purchasing Follow-up</h2><Link href="/procurement">ดูทั้งหมด</Link></div>
-          <div className="stack">{proc.slice(0,8).map(x=><div className="list-row" key={x.id}><div><b>{x.item_name}</b><small>{x.vendor||'-'} • {x.expected_delivery_text||'ยังไม่ระบุ ETA'}</small></div><StatusBadge value={x.current_status}/></div>)}</div>
+          <div className="stack">{proc.slice(0,8).map(x=><div className="list-row" key={x.id}><div><b>{x.item_name}</b><small>{x.vendor||'ยังไม่ระบุผู้ขาย'} • กำหนดส่ง: {x.expected_delivery_text||'ยังไม่ระบุ'}</small></div><StatusBadge value={x.current_status}/></div>)}</div>
         </section>
       </div>
     </>}
