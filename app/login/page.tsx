@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getSupabase } from '@/lib/supabase'
+import BrandLogo from '@/components/BrandLogo'
 
 type Mode = 'login'|'signup'|'forgot'
 
@@ -52,7 +53,7 @@ export default function LoginPage() {
         setMessage('สมัครเรียบร้อยแล้ว กำลังเข้าสู่ระบบ…')
         router.replace('/')
       } else {
-        setMessage('สมัครเรียบร้อยแล้ว กรุณายืนยันอีเมล 1 ครั้ง จากนั้น Login ได้ทันที โดยสิทธิ์เริ่มต้นเป็น Foreman')
+        setMessage('สมัครเรียบร้อยแล้ว กรุณายืนยันอีเมล 1 ครั้ง จากนั้นเข้าสู่ระบบได้ทันที โดยสิทธิ์เริ่มต้นเป็น Foreman')
         setMode('login')
         setPassword('')
       }
@@ -64,22 +65,24 @@ export default function LoginPage() {
   }
 
   return <div className="login-wrap"><div className="login-card">
-    <div className="login-brand"><div className="brand-mark large">3K</div><div><h1>3 Kings Site Report</h1><p>Daily Site Report • Plan vs Actual • Management Dashboard</p></div></div>
+    <div className="login-brand"><BrandLogo className="login-logo"/><div><h1>3 Kings Site Report</h1><p>Daily Site Report • Plan vs Actual • Management Dashboard</p></div></div>
     {mode!=='forgot' ? <div className="segmented">
       <button type="button" className={mode==='login'?'active':''} onClick={()=>{setMode('login');setMessage('')}}>เข้าสู่ระบบ</button>
       <button type="button" className={mode==='signup'?'active':''} onClick={()=>{setMode('signup');setMessage('')}}>สมัครใช้งาน</button>
     </div> : <div className="notice"><b>ลืมรหัสผ่าน</b><br/>กรอกอีเมลที่ใช้สมัคร ระบบจะส่งลิงก์สำหรับตั้งรหัสผ่านใหม่ให้</div>}
 
+    {mode==='signup' && <div className="company-only"><b>สำหรับทีมงาน 3 Kings Construction Co., Ltd. เท่านั้น</b><span>ไม่เปิดให้ผู้รับเหมาใช้บัญชีนี้ส่งรายงาน เพื่อให้ข้อมูลกำลังคนและรายงานหน้างานไม่ซ้ำซ้อนกับทีมบริษัท</span></div>}
+
     <form onSubmit={submit} className="form-grid one">
-      {mode==='signup' && <label>ชื่อผู้ใช้งาน<input value={name} onChange={e=>setName(e.target.value)} placeholder="ชื่อผู้ใช้งาน" required /></label>}
-      <label>Email<input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="name@company.com" required /></label>
-      {mode!=='forgot' && <label>Password<input type="password" value={password} onChange={e=>setPassword(e.target.value)} minLength={8} required /></label>}
-      <button className="primary" disabled={loading}>{loading?'กำลังดำเนินการ…':mode==='login'?'Login':mode==='signup'?'สมัครใช้งาน':'ส่งลิงก์ตั้งรหัสผ่านใหม่'}</button>
+      {mode==='signup' && <label>ชื่อผู้ใช้งาน <small className="muted">แนะนำให้ใช้ “ชื่อเล่น” เพื่อจำง่ายและดูแล้วรู้ทันทีว่าเป็นใคร</small><input value={name} onChange={e=>setName(e.target.value)} placeholder="เช่น Golf, เสือ, ไก่" required /></label>}
+      <label>อีเมล<input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="name@company.com" required /></label>
+      {mode!=='forgot' && <label>รหัสผ่าน<input type="password" value={password} onChange={e=>setPassword(e.target.value)} minLength={8} placeholder="อย่างน้อย 8 ตัวอักษร" required /></label>}
+      <button className="primary" disabled={loading}>{loading?'กำลังดำเนินการ…':mode==='login'?'เข้าสู่ระบบ':mode==='signup'?'สมัครใช้งาน':'ส่งลิงก์ตั้งรหัสผ่านใหม่'}</button>
     </form>
 
     {mode==='login' && <button type="button" className="button" onClick={()=>{setMode('forgot');setMessage('');setPassword('')}}>ลืมรหัสผ่าน?</button>}
-    {mode==='forgot' && <button type="button" className="button" onClick={()=>{setMode('login');setMessage('')}}>← กลับไปหน้า Login</button>}
+    {mode==='forgot' && <button type="button" className="button" onClick={()=>{setMode('login');setMessage('')}}>← กลับไปหน้าเข้าสู่ระบบ</button>}
     {message && <div className="notice">{message}</div>}
-    <p className="muted small">ผู้สมัครใหม่ใช้งานได้ทันทีหลังผ่านขั้นตอนยืนยันอีเมล โดยเริ่มต้นเป็น Foreman ส่วนการเปลี่ยน Role หรือปิดบัญชีทำได้โดย Manager ใน Users & Access</p>
+    <p className="muted small">ผู้สมัครใหม่ใช้งานได้หลังยืนยันอีเมล โดยเริ่มต้นเป็น Foreman ส่วนการเปลี่ยน Role หรือปิดบัญชีทำได้โดย Manager ใน Users & Access</p>
   </div></div>
 }
