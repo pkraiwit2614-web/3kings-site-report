@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import {useEffect,useMemo,useState} from 'react'
 import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
@@ -41,9 +42,20 @@ export default function WeeklyPage(){
   }),[projects,tasks,reports])
 
   return <AppShell>
-    <PageHeader title="Weekly Management Report" subtitle="สรุป 7 วันล่าสุด • กด Print เพื่อ Save PDF" action={<button className="button primary" onClick={()=>window.print()}>Print / Save PDF</button>}/>
+    <PageHeader title="Weekly Management Report" subtitle="สรุป 7 วันล่าสุด • คลิกแต่ละ Plot เพื่อดูรายละเอียดงาน • กด Print เพื่อ Save PDF" action={<button className="button primary" onClick={()=>window.print()}>Print / Save PDF</button>}/>
     <div className="weekly-cover panel"><h2>3 Kings Construction — Site Progress Weekly</h2><p>Generated from live Daily Reports + Schedule database</p></div>
-    {data.map(x=><section className="panel weekly-section" key={x.p.id}><div className="row between"><div><h2>{x.p.code} — {x.p.name}</h2><p>Plan {pct(x.pl)} • Actual {pct(x.a)}</p></div><div className="weekly-kpis"><b>{x.delay}<small>Delayed</small></b><b>{x.block}<small>Blockers</small></b><b>{x.man}<small>Man-days*</small></b></div></div><div className="bar"><i style={{width:pct(x.a)}}/></div><h3>Reports this week</h3>{x.reports.length?x.reports.map((r:any)=><div className="subitem" key={r.id}><span>{r.report_date} — {r.summary||'Daily Report'}</span><b>{r.total_manpower||0} คน</b></div>):<p className="muted">ยังไม่มี Daily Report ใน 7 วันล่าสุด</p>}</section>)}
+    {data.map(x=><section className="panel weekly-section" key={x.p.id}>
+      <div className="row between">
+        <div><h2>{x.p.code} — {x.p.name}</h2><p>Plan {pct(x.pl)} • Actual {pct(x.a)}</p></div>
+        <div className="row">
+          <div className="weekly-kpis"><b>{x.delay}<small>Delayed</small></b><b>{x.block}<small>Blockers</small></b><b>{x.man}<small>Man-days*</small></b></div>
+          <Link className="button" href={`/projects/${x.p.id}#weekly`}>ดูรายละเอียด Plot →</Link>
+        </div>
+      </div>
+      <div className="bar"><i style={{width:pct(x.a)}}/></div>
+      <h3>Reports this week</h3>
+      {x.reports.length?x.reports.map((r:any)=><div className="subitem" key={r.id}><span>{r.report_date} — {r.summary||'Daily Report'}</span><b>{r.total_manpower||0} คน</b></div>):<p className="muted">ยังไม่มี Daily Report ใน 7 วันล่าสุด</p>}
+    </section>)}
     <p className="muted small">* เป็นผลรวม manpower ที่รายงานรายวัน ไม่ใช่จำนวนคน unique</p>
   </AppShell>
 }
