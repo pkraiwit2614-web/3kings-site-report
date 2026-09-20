@@ -16,6 +16,8 @@ const PROJECT_SHEETS: Record<string, { sheet: string; sourceFile: string }> = {
 }
 
 const MATERIAL_MASTER_SHEET = '01 รายการทั้งหมด'
+const MATERIAL_SOURCE_FILE = 'ABOVE_MATERIALS_STATUS_Stock_Updated_2026-09-20.xlsx'
+const PROCUREMENT_SHEETS = ['04 Purchasing ค้างส่ง','12 Purchasing ค้างส่ง']
 
 function text(value: unknown): string | null {
   if (value === null || value === undefined) return null
@@ -169,8 +171,19 @@ async function parseMaterials(buffer: Buffer) {
   }
 
   const procurement: Record<string, unknown>[] = []
-  const procurementSheet = '12 Purchasing ค้างส่ง'
-  const pRows = await readSheet(buffer, procurementSheet)
+  let procurementSheet = ''
+  let pRows: Awaited<ReturnType<typeof readSheet>> | null = null
+  for (const candidate of PROCUREMENT_SHEETS) {
+    try {
+      pRows = await readSheet(buffer, candidate)
+      procurementSheet = candidate
+      break
+    } catch {
+      // Try the next supported sheet name.
+    }
+  }
+  if (!pRows || !procurementSheet) throw new Error('Purchasing sheet not found')
+
   const ph = pRows.findIndex((r) => r.some((v) => normalizeHeader(v) === 'ผู้ขาย/ผู้รับเหมา'))
   if (ph >= 0) {
     const pHeaders = pRows[ph] as unknown[]
@@ -190,6 +203,7 @@ async function parseMaterials(buffer: Buffer) {
         expected_delivery: isoDate(deliveryText),
         condition_note: text(valueByHeader(r, pHeaders, 'ผู้แจ้ง/เงื่อนไข')),
         source_updated_at: isoDate(valueByHeader(r, pHeaders, 'อัปเดตล่าสุด')),
+        source_sheet: procurementSheet,
         source_row: i + 1,
       })
     }
@@ -242,7 +256,7 @@ export async function POST(request: NextRequest) {
     const parsed = await parseMaterials(buffer)
     const { data, error } = await supabase.rpc('drive_sync_replace_materials', {
       p_sync_key: syncKey,
-      p_source_file: 'ABOVE_MATERIALS_STATUS_Stock_Updated_2026-09-06.xlsx',
+      p_source_file: MATERIAL_SOURCE_FILE,
       p_materials: parsed.materials,
       p_procurement: parsed.procurement,
     })
