@@ -15,12 +15,7 @@ const PROJECT_SHEETS: Record<string, { sheet: string; sourceFile: string }> = {
   'AV-P9': { sheet: 'ติดตามความคืบหน้าP9', sourceFile: 'Above Villa Plot9 Construction Progress.xlsx' },
 }
 
-const MATERIAL_SHEETS: Record<string, string> = {
-  'AV-P6': '03 Villa Plot 6',
-  'AV-P7': '04 Villa Plot 7',
-  'AV-P8': '05 Villa Plot 8',
-  'AV-P9': '06 Villa Plot 9',
-}
+const MATERIAL_MASTER_SHEET = '01 รายการทั้งหมด'
 
 function text(value: unknown): string | null {
   if (value === null || value === undefined) return null
@@ -142,35 +137,35 @@ async function parseSchedule(buffer: Buffer, projectCode: string) {
 
 async function parseMaterials(buffer: Buffer) {
   const materials: Record<string, unknown>[] = []
+  const rows = await readSheet(buffer, MATERIAL_MASTER_SHEET)
+  const h = rows.findIndex((r) => r.some((v) => normalizeHeader(v) === 'รายการวัสดุ/งาน'))
+  if (h < 0) throw new Error(`Header row not found in ${MATERIAL_MASTER_SHEET}`)
+  const headers = rows[h] as unknown[]
 
-  for (const [projectCode, sheet] of Object.entries(MATERIAL_SHEETS)) {
-    const rows = await readSheet(buffer, sheet)
-    const h = rows.findIndex((r) => r.some((v) => normalizeHeader(v) === 'รายการวัสดุ/งาน'))
-    if (h < 0) throw new Error(`Header row not found in ${sheet}`)
-    const headers = rows[h] as unknown[]
+  for (let i = h + 1; i < rows.length; i++) {
+    const r = rows[i] as unknown[]
+    const projectCode = mapProjectFromLocation(valueByHeader(r, headers, 'สถานที่/หลัง'))
+    if (!projectCode) continue
+    const itemName = text(valueByHeader(r, headers, 'รายการวัสดุ/งาน'))
+    if (!itemName) continue
 
-    for (let i = h + 1; i < rows.length; i++) {
-      const r = rows[i] as unknown[]
-      const itemName = text(valueByHeader(r, headers, 'รายการวัสดุ/งาน'))
-      if (!itemName) continue
-      materials.push({
-        project_code: projectCode,
-        data_group: text(valueByHeader(r, headers, 'กลุ่มข้อมูล')),
-        source_item_no: text(valueByHeader(r, headers, 'ลำดับเดิม')),
-        category: text(valueByHeader(r, headers, 'หมวดหมู่')),
-        item_name: itemName,
-        status: text(valueByHeader(r, headers, 'สถานะหลัก')),
-        status_detail: text(valueByHeader(r, headers, 'รายละเอียดสถานะเดิม')),
-        brand: text(valueByHeader(r, headers, 'ยี่ห้อ/ผู้ผลิต')),
-        model_spec: text(valueByHeader(r, headers, 'รุ่น/สเปก')),
-        quantity_unit: text(valueByHeader(r, headers, 'ปริมาณ/หน่วย')),
-        contact_name: text(valueByHeader(r, headers, 'ผู้ติดต่อ')),
-        contact_phone: text(valueByHeader(r, headers, 'โทรศัพท์')),
-        notes: text(valueByHeader(r, headers, 'หมายเหตุ')),
-        source_sheet: sheet,
-        source_row: i + 1,
-      })
-    }
+    materials.push({
+      project_code: projectCode,
+      data_group: text(valueByHeader(r, headers, 'กลุ่มข้อมูล')),
+      source_item_no: text(valueByHeader(r, headers, 'ลำดับเดิม')),
+      category: text(valueByHeader(r, headers, 'หมวดหมู่')),
+      item_name: itemName,
+      status: text(valueByHeader(r, headers, 'สถานะหลัก')),
+      status_detail: text(valueByHeader(r, headers, 'รายละเอียดสถานะเดิม')),
+      brand: text(valueByHeader(r, headers, 'ยี่ห้อ/ผู้ผลิต')),
+      model_spec: text(valueByHeader(r, headers, 'รุ่น/สเปก')),
+      quantity_unit: text(valueByHeader(r, headers, 'ปริมาณ/หน่วย')),
+      contact_name: text(valueByHeader(r, headers, 'ผู้ติดต่อ')),
+      contact_phone: text(valueByHeader(r, headers, 'โทรศัพท์')),
+      notes: text(valueByHeader(r, headers, 'หมายเหตุ')),
+      source_sheet: MATERIAL_MASTER_SHEET,
+      source_row: i + 1,
+    })
   }
 
   const procurement: Record<string, unknown>[] = []
@@ -178,23 +173,23 @@ async function parseMaterials(buffer: Buffer) {
   const pRows = await readSheet(buffer, procurementSheet)
   const ph = pRows.findIndex((r) => r.some((v) => normalizeHeader(v) === 'ผู้ขาย/ผู้รับเหมา'))
   if (ph >= 0) {
-    const headers = pRows[ph] as unknown[]
+    const pHeaders = pRows[ph] as unknown[]
     for (let i = ph + 1; i < pRows.length; i++) {
       const r = pRows[i] as unknown[]
-      const itemName = text(valueByHeader(r, headers, 'รายการ'))
+      const itemName = text(valueByHeader(r, pHeaders, 'รายการ'))
       if (!itemName) continue
-      const deliveryText = text(valueByHeader(r, headers, 'กำหนดส่ง/เข้าหน้างาน'))
+      const deliveryText = text(valueByHeader(r, pHeaders, 'กำหนดส่ง/เข้าหน้างาน'))
       procurement.push({
-        project_code: mapProjectFromLocation(valueByHeader(r, headers, 'หน้างาน')),
-        vendor: text(valueByHeader(r, headers, 'ผู้ขาย/ผู้รับเหมา')),
+        project_code: mapProjectFromLocation(valueByHeader(r, pHeaders, 'หน้างาน')),
+        vendor: text(valueByHeader(r, pHeaders, 'ผู้ขาย/ผู้รับเหมา')),
         item_name: itemName,
-        procurement_status: text(valueByHeader(r, headers, 'สถานะชำระ/จัดซื้อ')),
-        payment_status: text(valueByHeader(r, headers, 'สถานะชำระ/จัดซื้อ')),
-        current_status: text(valueByHeader(r, headers, 'สถานะปัจจุบัน')),
+        procurement_status: text(valueByHeader(r, pHeaders, 'สถานะชำระ/จัดซื้อ')),
+        payment_status: text(valueByHeader(r, pHeaders, 'สถานะชำระ/จัดซื้อ')),
+        current_status: text(valueByHeader(r, pHeaders, 'สถานะปัจจุบัน')),
         expected_delivery_text: deliveryText,
         expected_delivery: isoDate(deliveryText),
-        condition_note: text(valueByHeader(r, headers, 'ผู้แจ้ง/เงื่อนไข')),
-        source_updated_at: isoDate(valueByHeader(r, headers, 'อัปเดตล่าสุด')),
+        condition_note: text(valueByHeader(r, pHeaders, 'ผู้แจ้ง/เงื่อนไข')),
+        source_updated_at: isoDate(valueByHeader(r, pHeaders, 'อัปเดตล่าสุด')),
         source_row: i + 1,
       })
     }
