@@ -77,8 +77,8 @@ export default function LoginPage() {
       <button className="primary" disabled={loading}>{loading?'กำลังดำเนินการ…':mode==='login'?'Login':mode==='signup'?'สมัครใช้งาน':'ส่งลิงก์ตั้งรหัสผ่านใหม่'}</button>
     </form>
 
-    {mode==='login' && <button type="button" className="link-button" onClick={()=>{setMode('forgot');setMessage('');setPassword('')}}>ลืมรหัสผ่าน?</button>}
-    {mode==='forgot' && <button type="button" className="link-button" onClick={()=>{setMode('login');setMessage('')}}>← กลับไปหน้า Login</button>}
+    {mode==='login' && <button type="button" className="button" onClick={()=>{setMode('forgot');setMessage('');setPassword('')}}>ลืมรหัสผ่าน?</button>}
+    {mode==='forgot' && <button type="button" className="button" onClick={()=>{setMode('login');setMessage('')}}>← กลับไปหน้า Login</button>}
     {message && <div className="notice">{message}</div>}
     <p className="muted small">ผู้สมัครใหม่ใช้งานได้ทันทีหลังผ่านขั้นตอนยืนยันอีเมล โดยเริ่มต้นเป็น Foreman ส่วนการเปลี่ยน Role หรือปิดบัญชีทำได้โดย Manager ใน Users & Access</p>
   </div></div>
