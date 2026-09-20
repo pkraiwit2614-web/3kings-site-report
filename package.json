@@ -1,6 +1,6 @@
 {
-  "name": "3kings-site-report-v31",
-  "version": "3.1.0",
+  "name": "3kings-site-report-v32",
+  "version": "3.2.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -11,7 +11,8 @@
     "@supabase/supabase-js": "2.95.0",
     "next": "15.5.24",
     "react": "19.1.1",
-    "react-dom": "19.1.1"
+    "react-dom": "19.1.1",
+    "read-excel-file": "9.3.10"
   },
   "devDependencies": {
     "@types/node": "22.15.3",
