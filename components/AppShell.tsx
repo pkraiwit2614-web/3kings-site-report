@@ -4,11 +4,25 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { ReactNode, useEffect, useMemo, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
+import BrandLogo from '@/components/BrandLogo'
 
 const baseNav = [
-  ['/', 'Dashboard'], ['/reports/new', 'Daily Report'], ['/schedule', 'Schedule'], ['/materials', 'Materials'],
-  ['/procurement', 'Purchasing'], ['/reports', 'History'], ['/weekly', 'Weekly Report']
+  ['/', 'Dashboard'],
+  ['/reports/new', 'รายงานการทำงานประจำวัน'],
+  ['/schedule', 'กำหนดแผนงาน'],
+  ['/reports', 'ประวัติรายงานการทำงานประจำวัน'],
+  ['/materials', 'วัสดุอุปกรณ์และผู้รับเหมา'],
+  ['/procurement', 'การจัดซื้อจัดจ้าง'],
+  ['/weekly', 'รายงานการทำงานประจำสัปดาห์']
 ]
+
+const mobileLabels: Record<string,string> = {
+  '/':'Dashboard',
+  '/reports/new':'รายงาน',
+  '/schedule':'แผนงาน',
+  '/reports':'ประวัติ',
+  '/materials':'วัสดุ'
+}
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const path = usePathname(); const router = useRouter()
@@ -32,11 +46,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   return <div className="app-shell">
     <aside className="sidebar">
-      <div className="brand"><div className="brand-mark">3K</div><div><b>3 Kings</b><small>Site Report V3.1</small></div></div>
+      <div className="brand"><BrandLogo className="brand-logo"/><div><b>3 Kings Construction</b><small>Site Report V3.3</small></div></div>
       <nav>{nav.map(([href,label]) => <Link key={href} className={path===href?'active':''} href={href}>{label}</Link>)}</nav>
       <div className="userbox"><b>{userName}</b><span>{role}</span><button onClick={signOut}>ออกจากระบบ</button></div>
     </aside>
     <main className="main">{children}</main>
-    <nav className="mobile-nav">{baseNav.slice(0,5).map(([href,label]) => <Link key={href} className={path===href?'active':''} href={href}>{label.split(' ')[0]}</Link>)}</nav>
+    <nav className="mobile-nav">{baseNav.slice(0,5).map(([href]) => <Link key={href} className={path===href?'active':''} href={href}>{mobileLabels[href]||href}</Link>)}</nav>
   </div>
 }
