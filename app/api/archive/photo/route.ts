@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
 export const runtime = 'nodejs'
-export const maxDuration = 60
+export const maxDuration = 15
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://wtqubwdduzedmcvyhbgs.supabase.co'
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_Ruyka15H3QApZKY9q2U-Vg_CjmEuMRX'
@@ -15,11 +15,6 @@ function safePart(value: string, fallback = 'unknown') {
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
   return clean.slice(0, 100) || fallback
-}
-
-function normalizeN8nPayload(value: any): any {
-  if (Array.isArray(value)) return value[0] || {}
-  return value || {}
 }
 
 export async function POST(request: Request) {
@@ -88,6 +83,21 @@ export async function POST(request: Request) {
     safePart(originalFileName.replace(/\.[^.]+$/, ''), 'photo'),
   ].join('_') + extension
 
+  const { error: processingError } = await supabase
+    .from('report_photos')
+    .update({
+      archive_status: 'processing',
+      archive_error: null,
+      archive_staging_path: stagingPath,
+      archive_file_name: archiveFileName,
+    })
+    .eq('id', photoId)
+    .eq('uploaded_by', userData.user.id)
+
+  if (processingError) {
+    return NextResponse.json({ ok: false, error: `Unable to queue archive: ${processingError.message}` }, { status: 500 })
+  }
+
   try {
     const response = await fetch(webhookUrl, {
       method: 'POST',
@@ -110,48 +120,26 @@ export async function POST(request: Request) {
         uploaded_by: userData.user.id,
       }),
       cache: 'no-store',
+      signal: AbortSignal.timeout(10000),
     })
 
-    const responseText = await response.text()
-    let parsed: any = {}
-    try { parsed = JSON.parse(responseText) } catch { parsed = { raw: responseText } }
-    const payload = normalizeN8nPayload(parsed)
-
-    const driveFileId = payload.driveFileId || payload.id || payload.fileId || null
-    const driveUrl = payload.driveUrl || payload.webViewLink || (driveFileId ? `https://drive.google.com/file/d/${driveFileId}/view` : null)
-
-    if (!response.ok || payload.ok === false || !driveFileId) {
-      const detail = payload.error || payload.message || responseText || `n8n HTTP ${response.status}`
-      await markFailed(String(detail))
-      return NextResponse.json({ ok: false, error: String(detail) }, { status: 502 })
+    if (!response.ok) {
+      const detail = (await response.text()).slice(0, 1000) || `n8n HTTP ${response.status}`
+      await markFailed(detail)
+      return NextResponse.json({ ok: false, error: detail }, { status: 502 })
     }
 
-    const { error: updateError } = await supabase
-      .from('report_photos')
-      .update({
-        archive_status: 'archived',
-        archive_drive_file_id: String(driveFileId),
-        archive_drive_url: driveUrl ? String(driveUrl) : null,
-        archive_file_name: String(payload.archiveFileName || archiveFileName),
-        archive_staging_path: null,
-        archived_at: new Date().toISOString(),
-        archive_error: null,
-      })
-      .eq('id', photoId)
-      .eq('uploaded_by', userData.user.id)
-
-    if (updateError) {
-      return NextResponse.json({ ok: false, error: `Drive upload สำเร็จ แต่บันทึก Archive metadata ไม่สำเร็จ: ${updateError.message}`, driveFileId, driveUrl }, { status: 500 })
-    }
-
-    const { error: removeError } = await supabase.storage.from('photo-archive-staging').remove([stagingPath])
-    if (removeError) {
-      return NextResponse.json({ ok: true, driveFileId, driveUrl, archiveFileName, cleanupWarning: removeError.message })
-    }
-
-    return NextResponse.json({ ok: true, driveFileId, driveUrl, archiveFileName })
+    return NextResponse.json({
+      ok: true,
+      accepted: true,
+      photoId,
+      archiveFileName,
+      status: 'processing',
+    }, { status: 202 })
   } catch (error: any) {
-    const message = error?.message || 'Photo archive request failed'
+    const message = error?.name === 'TimeoutError'
+      ? 'n8n did not acknowledge archive request within 10 seconds'
+      : (error?.message || 'Photo archive queue request failed')
     await markFailed(message)
     return NextResponse.json({ ok: false, error: message }, { status: 502 })
   }
