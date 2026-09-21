@@ -6,6 +6,7 @@ import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
 import { getSupabase } from '@/lib/supabase'
 import { todayISO } from '@/lib/format'
+import { compressSitePhoto } from '@/lib/imageCompression'
 import type { Project, ScheduleTask } from '@/lib/types'
 
 type Item = { schedule_task_id:string; work_item:string; work_category:string; actual_progress:number; manpower:number; contractor:string; status:string; blocker:string; next_action:string; target_date:string; remarks:string }
@@ -17,6 +18,8 @@ const emptySection = (projectId=''):ReportSection => ({id:`section-${Date.now()}
 const statusOptions = [
   ['not_started','ยังไม่เริ่ม'],['in_progress','กำลังดำเนินการ'],['awaiting_inspection','รอตรวจ'],['blocked','ติดปัญหา/อุปสรรค'],['delayed','ล่าช้า'],['completed','เสร็จแล้ว'],['on_hold','พักงาน']
 ]
+
+const safeFileName = (name:string) => name.replace(/[\\/:*?"<>|#%{}[\]~]/g,'-').replace(/\s+/g,'-').slice(0,120) || 'site-photo'
 
 export default function NewReportPage(){
  const router=useRouter()
@@ -63,6 +66,8 @@ export default function NewReportPage(){
    try{
      const {data:{user},error:userError}=await s.auth.getUser()
      if(userError||!user) throw new Error('กรุณาเข้าสู่ระบบใหม่')
+     const {data:{session}}=await s.auth.getSession()
+     if(!session?.access_token) throw new Error('Session หมดอายุ กรุณาเข้าสู่ระบบใหม่')
 
      const validSections=sections.filter(sec=>sec.projectId&&sec.items.some(x=>x.work_item.trim()))
      if(!validSections.length) throw new Error('กรุณากรอกรายการงานอย่างน้อย 1 Site / Plot')
@@ -70,7 +75,12 @@ export default function NewReportPage(){
      if(new Set(ids).size!==ids.length) throw new Error('Site / Plot ซ้ำกัน กรุณารวมงานของ Plot เดียวกันไว้ในส่วนเดียว')
 
      let saved=0
+     let archiveFailures=0
+     let archivedPhotos=0
      for(const sec of validSections){
+       const project=projects.find(p=>p.id===sec.projectId)
+       if(!project) throw new Error('ไม่พบข้อมูล Site / Plot')
+
        const valid=sec.items.filter(x=>x.work_item.trim())
        const itemManpower=valid.reduce((a,b)=>a+(Number(b.manpower)||0),0)
        const {data:report,error}=await s.from('daily_reports').insert({
@@ -91,19 +101,72 @@ export default function NewReportPage(){
        firstItemId=itemRows?.[0]?.id||null
 
        for(let i=0;i<sec.files.length;i++){
-         const f=sec.files[i]
-         const ext=(f.name.split('.').pop()||'jpg').toLowerCase()
-         const path=`${sec.projectId}/${date}/${report.id}/${Date.now()}-${i}.${ext}`
-         const {error:up}=await s.storage.from('site-photos').upload(path,f,{upsert:false,contentType:f.type||undefined})
-         if(up) throw new Error(`อัปโหลดรูปไม่สำเร็จ: ${up.message}`)
-         const {error:pe}=await s.from('report_photos').insert({daily_report_id:report.id,report_item_id:firstItemId,storage_path:path,phase:sec.phase,caption:f.name,uploaded_by:user.id})
-         if(pe) throw new Error(`บันทึกข้อมูลรูปไม่สำเร็จ: ${pe.message}`)
+         const original=sec.files[i]
+         const compressed=await compressSitePhoto(original)
+         const compressedExt=(compressed.file.name.split('.').pop()||'jpg').toLowerCase()
+         const finalPath=`${sec.projectId}/${date}/${report.id}/${Date.now()}-${i}.${compressedExt}`
+
+         const {error:up}=await s.storage.from('site-photos').upload(finalPath,compressed.file,{upsert:false,contentType:compressed.file.type||undefined})
+         if(up) throw new Error(`อัปโหลดรูปสำหรับ Dashboard ไม่สำเร็จ: ${up.message}`)
+
+         const {data:photoRow,error:pe}=await s.from('report_photos').insert({
+           daily_report_id:report.id,
+           report_item_id:firstItemId,
+           storage_path:finalPath,
+           phase:sec.phase,
+           caption:original.name,
+           uploaded_by:user.id,
+           archive_status:'pending',
+           original_size_bytes:original.size,
+           compressed_size_bytes:compressed.compressedSize,
+         }).select('id').single()
+         if(pe||!photoRow) throw new Error(`บันทึกข้อมูลรูปไม่สำเร็จ: ${pe?.message||'unknown error'}`)
+
+         const originalName=safeFileName(original.name)
+         const stagingPath=`${user.id}/${date}/${report.id}/${photoRow.id}/${originalName}`
+         const {error:stageError}=await s.storage.from('photo-archive-staging').upload(stagingPath,original,{upsert:false,contentType:original.type||'application/octet-stream'})
+         if(stageError){
+           archiveFailures++
+           await s.from('report_photos').update({archive_status:'failed',archive_error:`Staging upload: ${stageError.message}`,archive_staging_path:stagingPath}).eq('id',photoRow.id)
+           continue
+         }
+
+         const {data:signed,error:signedError}=await s.storage.from('photo-archive-staging').createSignedUrl(stagingPath,600)
+         if(signedError||!signed?.signedUrl){
+           archiveFailures++
+           await s.from('report_photos').update({archive_status:'failed',archive_error:`Create signed URL: ${signedError?.message||'failed'}`,archive_staging_path:stagingPath}).eq('id',photoRow.id)
+           continue
+         }
+
+         const archiveResponse=await fetch('/api/archive/photo',{
+           method:'POST',
+           headers:{'content-type':'application/json','authorization':`Bearer ${session.access_token}`},
+           body:JSON.stringify({
+             photo_id:photoRow.id,
+             report_id:report.id,
+             project_id:sec.projectId,
+             project_code:project.code,
+             project_name:project.name,
+             report_date:date,
+             phase:sec.phase,
+             original_file_name:original.name,
+             staging_path:stagingPath,
+             signed_url:signed.signedUrl,
+           })
+         })
+
+         if(archiveResponse.ok) archivedPhotos++
+         else archiveFailures++
        }
        saved++
      }
 
-     setMessage(`บันทึกรายงานเรียบร้อย ${saved} Site / Plot`)
-     setTimeout(()=>router.push('/reports'),700)
+     if(archiveFailures>0){
+       setMessage(`บันทึกรายงานเรียบร้อย ${saved} Site / Plot • Archive สำเร็จ ${archivedPhotos} รูป • มี ${archiveFailures} รูปที่รอแก้/Retry (รูปสำหรับ Dashboard ยังบันทึกแล้ว)`)
+     }else{
+       setMessage(`บันทึกรายงานเรียบร้อย ${saved} Site / Plot${archivedPhotos?` • Archive Original เข้า Google Drive ${archivedPhotos} รูป`:''}`)
+     }
+     setTimeout(()=>router.push('/reports'),1400)
    }catch(err:any){
      setMessage(err.message||'บันทึกไม่สำเร็จ')
    }finally{
@@ -112,7 +175,7 @@ export default function NewReportPage(){
  }
 
  return <AppShell>
-   <PageHeader title="Daily Site Report" subtitle="กรอกครั้งเดียวได้หลาย Site / Plot • ระบบจะแยกบันทึกและ Sync งานกลับ Schedule ของแต่ละ Plot อัตโนมัติ"/>
+   <PageHeader title="Daily Site Report" subtitle="กรอกครั้งเดียวได้หลาย Site / Plot • รูปสำหรับ Dashboard จะถูกบีบอัตโนมัติ และ Original จะ Archive เข้า Google Drive"/>
    <form onSubmit={submit} className="stack-lg">
      <section className="panel"><h2>ข้อมูลประจำวัน</h2><div className="form-grid">
        <label>วันที่<input type="date" value={date} onChange={e=>setDate(e.target.value)} required/></label>
@@ -149,14 +212,14 @@ export default function NewReportPage(){
 
          <div className="subsection-head"><h3>รูปประกอบหน้างาน</h3></div><div className="form-grid">
            <label>ประเภทภาพ<select value={sec.phase} onChange={e=>updateSection(sec.id,{phase:e.target.value})}><option value="before">ก่อนทำ</option><option value="during">ระหว่างทำ</option><option value="after">หลังทำ</option><option value="other">อื่น ๆ</option></select></label>
-           <label className="span-2">เลือกรูปจากมือถือ<input type="file" accept="image/*" multiple onChange={e=>updateSection(sec.id,{files:Array.from(e.target.files||[])})}/><small>{sec.files.length} รูป</small></label>
+           <label className="span-2">เลือกรูปจากมือถือ<input type="file" accept="image/*" multiple onChange={e=>updateSection(sec.id,{files:Array.from(e.target.files||[])})}/><small>{sec.files.length} รูป • ระบบบีบรูปสำหรับ Dashboard อัตโนมัติ (ด้านยาวไม่เกิน 1600px) และเก็บ Original เข้า Drive</small></label>
          </div>
        </section>
      })}
 
      <button type="button" className="button add-site-button" onClick={addSection}>+ เพิ่ม Site / Plot ที่คุมในวันนี้</button>
      {message&&<div className="notice">{message}</div>}
-     <div className="sticky-actions"><button className="primary big" disabled={saving}>{saving?'กำลังบันทึก…':`บันทึกรายงาน ${totalReports||sections.length} Site / Plot`}</button></div>
+     <div className="sticky-actions"><button className="primary big" disabled={saving}>{saving?'กำลังบันทึกและ Archive รูป…':`บันทึกรายงาน ${totalReports||sections.length} Site / Plot`}</button></div>
    </form>
  </AppShell>
 }
