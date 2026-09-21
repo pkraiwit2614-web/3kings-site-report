@@ -12,6 +12,18 @@ import type{Project,ScheduleTask} from '@/lib/types'
 
 type TaskView='all'|'delayed'|'blockers'|'completed'
 
+function isPlotSummaryTask(t:ScheduleTask){
+  return t.category==='งานก่อสร้าง' && /^งานก่อสร้าง\s+Above Villa Plot/i.test(t.task_name||'')
+}
+
+function TaskFollowUp({task,compact=false}:{task:ScheduleTask,compact?:boolean}){
+  if(!task.blocker&&!task.next_action) return <span className="muted">-</span>
+  return <div>
+    {task.blocker?<p className={compact?'small':''}><b>ปัญหา:</b> {task.blocker}</p>:null}
+    {task.next_action?<p className={compact?'small':''}><b>งานถัดไป:</b> {task.next_action}</p>:null}
+  </div>
+}
+
 export default function ProjectPage(){
   const{id}=useParams<{id:string}>()
   const[p,setP]=useState<Project|null>(null)
@@ -33,7 +45,7 @@ export default function ProjectPage(){
     })
   },[id])
 
-  const workTasks=useMemo(()=>tasks.filter(t=>t.source_task_no!=='1'),[tasks])
+  const workTasks=useMemo(()=>tasks.filter(t=>!isPlotSummaryTask(t)),[tasks])
   const delayedTasks=useMemo(()=>workTasks.filter(t=>(t.delay_days||0)>0&&(t.actual_progress||0)<1),[workTasks])
   const blockerTasks=useMemo(()=>workTasks.filter(t=>!!t.blocker&&(t.actual_progress||0)<1),[workTasks])
   const completedTasks=useMemo(()=>workTasks.filter(t=>(t.actual_progress||0)>=1),[workTasks])
@@ -97,8 +109,8 @@ export default function ProjectPage(){
       <p className="muted small">* คน-วัน = ผลรวม manpower ที่รายงานในแต่ละวัน ไม่ใช่จำนวนคนแบบไม่ซ้ำ</p>
     </section>
 
-    <section className="panel weekly-section"><div className="panel-head"><h2>งานสำคัญที่ต้องติดตาม</h2><span className="muted">งานล่าช้า / มีอุปสรรค และยังไม่เสร็จ 100%</span></div><div className="stack">{critical.length?critical.slice(0,30).map(t=><div className="list-row" key={t.id}><div><b>{t.task_name}</b><small>{t.area||'-'} • จบตามแผน {dateTH(t.planned_end)} • หน้างานจริง {pct(t.actual_progress)}</small><p>{t.blocker||t.next_action||'-'}</p></div><div className="right"><StatusBadge value={t.site_status}/><small>ล่าช้า {t.delay_days||0} วัน</small></div></div>):<p className="muted">ไม่มีงานสำคัญค้างติดตาม</p>}</div></section>
+    <section className="panel weekly-section"><div className="panel-head"><h2>งานสำคัญที่ต้องติดตาม</h2><span className="muted">งานล่าช้า / มีอุปสรรค และยังไม่เสร็จ 100%</span></div><div className="stack">{critical.length?critical.slice(0,30).map(t=><div className="list-row" key={t.id}><div><b>{t.task_name}</b><small>{t.area||'-'} • จบตามแผน {dateTH(t.planned_end)} • หน้างานจริง {pct(t.actual_progress)}</small><TaskFollowUp task={t}/></div><div className="right"><StatusBadge value={t.site_status}/><small>ล่าช้า {t.delay_days||0} วัน</small></div></div>):<p className="muted">ไม่มีงานสำคัญค้างติดตาม</p>}</div></section>
 
-    <section className="panel weekly-section" id="task-detail"><div className="panel-head"><div><h2>รายละเอียด — {viewMeta.title}</h2><span className="muted">{viewMeta.desc}</span></div><span className="pill">{filteredTasks.length} งาน</span></div><div className="table-wrap"><table><thead><tr><th>งาน</th><th>พื้นที่</th><th>แผนเริ่ม–จบ</th><th>% แผน</th><th>% จริง</th><th>ล่าช้า</th><th>สถานะ</th><th>ปัญหา / งานถัดไป</th></tr></thead><tbody>{filteredTasks.map(t=><tr key={t.id}><td><b>{t.task_name}</b><small>{t.category||'-'}</small></td><td>{t.area||'-'}</td><td>{dateTH(t.planned_start)} → {dateTH(t.planned_end)}</td><td>{pct(t.current_plan_progress)}</td><td>{pct(t.actual_progress)}</td><td className={(t.delay_days||0)>0?'danger-text':''}>{t.delay_days||0} วัน</td><td><StatusBadge value={t.site_status}/></td><td>{t.blocker||t.next_action||'-'}</td></tr>)}</tbody></table></div></section>
+    <section className="panel weekly-section" id="task-detail"><div className="panel-head"><div><h2>รายละเอียด — {viewMeta.title}</h2><span className="muted">{viewMeta.desc}</span></div><span className="pill">{filteredTasks.length} งาน</span></div><div className="table-wrap"><table><thead><tr><th>งาน</th><th>พื้นที่</th><th>แผนเริ่ม–จบ</th><th>% แผน</th><th>% จริง</th><th>ล่าช้า</th><th>สถานะ</th><th>ปัญหา / งานถัดไป</th></tr></thead><tbody>{filteredTasks.map(t=><tr key={t.id}><td><b>{t.task_name}</b><small>{t.category||'-'}</small></td><td>{t.area||'-'}</td><td>{dateTH(t.planned_start)} → {dateTH(t.planned_end)}</td><td>{pct(t.current_plan_progress)}</td><td>{pct(t.actual_progress)}</td><td className={(t.delay_days||0)>0?'danger-text':''}>{t.delay_days||0} วัน</td><td><StatusBadge value={t.site_status}/></td><td><TaskFollowUp task={t} compact/></td></tr>)}</tbody></table></div></section>
   </AppShell>
 }
