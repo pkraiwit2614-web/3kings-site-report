@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createHash } from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 import { readSheet } from 'read-excel-file/node'
 
@@ -8,11 +9,11 @@ export const maxDuration = 60
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://wtqubwdduzedmcvyhbgs.supabase.co'
 const SUPABASE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_Ruyka15H3QApZKY9q2U-Vg_CjmEuMRX'
 
-const PROJECT_SHEETS: Record<string, { sheet: string; sourceFile: string }> = {
-  'AV-P6': { sheet: 'ติดตามความคืบหน้าP6', sourceFile: 'Above Villa Plot6 Construction Progress_Updated_2026-09-19.xlsx' },
-  'AV-P7': { sheet: 'ติดตามความคืบหน้าP7', sourceFile: 'Above Villa Plot7 Construction Progress_Updated_2026-09-19.xlsx' },
-  'AV-P8': { sheet: 'ติดตามความคืบหน้าP8', sourceFile: 'Above Villa Plot8 Construction Progress.xlsx' },
-  'AV-P9': { sheet: 'ติดตามความคืบหน้าP9', sourceFile: 'Above Villa Plot9 Construction Progress.xlsx' },
+const PROJECT_SHEETS: Record<string, { sheet: string }> = {
+  'AV-P6': { sheet: 'ติดตามความคืบหน้าP6' },
+  'AV-P7': { sheet: 'ติดตามความคืบหน้าP7' },
+  'AV-P8': { sheet: 'ติดตามความคืบหน้าP8' },
+  'AV-P9': { sheet: 'ติดตามความคืบหน้าP9' },
 }
 
 const MATERIAL_MASTER_SHEET = '01 รายการทั้งหมด'
@@ -71,9 +72,28 @@ function headerIndex(headers: unknown[], title: string): number {
   return headers.findIndex((h) => normalizeHeader(h) === target)
 }
 
+function headerIndexPrefix(headers: unknown[], prefix: string): number {
+  const target = normalizeHeader(prefix)
+  return headers.findIndex((h) => normalizeHeader(h).startsWith(target))
+}
+
 function valueByHeader(row: unknown[], headers: unknown[], title: string): unknown {
   const i = headerIndex(headers, title)
   return i >= 0 ? row[i] : null
+}
+
+function valueByHeaderPrefix(row: unknown[], headers: unknown[], prefix: string): unknown {
+  const i = headerIndexPrefix(headers, prefix)
+  return i >= 0 ? row[i] : null
+}
+
+function normalizeIdentityPart(value: string | null): string {
+  return (value || '').normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase()
+}
+
+function sourceIdentity(projectCode: string, category: string | null, taskName: string | null, area: string | null, occurrence: number): string {
+  const raw = [projectCode, normalizeIdentityPart(category), normalizeIdentityPart(taskName), normalizeIdentityPart(area), String(occurrence)].join('|')
+  return createHash('sha256').update(raw, 'utf8').digest('hex')
 }
 
 function mapProjectFromLocation(location: unknown): string | null {
@@ -90,51 +110,67 @@ async function parseSchedule(buffer: Buffer, projectCode: string) {
   if (!config) throw new Error(`Unsupported project: ${projectCode}`)
 
   const rows = await readSheet(buffer, config.sheet)
-  const h = rows.findIndex((r) => normalizeHeader(r[0]) === 'ID' && normalizeHeader(r[2]).includes('Task Name'))
+  const h = rows.findIndex((r) => r.some((v) => normalizeHeader(v) === 'ID') && r.some((v) => normalizeHeader(v) === 'Task Name ตาม Schedule'))
   if (h < 0) throw new Error(`Header row not found in ${config.sheet}`)
 
+  const headers = rows[h] as unknown[]
+  const requiredHeaders = [
+    'ID', 'หมวดหลัก', 'Task Name ตาม Schedule', 'พื้นที่/ชั้น', '% หน้างานล่าสุด',
+    'สถานะหน้างาน', 'ปัญหา/อุปสรรค', 'งานถัดไป/แนวทางแก้', 'วันที่อัปเดต'
+  ]
+  const missing = requiredHeaders.filter((name) => headerIndex(headers, name) < 0)
+  if (missing.length) throw new Error(`Missing schedule headers in ${config.sheet}: ${missing.join(', ')}`)
+
+  const identityCounts = new Map<string, number>()
   const out: Record<string, unknown>[] = []
+
   for (let i = h + 1; i < rows.length; i++) {
     const r = rows[i] as unknown[]
-    const category = text(r[1])
-    const taskName = text(r[2])
+    const category = text(valueByHeader(r, headers, 'หมวดหลัก'))
+    const taskName = text(valueByHeader(r, headers, 'Task Name ตาม Schedule'))
+    const area = text(valueByHeader(r, headers, 'พื้นที่/ชั้น'))
     if (!category && !taskName) continue
 
+    const identityBase = [normalizeIdentityPart(category), normalizeIdentityPart(taskName), normalizeIdentityPart(area)].join('|')
+    const occurrence = (identityCounts.get(identityBase) || 0) + 1
+    identityCounts.set(identityBase, occurrence)
+
     out.push({
-      source_task_no: sourceTaskNo(r[0], i - h),
+      source_identity: sourceIdentity(projectCode, category, taskName, area, occurrence),
+      source_task_no: sourceTaskNo(valueByHeader(r, headers, 'ID'), i - h),
       category,
       task_name: taskName,
-      area: text(r[3]),
-      planned_duration_days: num(r[4]),
-      planned_start: isoDate(r[5]),
-      planned_end: isoDate(r[6]),
-      baseline_progress: pct(r[7]),
-      imported_plan_progress: pct(r[8]),
-      actual_progress: pct(r[9]) ?? 0,
-      plan_status: text(r[11]),
-      site_status: text(r[12]),
-      actual_start: isoDate(r[13]),
-      actual_end: isoDate(r[14]),
-      responsible_person: text(r[15]),
-      contractor: text(r[16]),
-      inspection_point: text(r[17]),
-      required_evidence: text(r[18]),
-      inspection_type: text(r[19]),
-      inspection_result: text(r[20]),
-      inspection_date: isoDate(r[21]),
-      blocker: text(r[22]),
-      next_action: text(r[23]),
-      target_close: isoDate(r[24]),
-      defect_ref: text(r[25]),
-      evidence_link: text(r[26]),
-      source_updated_at: isoDate(r[27]),
-      notes: text(r[28]),
+      area,
+      planned_duration_days: num(valueByHeader(r, headers, 'ระยะเวลา (วัน)')),
+      planned_start: isoDate(valueByHeader(r, headers, 'เริ่มตามแผน')),
+      planned_end: isoDate(valueByHeader(r, headers, 'จบตามแผน')),
+      baseline_progress: pct(valueByHeaderPrefix(r, headers, '% ตาม Schedule')),
+      imported_plan_progress: pct(valueByHeader(r, headers, '% แผน ณ วันรายงาน')),
+      actual_progress: pct(valueByHeader(r, headers, '% หน้างานล่าสุด')) ?? 0,
+      plan_status: text(valueByHeader(r, headers, 'สถานะแผน (Auto)')),
+      site_status: text(valueByHeader(r, headers, 'สถานะหน้างาน')),
+      actual_start: isoDate(valueByHeader(r, headers, 'เริ่มจริง')),
+      actual_end: isoDate(valueByHeader(r, headers, 'จบจริง')),
+      responsible_person: text(valueByHeader(r, headers, 'ผู้รับผิดชอบ')),
+      contractor: text(valueByHeader(r, headers, 'ทีมงาน/ผู้รับเหมา')),
+      inspection_point: text(valueByHeader(r, headers, 'จุดตรวจสำคัญ / ITP')),
+      required_evidence: text(valueByHeader(r, headers, 'หลักฐาน / Report ที่ต้องมี')),
+      inspection_type: text(valueByHeader(r, headers, 'ประเภทจุดตรวจ')),
+      inspection_result: text(valueByHeader(r, headers, 'ผลตรวจล่าสุด')),
+      inspection_date: isoDate(valueByHeader(r, headers, 'วันที่ตรวจล่าสุด')),
+      blocker: text(valueByHeader(r, headers, 'ปัญหา/อุปสรรค')),
+      next_action: text(valueByHeader(r, headers, 'งานถัดไป/แนวทางแก้')),
+      target_close: isoDate(valueByHeader(r, headers, 'Target Close')),
+      defect_ref: text(valueByHeader(r, headers, 'Defect/NCR Ref.')),
+      evidence_link: text(valueByHeader(r, headers, 'Link รูป/เอกสาร')),
+      source_updated_at: isoDate(valueByHeader(r, headers, 'วันที่อัปเดต')),
+      notes: text(valueByHeader(r, headers, 'หมายเหตุ')),
       source_sheet: config.sheet,
       source_row: i + 1,
     })
   }
 
-  return { rows: out, sourceFile: config.sourceFile }
+  return { rows: out }
 }
 
 async function parseMaterials(buffer: Buffer) {
@@ -213,7 +249,7 @@ async function parseMaterials(buffer: Buffer) {
 }
 
 export async function GET() {
-  return NextResponse.json({ ok: true, service: '3 Kings Drive Sync V3.2', route: '/api/sync/drive' })
+  return NextResponse.json({ ok: true, service: '3 Kings Drive Sync V3.2.3', route: '/api/sync/drive' })
 }
 
 export async function POST(request: NextRequest) {
@@ -221,6 +257,7 @@ export async function POST(request: NextRequest) {
     const url = new URL(request.url)
     const kind = url.searchParams.get('kind')
     const projectCode = url.searchParams.get('project')
+    const sourceFile = text(url.searchParams.get('sourceFile'))
     const syncKey = request.headers.get('x-sync-key') || ''
 
     if (!syncKey) return NextResponse.json({ ok: false, error: 'missing_sync_key' }, { status: 401 })
@@ -242,10 +279,12 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ ok: false, error: 'invalid_project' }, { status: 400 })
       }
       const parsed = await parseSchedule(buffer, projectCode)
+      if (!parsed.rows.length) return NextResponse.json({ ok: false, error: 'no_schedule_rows' }, { status: 422 })
+      const actualSourceFile = sourceFile || `${projectCode}-latest.xlsx`
       const { data, error } = await supabase.rpc('drive_sync_apply_schedule', {
         p_sync_key: syncKey,
         p_project_code: projectCode,
-        p_source_file: parsed.sourceFile,
+        p_source_file: actualSourceFile,
         p_rows: parsed.rows,
       })
       if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
@@ -254,9 +293,10 @@ export async function POST(request: NextRequest) {
     }
 
     const parsed = await parseMaterials(buffer)
+    const actualSourceFile = sourceFile || MATERIAL_SOURCE_FILE
     const { data, error } = await supabase.rpc('drive_sync_replace_materials', {
       p_sync_key: syncKey,
-      p_source_file: MATERIAL_SOURCE_FILE,
+      p_source_file: actualSourceFile,
       p_materials: parsed.materials,
       p_procurement: parsed.procurement,
     })
