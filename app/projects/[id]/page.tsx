@@ -12,6 +12,13 @@ import type{Project,ScheduleTask} from '@/lib/types'
 
 type TaskView='all'|'delayed'|'blockers'|'completed'
 
+const pictureProgressFolders:Record<string,string>={
+  'AV-P6':'https://drive.google.com/drive/folders/18WfplWKvZ7DWfjVgO7oVHA4dtlbuuzfr',
+  'AV-P7':'https://drive.google.com/drive/folders/1ZmlxctN0yAXamSmXTNzjx0t3GJu_aLiI',
+  'AV-P8':'https://drive.google.com/drive/folders/1T1eWjtfuNhtI8hrm-Jac5tKeZNfbJaXY',
+  'AV-P9':'https://drive.google.com/drive/folders/1f4YCTjwd8E0dHgbyf8eF7XeC5kSj5j_6'
+}
+
 function isPlotSummaryTask(t:ScheduleTask){
   return t.category==='งานก่อสร้าง' && /^งานก่อสร้าง\s+Above Villa Plot/i.test(t.task_name||'')
 }
@@ -58,6 +65,7 @@ export default function ProjectPage(){
   const weeklyItems=reports.flatMap((r:any)=>(r.report_items||[]).map((x:any)=>({...x,report_date:r.report_date,report_summary:r.summary})))
   const maxDelay=delayedTasks.reduce((m,t)=>Math.max(m,t.delay_days||0),0)
   const categories=useMemo(()=>[...new Set(workTasks.map(t=>t.category).filter((x):x is string=>Boolean(x?.trim())))].sort((a,b)=>a.localeCompare(b,'th')),[workTasks])
+  const drivePhotoUrl=p?.code?pictureProgressFolders[p.code]:undefined
 
   const viewTasks=useMemo(()=>{
     if(taskView==='delayed') return delayedTasks
@@ -91,7 +99,11 @@ export default function ProjectPage(){
     <PageHeader
       title={p?`${p.code} — ${p.name}`:'รายละเอียด Plot'}
       subtitle={`เป้าส่งมอบ: ${dateTH(p?.target_handover)} • แผน ${pct(avgPlan)} • หน้างานจริง ${pct(avgActual)}`}
-      action={<div className="row"><Link className="button" href="/weekly">← รายงานประจำสัปดาห์</Link><button className="button primary" onClick={()=>window.print()}>พิมพ์ PDF Plot</button></div>}
+      action={<div className="row">
+        <Link className="button" href="/weekly">← รายงานประจำสัปดาห์</Link>
+        {drivePhotoUrl&&<Link className="button" href={drivePhotoUrl} target="_blank" rel="noreferrer">รูปความคืบหน้า (Drive) ↗</Link>}
+        <button className="button primary" onClick={()=>window.print()}>พิมพ์ PDF Plot</button>
+      </div>}
     />
 
     <section className="kpi-grid plot-kpi-grid">
