@@ -61,6 +61,8 @@ export async function POST(request: Request) {
         archive_status: 'failed',
         archive_error: message.slice(0, 1000),
         archive_staging_path: stagingPath,
+        archive_last_attempt_at: new Date().toISOString(),
+        archive_last_attempt_by: userData.user.id,
       })
       .eq('id', photoId)
       .eq('uploaded_by', userData.user.id)
@@ -90,6 +92,8 @@ export async function POST(request: Request) {
       archive_error: null,
       archive_staging_path: stagingPath,
       archive_file_name: archiveFileName,
+      archive_last_attempt_at: new Date().toISOString(),
+      archive_last_attempt_by: userData.user.id,
     })
     .eq('id', photoId)
     .eq('uploaded_by', userData.user.id)
