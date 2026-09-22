@@ -41,6 +41,14 @@ export default function ProjectPage(){
   const[categoryFilter,setCategoryFilter]=useState('')
 
   useEffect(()=>{
+    const requested=new URLSearchParams(window.location.search).get('view') as TaskView|null
+    if(requested&&['all','delayed','blockers','completed'].includes(requested)){
+      setTaskView(requested)
+      window.setTimeout(()=>document.getElementById('task-detail')?.scrollIntoView({behavior:'smooth',block:'start'}),300)
+    }
+  },[id])
+
+  useEffect(()=>{
     const s=getSupabase()
     const since=new Date(Date.now()-7*86400000).toISOString().slice(0,10)
     Promise.all([
