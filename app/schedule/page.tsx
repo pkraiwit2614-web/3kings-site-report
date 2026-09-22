@@ -51,7 +51,7 @@ export default function SchedulePage(){
   const workTasks=useMemo(()=>tasks.filter(t=>t.source_task_no!=='1'),[tasks])
   const rows=useMemo(()=>workTasks.filter(t=>{
     if(project&&t.project_id!==project) return false
-    if(q&&!`${t.task_name} ${t.category||''} ${t.area||''} ${t.blocker||''} ${t.next_action||''}`.toLowerCase().includes(q.toLowerCase())) return false
+    if(q&&!`${t.task_name} ${t.category||''} ${t.area||''} ${t.next_action||''}`.toLowerCase().includes(q.toLowerCase())) return false
     if(status==='delayed'&&!((t.delay_days||0)>0&&(t.actual_progress||0)<1)) return false
     if(status==='blockers'&&!(Boolean(t.blocker?.trim())&&(t.actual_progress||0)<1)) return false
     if(status==='in_progress'&&!((t.actual_progress||0)>0&&(t.actual_progress||0)<1)) return false
@@ -141,7 +141,7 @@ export default function SchedulePage(){
           <option value="in_progress">กำลังดำเนินการ</option>
           <option value="completed">เสร็จแล้ว</option>
         </select>
-        <input placeholder="ค้นหา งาน / พื้นที่ / ปัญหา / งานถัดไป…" value={q} onChange={e=>setQ(e.target.value)}/>
+        <input placeholder="ค้นหา งาน / พื้นที่ / งานถัดไป…" value={q} onChange={e=>setQ(e.target.value)}/>
         <span className="schedule-row-count">{rows.length} รายการ</span>
         {(project||q||status!=='all')&&<button className="button" onClick={()=>{setProject('');setQ('');setStatus('all')}}>ล้างตัวกรอง</button>}
       </div>
@@ -150,7 +150,7 @@ export default function SchedulePage(){
     {loading?<div className="panel">กำลังโหลดข้อมูล…</div>:<div className="panel schedule-table-panel">
       <div className="schedule-table-scroll">
         <table className="schedule-table">
-          <thead><tr><th>Site / Plot</th><th>งาน / แผน</th><th>พื้นที่</th><th>Plan</th><th>Actual</th><th>Variance</th><th>ล่าช้า</th><th>สถานะ</th><th>ปัญหา / งานถัดไป</th></tr></thead>
+          <thead><tr><th>Site / Plot</th><th>งาน / แผน</th><th>พื้นที่</th><th>Plan</th><th>Actual</th><th>Variance</th><th>ล่าช้า</th><th>สถานะ</th><th>งานถัดไป</th></tr></thead>
           <tbody>{rows.map(t=>{
             const plan=Math.round((t.current_plan_progress||0)*100)
             const actual=Math.round((t.actual_progress||0)*100)
@@ -167,9 +167,7 @@ export default function SchedulePage(){
               <td>{isDelayed?<span className="delay-chip">{t.delay_days} วัน</span>:<span className="muted">—</span>}</td>
               <td><StatusBadge value={t.site_status}/></td>
               <td className="schedule-detail-cell">
-                {t.blocker&&<p><b>ปัญหา:</b> {t.blocker}</p>}
-                {t.next_action&&<small><b>งานถัดไป:</b> {t.next_action}</small>}
-                {!t.blocker&&!t.next_action&&<span className="muted">ยังไม่ระบุ</span>}
+                {t.next_action?<small><b>งานถัดไป:</b> {t.next_action}</small>:<span className="muted">—</span>}
               </td>
             </tr>
           })}</tbody>
