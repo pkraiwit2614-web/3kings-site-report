@@ -200,16 +200,7 @@ export default function DashboardPage() {
 
   const sitePerformanceStats=useMemo(()=>snapshotDate?snapshotStats:projectStats,[snapshotDate,snapshotStats,projectStats])
   const sitePerformanceFiltered=useMemo(()=>sitePerformanceStats.filter(x=>x.taskCount>0&&(siteStatusFilter==='all'||siteStatusOf(x)===siteStatusFilter)),[sitePerformanceStats,siteStatusFilter])
-
-  const latestSyncFiles=useMemo(()=>{
-    const seen=new Set<string>(); const out:any[]=[]
-    for(const r of syncRuns){
-      const key=`${r.sync_type}:${r.project_code||''}:${r.source_file||''}`
-      if(!seen.has(key)){seen.add(key);out.push(r)}
-    }
-    return out.slice(0,8)
-  },[syncRuns])
-  const latestSyncAt=latestSyncFiles.map(x=>x.created_at).filter(Boolean).sort().at(-1)||null
+  const latestSyncAt=syncRuns.map(x=>x.created_at).filter(Boolean).sort().at(-1)||null
   const latestSnapshotDate=snapshotDays[0]?.snapshot_date||''
   const earliestSnapshotDate=snapshotDays.at(-1)?.snapshot_date||''
 
@@ -280,7 +271,7 @@ export default function DashboardPage() {
       </section>
 
       <section className="panel dashboard-module" id="site-performance" style={{marginBottom:18}}>
-        <div className="module-title"><span>5</span><div><b>SITE PERFORMANCE — DELAYED / BLOCKER</b><small>วงนอก = Delayed ต่อจำนวนงาน • วงใน = Blocker ต่อจำนวนงาน • ไม่ใช้ Plan/Actual ซ้ำกับข้อ 2</small></div></div>
+        <div className="module-title"><span>5</span><div><b>SITE PERFORMANCE — DELAYED / BLOCKER</b><small>วงนอก = Delayed ต่อจำนวนงาน • วงใน = Blocker ต่อจำนวนงาน</small></div></div>
         <div style={{padding:'12px 14px',display:'flex',gap:10,alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',borderBottom:'1px solid var(--line)'}}>
           <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
             <label className="small" style={{fontWeight:800}}>ข้อมูล ณ วันที่</label>
@@ -304,7 +295,6 @@ export default function DashboardPage() {
           </Link>)}
           {!sitePerformanceFiltered.length&&<p className="muted">ไม่มี Site / Plot ในสถานะที่เลือกสำหรับวันที่นี้</p>}
         </div>}
-        <div style={{padding:'0 14px 14px'}}><div className="small" style={{fontWeight:800,marginBottom:6}}>สถานะ Sync ไฟล์ล่าสุด</div><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(260px,1fr))',gap:6}}>{latestSyncFiles.map(r=><div key={r.id} style={{border:'1px solid var(--line)',borderRadius:9,padding:'7px 9px',background:'var(--surface)'}}><b style={{fontSize:10}}>{r.project_code|| (r.sync_type==='materials'?'Materials':'Sync')}</b><small style={{display:'block',color:'var(--muted)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}} title={r.source_file||''}>{r.source_file||'-'}</small><small style={{display:'block',color:'var(--green)',marginTop:2}}>✓ {dateTimeTH(r.created_at)}</small></div>)}</div></div>
       </section>
 
       <div className="dashboard-grid two-main">
@@ -315,8 +305,8 @@ export default function DashboardPage() {
         </section>
 
         <section className="panel dashboard-module">
-          <div className="module-title"><span>7</span><div><b>PURCHASING FOLLOW-UP</b><small>รายการจัดซื้อ/ส่งของที่สถานะยังไม่ปิด</small></div><Link href="/procurement">เปิดจัดซื้อ →</Link></div>
-          <div className="resource-kpis"><div><span>รายการต้องติดตาม</span><b>{openProc.length}</b><small>รายการที่ยังไม่ปิด</small></div><div><span>มีข้อมูลทั้งหมด</span><b>{proc.length}</b><small>รายการใน Procurement</small></div><div><span>อัปเดต Materials</span><b style={{fontSize:14}}>{dateTimeTH(latestSyncFiles.find(x=>x.sync_type==='materials')?.created_at)}</b><small>จาก Drive Sync</small></div></div>
+          <div className="module-title"><span>7</span><div><b>PURCHASING FOLLOW-UP</b><small>สถานะรายการจัดซื้อ/จัดจ้าง</small></div><Link href="/procurement">เปิดจัดซื้อ →</Link></div>
+          <div className="resource-kpis" style={{gridTemplateColumns:'repeat(2,1fr)'}}><div><span>รายการต้องติดตาม</span><b>{openProc.length}</b><small>รายการที่ยังไม่ปิด</small></div><div><span>มีข้อมูลทั้งหมด</span><b>{proc.length}</b><small>รายการใน Procurement</small></div></div>
           <div className="resource-list">{openProc.slice(0,8).map(x=><div key={x.id}><div><b>{x.item_name}</b><small>{projects.find(p=>p.id===x.project_id)?.code||'-'} • {x.vendor||'ยังไม่ระบุผู้ขาย'}</small></div><span>{x.expected_delivery_text||'ยังไม่ระบุกำหนด'}</span></div>)}{!openProc.length&&<p className="muted">ไม่มีรายการจัดซื้อค้างในข้อมูลปัจจุบัน</p>}</div>
         </section>
       </div>
