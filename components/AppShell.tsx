@@ -13,6 +13,7 @@ const baseNav = [
   ['/reports', 'ประวัติรายงานการทำงานประจำวัน'],
   ['/materials', 'วัสดุอุปกรณ์และผู้รับเหมา'],
   ['/procurement', 'การจัดซื้อจัดจ้าง'],
+  ['/site-photos', 'รูปภาพหน้างาน'],
   ['/weekly', 'รายงานการทำงานประจำสัปดาห์']
 ]
 
@@ -43,6 +44,24 @@ export default function AppShell({ children }: { children: ReactNode }) {
   }, [router])
 
   useEffect(() => { setMobileMore(false) }, [path])
+
+  useEffect(() => {
+    if (path !== '/') return
+    const translateOptions = () => {
+      document.querySelectorAll<HTMLSelectElement>('#site-performance select').forEach(select => {
+        Array.from(select.options).forEach(option => {
+          if (option.value === 'all') option.text = 'ทุกสถานะหน้างาน'
+          if (option.value === 'ontrack') option.text = 'ตามแผน'
+          if (option.value === 'atrisk') option.text = 'เสี่ยงล่าช้า'
+          if (option.value === 'delayed') option.text = 'ล่าช้า'
+        })
+      })
+    }
+    translateOptions()
+    const observer = new MutationObserver(translateOptions)
+    observer.observe(document.body,{childList:true,subtree:true})
+    return () => observer.disconnect()
+  }, [path, ready])
 
   const signOut = async () => {
     setMobileMore(false)
@@ -82,5 +101,34 @@ export default function AppShell({ children }: { children: ReactNode }) {
       {mobilePrimary.map(([href,label]) => <Link key={href} className={path===href?'active':''} href={href}>{label}</Link>)}
       <button type="button" className={(mobileMore||extraActive)?'active':''} onClick={()=>setMobileMore(v=>!v)}>เพิ่มเติม</button>
     </nav>
+
+    <style jsx global>{`
+      .portfolio-status-strip>button:nth-child(1)>b,
+      .portfolio-status-strip>button:nth-child(2)>b,
+      .portfolio-status-strip>button:nth-child(3)>b,
+      .portfolio-status-strip>button:nth-child(1)>small,
+      .portfolio-status-strip>button:nth-child(2)>small,
+      .portfolio-status-strip>button:nth-child(3)>small{font-size:0}
+      .portfolio-status-strip>button:nth-child(1)>b::after{content:'ตามแผน';font-size:14px}
+      .portfolio-status-strip>button:nth-child(2)>b::after{content:'เสี่ยงล่าช้า';font-size:14px}
+      .portfolio-status-strip>button:nth-child(3)>b::after{content:'ล่าช้า';font-size:14px}
+      .portfolio-status-strip>button:nth-child(1)>small::after{content:'ส่วนต่างหน้างานจริง - แผน ≥ -3 จุดเปอร์เซ็นต์ • คลิกดูรายละเอียด';font-size:10px}
+      .portfolio-status-strip>button:nth-child(2)>small::after{content:'ส่วนต่างหน้างานจริง - แผน ตั้งแต่ -10 ถึงน้อยกว่า -3 จุดเปอร์เซ็นต์ • คลิกดูรายละเอียด';font-size:10px}
+      .portfolio-status-strip>button:nth-child(3)>small::after{content:'ส่วนต่างหน้างานจริง - แผน ต่ำกว่า -10 จุดเปอร์เซ็นต์ • คลิกดูรายละเอียด';font-size:10px}
+      #site-performance a[href^='/projects/']{grid-template-columns:80px minmax(0,1fr)!important;gap:8px!important;overflow:hidden;min-width:0}
+      #site-performance a[href^='/projects/']>svg{width:80px!important;height:80px!important;max-width:100%}
+      #site-performance a[href^='/projects/']>div{min-width:0}
+      #site-performance a[href^='/projects/'] .row.between{flex-direction:column;align-items:flex-start;gap:5px;min-width:0}
+      #site-performance a[href^='/projects/'] .row.between>div{min-width:0;max-width:100%}
+      #site-performance a[href^='/projects/'] .row.between small{white-space:normal;overflow-wrap:anywhere}
+      #site-performance a[href^='/projects/'] .badge{margin-top:2px;max-width:124px}
+      #site-performance a[href^='/projects/'] div[style*='grid-template-columns']{min-width:0}
+      #site-performance a[href^='/projects/'] div[style*='grid-template-columns']>div{min-width:0;overflow:hidden}
+      #site-performance a[href^='/projects/'] div[style*='grid-template-columns'] small{white-space:nowrap;font-size:9px}
+      @media(max-width:760px){
+        #site-performance a[href^='/projects/']{grid-template-columns:72px minmax(0,1fr)!important;padding:10px!important}
+        #site-performance a[href^='/projects/']>svg{width:72px!important;height:72px!important}
+      }
+    `}</style>
   </div>
 }
