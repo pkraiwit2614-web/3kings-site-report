@@ -54,7 +54,7 @@ function CompletionCurve({data,large=false,onOpen}:{data:CurvePoint[];large?:boo
         <rect x={tooltipX} y={tooltipY} width={tooltipW} height={large?82:70} rx="9" fill="white" stroke="var(--line)"/>
         <text x={tooltipX+12} y={tooltipY+(large?22:19)} fontSize={large?14:11} fontWeight="800" fill="var(--navy)">{active.label}</text>
         <text x={tooltipX+12} y={tooltipY+(large?43:37)} fontSize={large?13:10} fill="var(--text)">Plan {active.plan}%</text>
-        <text x={tooltipX+12} y={tooltipY+(large?63:53)} fontSize={large?13:10} fill="var(--text)">Actual {active.actual}%  •  Δ {active.actual-active.plan>0?'+':''}{active.actual-active.plan}%</text>
+        <text x={tooltipX+12} y={tooltipY+(large?63:53)} fontSize={large?13:10} fill="var(--text)">Actual {active.actual}% • Δ {active.actual-active.plan>0?'+':''}{active.actual-active.plan}%</text>
       </g>}
     </svg>
     {onOpen&&<span style={{position:'absolute',right:8,top:7,fontSize:10,fontWeight:800,color:'var(--muted)',background:'rgba(255,255,255,.88)',padding:'4px 7px',borderRadius:8,pointerEvents:'none'}}>เลื่อนดู % • คลิกเพื่อขยาย</span>}
@@ -85,34 +85,35 @@ function siteStatusOf(x:{variance:number}){
 }
 
 export default function DashboardPage() {
-  const [projects, setProjects] = useState<Project[]>([])
-  const [tasks, setTasks] = useState<ScheduleTask[]>([])
-  const [reports, setReports] = useState<any[]>([])
-  const [proc, setProc] = useState<any[]>([])
-  const [syncRuns, setSyncRuns] = useState<any[]>([])
-  const [snapshotDays, setSnapshotDays] = useState<any[]>([])
-  const [snapshotRows, setSnapshotRows] = useState<any[]>([])
-  const [snapshotDate, setSnapshotDate] = useState('')
-  const [snapshotLoading, setSnapshotLoading] = useState(false)
-  const [disciplineProject, setDisciplineProject] = useState('')
-  const [siteStatusFilter, setSiteStatusFilter] = useState<SiteStatusFilter>('all')
-  const [loading, setLoading] = useState(true)
-  const [followupView, setFollowupView] = useState<FollowupView>('critical')
+  const [projects,setProjects]=useState<Project[]>([])
+  const [tasks,setTasks]=useState<ScheduleTask[]>([])
+  const [reports,setReports]=useState<any[]>([])
+  const [proc,setProc]=useState<any[]>([])
+  const [syncRuns,setSyncRuns]=useState<any[]>([])
+  const [snapshotDays,setSnapshotDays]=useState<any[]>([])
+  const [snapshotRows,setSnapshotRows]=useState<any[]>([])
+  const [snapshotDate,setSnapshotDate]=useState('')
+  const [snapshotLoading,setSnapshotLoading]=useState(false)
+  const [disciplineProject,setDisciplineProject]=useState('')
+  const [siteStatusFilter,setSiteStatusFilter]=useState<SiteStatusFilter>('all')
+  const [followupProject,setFollowupProject]=useState('')
+  const [followupView,setFollowupView]=useState<FollowupView>('critical')
   const [curveOpen,setCurveOpen]=useState(false)
+  const [loading,setLoading]=useState(true)
 
-  useEffect(() => {
-    const load = async () => {
-      const s = getSupabase()
-      const [p,t,r,pr,sr,sd] = await Promise.all([
+  useEffect(()=>{
+    const load=async()=>{
+      const s=getSupabase()
+      const [p,t,r,pr,sr,sd]=await Promise.all([
         s.from('projects').select('id,code,name,target_handover,active,sort_order').eq('active',true).order('sort_order'),
         s.from('v_schedule_tasks').select('id,project_id,task_name,category,actual_progress,current_plan_progress,current_variance,delay_days,site_status,blocker,next_action,target_close,planned_start,planned_end,actual_start,actual_end,area,source_task_no,contractor'),
         s.from('daily_reports').select('id,project_id,report_date,total_manpower,summary,status,created_at').order('report_date',{ascending:false}).order('created_at',{ascending:false}).limit(100),
         s.from('procurement_items').select('id,project_id,vendor,item_name,current_status,expected_delivery_text,expected_delivery').order('created_at',{ascending:false}),
-        s.from('drive_sync_runs').select('created_at').eq('status','success').order('created_at',{ascending:false}).limit(1),
+        s.from('drive_sync_runs').select('sync_type,project_code,created_at').eq('status','success').order('created_at',{ascending:false}).limit(30),
         s.from('v_schedule_snapshot_days').select('snapshot_date').order('snapshot_date',{ascending:false}).limit(60)
       ])
-      if (p.error) throw p.error
-      if (t.error) throw t.error
+      if(p.error) throw p.error
+      if(t.error) throw t.error
       setProjects((p.data||[]) as Project[])
       setTasks((t.data||[]) as ScheduleTask[])
       setReports(r.data||[])
@@ -122,10 +123,10 @@ export default function DashboardPage() {
       setLoading(false)
     }
     load().catch(()=>setLoading(false))
-  }, [])
+  },[])
 
   useEffect(()=>{
-    if(!snapshotDate){ setSnapshotRows([]); setSnapshotLoading(false); return }
+    if(!snapshotDate){setSnapshotRows([]);setSnapshotLoading(false);return}
     setSnapshotLoading(true)
     getSupabase().from('schedule_task_daily_snapshots').select('snapshot_date,synced_at,project_id,source_identity,source_task_no,category,task_name,area,planned_start,planned_end,actual_progress,current_plan_progress,current_variance,delay_days,site_status,blocker,next_action,source_file').eq('snapshot_date',snapshotDate).then(({data})=>{
       setSnapshotRows(data||[])
@@ -135,117 +136,92 @@ export default function DashboardPage() {
 
   useEffect(()=>{
     if(!curveOpen) return
-    const close=(e:KeyboardEvent)=>{ if(e.key==='Escape') setCurveOpen(false) }
+    const close=(e:KeyboardEvent)=>{if(e.key==='Escape')setCurveOpen(false)}
     window.addEventListener('keydown',close)
     return()=>window.removeEventListener('keydown',close)
   },[curveOpen])
 
-  const workTasks = useMemo(() => tasks.filter(t=>t.source_task_no!=='1'), [tasks])
-  const delayedTasks = useMemo(() => workTasks.filter(t=>(t.delay_days||0)>0 && (t.actual_progress||0)<1), [workTasks])
-  const blockerTasks = useMemo(() => workTasks.filter(t=>Boolean(t.blocker?.trim()) && (t.actual_progress||0)<1), [workTasks])
-  const criticalTasks = useMemo(() => workTasks.filter(t=>((t.delay_days||0)>0 || Boolean(t.blocker?.trim())) && (t.actual_progress||0)<1), [workTasks])
+  const workTasks=useMemo(()=>tasks.filter(t=>t.source_task_no!=='1'),[tasks])
+  const delayedTasks=useMemo(()=>workTasks.filter(t=>(t.delay_days||0)>0&&(t.actual_progress||0)<1),[workTasks])
+  const blockerTasks=useMemo(()=>workTasks.filter(t=>Boolean(t.blocker?.trim())&&(t.actual_progress||0)<1),[workTasks])
+  const criticalTasks=useMemo(()=>workTasks.filter(t=>((t.delay_days||0)>0||Boolean(t.blocker?.trim()))&&(t.actual_progress||0)<1),[workTasks])
 
   const portfolioActual=workTasks.length?workTasks.reduce((s,t)=>s+(t.actual_progress||0),0)/workTasks.length:0
   const portfolioPlan=workTasks.length?workTasks.reduce((s,t)=>s+(t.current_plan_progress||0),0)/workTasks.length:0
   const portfolioVariance=portfolioActual-portfolioPlan
 
-  const projectStats = useMemo<ProjectStat[]>(() => projects.map(p => {
-    const list = workTasks.filter(t=>t.project_id===p.id)
-    const avgActual = list.length ? list.reduce((a,b)=>a+(b.actual_progress||0),0)/list.length : 0
-    const avgPlan = list.length ? list.reduce((a,b)=>a+(b.current_plan_progress||0),0)/list.length : 0
-    const delayed = list.filter(t=>(t.delay_days||0)>0 && (t.actual_progress||0)<1).length
-    const blockers = list.filter(t=>Boolean(t.blocker?.trim()) && (t.actual_progress||0)<1).length
-    return { p, avgActual, avgPlan, delayed, blockers, taskCount:list.length, variance:avgActual-avgPlan }
-  }), [projects,workTasks])
+  const projectStats=useMemo<ProjectStat[]>(()=>projects.map(p=>{
+    const list=workTasks.filter(t=>t.project_id===p.id)
+    const avgActual=list.length?list.reduce((a,b)=>a+(b.actual_progress||0),0)/list.length:0
+    const avgPlan=list.length?list.reduce((a,b)=>a+(b.current_plan_progress||0),0)/list.length:0
+    return {p,avgActual,avgPlan,delayed:list.filter(t=>(t.delay_days||0)>0&&(t.actual_progress||0)<1).length,blockers:list.filter(t=>Boolean(t.blocker?.trim())&&(t.actual_progress||0)<1).length,taskCount:list.length,variance:avgActual-avgPlan}
+  }),[projects,workTasks])
 
   const statusSummary=useMemo(()=>{
     const active=projectStats.filter(x=>x.taskCount>0)
-    return {
-      onTrack:active.filter(x=>siteStatusOf(x)==='ontrack').length,
-      atRisk:active.filter(x=>siteStatusOf(x)==='atrisk').length,
-      delayed:active.filter(x=>siteStatusOf(x)==='delayed').length,
-      total:active.length
-    }
+    return {onTrack:active.filter(x=>siteStatusOf(x)==='ontrack').length,atRisk:active.filter(x=>siteStatusOf(x)==='atrisk').length,delayed:active.filter(x=>siteStatusOf(x)==='delayed').length,total:active.length}
   },[projectStats])
 
   const disciplineTasks=useMemo(()=>disciplineProject?workTasks.filter(t=>t.project_id===disciplineProject):workTasks,[workTasks,disciplineProject])
   const disciplineStats=useMemo(()=>{
     const map=new Map<string,ScheduleTask[]>()
-    disciplineTasks.forEach(t=>{ const key=t.category||'ไม่ระบุหมวด'; map.set(key,[...(map.get(key)||[]),t]) })
-    return [...map.entries()].map(([category,list])=>({
-      category,
-      count:list.length,
-      plan:list.reduce((s,t)=>s+(t.current_plan_progress||0),0)/list.length,
-      actual:list.reduce((s,t)=>s+(t.actual_progress||0),0)/list.length,
-      delayed:list.filter(t=>(t.delay_days||0)>0&&(t.actual_progress||0)<1).length
-    })).sort((a,b)=>b.count-a.count).slice(0,8)
+    disciplineTasks.forEach(t=>{const key=t.category||'ไม่ระบุหมวด';map.set(key,[...(map.get(key)||[]),t])})
+    return [...map.entries()].map(([category,list])=>({category,count:list.length,plan:list.reduce((s,t)=>s+(t.current_plan_progress||0),0)/list.length,actual:list.reduce((s,t)=>s+(t.actual_progress||0),0)/list.length,delayed:list.filter(t=>(t.delay_days||0)>0&&(t.actual_progress||0)<1).length})).sort((a,b)=>b.count-a.count).slice(0,8)
   },[disciplineTasks])
 
   const curveData=useMemo(()=>{
-    const year=2026
     const labels=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.']
     const denominator=Math.max(1,workTasks.length)
     return labels.map((label,month)=>{
-      const end=new Date(Date.UTC(year,month+1,0,23,59,59))
+      const end=new Date(Date.UTC(2026,month+1,0,23,59,59))
       const planned=workTasks.filter(t=>t.planned_end&&new Date(`${t.planned_end}T00:00:00Z`)<=end).length
       const actual=workTasks.filter(t=>t.actual_end&&new Date(`${t.actual_end}T00:00:00Z`)<=end).length
       return {label,plan:Math.round(planned/denominator*100),actual:Math.round(actual/denominator*100)}
     })
   },[workTasks])
 
-  const delayedTotal = delayedTasks.length
-  const blockersTotal = blockerTasks.length
-  const today = new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Bangkok'})
-  const reportToday = reports.filter(r=>r.report_date===today).length
-
-  const latestReports=useMemo(()=>{
-    const seen=new Set<string>(); const out:any[]=[]
-    for(const r of reports){ if(!seen.has(r.project_id)){seen.add(r.project_id);out.push(r)} }
-    return out
-  },[reports])
+  const delayedTotal=delayedTasks.length
+  const blockersTotal=blockerTasks.length
+  const today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Bangkok'})
+  const reportToday=reports.filter(r=>r.report_date===today).length
+  const latestReports=useMemo(()=>{const seen=new Set<string>();const out:any[]=[];for(const r of reports){if(!seen.has(r.project_id)){seen.add(r.project_id);out.push(r)}}return out},[reports])
   const latestManpower=latestReports.reduce((s,r)=>s+(Number(r.total_manpower)||0),0)
-
   const openProc=useMemo(()=>proc.filter(x=>!/(ส่งครบ|delivered|closed|complete|completed|เสร็จ|รับของแล้ว)/i.test(`${x.current_status||''}`)),[proc])
 
-  const followupTasks = useMemo(() => {
-    const list = followupView==='delayed' ? delayedTasks : followupView==='blockers' ? blockerTasks : criticalTasks
-    return [...list].sort((a,b)=>(b.delay_days||0)-(a.delay_days||0))
-  }, [followupView, delayedTasks, blockerTasks, criticalTasks])
-
-  const followupTitle = followupView==='delayed' ? 'Delayed Tasks' : followupView==='blockers' ? 'Open Blockers' : 'Construction Alert & Action'
+  const followupTasks=useMemo(()=>{
+    const base=followupView==='delayed'?delayedTasks:followupView==='blockers'?blockerTasks:criticalTasks
+    const filtered=followupProject?base.filter(t=>t.project_id===followupProject):base
+    return [...filtered].sort((a,b)=>(b.delay_days||0)-(a.delay_days||0))
+  },[followupView,followupProject,delayedTasks,blockerTasks,criticalTasks])
 
   const snapshotStats=useMemo<ProjectStat[]>(()=>projects.map(p=>{
     const list=snapshotRows.filter(x=>x.project_id===p.id&&x.source_task_no!=='1')
-    if(!list.length) return {p,avgActual:0,avgPlan:0,delayed:0,blockers:0,taskCount:0,variance:0,syncedAt:null}
+    if(!list.length)return{p,avgActual:0,avgPlan:0,delayed:0,blockers:0,taskCount:0,variance:0,syncedAt:null}
     const avgActual=list.reduce((s,x)=>s+(Number(x.actual_progress)||0),0)/list.length
     const avgPlan=list.reduce((s,x)=>s+(Number(x.current_plan_progress)||0),0)/list.length
     const syncedAt=[...list].map(x=>x.synced_at).filter(Boolean).sort().at(-1)||null
-    return {
-      p,avgActual,avgPlan,
-      delayed:list.filter(x=>(Number(x.delay_days)||0)>0&&(Number(x.actual_progress)||0)<1).length,
-      blockers:list.filter(x=>Boolean(`${x.blocker||''}`.trim())&&(Number(x.actual_progress)||0)<1).length,
-      taskCount:list.length,variance:avgActual-avgPlan,syncedAt
-    }
+    return {p,avgActual,avgPlan,delayed:list.filter(x=>(Number(x.delay_days)||0)>0&&(Number(x.actual_progress)||0)<1).length,blockers:list.filter(x=>Boolean(`${x.blocker||''}`.trim())&&(Number(x.actual_progress)||0)<1).length,taskCount:list.length,variance:avgActual-avgPlan,syncedAt}
   }),[projects,snapshotRows])
 
   const sitePerformanceStats=useMemo(()=>snapshotDate?snapshotStats:projectStats,[snapshotDate,snapshotStats,projectStats])
   const sitePerformanceFiltered=useMemo(()=>sitePerformanceStats.filter(x=>x.taskCount>0&&(siteStatusFilter==='all'||siteStatusOf(x)===siteStatusFilter)),[sitePerformanceStats,siteStatusFilter])
-  const latestSyncAt=syncRuns[0]?.created_at||null
+  const latestDataSyncAt=syncRuns[0]?.created_at||null
+  const latestScheduleSyncAt=syncRuns.find(x=>x.sync_type==='schedule')?.created_at||null
+  const latestMaterialsSyncAt=syncRuns.find(x=>x.sync_type==='materials')?.created_at||null
+  const selectedFollowupCode=projects.find(p=>p.id===followupProject)?.code||''
+  const followupSyncAt=(selectedFollowupCode?syncRuns.find(x=>x.sync_type==='schedule'&&x.project_code===selectedFollowupCode)?.created_at:null)||latestScheduleSyncAt
   const earliestSnapshotDate=snapshotDays.at(-1)?.snapshot_date||''
 
-  function openFollowup(view: FollowupView) {
-    setFollowupView(view)
-    window.setTimeout(()=>document.getElementById('management-followup')?.scrollIntoView({behavior:'smooth',block:'start'}),60)
-  }
+  function openFollowup(view:FollowupView){setFollowupView(view);window.setTimeout(()=>document.getElementById('management-followup')?.scrollIntoView({behavior:'smooth',block:'start'}),60)}
+  function openSiteStatus(view:Exclude<SiteStatusFilter,'all'>){setSiteStatusFilter(view);setSnapshotDate('');window.setTimeout(()=>document.getElementById('site-performance')?.scrollIntoView({behavior:'smooth',block:'start'}),60)}
 
-  function openSiteStatus(view:Exclude<SiteStatusFilter,'all'>){
-    setSiteStatusFilter(view)
-    setSnapshotDate('')
-    window.setTimeout(()=>document.getElementById('site-performance')?.scrollIntoView({behavior:'smooth',block:'start'}),60)
-  }
+  const followupTitle=followupView==='delayed'?'Delayed Tasks':followupView==='blockers'?'Open Blockers':'Construction Alert & Action'
+  const followupLinkView=followupView==='delayed'?'delayed':followupView==='blockers'?'blockers':'all'
 
-  return <AppShell><PageHeader title="Management Dashboard" subtitle="Construction supervision overview — เห็นความคืบหน้า ความเสี่ยง ทรัพยากร และรายการต้องติดตามจากหน้าเดียว" action={<Link href="/reports/new" className="button primary">+ รายงานประจำวัน</Link>} />
-    {loading ? <div className="panel">กำลังโหลดข้อมูล…</div> : <>
+  return <AppShell>
+    <PageHeader title="Management Dashboard" subtitle="Construction supervision overview — เห็นความคืบหน้า ความเสี่ยง ทรัพยากร และรายการต้องติดตามจากหน้าเดียว" action={<Link href="/reports/new" className="button primary">+ รายงานประจำวัน</Link>} />
+    <div className="panel" style={{padding:'10px 14px',marginBottom:14,display:'flex',justifyContent:'space-between',gap:10,alignItems:'center',flexWrap:'wrap'}}><span className="small muted">ข้อมูล Dashboard จาก Schedule / Materials / Daily Report</span><b className="small">อัปเดตข้อมูลล่าสุด: {dateTimeTH(latestDataSyncAt)}</b></div>
+    {loading?<div className="panel">กำลังโหลดข้อมูล…</div>:<>
       <section className="executive-section">
         <div className="executive-section-title"><span>1</span><div><b>PROJECT KPI SUMMARY</b><small>ภาพรวมโครงการจาก Schedule และข้อมูลหน้างานล่าสุด</small></div></div>
         <div className="executive-kpi-grid">
@@ -264,96 +240,31 @@ export default function DashboardPage() {
       </section>
 
       <div className="dashboard-grid two-main">
-        <section className="panel dashboard-module">
-          <div className="module-title"><span>2</span><div><b>PLAN vs ACTUAL PROGRESS</b><small>เทียบความคืบหน้าราย Site / Plot</small></div><Link href="/schedule">เปิด Schedule →</Link></div>
-          <div className="portfolio-bars">
-            {projectStats.filter(x=>x.taskCount>0).map(x=>{
-              const plan=clampPct(x.avgPlan), actual=clampPct(x.avgActual), delta=Math.round(x.variance*100)
-              return <Link href={`/projects/${x.p.id}`} key={x.p.id} className="portfolio-bar-row">
-                <div><b>{x.p.code}</b><small>{x.p.name}</small></div>
-                <div className="portfolio-track"><i style={{width:`${actual}%`}}/><em style={{left:`${plan}%`}}/><strong>{actual}%</strong></div>
-                <div className="portfolio-bar-meta"><span>Plan {plan}%</span><b className={delta<0?'danger-text':'good-text'}>{delta>0?'+':''}{delta}%</b></div>
-              </Link>
-            })}
-          </div>
-        </section>
-
-        <section className="panel dashboard-module">
-          <div className="module-title"><span>3</span><div><b>COMPLETION CURVE</b><small>สะสมจำนวนงานที่ควรจบ เทียบวันที่จบจริงที่บันทึก</small></div></div>
-          <CompletionCurve data={curveData} onOpen={()=>setCurveOpen(true)}/>
-          <div className="curve-legend"><span><i className="legend-plan"/>Planned completion</span><span><i className="legend-actual"/>Actual completion</span></div>
-          <p className="muted small">เลื่อนเมาส์บนกราฟเพื่อดู Plan / Actual เป็น % • คลิกกราฟเพื่อขยาย • กราฟนับตามจำนวน Task ไม่ใช่ Earned Value ตาม BOQ</p>
-        </section>
+        <section className="panel dashboard-module"><div className="module-title"><span>2</span><div><b>PLAN vs ACTUAL PROGRESS</b><small>เทียบความคืบหน้าราย Site / Plot</small></div><Link href="/schedule">เปิด Schedule →</Link></div><div className="portfolio-bars">{projectStats.filter(x=>x.taskCount>0).map(x=>{const plan=clampPct(x.avgPlan),actual=clampPct(x.avgActual),delta=Math.round(x.variance*100);return <Link href={`/projects/${x.p.id}`} key={x.p.id} className="portfolio-bar-row"><div><b>{x.p.code}</b><small>{x.p.name}</small></div><div className="portfolio-track"><i style={{width:`${actual}%`}}/><em style={{left:`${plan}%`}}/><strong>{actual}%</strong></div><div className="portfolio-bar-meta"><span>Plan {plan}%</span><b className={delta<0?'danger-text':'good-text'}>{delta>0?'+':''}{delta}%</b></div></Link>})}</div></section>
+        <section className="panel dashboard-module"><div className="module-title"><span>3</span><div><b>COMPLETION CURVE</b><small>สะสมจำนวนงานที่ควรจบ เทียบวันที่จบจริงที่บันทึก</small></div></div><CompletionCurve data={curveData} onOpen={()=>setCurveOpen(true)}/><div className="curve-legend"><span><i className="legend-plan"/>Planned completion</span><span><i className="legend-actual"/>Actual completion</span></div><p className="muted small">เลื่อนเมาส์บนกราฟเพื่อดู Plan / Actual เป็น % • คลิกกราฟเพื่อขยาย • กราฟนับตามจำนวน Task ไม่ใช่ Earned Value ตาม BOQ</p></section>
       </div>
 
-      <section className="panel dashboard-module" style={{marginBottom:18}}>
-        <div className="module-title"><span>4</span><div><b>WORK PROGRESS BY DISCIPLINE</b><small>{disciplineProject?`เฉพาะ ${projects.find(p=>p.id===disciplineProject)?.code||'Site ที่เลือก'}`:'ภาพรวมรวมทุก Site / Plot — เลือก Site เพื่อดูแยกหน้างาน'}</small></div><select value={disciplineProject} onChange={e=>setDisciplineProject(e.target.value)} style={{maxWidth:230,padding:'7px 9px',borderRadius:8,border:'1px solid rgba(255,255,255,.5)',background:'#fff',color:'var(--text)',fontSize:11}}><option value="">ทุก Site / Plot (รวม)</option>{projects.filter(p=>workTasks.some(t=>t.project_id===p.id)).map(p=><option key={p.id} value={p.id}>{p.code} — {p.name}</option>)}</select></div>
-        <div className="discipline-list">{disciplineStats.map(x=>{
-          const plan=clampPct(x.plan), actual=clampPct(x.actual), delta=Math.round((x.actual-x.plan)*100)
-          return <Link href={`/schedule?q=${encodeURIComponent(x.category)}${disciplineProject?`&project=${encodeURIComponent(disciplineProject)}`:''}`} key={x.category} className="discipline-row">
-            <div><b>{x.category}</b><small>{x.count} งาน • Delayed {x.delayed}</small></div>
-            <div className="discipline-bars"><span><i style={{width:`${plan}%`}}/></span><span className="actual"><i style={{width:`${actual}%`}}/></span></div>
-            <div><b>{actual}%</b><small className={delta<0?'danger-text':'good-text'}>Δ {delta>0?'+':''}{delta}%</small></div>
-          </Link>
-        })}</div>
-        <div className="module-footnote"><span><i className="plan-key"/>Plan</span><span><i className="actual-key"/>Actual</span></div>
-      </section>
+      <section className="panel dashboard-module" style={{marginBottom:18}}><div className="module-title"><span>4</span><div><b>WORK PROGRESS BY DISCIPLINE</b><small>{disciplineProject?`เฉพาะ ${projects.find(p=>p.id===disciplineProject)?.code||'Site ที่เลือก'}`:'ภาพรวมรวมทุก Site / Plot — เลือก Site เพื่อดูแยกหน้างาน'}</small></div><select value={disciplineProject} onChange={e=>setDisciplineProject(e.target.value)} style={{maxWidth:230,padding:'7px 9px',borderRadius:8,border:'1px solid rgba(255,255,255,.5)',background:'#fff',color:'var(--text)',fontSize:11}}><option value="">ทุก Site / Plot (รวม)</option>{projects.filter(p=>workTasks.some(t=>t.project_id===p.id)).map(p=><option key={p.id} value={p.id}>{p.code} — {p.name}</option>)}</select></div><div className="discipline-list">{disciplineStats.map(x=>{const plan=clampPct(x.plan),actual=clampPct(x.actual),delta=Math.round((x.actual-x.plan)*100);return <Link href={`/schedule?q=${encodeURIComponent(x.category)}${disciplineProject?`&project=${encodeURIComponent(disciplineProject)}`:''}`} key={x.category} className="discipline-row"><div><b>{x.category}</b><small>{x.count} งาน • Delayed {x.delayed}</small></div><div className="discipline-bars"><span><i style={{width:`${plan}%`}}/></span><span className="actual"><i style={{width:`${actual}%`}}/></span></div><div><b>{actual}%</b><small className={delta<0?'danger-text':'good-text'}>Δ {delta>0?'+':''}{delta}%</small></div></Link>})}</div><div className="module-footnote"><span><i className="plan-key"/>Plan</span><span><i className="actual-key"/>Actual</span></div></section>
 
       <section className="panel dashboard-module" id="site-performance" style={{marginBottom:18}}>
         <div className="module-title"><span>5</span><div><b>SITE PERFORMANCE — DELAYED / BLOCKER</b><small>วงนอก = Delayed ต่อจำนวนงาน • วงใน = Blocker ต่อจำนวนงาน</small></div></div>
-        <div style={{padding:'12px 14px',display:'flex',gap:10,alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',borderBottom:'1px solid var(--line)'}}>
-          <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
-            <label className="small" style={{fontWeight:800}}>ข้อมูล ณ วันที่</label>
-            <select value={snapshotDate} onChange={e=>setSnapshotDate(e.target.value)} style={{padding:'8px 10px',border:'1px solid var(--line)',borderRadius:9,background:'var(--surface)'}}>
-              <option value="">ข้อมูลล่าสุด</option>
-              {snapshotDays.map(d=><option key={d.snapshot_date} value={d.snapshot_date}>{dateTH(d.snapshot_date)}</option>)}
-            </select>
-            <select value={siteStatusFilter} onChange={e=>setSiteStatusFilter(e.target.value as SiteStatusFilter)} style={{padding:'8px 10px',border:'1px solid var(--line)',borderRadius:9,background:'var(--surface)'}}>
-              <option value="all">ทุกสถานะ Site</option><option value="ontrack">On Track</option><option value="atrisk">At Risk</option><option value="delayed">Delayed</option>
-            </select>
-            {siteStatusFilter!=='all'&&<button type="button" className="button" style={{padding:'7px 10px',fontSize:11}} onClick={()=>setSiteStatusFilter('all')}>แสดงทุก Site</button>}
-          </div>
-          <div className="small" style={{color:'var(--muted)',textAlign:'right'}}><b style={{color:'var(--text)'}}>Sync ล่าสุด:</b> {dateTimeTH(latestSyncAt)}{earliestSnapshotDate&&<><br/>ประวัติเลือกดูรายวันเริ่มเก็บ: {dateTH(earliestSnapshotDate)}</>}</div>
-        </div>
-        {snapshotLoading?<p className="muted" style={{padding:'14px'}}>กำลังโหลดข้อมูล ณ วันที่เลือก…</p>:<div style={{padding:14,display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(245px,1fr))',gap:10}}>
-          {sitePerformanceFiltered.map(x=><Link href={`/projects/${x.p.id}`} key={x.p.id} style={{border:'1px solid var(--line)',borderRadius:13,padding:12,display:'grid',gridTemplateColumns:'92px 1fr',gap:12,alignItems:'center',background:'var(--surface-2)'}}>
-            <SiteAlertRings delayed={x.delayed} blockers={x.blockers} total={x.taskCount}/>
-            <div><div className="row between"><div><b style={{color:'var(--navy-2)'}}>{x.p.code}</b><small style={{display:'block',color:'var(--muted)',marginTop:2}}>{x.p.name}</small></div><StatusBadge value={siteStatusOf(x)==='ontrack'?'On Track':siteStatusOf(x)==='atrisk'?'At Risk':'Delayed'}/></div>
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6,marginTop:10}}><div style={{background:'var(--amber-soft)',borderRadius:8,padding:'7px 8px'}}><small>Delayed</small><b style={{display:'block'}}>{x.delayed} งาน</b></div><div style={{background:'var(--red-soft)',borderRadius:8,padding:'7px 8px'}}><small>Blocker</small><b style={{display:'block'}}>{x.blockers} งาน</b></div></div>
-              <small style={{display:'block',marginTop:7,color:'var(--muted)'}}>ข้อมูล Sync: {dateTimeTH(x.syncedAt||latestSyncAt)}</small>
-            </div>
-          </Link>)}
-          {!sitePerformanceFiltered.length&&<p className="muted">ไม่มี Site / Plot ในสถานะที่เลือกสำหรับวันที่นี้</p>}
-        </div>}
+        <div style={{padding:'12px 14px',display:'flex',gap:10,alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',borderBottom:'1px solid var(--line)'}}><div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><label className="small" style={{fontWeight:800}}>ข้อมูล ณ วันที่</label><select value={snapshotDate} onChange={e=>setSnapshotDate(e.target.value)} style={{padding:'8px 10px',border:'1px solid var(--line)',borderRadius:9,background:'var(--surface)'}}><option value="">ข้อมูลล่าสุด</option>{snapshotDays.map(d=><option key={d.snapshot_date} value={d.snapshot_date}>{dateTH(d.snapshot_date)}</option>)}</select><select value={siteStatusFilter} onChange={e=>setSiteStatusFilter(e.target.value as SiteStatusFilter)} style={{padding:'8px 10px',border:'1px solid var(--line)',borderRadius:9,background:'var(--surface)'}}><option value="all">ทุกสถานะ Site</option><option value="ontrack">On Track</option><option value="atrisk">At Risk</option><option value="delayed">Delayed</option></select>{siteStatusFilter!=='all'&&<button type="button" className="button" style={{padding:'7px 10px',fontSize:11}} onClick={()=>setSiteStatusFilter('all')}>แสดงทุก Site</button>}</div><div className="small" style={{color:'var(--muted)',textAlign:'right'}}><b style={{color:'var(--text)'}}>Sync ล่าสุด:</b> {dateTimeTH(latestScheduleSyncAt)}{earliestSnapshotDate&&<><br/>ประวัติเลือกดูรายวันเริ่มเก็บ: {dateTH(earliestSnapshotDate)}</>}</div></div>
+        {snapshotLoading?<p className="muted" style={{padding:'14px'}}>กำลังโหลดข้อมูล ณ วันที่เลือก…</p>:<div style={{padding:14,display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(245px,1fr))',gap:10}}>{sitePerformanceFiltered.map(x=><Link href={`/projects/${x.p.id}`} key={x.p.id} style={{border:'1px solid var(--line)',borderRadius:13,padding:12,display:'grid',gridTemplateColumns:'92px 1fr',gap:12,alignItems:'center',background:'var(--surface-2)'}}><SiteAlertRings delayed={x.delayed} blockers={x.blockers} total={x.taskCount}/><div><div className="row between"><div><b style={{color:'var(--navy-2)'}}>{x.p.code}</b><small style={{display:'block',color:'var(--muted)',marginTop:2}}>{x.p.name}</small></div><StatusBadge value={siteStatusOf(x)==='ontrack'?'On Track':siteStatusOf(x)==='atrisk'?'At Risk':'Delayed'}/></div><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6,marginTop:10}}><div style={{background:'var(--amber-soft)',borderRadius:8,padding:'7px 8px'}}><small>Delayed</small><b style={{display:'block'}}>{x.delayed} งาน</b></div><div style={{background:'var(--red-soft)',borderRadius:8,padding:'7px 8px'}}><small>Blocker</small><b style={{display:'block'}}>{x.blockers} งาน</b></div></div><small style={{display:'block',marginTop:7,color:'var(--muted)'}}>ข้อมูล Sync: {dateTimeTH(x.syncedAt||latestScheduleSyncAt)}</small></div></Link>)}{!sitePerformanceFiltered.length&&<p className="muted">ไม่มี Site / Plot ในสถานะที่เลือกสำหรับวันที่นี้</p>}</div>}
       </section>
 
       <div className="dashboard-grid two-main">
-        <section className="panel dashboard-module">
-          <div className="module-title"><span>6</span><div><b>MANPOWER / DAILY REPORT</b><small>กำลังคนจากรายงานล่าสุดของแต่ละ Site และสถานะการส่งรายงานวันนี้</small></div><Link href="/reports">ดูรายงาน →</Link></div>
-          <div className="resource-kpis"><div><span>แรงงานล่าสุด</span><b>{latestManpower}</b><small>คน จาก {latestReports.length} Site ที่มีรายงาน</small></div><div><span>Reports Today</span><b>{reportToday}</b><small>รายงานประจำวัน</small></div><div><span>Active Sites</span><b>{projects.length}</b><small>Site / Plot ที่เปิดใช้งาน</small></div></div>
-          <div className="resource-list">{latestReports.slice(0,8).map(r=><div key={r.id}><div><b>{projects.find(p=>p.id===r.project_id)?.code||'-'}</b><small>{r.summary||'Daily Report'} • {dateTH(r.report_date)}</small></div><span>{Number(r.total_manpower)||0} คน</span></div>)}{!latestReports.length&&<p className="muted">ยังไม่มี Daily Report</p>}</div>
-        </section>
-
-        <section className="panel dashboard-module">
-          <div className="module-title"><span>7</span><div><b>PURCHASING FOLLOW-UP</b><small>สถานะรายการจัดซื้อ/จัดจ้าง</small></div><Link href="/procurement">เปิดจัดซื้อ →</Link></div>
-          <div className="resource-kpis" style={{gridTemplateColumns:'repeat(2,1fr)'}}><div><span>รายการต้องติดตาม</span><b>{openProc.length}</b><small>รายการที่ยังไม่ปิด</small></div><div><span>มีข้อมูลทั้งหมด</span><b>{proc.length}</b><small>รายการใน Procurement</small></div></div>
-          <div className="resource-list">{openProc.slice(0,8).map(x=><div key={x.id}><div><b>{x.item_name}</b><small>{projects.find(p=>p.id===x.project_id)?.code||'-'} • {x.vendor||'ยังไม่ระบุผู้ขาย'}</small></div><span>{x.expected_delivery_text||'ยังไม่ระบุกำหนด'}</span></div>)}{!openProc.length&&<p className="muted">ไม่มีรายการจัดซื้อค้างในข้อมูลปัจจุบัน</p>}</div>
-        </section>
+        <section className="panel dashboard-module"><div className="module-title"><span>6</span><div><b>MANPOWER / DAILY REPORT</b><small>กำลังคนจากรายงานล่าสุดของแต่ละ Site และสถานะการส่งรายงานวันนี้</small></div><Link href="/reports">ดูรายงาน →</Link></div><div className="resource-kpis"><div><span>แรงงานล่าสุด</span><b>{latestManpower}</b><small>คน จาก {latestReports.length} Site ที่มีรายงาน</small></div><div><span>Reports Today</span><b>{reportToday}</b><small>รายงานประจำวัน</small></div><div><span>Active Sites</span><b>{projects.length}</b><small>Site / Plot ที่เปิดใช้งาน</small></div></div><div className="resource-list">{latestReports.slice(0,8).map(r=><div key={r.id}><div><b>{projects.find(p=>p.id===r.project_id)?.code||'-'}</b><small>{r.summary||'Daily Report'} • {dateTH(r.report_date)}</small></div><span>{Number(r.total_manpower)||0} คน</span></div>)}{!latestReports.length&&<p className="muted">ยังไม่มี Daily Report</p>}</div></section>
+        <section className="panel dashboard-module"><div className="module-title"><span>7</span><div><b>PURCHASING FOLLOW-UP</b><small>สถานะรายการจัดซื้อ/จัดจ้าง</small></div><Link href="/procurement">เปิดจัดซื้อ →</Link></div><div style={{padding:'9px 14px',borderBottom:'1px solid var(--line)',fontSize:11,color:'var(--muted)'}}><b style={{color:'var(--text)'}}>อัปเดตข้อมูลล่าสุด:</b> {dateTimeTH(latestMaterialsSyncAt)}</div><div className="resource-kpis" style={{gridTemplateColumns:'repeat(2,1fr)'}}><div><span>รายการต้องติดตาม</span><b>{openProc.length}</b><small>รายการที่ยังไม่ปิด</small></div><div><span>มีข้อมูลทั้งหมด</span><b>{proc.length}</b><small>รายการใน Procurement</small></div></div><div className="resource-list">{openProc.slice(0,8).map(x=><div key={x.id}><div><b>{x.item_name}</b><small>{projects.find(p=>p.id===x.project_id)?.code||'-'} • {x.vendor||'ยังไม่ระบุผู้ขาย'}</small></div><span>{x.expected_delivery_text||'ยังไม่ระบุกำหนด'}</span></div>)}{!openProc.length&&<p className="muted">ไม่มีรายการจัดซื้อค้างในข้อมูลปัจจุบัน</p>}</div></section>
       </div>
 
       <section className="panel dashboard-module" id="management-followup" style={{marginBottom:18}}>
         <div className="module-title alert"><span>8</span><div><b>{followupTitle.toUpperCase()}</b><small>รายการที่ต้องตามต่อจาก Schedule</small></div><Link href="/schedule">ดู Schedule →</Link></div>
-        <div className="followup-tabs">{(['critical','delayed','blockers'] as FollowupView[]).map(view=><button type="button" key={view} onClick={()=>setFollowupView(view)} className={followupView===view?'active':''}>{view==='critical'?`ทั้งหมด ${criticalTasks.length}`:view==='delayed'?`Delayed ${delayedTotal}`:`Blockers ${blockersTotal}`}</button>)}</div>
-        <div className="alert-list">{followupTasks.slice(0,15).map(t=><div key={t.id} className="alert-row"><span className={(t.delay_days||0)>0?'alert-icon bad':'alert-icon warn'}>!</span><div><b>{t.task_name}</b><small>{projects.find(p=>p.id===t.project_id)?.code} • {t.area||'-'} • จบตามแผน {dateTH(t.planned_end)}</small>{t.blocker&&<p><strong>ปัญหา:</strong> {t.blocker}</p>}{t.next_action&&<p><strong>งานถัดไป:</strong> {t.next_action}</p>}</div><div className="right"><StatusBadge value={t.site_status}/><small className={(t.delay_days||0)>0?'danger-text':''}>{t.delay_days||0} วัน</small><Link href={`/projects/${t.project_id}`} style={{fontSize:10,color:'var(--blue)',fontWeight:800}}>เปิด Plot →</Link></div></div>)}{!followupTasks.length&&<p className="muted">ไม่มีรายการในหมวดนี้</p>}</div>
+        <div style={{padding:'10px 14px',display:'flex',gap:10,alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',borderBottom:'1px solid var(--line)'}}><div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><label className="small" style={{fontWeight:800}}>Plot</label><select value={followupProject} onChange={e=>setFollowupProject(e.target.value)} style={{padding:'8px 10px',border:'1px solid var(--line)',borderRadius:9,background:'var(--surface)'}}><option value="">ทุก Site / Plot</option>{projects.filter(p=>workTasks.some(t=>t.project_id===p.id)).map(p=><option key={p.id} value={p.id}>{p.code} — {p.name}</option>)}</select></div><div className="small" style={{color:'var(--muted)'}}><b style={{color:'var(--text)'}}>อัปเดตข้อมูลล่าสุด:</b> {dateTimeTH(followupSyncAt)}</div></div>
+        <div className="followup-tabs">{(['critical','delayed','blockers'] as FollowupView[]).map(view=><button type="button" key={view} onClick={()=>setFollowupView(view)} className={followupView===view?'active':''}>{view==='critical'?`ทั้งหมด ${followupProject?criticalTasks.filter(t=>t.project_id===followupProject).length:criticalTasks.length}`:view==='delayed'?`ล่าช้า ${followupProject?delayedTasks.filter(t=>t.project_id===followupProject).length:delayedTotal}`:`ติดอุปสรรค ${followupProject?blockerTasks.filter(t=>t.project_id===followupProject).length:blockersTotal}`}</button>)}</div>
+        <div className="alert-list">{followupTasks.slice(0,15).map(t=><div key={t.id} className="alert-row"><span className={(t.delay_days||0)>0?'alert-icon bad':'alert-icon warn'}>!</span><div><b>{t.task_name}</b><small>{projects.find(p=>p.id===t.project_id)?.code} • {t.area||'-'} • จบตามแผน {dateTH(t.planned_end)}</small>{t.blocker&&<p><strong>ปัญหา:</strong> {t.blocker}</p>}{t.next_action&&<p><strong>งานถัดไป:</strong> {t.next_action}</p>}</div><div className="right"><StatusBadge value={t.site_status}/><small className={(t.delay_days||0)>0?'danger-text':''}>{t.delay_days||0} วัน</small><Link href={`/projects/${t.project_id}?view=${followupLinkView}#task-detail`} style={{fontSize:10,color:'var(--blue)',fontWeight:800}}>เปิด Plot →</Link></div></div>)}{!followupTasks.length&&<p className="muted">ไม่มีรายการในหมวดนี้</p>}</div>
       </section>
 
-      {curveOpen&&<div role="dialog" aria-modal="true" aria-label="Completion Curve ขนาดใหญ่" onClick={()=>setCurveOpen(false)} style={{position:'fixed',inset:0,zIndex:1000,background:'rgba(9,20,35,.72)',display:'grid',placeItems:'center',padding:24}}>
-        <div onClick={e=>e.stopPropagation()} style={{width:'min(1180px,96vw)',maxHeight:'92vh',overflow:'auto',background:'var(--surface)',borderRadius:18,boxShadow:'0 24px 80px rgba(0,0,0,.28)',padding:18}}>
-          <div className="row between" style={{marginBottom:8}}><div><b style={{fontSize:18,color:'var(--navy)'}}>Completion Curve — Plan vs Actual</b><small style={{display:'block',marginTop:4,color:'var(--muted)'}}>เลื่อนเมาส์บนแต่ละเดือนเพื่อดูค่า %</small></div><button type="button" className="button" onClick={()=>setCurveOpen(false)}>ปิด ✕</button></div>
-          <CompletionCurve data={curveData} large/>
-          <div className="curve-legend"><span><i className="legend-plan"/>Planned completion</span><span><i className="legend-actual"/>Actual completion</span></div>
-        </div>
-      </div>}
+      {curveOpen&&<div role="dialog" aria-modal="true" aria-label="Completion Curve ขนาดใหญ่" onClick={()=>setCurveOpen(false)} style={{position:'fixed',inset:0,zIndex:1000,background:'rgba(9,20,35,.72)',display:'grid',placeItems:'center',padding:24}}><div onClick={e=>e.stopPropagation()} style={{width:'min(1180px,96vw)',maxHeight:'92vh',overflow:'auto',background:'var(--surface)',borderRadius:18,boxShadow:'0 24px 80px rgba(0,0,0,.28)',padding:18}}><div className="row between" style={{marginBottom:8}}><div><b style={{fontSize:18,color:'var(--navy)'}}>Completion Curve — Plan vs Actual</b><small style={{display:'block',marginTop:4,color:'var(--muted)'}}>เลื่อนเมาส์บนแต่ละเดือนเพื่อดูค่า %</small></div><button type="button" className="button" onClick={()=>setCurveOpen(false)}>ปิด ✕</button></div><CompletionCurve data={curveData} large/><div className="curve-legend"><span><i className="legend-plan"/>Planned completion</span><span><i className="legend-actual"/>Actual completion</span></div></div></div>}
     </>}
   </AppShell>
 }
