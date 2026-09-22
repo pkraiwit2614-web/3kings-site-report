@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
 import StatusBadge from '@/components/StatusBadge'
@@ -11,6 +12,7 @@ import type { Project, ScheduleTask } from '@/lib/types'
 type StatusFilter = 'all' | 'delayed' | 'blockers' | 'in_progress' | 'completed'
 
 export default function SchedulePage(){
+  const router=useRouter()
   const [projects,setProjects]=useState<Project[]>([])
   const [tasks,setTasks]=useState<ScheduleTask[]>([])
   const [project,setProject]=useState('')
@@ -61,6 +63,15 @@ export default function SchedulePage(){
     return {p,plan,actual,delta:actual-plan,delayed:list.filter(t=>(t.delay_days||0)>0&&(t.actual_progress||0)<1).length,blockers:list.filter(t=>Boolean(t.blocker?.trim())&&(t.actual_progress||0)<1).length}
   }).filter(Boolean) as {p:Project;plan:number;actual:number;delta:number;delayed:number;blockers:number}[],[projects,rows])
 
+  const handlePlotClick=(projectId:string)=>{
+    if(project===projectId){
+      router.push(`/projects/${projectId}`)
+      return
+    }
+    setProject(projectId)
+    window.setTimeout(()=>document.querySelector('.schedule-sticky-tools')?.scrollIntoView({behavior:'smooth',block:'start'}),60)
+  }
+
   return <AppShell>
     <PageHeader title="Schedule / Plan vs Actual" subtitle="เห็นภาพรวมแผนเทียบหน้างานจริงก่อน แล้วค่อยลงรายละเอียดเฉพาะงานที่ต้องติดตาม"/>
 
@@ -74,7 +85,7 @@ export default function SchedulePage(){
 
     <section className="panel schedule-overview-panel">
       <div className="panel-head schedule-panel-head">
-        <div><h2>Plan vs Actual by Site / Plot</h2><span className="muted small">แถบสีน้ำเงิน = Actual • เส้นทอง = Plan • ด้านขวาเห็น Delayed / Blocker ทันที</span></div>
+        <div><h2>Plan vs Actual by Site / Plot</h2><span className="muted small">คลิก Plot = ดูรายละเอียดด้านล่าง • คลิก Plot เดิมอีกครั้ง = เปิดหน้ารายละเอียด Plot • แถบสีน้ำเงิน = Actual • เส้นทอง = Plan</span></div>
         <span className="pill">{projectStats.length} Site / Plot</span>
       </div>
       <div className="schedule-portfolio-list">
@@ -82,8 +93,15 @@ export default function SchedulePage(){
           const plan=Math.max(0,Math.min(100,Math.round(x.plan*100)))
           const actual=Math.max(0,Math.min(100,Math.round(x.actual*100)))
           const delta=Math.round(x.delta*100)
-          return <button key={x.p.id} className="schedule-portfolio-row" onClick={()=>setProject(x.p.id)}>
-            <div className="schedule-site-name"><b>{x.p.code}</b><span>{x.p.name}</span></div>
+          const selected=project===x.p.id
+          return <button
+            key={x.p.id}
+            className={`schedule-portfolio-row${selected?' selected':''}`}
+            onClick={()=>handlePlotClick(x.p.id)}
+            title={selected?'คลิกอีกครั้งเพื่อเปิดหน้ารายละเอียด Plot':'คลิกเพื่อดูงานของ Plot นี้ด้านล่าง'}
+            aria-label={selected?`${x.p.code} เลือกอยู่ คลิกอีกครั้งเพื่อเปิดหน้ารายละเอียด Plot`:`${x.p.code} คลิกเพื่อดูงานด้านล่าง`}
+          >
+            <div className="schedule-site-name"><b>{x.p.code}</b><span>{x.p.name}</span>{selected&&<small style={{display:'block',marginTop:4,color:'var(--blue)',fontWeight:800}}>เลือกแล้ว • คลิกอีกครั้งเพื่อเปิด Plot →</small>}</div>
             <div className="schedule-comparison">
               <div className="schedule-comparison-track">
                 <i style={{width:`${actual}%`}} />
