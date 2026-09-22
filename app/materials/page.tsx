@@ -11,6 +11,7 @@ export default function MaterialsPage(){
   const [projects,setProjects]=useState<Project[]>([])
   const [rows,setRows]=useState<any[]>([])
   const [project,setProject]=useState('')
+  const [orderStatus,setOrderStatus]=useState('')
   const [q,setQ]=useState('')
 
   useEffect(()=>{
@@ -24,12 +25,21 @@ export default function MaterialsPage(){
     })
   },[])
 
-  const filtered=useMemo(()=>rows.filter(x=>(!project||x.project_id===project)&&(!q||`${x.item_name} ${x.category||''} ${x.status||''} ${x.model_spec||''}`.toLowerCase().includes(q.toLowerCase()))),[rows,project,q])
+  const filtered=useMemo(()=>rows.filter(x=>
+    (!project||x.project_id===project)&&
+    (!orderStatus||x.status===orderStatus)&&
+    (!q||`${x.item_name} ${x.category||''} ${x.status||''} ${x.model_spec||''}`.toLowerCase().includes(q.toLowerCase()))
+  ),[rows,project,orderStatus,q])
 
   return <AppShell>
     <PageHeader title="Materials Status" subtitle={`วัสดุอุปกรณ์และรายการผู้รับเหมา จาก Master Materials ล่าสุดใน Google Drive • ปัจจุบัน ${rows.length} รายการ`}/>
     <div className="toolbar">
       <select value={project} onChange={e=>setProject(e.target.value)}><option value="">ทุก Plot</option>{projects.filter(p=>/^AV-P[6-9]$/.test(p.code)).map(p=><option key={p.id} value={p.id}>{p.code} — {p.name}</option>)}</select>
+      <select value={orderStatus} onChange={e=>setOrderStatus(e.target.value)}>
+        <option value="">ทุกสถานะการสั่งซื้อ</option>
+        <option value="สั่งแล้ว">สั่งแล้ว</option>
+        <option value="ยังไม่สั่ง">ยังไม่สั่ง</option>
+      </select>
       <input placeholder="ค้นหาวัสดุ / รุ่น / สถานะ / หมวด" value={q} onChange={e=>setQ(e.target.value)}/>
       <span>{filtered.length} รายการ</span>
     </div>
