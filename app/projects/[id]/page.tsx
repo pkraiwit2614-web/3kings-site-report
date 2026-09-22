@@ -30,6 +30,8 @@ export default function ProjectPage(){
   const[tasks,setTasks]=useState<ScheduleTask[]>([])
   const[reports,setReports]=useState<any[]>([])
   const[taskView,setTaskView]=useState<TaskView>('all')
+  const[taskSearch,setTaskSearch]=useState('')
+  const[categoryFilter,setCategoryFilter]=useState('')
 
   useEffect(()=>{
     const s=getSupabase()
@@ -55,13 +57,23 @@ export default function ProjectPage(){
   const weeklyMan=reports.reduce((s,r)=>s+(r.total_manpower||0),0)
   const weeklyItems=reports.flatMap((r:any)=>(r.report_items||[]).map((x:any)=>({...x,report_date:r.report_date,report_summary:r.summary})))
   const maxDelay=delayedTasks.reduce((m,t)=>Math.max(m,t.delay_days||0),0)
+  const categories=useMemo(()=>[...new Set(workTasks.map(t=>t.category).filter((x):x is string=>Boolean(x?.trim())))].sort((a,b)=>a.localeCompare(b,'th')),[workTasks])
 
-  const filteredTasks=useMemo(()=>{
+  const viewTasks=useMemo(()=>{
     if(taskView==='delayed') return delayedTasks
     if(taskView==='blockers') return blockerTasks
     if(taskView==='completed') return completedTasks
     return workTasks
   },[taskView,workTasks,delayedTasks,blockerTasks,completedTasks])
+
+  const filteredTasks=useMemo(()=>{
+    const needle=taskSearch.trim().toLowerCase()
+    return viewTasks.filter(t=>{
+      if(categoryFilter&&t.category!==categoryFilter) return false
+      if(!needle) return true
+      return `${t.task_name||''} ${t.category||''} ${t.area||''} ${t.blocker||''} ${t.next_action||''} ${t.contractor||''}`.toLowerCase().includes(needle)
+    })
+  },[viewTasks,taskSearch,categoryFilter])
 
   const viewMeta={
     all:{title:'งานทั้งหมด',desc:'งาน Schedule ทั้งหมดของ Plot นี้ ไม่รวมแถวสรุป Plot'},
@@ -111,6 +123,19 @@ export default function ProjectPage(){
 
     <section className="panel weekly-section"><div className="panel-head"><h2>งานสำคัญที่ต้องติดตาม</h2><span className="muted">งานล่าช้า / มีอุปสรรค และยังไม่เสร็จ 100%</span></div><div className="stack">{critical.length?critical.slice(0,30).map(t=><div className="list-row" key={t.id}><div><b>{t.task_name}</b><small>{t.area||'-'} • จบตามแผน {dateTH(t.planned_end)} • หน้างานจริง {pct(t.actual_progress)}</small><TaskFollowUp task={t}/></div><div className="right"><StatusBadge value={t.site_status}/><small>ล่าช้า {t.delay_days||0} วัน</small></div></div>):<p className="muted">ไม่มีงานสำคัญค้างติดตาม</p>}</div></section>
 
-    <section className="panel weekly-section" id="task-detail"><div className="panel-head"><div><h2>รายละเอียด — {viewMeta.title}</h2><span className="muted">{viewMeta.desc}</span></div><span className="pill">{filteredTasks.length} งาน</span></div><div className="table-wrap"><table><thead><tr><th>งาน</th><th>พื้นที่</th><th>แผนเริ่ม–จบ</th><th>% แผน</th><th>% จริง</th><th>ล่าช้า</th><th>สถานะ</th><th>ปัญหา / งานถัดไป</th></tr></thead><tbody>{filteredTasks.map(t=><tr key={t.id}><td><b>{t.task_name}</b><small>{t.category||'-'}</small></td><td>{t.area||'-'}</td><td>{dateTH(t.planned_start)} → {dateTH(t.planned_end)}</td><td>{pct(t.current_plan_progress)}</td><td>{pct(t.actual_progress)}</td><td className={(t.delay_days||0)>0?'danger-text':''}>{t.delay_days||0} วัน</td><td><StatusBadge value={t.site_status}/></td><td><TaskFollowUp task={t} compact/></td></tr>)}</tbody></table></div></section>
+    <section className="panel weekly-section" id="task-detail">
+      <div className="panel-head"><div><h2>รายละเอียด — {viewMeta.title}</h2><span className="muted">{viewMeta.desc}</span></div><span className="pill">{filteredTasks.length} งาน</span></div>
+      <div className="toolbar" style={{position:'sticky',top:0,zIndex:9,background:'var(--surface)',padding:'8px',border:'1px solid var(--line)',borderRadius:12}}>
+        <input value={taskSearch} onChange={e=>setTaskSearch(e.target.value)} placeholder="ค้นหางาน เช่น ฝ้า / กระเบื้อง / ราวกันตก / Air / ปัญหา…" />
+        <select value={categoryFilter} onChange={e=>setCategoryFilter(e.target.value)}>
+          <option value="">ทุกหมวดหลัก</option>
+          {categories.map(c=><option key={c} value={c}>{c}</option>)}
+        </select>
+        {(taskSearch||categoryFilter)&&<button type="button" className="button" onClick={()=>{setTaskSearch('');setCategoryFilter('')}}>ล้างค้นหา</button>}
+      </div>
+      {(taskSearch||categoryFilter)&&<p className="muted small" style={{marginTop:0}}>กำลังแสดง {filteredTasks.length} จาก {viewTasks.length} งานในมุมมองนี้{categoryFilter?` • หมวด: ${categoryFilter}`:''}</p>}
+      <div className="table-wrap"><table><thead><tr><th>งาน</th><th>พื้นที่</th><th>แผนเริ่ม–จบ</th><th>% แผน</th><th>% จริง</th><th>ล่าช้า</th><th>สถานะ</th><th>ปัญหา / งานถัดไป</th></tr></thead><tbody>{filteredTasks.map(t=><tr key={t.id}><td><b>{t.task_name}</b><small>{t.category||'-'}</small></td><td>{t.area||'-'}</td><td>{dateTH(t.planned_start)} → {dateTH(t.planned_end)}</td><td>{pct(t.current_plan_progress)}</td><td>{pct(t.actual_progress)}</td><td className={(t.delay_days||0)>0?'danger-text':''}>{t.delay_days||0} วัน</td><td><StatusBadge value={t.site_status}/></td><td><TaskFollowUp task={t} compact/></td></tr>)}</tbody></table></div>
+      {!filteredTasks.length&&<p className="muted" style={{padding:'12px 0 0'}}>ไม่พบงานที่ตรงกับคำค้นหา / หมวดที่เลือก</p>}
+    </section>
   </AppShell>
 }
