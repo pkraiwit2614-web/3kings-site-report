@@ -11,6 +11,13 @@ import type { Project, ScheduleTask } from '@/lib/types'
 
 type StatusFilter = 'all' | 'delayed' | 'blockers' | 'in_progress' | 'completed'
 
+function dateTimeTH(value:string|null|undefined){
+  if(!value) return '-'
+  const d=new Date(value)
+  if(Number.isNaN(d.getTime())) return '-'
+  return new Intl.DateTimeFormat('th-TH',{timeZone:'Asia/Bangkok',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(d)
+}
+
 export default function SchedulePage(){
   const router=useRouter()
   const [projects,setProjects]=useState<Project[]>([])
@@ -18,6 +25,7 @@ export default function SchedulePage(){
   const [project,setProject]=useState('')
   const [q,setQ]=useState('')
   const [status,setStatus]=useState<StatusFilter>('all')
+  const [latestSyncAt,setLatestSyncAt]=useState<string|null>(null)
   const [loading,setLoading]=useState(true)
 
   useEffect(()=>{
@@ -30,10 +38,12 @@ export default function SchedulePage(){
     const s=getSupabase()
     Promise.all([
       s.from('projects').select('*').eq('active',true).order('sort_order'),
-      s.from('v_schedule_tasks').select('*').order('planned_start')
-    ]).then(([p,t])=>{
+      s.from('v_schedule_tasks').select('*').order('planned_start'),
+      s.from('drive_sync_runs').select('created_at').eq('status','success').eq('sync_type','schedule').order('created_at',{ascending:false}).limit(1).maybeSingle()
+    ]).then(([p,t,sync])=>{
       setProjects((p.data||[]) as Project[])
       setTasks((t.data||[]) as ScheduleTask[])
+      setLatestSyncAt(sync.data?.created_at||null)
       setLoading(false)
     }).catch(()=>setLoading(false))
   },[])
@@ -74,6 +84,10 @@ export default function SchedulePage(){
 
   return <AppShell>
     <PageHeader title="Schedule / Plan vs Actual" subtitle="เห็นภาพรวมแผนเทียบหน้างานจริงก่อน แล้วค่อยลงรายละเอียดเฉพาะงานที่ต้องติดตาม"/>
+    <div className="panel" style={{padding:'10px 14px',marginBottom:14,display:'flex',justifyContent:'space-between',gap:10,alignItems:'center',flexWrap:'wrap'}}>
+      <span className="small muted">ข้อมูล Schedule จาก Drive Sync</span>
+      <b className="small">อัปเดตข้อมูลล่าสุด: {dateTimeTH(latestSyncAt)}</b>
+    </div>
 
     <section className="schedule-summary-grid">
       <div className="schedule-summary-card"><span>Plan</span><b>{pct(avgPlan)}</b><small>ค่าเฉลี่ยตามแผนของรายการที่กำลังดู</small></div>
