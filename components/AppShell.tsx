@@ -9,11 +9,11 @@ import BrandLogo from '@/components/BrandLogo'
 const baseNav = [
   ['/', 'Dashboard'],
   ['/reports/new', 'รายงานการทำงานประจำวัน'],
-  ['/schedule', 'กำหนดแผนงาน'],
-  ['/reports', 'ประวัติรายงานการทำงานประจำวัน'],
+  ['/schedule', 'แผนงานที่กำหนด'],
   ['/materials', 'วัสดุอุปกรณ์และผู้รับเหมา'],
-  ['/procurement', 'การจัดซื้อจัดจ้าง'],
   ['/site-photos', 'รูปภาพหน้างาน'],
+  ['/reports', 'ประวัติรายงานการทำงานประจำวัน'],
+  ['/procurement', 'การจัดซื้อ/จัดจ้าง'],
   ['/weekly', 'รายงานการทำงานประจำสัปดาห์']
 ]
 
@@ -30,7 +30,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [role, setRole] = useState('')
   const [ready, setReady] = useState(false)
   const [mobileMore, setMobileMore] = useState(false)
-  const nav = useMemo(() => role === 'manager' ? [...baseNav, ['/users', 'Users & Access']] : baseNav, [role])
+  const nav = useMemo(() => role === 'manager' ? [...baseNav, ['/users', 'User & Access']] : baseNav, [role])
   const extraNav = useMemo(() => nav.filter(([href]) => !mobilePrimary.some(([mobileHref]) => mobileHref === href)), [nav])
 
   useEffect(() => {
