@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
 import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
 import StatusBadge from '@/components/StatusBadge'
@@ -12,15 +11,20 @@ import type { Project, ScheduleTask } from '@/lib/types'
 type StatusFilter = 'all' | 'delayed' | 'blockers' | 'in_progress' | 'completed'
 
 export default function SchedulePage(){
-  const searchParams=useSearchParams()
   const [projects,setProjects]=useState<Project[]>([])
   const [tasks,setTasks]=useState<ScheduleTask[]>([])
-  const [project,setProject]=useState(searchParams.get('project')||'')
-  const [q,setQ]=useState(searchParams.get('q')||'')
-  const [status,setStatus]=useState<StatusFilter>((searchParams.get('status') as StatusFilter)||'all')
+  const [project,setProject]=useState('')
+  const [q,setQ]=useState('')
+  const [status,setStatus]=useState<StatusFilter>('all')
   const [loading,setLoading]=useState(true)
 
   useEffect(()=>{
+    const params=new URLSearchParams(window.location.search)
+    const urlStatus=params.get('status') as StatusFilter|null
+    setProject(params.get('project')||'')
+    setQ(params.get('q')||'')
+    if(urlStatus&&['all','delayed','blockers','in_progress','completed'].includes(urlStatus)) setStatus(urlStatus)
+
     const s=getSupabase()
     Promise.all([
       s.from('projects').select('*').eq('active',true).order('sort_order'),
