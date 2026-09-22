@@ -23,19 +23,42 @@ function dateTimeTH(value:string|null|undefined){
   return new Intl.DateTimeFormat('th-TH',{timeZone:'Asia/Bangkok',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(d)
 }
 
-function CompletionCurve({data}:{data:CurvePoint[]}){
-  const width=760, height=245, left=42, right=14, top=12, bottom=34
+function CompletionCurve({data,large=false,onOpen}:{data:CurvePoint[];large?:boolean;onOpen?:()=>void}){
+  const [hovered,setHovered]=useState<number|null>(null)
+  const width=large?1120:760, height=large?430:245, left=large?58:42, right=large?24:14, top=large?28:12, bottom=large?48:34
   const plotW=width-left-right, plotH=height-top-bottom
   const x=(i:number)=>left+(data.length<=1?0:(i/(data.length-1))*plotW)
   const y=(v:number)=>top+plotH-(Math.max(0,Math.min(100,v))/100)*plotH
   const planPoints=data.map((d,i)=>`${x(i)},${y(d.plan)}`).join(' ')
   const actualPoints=data.map((d,i)=>`${x(i)},${y(d.actual)}`).join(' ')
-  return <div className="curve-chart-wrap"><svg className="curve-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Task completion curve plan versus actual">
-    {[0,25,50,75,100].map(v=><g key={v}><line x1={left} x2={width-right} y1={y(v)} y2={y(v)} className="curve-grid"/><text x={left-8} y={y(v)+4} textAnchor="end" className="curve-axis-text">{v}%</text></g>)}
-    <polyline points={planPoints} fill="none" className="curve-line plan"/>
-    <polyline points={actualPoints} fill="none" className="curve-line actual"/>
-    {data.map((d,i)=><g key={d.label}><text x={x(i)} y={height-10} textAnchor="middle" className="curve-axis-text">{d.label}</text>{i<data.length-1&&<circle cx={x(i)} cy={y(d.actual)} r="2.5" className="curve-dot"/>}</g>)}
-  </svg></div>
+  const hitW=data.length>1?plotW/(data.length-1):plotW
+  const active=hovered===null?null:data[hovered]
+  const tooltipW=large?190:160
+  const tooltipX=hovered===null?left:Math.max(left+3,Math.min(width-right-tooltipW,x(hovered)-tooltipW/2))
+  const tooltipY=top+4
+  return <div className="curve-chart-wrap" style={{position:'relative',cursor:onOpen?'zoom-in':'default'}} onClick={onOpen} onKeyDown={e=>{if(onOpen&&(e.key==='Enter'||e.key===' ')){e.preventDefault();onOpen()}}} role={onOpen?'button':undefined} tabIndex={onOpen?0:undefined} aria-label={onOpen?'กราฟ Completion Curve คลิกเพื่อขยาย':undefined}>
+    <svg className="curve-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Task completion curve plan versus actual" onMouseLeave={()=>setHovered(null)}>
+      {[0,25,50,75,100].map(v=><g key={v}><line x1={left} x2={width-right} y1={y(v)} y2={y(v)} className="curve-grid"/><text x={left-8} y={y(v)+4} textAnchor="end" className="curve-axis-text">{v}%</text></g>)}
+      <polyline points={planPoints} fill="none" className="curve-line plan"/>
+      <polyline points={actualPoints} fill="none" className="curve-line actual"/>
+      {data.map((d,i)=><g key={d.label}>
+        <text x={x(i)} y={height-(large?15:10)} textAnchor="middle" className="curve-axis-text">{d.label}</text>
+        <circle cx={x(i)} cy={y(d.plan)} r={large?3.5:2.7} fill="var(--navy-2)"/>
+        <circle cx={x(i)} cy={y(d.actual)} r={large?3.8:2.9} className="curve-dot"/>
+        <rect x={Math.max(left,x(i)-hitW/2)} y={top} width={Math.min(hitW,width-right-Math.max(left,x(i)-hitW/2))} height={plotH} fill="transparent" onMouseEnter={()=>setHovered(i)} onMouseMove={()=>setHovered(i)}/>
+      </g>)}
+      {active&&hovered!==null&&<g pointerEvents="none">
+        <line x1={x(hovered)} x2={x(hovered)} y1={top} y2={height-bottom} stroke="var(--line)" strokeDasharray="4 4"/>
+        <circle cx={x(hovered)} cy={y(active.plan)} r={large?7:5.5} fill="var(--navy-2)" stroke="white" strokeWidth="2"/>
+        <circle cx={x(hovered)} cy={y(active.actual)} r={large?7:5.5} fill="var(--blue)" stroke="white" strokeWidth="2"/>
+        <rect x={tooltipX} y={tooltipY} width={tooltipW} height={large?82:70} rx="9" fill="white" stroke="var(--line)"/>
+        <text x={tooltipX+12} y={tooltipY+(large?22:19)} fontSize={large?14:11} fontWeight="800" fill="var(--navy)">{active.label}</text>
+        <text x={tooltipX+12} y={tooltipY+(large?43:37)} fontSize={large?13:10} fill="var(--text)">Plan {active.plan}%</text>
+        <text x={tooltipX+12} y={tooltipY+(large?63:53)} fontSize={large?13:10} fill="var(--text)">Actual {active.actual}%  •  Δ {active.actual-active.plan>0?'+':''}{active.actual-active.plan}%</text>
+      </g>}
+    </svg>
+    {onOpen&&<span style={{position:'absolute',right:8,top:7,fontSize:10,fontWeight:800,color:'var(--muted)',background:'rgba(255,255,255,.88)',padding:'4px 7px',borderRadius:8,pointerEvents:'none'}}>เลื่อนดู % • คลิกเพื่อขยาย</span>}
+  </div>
 }
 
 function SiteAlertRings({delayed,blockers,total}:{delayed:number;blockers:number;total:number}){
@@ -75,17 +98,18 @@ export default function DashboardPage() {
   const [siteStatusFilter, setSiteStatusFilter] = useState<SiteStatusFilter>('all')
   const [loading, setLoading] = useState(true)
   const [followupView, setFollowupView] = useState<FollowupView>('critical')
+  const [curveOpen,setCurveOpen]=useState(false)
 
   useEffect(() => {
     const load = async () => {
       const s = getSupabase()
       const [p,t,r,pr,sr,sd] = await Promise.all([
-        s.from('projects').select('*').eq('active',true).order('sort_order'),
+        s.from('projects').select('id,code,name,target_handover,active,sort_order').eq('active',true).order('sort_order'),
         s.from('v_schedule_tasks').select('id,project_id,task_name,category,actual_progress,current_plan_progress,current_variance,delay_days,site_status,blocker,next_action,target_close,planned_start,planned_end,actual_start,actual_end,area,source_task_no,contractor'),
         s.from('daily_reports').select('id,project_id,report_date,total_manpower,summary,status,created_at').order('report_date',{ascending:false}).order('created_at',{ascending:false}).limit(100),
         s.from('procurement_items').select('id,project_id,vendor,item_name,current_status,expected_delivery_text,expected_delivery').order('created_at',{ascending:false}),
-        s.from('drive_sync_runs').select('id,sync_type,project_code,source_file,status,created_at').eq('status','success').order('created_at',{ascending:false}).limit(100),
-        s.from('v_schedule_snapshot_days').select('*').order('snapshot_date',{ascending:false}).limit(60)
+        s.from('drive_sync_runs').select('created_at').eq('status','success').order('created_at',{ascending:false}).limit(1),
+        s.from('v_schedule_snapshot_days').select('snapshot_date').order('snapshot_date',{ascending:false}).limit(60)
       ])
       if (p.error) throw p.error
       if (t.error) throw t.error
@@ -95,20 +119,26 @@ export default function DashboardPage() {
       setProc(pr.data||[])
       setSyncRuns(sr.data||[])
       setSnapshotDays(sd.data||[])
-      if((sd.data||[]).length) setSnapshotDate((sd.data||[])[0].snapshot_date)
       setLoading(false)
     }
     load().catch(()=>setLoading(false))
   }, [])
 
   useEffect(()=>{
-    if(!snapshotDate) return
+    if(!snapshotDate){ setSnapshotRows([]); setSnapshotLoading(false); return }
     setSnapshotLoading(true)
     getSupabase().from('schedule_task_daily_snapshots').select('snapshot_date,synced_at,project_id,source_identity,source_task_no,category,task_name,area,planned_start,planned_end,actual_progress,current_plan_progress,current_variance,delay_days,site_status,blocker,next_action,source_file').eq('snapshot_date',snapshotDate).then(({data})=>{
       setSnapshotRows(data||[])
       setSnapshotLoading(false)
     })
   },[snapshotDate])
+
+  useEffect(()=>{
+    if(!curveOpen) return
+    const close=(e:KeyboardEvent)=>{ if(e.key==='Escape') setCurveOpen(false) }
+    window.addEventListener('keydown',close)
+    return()=>window.removeEventListener('keydown',close)
+  },[curveOpen])
 
   const workTasks = useMemo(() => tasks.filter(t=>t.source_task_no!=='1'), [tasks])
   const delayedTasks = useMemo(() => workTasks.filter(t=>(t.delay_days||0)>0 && (t.actual_progress||0)<1), [workTasks])
@@ -200,8 +230,7 @@ export default function DashboardPage() {
 
   const sitePerformanceStats=useMemo(()=>snapshotDate?snapshotStats:projectStats,[snapshotDate,snapshotStats,projectStats])
   const sitePerformanceFiltered=useMemo(()=>sitePerformanceStats.filter(x=>x.taskCount>0&&(siteStatusFilter==='all'||siteStatusOf(x)===siteStatusFilter)),[sitePerformanceStats,siteStatusFilter])
-  const latestSyncAt=syncRuns.map(x=>x.created_at).filter(Boolean).sort().at(-1)||null
-  const latestSnapshotDate=snapshotDays[0]?.snapshot_date||''
+  const latestSyncAt=syncRuns[0]?.created_at||null
   const earliestSnapshotDate=snapshotDays.at(-1)?.snapshot_date||''
 
   function openFollowup(view: FollowupView) {
@@ -211,7 +240,7 @@ export default function DashboardPage() {
 
   function openSiteStatus(view:Exclude<SiteStatusFilter,'all'>){
     setSiteStatusFilter(view)
-    if(latestSnapshotDate) setSnapshotDate(latestSnapshotDate)
+    setSnapshotDate('')
     window.setTimeout(()=>document.getElementById('site-performance')?.scrollIntoView({behavior:'smooth',block:'start'}),60)
   }
 
@@ -251,9 +280,9 @@ export default function DashboardPage() {
 
         <section className="panel dashboard-module">
           <div className="module-title"><span>3</span><div><b>COMPLETION CURVE</b><small>สะสมจำนวนงานที่ควรจบ เทียบวันที่จบจริงที่บันทึก</small></div></div>
-          <CompletionCurve data={curveData}/>
+          <CompletionCurve data={curveData} onOpen={()=>setCurveOpen(true)}/>
           <div className="curve-legend"><span><i className="legend-plan"/>Planned completion</span><span><i className="legend-actual"/>Actual completion</span></div>
-          <p className="muted small">กราฟนี้นับตามจำนวน Task และ Actual ใช้วันที่จบจริงที่บันทึก ไม่ใช่ Earned Value ตาม BOQ</p>
+          <p className="muted small">เลื่อนเมาส์บนกราฟเพื่อดู Plan / Actual เป็น % • คลิกกราฟเพื่อขยาย • กราฟนับตามจำนวน Task ไม่ใช่ Earned Value ตาม BOQ</p>
         </section>
       </div>
 
@@ -276,6 +305,7 @@ export default function DashboardPage() {
           <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
             <label className="small" style={{fontWeight:800}}>ข้อมูล ณ วันที่</label>
             <select value={snapshotDate} onChange={e=>setSnapshotDate(e.target.value)} style={{padding:'8px 10px',border:'1px solid var(--line)',borderRadius:9,background:'var(--surface)'}}>
+              <option value="">ข้อมูลล่าสุด</option>
               {snapshotDays.map(d=><option key={d.snapshot_date} value={d.snapshot_date}>{dateTH(d.snapshot_date)}</option>)}
             </select>
             <select value={siteStatusFilter} onChange={e=>setSiteStatusFilter(e.target.value as SiteStatusFilter)} style={{padding:'8px 10px',border:'1px solid var(--line)',borderRadius:9,background:'var(--surface)'}}>
@@ -316,6 +346,14 @@ export default function DashboardPage() {
         <div className="followup-tabs">{(['critical','delayed','blockers'] as FollowupView[]).map(view=><button type="button" key={view} onClick={()=>setFollowupView(view)} className={followupView===view?'active':''}>{view==='critical'?`ทั้งหมด ${criticalTasks.length}`:view==='delayed'?`Delayed ${delayedTotal}`:`Blockers ${blockersTotal}`}</button>)}</div>
         <div className="alert-list">{followupTasks.slice(0,15).map(t=><div key={t.id} className="alert-row"><span className={(t.delay_days||0)>0?'alert-icon bad':'alert-icon warn'}>!</span><div><b>{t.task_name}</b><small>{projects.find(p=>p.id===t.project_id)?.code} • {t.area||'-'} • จบตามแผน {dateTH(t.planned_end)}</small>{t.blocker&&<p><strong>ปัญหา:</strong> {t.blocker}</p>}{t.next_action&&<p><strong>งานถัดไป:</strong> {t.next_action}</p>}</div><div className="right"><StatusBadge value={t.site_status}/><small className={(t.delay_days||0)>0?'danger-text':''}>{t.delay_days||0} วัน</small><Link href={`/projects/${t.project_id}`} style={{fontSize:10,color:'var(--blue)',fontWeight:800}}>เปิด Plot →</Link></div></div>)}{!followupTasks.length&&<p className="muted">ไม่มีรายการในหมวดนี้</p>}</div>
       </section>
+
+      {curveOpen&&<div role="dialog" aria-modal="true" aria-label="Completion Curve ขนาดใหญ่" onClick={()=>setCurveOpen(false)} style={{position:'fixed',inset:0,zIndex:1000,background:'rgba(9,20,35,.72)',display:'grid',placeItems:'center',padding:24}}>
+        <div onClick={e=>e.stopPropagation()} style={{width:'min(1180px,96vw)',maxHeight:'92vh',overflow:'auto',background:'var(--surface)',borderRadius:18,boxShadow:'0 24px 80px rgba(0,0,0,.28)',padding:18}}>
+          <div className="row between" style={{marginBottom:8}}><div><b style={{fontSize:18,color:'var(--navy)'}}>Completion Curve — Plan vs Actual</b><small style={{display:'block',marginTop:4,color:'var(--muted)'}}>เลื่อนเมาส์บนแต่ละเดือนเพื่อดูค่า %</small></div><button type="button" className="button" onClick={()=>setCurveOpen(false)}>ปิด ✕</button></div>
+          <CompletionCurve data={curveData} large/>
+          <div className="curve-legend"><span><i className="legend-plan"/>Planned completion</span><span><i className="legend-actual"/>Actual completion</span></div>
+        </div>
+      </div>}
     </>}
   </AppShell>
 }
