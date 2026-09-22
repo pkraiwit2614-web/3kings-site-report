@@ -11,8 +11,8 @@ const labels: Record<string,string> = {
   approved:'อนุมัติแล้ว',
   pending:'รอดำเนินการ',
   needs_fix:'รอแก้ไข',
-  on_track:'On Track',
-  at_risk:'At Risk'
+  on_track:'ตามแผน',
+  at_risk:'เสี่ยงล่าช้า'
 }
 
 const aliases: Record<string,string> = {
@@ -30,7 +30,9 @@ const aliases: Record<string,string> = {
   'รอดำเนินการ':'pending',
   'รอแก้ไข':'needs_fix',
   'on track':'on_track',
-  'at risk':'at_risk'
+  'at risk':'at_risk',
+  'ตามแผน':'on_track',
+  'เสี่ยงล่าช้า':'at_risk'
 }
 
 const kinds: Record<string,string> = {
