@@ -57,6 +57,6 @@ export default function MaterialsPage(){
       <input placeholder="ค้นหาวัสดุ / รุ่น / สถานะ / หมวด" value={q} onChange={e=>setQ(e.target.value)}/>
       <span>{filtered.length} รายการ</span>
     </div>
-    <div className="panel table-wrap"><table><thead><tr><th>Plot</th><th>หมวด</th><th>วัสดุ / งาน</th><th>ยี่ห้อ / รุ่น / สเปก</th><th>สถานะ</th><th>รายละเอียด / หมายเหตุ</th></tr></thead><tbody>{filtered.map(x=><tr key={x.id}><td>{projects.find(p=>p.id===x.project_id)?.code||'-'}</td><td>{x.category||'-'}</td><td><b>{x.item_name}</b><small>{x.quantity_unit||'ยังไม่ระบุปริมาณ/หน่วย'}</small></td><td>{[x.brand,x.model_spec].filter(Boolean).join(' / ')||'-'}</td><td><StatusBadge value={x.status}/></td><td>{x.status_detail||x.notes||'-'}</td></tr>)}</tbody></table></div>
+    <div className="panel table-wrap" style={{maxHeight:'calc(100vh - 250px)',overflow:'auto'}}><table><thead><tr><th>Plot</th><th>หมวด</th><th>วัสดุ / งาน</th><th>ยี่ห้อ / รุ่น / สเปก</th><th>สถานะ</th><th>รายละเอียด / หมายเหตุ</th></tr></thead><tbody>{filtered.map(x=><tr key={x.id}><td>{projects.find(p=>p.id===x.project_id)?.code||'-'}</td><td>{x.category||'-'}</td><td><b>{x.item_name}</b><small>{x.quantity_unit||'ยังไม่ระบุปริมาณ/หน่วย'}</small></td><td>{[x.brand,x.model_spec].filter(Boolean).join(' / ')||'-'}</td><td><StatusBadge value={x.status}/></td><td>{x.status_detail||x.notes||'-'}</td></tr>)}</tbody></table></div>
   </AppShell>
 }
