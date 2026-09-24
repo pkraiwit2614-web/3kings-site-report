@@ -39,6 +39,16 @@ export default function MaterialsPage(){
   const [latestSyncAt,setLatestSyncAt]=useState<string|null>(null)
 
   useEffect(()=>{
+    const params=new URLSearchParams(window.location.search)
+    const projectParam=params.get('project')||''
+    const statusParam=params.get('status')||''
+    const qParam=params.get('q')||''
+    if(projectParam) setProject(projectParam)
+    if(['สั่งแล้ว','สั่งมาไม่พอ','ยังไม่สั่ง','เจ้าของจัดหา','ไม่เกี่ยวข้อง'].includes(statusParam)) setOrderStatus(statusParam)
+    if(qParam) setQ(qParam)
+  },[])
+
+  useEffect(()=>{
     const s=getSupabase()
     Promise.all([
       s.from('projects').select('*').eq('active',true).order('sort_order'),
