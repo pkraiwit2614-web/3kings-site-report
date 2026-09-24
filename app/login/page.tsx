@@ -53,12 +53,18 @@ export default function LoginPage() {
         setMessage('สมัครเรียบร้อยแล้ว กำลังเข้าสู่ระบบ…')
         router.replace('/')
       } else {
-        setMessage('สมัครเรียบร้อยแล้ว กรุณายืนยันอีเมล 1 ครั้ง จากนั้นเข้าสู่ระบบได้ทันที โดยสิทธิ์เริ่มต้นเป็น Foreman')
+        setMessage('สมัครเรียบร้อยแล้ว กรุณาเปิดอีเมลที่ใช้สมัครและกดลิงก์ยืนยันอีเมลก่อน จากนั้นกลับมาเข้าสู่ระบบ')
         setMode('login')
         setPassword('')
       }
     } catch (err: any) {
-      setMessage(err.message || 'เกิดข้อผิดพลาด')
+      const errorMessage = String(err?.message || '')
+      const errorCode = String(err?.code || '')
+      if (errorCode === 'email_not_confirmed' || /email not confirmed|email.*confirm/i.test(errorMessage)) {
+        setMessage('ยังเข้าสู่ระบบไม่ได้ กรุณาเข้าไปที่อีเมลที่ใช้สมัคร และกดลิงก์ยืนยันอีเมลก่อน จากนั้นจึงกลับมาเข้าสู่ระบบอีกครั้ง')
+      } else {
+        setMessage(errorMessage || 'เกิดข้อผิดพลาด')
+      }
     } finally {
       setLoading(false)
     }
