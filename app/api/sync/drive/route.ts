@@ -19,6 +19,7 @@ const PROJECT_SHEETS: Record<string, { sheet: string }> = {
 const MATERIAL_MASTER_SHEET = '01 รายการทั้งหมด'
 const MATERIAL_SOURCE_FILE = 'ABOVE_MATERIALS_STATUS_Stock_Updated_2026-09-20.xlsx'
 const PROCUREMENT_SHEETS = ['04 Purchasing ค้างส่ง','12 Purchasing ค้างส่ง']
+const TOOL_MACHINE_SHEET = '06-Tools & Machine'
 
 function text(value: unknown): string | null {
   if (value === null || value === undefined) return null
@@ -245,11 +246,42 @@ async function parseMaterials(buffer: Buffer) {
     }
   }
 
-  return { materials, procurement }
+  const tools: Record<string, unknown>[] = []
+  const tRows = await readSheet(buffer, TOOL_MACHINE_SHEET)
+  const th = tRows.findIndex((r) => r.some((v) => normalizeHeader(v) === 'รหัสรายการ') && r.some((v) => normalizeHeader(v) === 'รายการเครื่องมือ/เครื่องจักร'))
+  if (th < 0) throw new Error(`Header row not found in ${TOOL_MACHINE_SHEET}`)
+  const tHeaders = tRows[th] as unknown[]
+
+  for (let i = th + 1; i < tRows.length; i++) {
+    const r = tRows[i] as unknown[]
+    const itemCode = text(valueByHeader(r, tHeaders, 'รหัสรายการ'))
+    const itemName = text(valueByHeader(r, tHeaders, 'รายการเครื่องมือ/เครื่องจักร'))
+    if (!itemCode && !itemName) continue
+
+    tools.push({
+      item_no: num(valueByHeader(r, tHeaders, 'ลำดับ')),
+      item_code: itemCode,
+      category: text(valueByHeader(r, tHeaders, 'หมวด')),
+      item_name: itemName,
+      brand: text(valueByHeader(r, tHeaders, 'ยี่ห้อ')),
+      model_spec: text(valueByHeader(r, tHeaders, 'รุ่น/ขนาด')),
+      quantity: num(valueByHeader(r, tHeaders, 'จำนวน')),
+      unit: text(valueByHeader(r, tHeaders, 'หน่วย')),
+      status: text(valueByHeader(r, tHeaders, 'สถานะ')),
+      location: text(valueByHeader(r, tHeaders, 'สถานที่จัดเก็บ/ใช้ล่าสุด')),
+      source_updated_at: isoDate(valueByHeader(r, tHeaders, 'วันที่อัปเดต')),
+      responsible_person: text(valueByHeader(r, tHeaders, 'ผู้รับผิดชอบ')),
+      notes: text(valueByHeader(r, tHeaders, 'หมายเหตุ')),
+      source_sheet: TOOL_MACHINE_SHEET,
+      source_row: i + 1,
+    })
+  }
+
+  return { materials, procurement, tools }
 }
 
 export async function GET() {
-  return NextResponse.json({ ok: true, service: '3 Kings Drive Sync V3.2.3', route: '/api/sync/drive' })
+  return NextResponse.json({ ok: true, service: '3 Kings Drive Sync V3.2.4', route: '/api/sync/drive' })
 }
 
 export async function POST(request: NextRequest) {
@@ -294,11 +326,12 @@ export async function POST(request: NextRequest) {
 
     const parsed = await parseMaterials(buffer)
     const actualSourceFile = sourceFile || MATERIAL_SOURCE_FILE
-    const { data, error } = await supabase.rpc('drive_sync_replace_materials', {
+    const { data, error } = await supabase.rpc('drive_sync_replace_materials_tools', {
       p_sync_key: syncKey,
       p_source_file: actualSourceFile,
       p_materials: parsed.materials,
       p_procurement: parsed.procurement,
+      p_tools: parsed.tools,
     })
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
     const result = data as Record<string, unknown> | null
