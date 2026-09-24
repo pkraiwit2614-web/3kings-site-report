@@ -15,6 +15,7 @@ export default function LoginPage() {
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
+  const [confirmEmailNotice, setConfirmEmailNotice] = useState(false)
 
   useEffect(() => {
     getSupabase().auth.getSession().then(({ data }) => {
@@ -26,6 +27,7 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     setMessage('')
+    setConfirmEmailNotice(false)
     const supabase = getSupabase()
     try {
       if (mode === 'login') {
@@ -53,7 +55,8 @@ export default function LoginPage() {
         setMessage('สมัครเรียบร้อยแล้ว กำลังเข้าสู่ระบบ…')
         router.replace('/')
       } else {
-        setMessage('สมัครเรียบร้อยแล้ว กรุณาเปิดอีเมลที่ใช้สมัครและกดลิงก์ยืนยันอีเมลก่อน จากนั้นกลับมาเข้าสู่ระบบ')
+        setMessage('สมัครเรียบร้อยแล้ว กรุณาเปิดอีเมลที่ใช้สมัครและกดลิงก์ยืนยัน จากนั้นกลับมาหน้านี้เพื่อเข้าสู่ระบบ')
+        setConfirmEmailNotice(true)
         setMode('login')
         setPassword('')
       }
@@ -61,7 +64,8 @@ export default function LoginPage() {
       const errorMessage = String(err?.message || '')
       const errorCode = String(err?.code || '')
       if (errorCode === 'email_not_confirmed' || /email not confirmed|email.*confirm/i.test(errorMessage)) {
-        setMessage('ยังเข้าสู่ระบบไม่ได้ กรุณาเข้าไปที่อีเมลที่ใช้สมัคร และกดลิงก์ยืนยันอีเมลก่อน จากนั้นจึงกลับมาเข้าสู่ระบบอีกครั้ง')
+        setMessage('กรุณาเปิดอีเมลที่ใช้สมัครและกดลิงก์ยืนยัน จากนั้นกลับมาหน้านี้เพื่อเข้าสู่ระบบ')
+        setConfirmEmailNotice(true)
       } else {
         setMessage(errorMessage || 'เกิดข้อผิดพลาด')
       }
@@ -70,11 +74,16 @@ export default function LoginPage() {
     }
   }
 
+  const clearMessage = () => {
+    setMessage('')
+    setConfirmEmailNotice(false)
+  }
+
   return <div className="login-wrap"><div className="login-card">
     <div className="login-brand"><BrandLogo className="login-logo"/><div><h1>3 Kings Site Report</h1><p>Daily Site Report • Plan vs Actual • Management Dashboard</p></div></div>
     {mode!=='forgot' ? <div className="segmented">
-      <button type="button" className={mode==='login'?'active':''} onClick={()=>{setMode('login');setMessage('')}}>เข้าสู่ระบบ</button>
-      <button type="button" className={mode==='signup'?'active':''} onClick={()=>{setMode('signup');setMessage('')}}>สมัครใช้งาน</button>
+      <button type="button" className={mode==='login'?'active':''} onClick={()=>{setMode('login');clearMessage()}}>เข้าสู่ระบบ</button>
+      <button type="button" className={mode==='signup'?'active':''} onClick={()=>{setMode('signup');clearMessage()}}>สมัครใช้งาน</button>
     </div> : <div className="notice"><b>ลืมรหัสผ่าน</b><br/>กรอกอีเมลที่ใช้สมัคร ระบบจะส่งลิงก์สำหรับตั้งรหัสผ่านใหม่ให้</div>}
 
     {mode==='signup' && <div className="company-only"><b>สำหรับทีมงาน 3 Kings Construction Co., Ltd. เท่านั้น</b><span>ไม่เปิดให้ผู้รับเหมาใช้บัญชีนี้ส่งรายงาน เพื่อให้ข้อมูลกำลังคนและรายงานหน้างานไม่ซ้ำซ้อนกับทีมบริษัท</span></div>}
@@ -86,9 +95,19 @@ export default function LoginPage() {
       <button className="primary" disabled={loading}>{loading?'กำลังดำเนินการ…':mode==='login'?'เข้าสู่ระบบ':mode==='signup'?'สมัครใช้งาน':'ส่งลิงก์ตั้งรหัสผ่านใหม่'}</button>
     </form>
 
-    {mode==='login' && <button type="button" className="button" onClick={()=>{setMode('forgot');setMessage('');setPassword('')}}>ลืมรหัสผ่าน?</button>}
-    {mode==='forgot' && <button type="button" className="button" onClick={()=>{setMode('login');setMessage('')}}>← กลับไปหน้าเข้าสู่ระบบ</button>}
-    {message && <div className="notice">{message}</div>}
-    <p className="muted small">ผู้สมัครใหม่ใช้งานได้หลังยืนยันอีเมล โดยเริ่มต้นเป็น Foreman ส่วนการเปลี่ยน Role หรือปิดบัญชีทำได้โดย Manager ใน Users & Access</p>
+    {mode==='login' && <button type="button" className="button" onClick={()=>{setMode('forgot');clearMessage();setPassword('')}}>ลืมรหัสผ่าน?</button>}
+    {mode==='forgot' && <button type="button" className="button" onClick={()=>{setMode('login');clearMessage()}}>← กลับไปหน้าเข้าสู่ระบบ</button>}
+
+    {message && (confirmEmailNotice ?
+      <div className="notice" style={{marginTop:14, padding:'14px 16px', overflowWrap:'anywhere'}}>
+        <div style={{fontSize:20, fontWeight:800, lineHeight:1.35, marginBottom:6}}>⚠️ กรุณายืนยันอีเมลก่อน</div>
+        <div style={{fontSize:14, lineHeight:1.65}}>{message}</div>
+      </div>
+      : <div className="notice" style={{marginTop:14, overflowWrap:'anywhere'}}>{message}</div>
+    )}
+
+    <div style={{marginTop:14, padding:'11px 12px', border:'1px solid #e6e0d5', borderRadius:11, background:'#f8f6f1', color:'#5f6976', fontSize:12, lineHeight:1.65, overflowWrap:'anywhere'}}>
+      ผู้สมัครใหม่ต้องยืนยันอีเมลก่อนจึงจะเข้าสู่ระบบได้ บัญชีใหม่จะได้รับสิทธิ์ใช้งานระดับโฟร์แมนโดยอัตโนมัติ หากต้องการเปลี่ยนสิทธิ์หรือปิดบัญชี กรุณาแจ้งผู้จัดการระบบ
+    </div>
   </div></div>
 }
