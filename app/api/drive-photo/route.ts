@@ -11,8 +11,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: false, error: 'invalid_file_id' }, { status: 400 })
   }
 
+  const requestedSize = Number(request.nextUrl.searchParams.get('size') || 1600)
+  const size = Number.isFinite(requestedSize) ? Math.max(320, Math.min(1600, Math.round(requestedSize))) : 1600
+
   const sources = [
-    `https://drive.google.com/thumbnail?id=${encodeURIComponent(fileId)}&sz=w1600`,
+    `https://drive.google.com/thumbnail?id=${encodeURIComponent(fileId)}&sz=w${size}`,
     `https://drive.usercontent.google.com/download?id=${encodeURIComponent(fileId)}&export=view&confirm=t`,
   ]
 
