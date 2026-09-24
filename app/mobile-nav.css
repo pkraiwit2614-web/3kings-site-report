@@ -3,7 +3,7 @@
 
   .mobile-nav{
     display:grid!important;
-    grid-template-columns:repeat(5,minmax(0,1fr))!important;
+    grid-template-columns:repeat(7,minmax(0,1fr))!important;
     position:fixed;
     left:0;
     right:0;
@@ -21,15 +21,16 @@
     display:flex;
     align-items:center;
     justify-content:center;
-    padding:9px 3px;
+    padding:8px 2px;
     border:0;
     border-top:3px solid transparent;
     background:transparent;
     color:#b9c5d5;
     text-align:center;
-    font-size:11px;
-    line-height:1.2;
+    font-size:9.5px;
+    line-height:1.15;
     font-weight:600;
+    overflow-wrap:anywhere;
   }
 
   .mobile-nav a.active,.mobile-nav button.active{
