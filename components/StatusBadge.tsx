@@ -12,7 +12,9 @@ const labels: Record<string,string> = {
   pending:'รอดำเนินการ',
   needs_fix:'รอแก้ไข',
   on_track:'ตามแผน',
-  at_risk:'เสี่ยงล่าช้า'
+  at_risk:'เสี่ยงล่าช้า',
+  ordered:'✓ สั่งแล้ว',
+  not_ordered:'! ยังไม่สั่ง'
 }
 
 const aliases: Record<string,string> = {
@@ -32,7 +34,9 @@ const aliases: Record<string,string> = {
   'on track':'on_track',
   'at risk':'at_risk',
   'ตามแผน':'on_track',
-  'เสี่ยงล่าช้า':'at_risk'
+  'เสี่ยงล่าช้า':'at_risk',
+  'สั่งแล้ว':'ordered',
+  'ยังไม่สั่ง':'not_ordered'
 }
 
 const kinds: Record<string,string> = {
@@ -49,7 +53,9 @@ const kinds: Record<string,string> = {
   pending:'warn',
   needs_fix:'warn',
   on_track:'good',
-  at_risk:'warn'
+  at_risk:'warn',
+  ordered:'good',
+  not_ordered:'bad'
 }
 
 export default function StatusBadge({ value }: { value?: string | null }) {
