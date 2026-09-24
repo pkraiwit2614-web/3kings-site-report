@@ -58,6 +58,13 @@ const kinds: Record<string,string> = {
   not_ordered:'bad'
 }
 
+const procurementStyles: Record<string,{background:string;color:string;borderColor:string}> = {
+  'รอส่งสินค้า': {background:'#e8f2ff',color:'#155f9c',borderColor:'#a9cce9'},
+  'นัดเข้าหน้างาน': {background:'#f1e9ff',color:'#6941a5',borderColor:'#cab6ec'},
+  'มีสินค้าพร้อมส่ง': {background:'#e8f7ed',color:'#217044',borderColor:'#a8d8b7'},
+  'รอผลิต/จัดส่ง': {background:'#fff3d9',color:'#8b5d00',borderColor:'#e9c96f'}
+}
+
 export default function StatusBadge({ value }: { value?: string | null }) {
   const clean = `${value || 'ยังไม่ระบุ'}`.trim().replace(/\s+/g,' ')
   const lookup = clean.toLowerCase()
@@ -72,5 +79,6 @@ export default function StatusBadge({ value }: { value?: string | null }) {
     else if (s.includes('กำลัง') || s.includes('รอตรวจ')) kind = 'info'
   }
 
-  return <span className={`badge ${kind}`} style={{width:124,height:28,justifyContent:'center',alignItems:'center',padding:'0 9px',lineHeight:1,flex:'0 0 124px'}}>{s}</span>
+  const procurementStyle = procurementStyles[clean]
+  return <span className={`badge ${kind}`} style={{width:124,height:28,justifyContent:'center',alignItems:'center',padding:'0 9px',lineHeight:1,flex:'0 0 124px',...(procurementStyle||{})}}>{s}</span>
 }
