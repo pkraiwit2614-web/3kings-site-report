@@ -1,0 +1,42 @@
+/* V3.6 — fixed data headers for long operational lists */
+
+/* Dashboard module 8: keep title / Plot filter / tabs visible and scroll only the action rows. */
+#management-followup .alert-list{
+  max-height:calc(100vh - 300px);
+  min-height:140px;
+  overflow:auto;
+  overscroll-behavior:contain;
+  scrollbar-gutter:stable;
+}
+#management-followup .module-title,
+#management-followup .followup-tabs,
+#management-followup > div:nth-child(2){
+  position:relative;
+  z-index:2;
+  background:var(--surface);
+}
+#management-followup .module-title.alert{
+  background:linear-gradient(90deg,#9f2925,#d74a42);
+}
+#management-followup .followup-tabs{
+  padding-bottom:9px;
+  border-bottom:1px solid var(--line);
+}
+
+/* Data tables: pin the column header inside their own scroll container. */
+.table-wrap table{
+  border-collapse:separate;
+  border-spacing:0;
+}
+.table-wrap table thead th{
+  position:sticky;
+  top:0;
+  z-index:14;
+  background:#173f6a;
+  color:#fff;
+  box-shadow:0 2px 0 rgba(0,0,0,.08);
+}
+
+@media(max-width:760px){
+  #management-followup .alert-list{max-height:calc(100vh - 330px)}
+}
