@@ -14,7 +14,9 @@ const labels: Record<string,string> = {
   on_track:'ตามแผน',
   at_risk:'เสี่ยงล่าช้า',
   ordered:'✓ สั่งแล้ว',
-  not_ordered:'! ยังไม่สั่ง'
+  not_ordered:'! ยังไม่สั่ง',
+  tool_ok:'ใช้งานปกติ',
+  tool_bad:'เสีย-ซ่อมไม่คุ้ม'
 }
 
 const aliases: Record<string,string> = {
@@ -36,7 +38,9 @@ const aliases: Record<string,string> = {
   'ตามแผน':'on_track',
   'เสี่ยงล่าช้า':'at_risk',
   'สั่งแล้ว':'ordered',
-  'ยังไม่สั่ง':'not_ordered'
+  'ยังไม่สั่ง':'not_ordered',
+  'ใช้งานปกติ':'tool_ok',
+  'เสีย-ซ่อมไม่คุ้ม':'tool_bad'
 }
 
 const kinds: Record<string,string> = {
@@ -55,7 +59,9 @@ const kinds: Record<string,string> = {
   on_track:'good',
   at_risk:'warn',
   ordered:'good',
-  not_ordered:'bad'
+  not_ordered:'bad',
+  tool_ok:'good',
+  tool_bad:'bad'
 }
 
 const procurementStyles: Record<string,{background:string;color:string;borderColor:string}> = {
