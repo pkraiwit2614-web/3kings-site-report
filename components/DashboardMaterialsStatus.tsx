@@ -60,11 +60,11 @@ export default function DashboardMaterialsStatus(){
       <span>กดตัวเลขของแต่ละ Plot เพื่อเปิดรายการที่กรองไว้แล้ว</span>
     </div>
     {loading?<p className="muted" style={{padding:14}}>กำลังโหลด Materials Status…</p>:<>
-      <div className="resource-kpis" style={{gridTemplateColumns:'repeat(4,1fr)'}}>
-        <div style={{background:'#eef8f2',borderColor:'#cfe8d8'}}><span>✓ สั่งแล้ว</span><b style={{color:'var(--green)'}}>{totals.ordered}</b><small>จาก {totals.total} รายการ</small></div>
-        <div style={{background:'var(--red-soft)',borderColor:'#efcfcc'}}><span>! ยังไม่สั่ง</span><b style={{color:'var(--red)'}}>{totals.pending}</b><small>ควรตามการสั่งซื้อ</small></div>
-        <div style={{background:'var(--amber-soft)',borderColor:'#eedda8'}}><span>ต้องติดตามเพิ่ม</span><b style={{color:'var(--amber)'}}>{totals.followup}</b><small>สั่งมาไม่พอ / ต้องติดตาม</small></div>
-        <div><span>สถานะอื่น</span><b>{totals.other}</b><small>เจ้าของจัดหา / ไม่เกี่ยวข้อง / อื่น ๆ</small></div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(145px,1fr))',gap:8,padding:12}}>
+        <div style={{background:'#eef8f2',border:'1px solid #cfe8d8',borderRadius:11,padding:10}}><span style={{fontSize:10,color:'var(--muted)',fontWeight:800}}>✓ สั่งแล้ว</span><b style={{display:'block',fontSize:22,color:'var(--green)',margin:'4px 0'}}>{totals.ordered}</b><small style={{fontSize:9,color:'var(--muted)'}}>จาก {totals.total} รายการ</small></div>
+        <div style={{background:'var(--red-soft)',border:'1px solid #efcfcc',borderRadius:11,padding:10}}><span style={{fontSize:10,color:'var(--muted)',fontWeight:800}}>! ยังไม่สั่ง</span><b style={{display:'block',fontSize:22,color:'var(--red)',margin:'4px 0'}}>{totals.pending}</b><small style={{fontSize:9,color:'var(--muted)'}}>ควรตามการสั่งซื้อ</small></div>
+        <div style={{background:'var(--amber-soft)',border:'1px solid #eedda8',borderRadius:11,padding:10}}><span style={{fontSize:10,color:'var(--muted)',fontWeight:800}}>ต้องติดตามเพิ่ม</span><b style={{display:'block',fontSize:22,color:'var(--amber)',margin:'4px 0'}}>{totals.followup}</b><small style={{fontSize:9,color:'var(--muted)'}}>สั่งมาไม่พอ / ต้องติดตาม</small></div>
+        <div style={{background:'#f3f7fb',border:'1px solid #dfe8f0',borderRadius:11,padding:10}}><span style={{fontSize:10,color:'var(--muted)',fontWeight:800}}>สถานะอื่น</span><b style={{display:'block',fontSize:22,color:'#1f5e99',margin:'4px 0'}}>{totals.other}</b><small style={{fontSize:9,color:'var(--muted)'}}>เจ้าของจัดหา / ไม่เกี่ยวข้อง / อื่น ๆ</small></div>
       </div>
       <div style={{padding:'0 12px 13px',display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(230px,1fr))',gap:10}}>
         {stats.map((x,index)=>{
