@@ -44,7 +44,13 @@ export default function MaterialsPage(){
   return <AppShell>
     <PageHeader title="Materials Status" subtitle={`วัสดุอุปกรณ์และรายการผู้รับเหมา จาก Master Materials ล่าสุดใน Google Drive • ปัจจุบัน ${rows.length} รายการ`}/>
     <div className="panel" style={{padding:'10px 14px',marginBottom:14,display:'flex',justifyContent:'space-between',gap:10,alignItems:'center',flexWrap:'wrap'}}>
-      <span className="small muted">ข้อมูล Materials จาก Drive Sync</span>
+      <input
+        aria-label="ค้นหาวัสดุ รุ่น สถานะ หรือหมวด"
+        placeholder="ค้นหาวัสดุ / รุ่น / สถานะ / หมวด"
+        value={q}
+        onChange={e=>setQ(e.target.value)}
+        style={{flex:'1 1 340px',minWidth:220,maxWidth:620,padding:'10px 11px',border:'1px solid #d8d2c7',borderRadius:10,background:'#fffdf9',color:'#182231',outline:'none'}}
+      />
       <b className="small">อัปเดตข้อมูลล่าสุด: {dateTimeTH(latestSyncAt)}</b>
     </div>
     <div className="toolbar">
@@ -54,7 +60,7 @@ export default function MaterialsPage(){
         <option value="สั่งแล้ว">สั่งแล้ว</option>
         <option value="ยังไม่สั่ง">ยังไม่สั่ง</option>
       </select>
-      <input placeholder="ค้นหาวัสดุ / รุ่น / สถานะ / หมวด" value={q} onChange={e=>setQ(e.target.value)}/>
+      <span className="small muted" style={{flex:1}}>ข้อมูล Materials จาก Drive Sync</span>
       <span>{filtered.length} รายการ</span>
     </div>
     <div className="panel table-wrap" style={{maxHeight:'calc(100vh - 250px)',overflow:'auto'}}><table><thead><tr><th>Plot</th><th>หมวด</th><th>วัสดุ / งาน</th><th>ยี่ห้อ / รุ่น / สเปก</th><th>สถานะ</th><th>รายละเอียด / หมายเหตุ</th></tr></thead><tbody>{filtered.map(x=><tr key={x.id}><td>{projects.find(p=>p.id===x.project_id)?.code||'-'}</td><td>{x.category||'-'}</td><td><b>{x.item_name}</b><small>{x.quantity_unit||'ยังไม่ระบุปริมาณ/หน่วย'}</small></td><td>{[x.brand,x.model_spec].filter(Boolean).join(' / ')||'-'}</td><td><StatusBadge value={x.status}/></td><td>{x.status_detail||x.notes||'-'}</td></tr>)}</tbody></table></div>
