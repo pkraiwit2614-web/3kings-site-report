@@ -9,9 +9,9 @@ import BrandLogo from '@/components/BrandLogo'
 const baseNav = [
   ['/', 'Dashboard'],
   ['/presentation', 'Executive Presentation'],
-  ['/reports/new', 'รายงานการทำงานประจำวัน'],
   ['/schedule', 'แผนงานที่กำหนด'],
   ['/materials', 'วัสดุอุปกรณ์และผู้รับเหมา'],
+  ['/reports/new', 'รายงานการทำงานประจำวัน'],
   ['/site-photos', 'รูปภาพหน้างาน'],
   ['/reports', 'ประวัติรายงานการทำงานประจำวัน'],
   ['/procurement', 'การจัดซื้อ/จัดจ้าง'],
@@ -20,9 +20,11 @@ const baseNav = [
 
 const mobilePrimary = [
   ['/', 'Dashboard'],
-  ['/reports/new', 'รายงาน'],
+  ['/presentation', 'Executive'],
   ['/schedule', 'แผนงาน'],
-  ['/materials', 'วัสดุ']
+  ['/materials', 'วัสดุ'],
+  ['/reports/new', 'รายงาน'],
+  ['/site-photos', 'รูปหน้างาน']
 ]
 
 export default function AppShell({ children }: { children: ReactNode }) {
