@@ -10,6 +10,7 @@
   "dependencies": {
     "@supabase/supabase-js": "2.95.0",
     "next": "15.5.24",
+    "pptxgenjs": "4.0.1",
     "react": "19.1.1",
     "react-dom": "19.1.1",
     "read-excel-file": "9.3.10"
