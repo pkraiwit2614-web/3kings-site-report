@@ -45,11 +45,14 @@ export default function DashboardCondoDefectSummary(){
 
   useEffect(()=>{
     let alive=true
-    getSupabase().from('condo_room_status').select('room_no,building,hotel_participation,customer_status,status_group,source_modified_at').order('room_no').then(({data})=>{
-      if(!alive)return
-      setRows((data||[]) as Row[])
-      setLoading(false)
-    }).catch(()=>{if(alive)setLoading(false)})
+    ;(async()=>{
+      try{
+        const {data}=await getSupabase().from('condo_room_status').select('room_no,building,hotel_participation,customer_status,status_group,source_modified_at').order('room_no')
+        if(alive)setRows((data||[]) as Row[])
+      }finally{
+        if(alive)setLoading(false)
+      }
+    })()
     return()=>{alive=false}
   },[])
 
