@@ -10,6 +10,7 @@ const baseNav = [
   ['/', 'Dashboard'],
   ['/presentation', 'Executive Presentation'],
   ['/schedule', 'แผนงานที่กำหนด'],
+  ['/defects', 'สรุปห้องและ Defect'],
   ['/materials', 'วัสดุ เครื่องมือและผู้รับเหมา'],
   ['/reports/new', 'รายงานการทำงานประจำวัน'],
   ['/site-photos', 'รูปภาพหน้างาน'],
