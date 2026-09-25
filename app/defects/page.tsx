@@ -78,11 +78,14 @@ export default function DefectDetailPage(){
     const initial=new URLSearchParams(window.location.search).get('filter')||''
     if(categories.some(c=>c.id===initial))setFilter(initial)
     let alive=true
-    getSupabase().from('condo_room_status').select('room_no,building,floor,owner_name,hotel_participation,customer_status,current_status,status_group,follow_up,priority,next_action,source_modified_at').order('building').order('floor').order('room_no').then(({data,error})=>{
-      if(!alive)return
-      if(!error)setRows((data||[]) as RoomRow[])
-      setLoading(false)
-    }).catch(()=>{if(alive)setLoading(false)})
+    ;(async()=>{
+      try{
+        const {data,error}=await getSupabase().from('condo_room_status').select('room_no,building,floor,owner_name,hotel_participation,customer_status,current_status,status_group,follow_up,priority,next_action,source_modified_at').order('building').order('floor').order('room_no')
+        if(alive&&!error)setRows((data||[]) as RoomRow[])
+      }finally{
+        if(alive)setLoading(false)
+      }
+    })()
     return()=>{alive=false}
   },[])
 
