@@ -84,8 +84,10 @@ export default function DefectDetailPage(){
     const params=new URLSearchParams(window.location.search)
     const initial=params.get('filter')||''
     const initialBuilding=params.get('building')||'ALL'
+    const initialQuery=params.get('q')||''
     if(categories.some(c=>c.id===initial))setFilter(initial)
     if(['ALL','A','B'].includes(initialBuilding))setBuilding(initialBuilding)
+    if(initialQuery)setQ(initialQuery)
     let alive=true
     ;(async()=>{
       try{
