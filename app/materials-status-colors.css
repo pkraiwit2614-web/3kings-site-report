@@ -1,24 +1,37 @@
-/* Dashboard 7B — keep material status labels visually tied to the stacked status bar */
+/* Dashboard 7B — status text/numbers must use the exact same visual color family as the stacked chart. */
+
+/* ORDERED / สั่งแล้ว — green */
 .materials-summary .materials-kpis .good > span,
-.materials-summary .plot-status-grid .good > span{
-  color:var(--green);
+.materials-summary .materials-kpis .good > b,
+.materials-summary .plot-status-grid .good > span,
+.materials-summary .plot-status-grid .good > b{
+  color:var(--green) !important;
   font-weight:800;
 }
 
+/* NOT ORDERED / ยังไม่สั่ง — red */
 .materials-summary .materials-kpis .danger > span,
-.materials-summary .plot-status-grid .danger > span{
-  color:var(--red);
+.materials-summary .materials-kpis .danger > b,
+.materials-summary .plot-status-grid .danger > span,
+.materials-summary .plot-status-grid .danger > b{
+  color:var(--red) !important;
   font-weight:800;
 }
 
+/* FOLLOW UP / ต้องตาม — amber */
 .materials-summary .materials-kpis .warn > span,
-.materials-summary .plot-foot > span:first-child{
-  color:var(--amber);
+.materials-summary .materials-kpis .warn > b,
+.materials-summary .plot-foot > span:first-child,
+.materials-summary .plot-foot > span:first-child > b{
+  color:var(--amber) !important;
   font-weight:800;
 }
 
+/* OTHER / อื่น ๆ — same grey as the chart */
 .materials-summary .materials-kpis .neutral > span,
-.materials-summary .plot-foot > span:nth-child(2){
-  color:#adb5bd;
+.materials-summary .materials-kpis .neutral > b,
+.materials-summary .plot-foot > span:nth-child(2),
+.materials-summary .plot-foot > span:nth-child(2) > b{
+  color:#adb5bd !important;
   font-weight:800;
 }
