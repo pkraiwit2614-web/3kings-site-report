@@ -97,7 +97,7 @@ export default function DashboardCondoDefectSummary(){
 
       <div className="condo-headline">
         <Link href="/defects" className="headline-card total"><span>ห้องทั้งหมด</span><b>{summary.total}<em>ห้อง</em></b><small>A {summary.buildingA} • B {summary.buildingB}</small></Link>
-        <Link href="/defects?filter=nonhotel-nosale" className="headline-card nonhotel"><span>ไม่ร่วมโรงแรม</span><b>{summary.nonhotel}<em>ห้อง</em></b><small>สถานะส่งมอบและรอลูกค้า</small></Link>
+        <Link href={`/defects?q=${encodeURIComponent('ไม่ร่วมโรงแรม')}`} className="headline-card nonhotel"><span>ไม่ร่วมโรงแรม</span><b>{summary.nonhotel}<em>ห้อง</em></b><small>สถานะส่งมอบและรอลูกค้า</small></Link>
         <Link href="/defects?filter=hotel-customer" className="headline-card hotel"><span>ร่วมโรงแรม • มีลูกค้า</span><b>{summary.hotelCustomer}<em>ห้อง</em></b><small>รวมสถานะ Defect 3 กลุ่มด้านล่าง</small></Link>
         <Link href="/defects?filter=hotel-nocustomer" className="headline-card hotel"><span>ร่วมโรงแรม • ไม่มีลูกค้า</span><b>{summary.hotelNoCustomer}<em>ห้อง</em></b><small>รวมสถานะ Defect 3 กลุ่มด้านล่าง</small></Link>
       </div>
