@@ -1,0 +1,86 @@
+.report-print-header{display:none}
+.page-header-print-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.report-print-button{white-space:nowrap}
+
+@media print{
+  @page{size:A4 landscape;margin:10mm}
+
+  body.report-print-mode{background:#fff!important;color:#111!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body.report-print-mode .sidebar,
+  body.report-print-mode .mobile-nav,
+  body.report-print-mode .mobile-more-sheet,
+  body.report-print-mode .mobile-more-backdrop,
+  body.report-print-mode .page-header,
+  body.report-print-mode .sticky-actions{display:none!important}
+
+  body.report-print-mode .main{margin:0!important;padding:0!important;min-height:auto!important}
+  body.report-print-mode .report-print-header{display:block!important;margin:0 0 10mm!important;padding:0 0 5mm!important;border-bottom:1.5px solid #17243a!important;break-after:avoid;page-break-after:avoid}
+  body.report-print-mode .report-print-brand{display:flex;align-items:center;gap:9px;margin-bottom:6mm}
+  body.report-print-mode .report-print-mark{width:34px;height:34px;display:grid;place-items:center;border-radius:8px;background:#17243a!important;color:#fff!important;font-size:13px;font-weight:900;letter-spacing:.04em}
+  body.report-print-mode .report-print-brand b{display:block;color:#17243a!important;font-size:14px;line-height:1.2}
+  body.report-print-mode .report-print-brand span{display:block;margin-top:2px;color:#667085!important;font-size:8px}
+  body.report-print-mode .report-print-title-row{display:flex;justify-content:space-between;align-items:flex-end;gap:18px}
+  body.report-print-mode .report-print-title-row>div:first-child>span{display:block;color:#667085!important;font-size:7px;font-weight:800;letter-spacing:.18em}
+  body.report-print-mode .report-print-title-row h1{margin:2px 0 0!important;color:#17243a!important;font-size:20px!important;line-height:1.25!important}
+  body.report-print-mode .report-print-date{min-width:155px;text-align:right}
+  body.report-print-mode .report-print-date span{display:block;color:#667085!important;font-size:7px}
+  body.report-print-mode .report-print-date b{display:block;margin-top:2px;color:#17243a!important;font-size:9px}
+  body.report-print-mode .report-print-filters{display:grid;grid-template-columns:auto 1fr;gap:7px;margin-top:4mm;padding:3mm 4mm;border:1px solid #d8dee7;border-radius:6px;background:#f7f9fb!important;font-size:8px;line-height:1.45}
+  body.report-print-mode .report-print-filters b{color:#17243a!important;white-space:nowrap}
+  body.report-print-mode .report-print-filters span{color:#475467!important}
+
+  body.report-print-mode .filter-panel,
+  body.report-print-mode .schedule-sticky-tools,
+  body.report-print-mode .main .toolbar,
+  body.report-print-mode .main .panel:has(input),
+  body.report-print-mode .main .panel:has(select){display:none!important}
+
+  body.report-print-mode .panel{background:#fff!important;box-shadow:none!important;border-color:#dfe3e8!important}
+  body.report-print-mode .table-wrap,
+  body.report-print-mode .schedule-table-scroll,
+  body.report-print-mode .defect-table{max-height:none!important;height:auto!important;overflow:visible!important;border-radius:0!important}
+  body.report-print-mode .table-wrap table,
+  body.report-print-mode .schedule-table{width:100%!important;min-width:0!important;table-layout:fixed!important;border-collapse:collapse!important;background:#fff!important}
+  body.report-print-mode table thead{display:table-header-group!important}
+  body.report-print-mode table tfoot{display:table-footer-group!important}
+  body.report-print-mode table tr{break-inside:avoid;page-break-inside:avoid}
+  body.report-print-mode table th,
+  body.report-print-mode table td{position:static!important;padding:5px 5px!important;border-bottom:1px solid #e4e7ec!important;vertical-align:top!important;overflow-wrap:anywhere!important;word-break:normal!important}
+  body.report-print-mode table th{background:#eef3f8!important;color:#344054!important;font-size:7.4px!important;line-height:1.3!important;text-transform:none!important;letter-spacing:0!important}
+  body.report-print-mode table td{color:#1f2937!important;font-size:7.6px!important;line-height:1.35!important}
+  body.report-print-mode table td small{font-size:6.6px!important;line-height:1.3!important}
+  body.report-print-mode .badge,
+  body.report-print-mode .customer-badge,
+  body.report-print-mode .program-badge,
+  body.report-print-mode .state-badge,
+  body.report-print-mode .delay-chip{font-size:6.5px!important;padding:2px 4px!important;line-height:1.25!important;white-space:normal!important;box-shadow:none!important}
+
+  body.report-print-mode .selected-status{break-inside:avoid;page-break-inside:avoid;margin-bottom:5mm!important;padding:8px 10px!important;box-shadow:none!important}
+  body.report-print-mode .selected-copy h2{font-size:15px!important}
+  body.report-print-mode .selected-copy p{font-size:8px!important}
+  body.report-print-mode .selected-breakdown{gap:4px!important}
+  body.report-print-mode .break-card{min-height:48px!important;padding:5px!important;box-shadow:none!important;transform:none!important}
+  body.report-print-mode .break-card span{font-size:7px!important}
+  body.report-print-mode .break-card b{font-size:15px!important}
+  body.report-print-mode .break-card small{font-size:6px!important}
+  body.report-print-mode .detail-head{margin-bottom:4mm!important}
+  body.report-print-mode .detail-head h2{font-size:14px!important}
+  body.report-print-mode .detail-head p,
+  body.report-print-mode .legend{font-size:7px!important}
+
+  body.report-print-mode .schedule-summary-grid,
+  body.report-print-mode .schedule-overview-panel{break-inside:avoid;page-break-inside:avoid}
+  body.report-print-mode .schedule-summary-card{box-shadow:none!important;transform:none!important}
+  body.report-print-mode .schedule-portfolio-row{break-inside:avoid;page-break-inside:avoid;box-shadow:none!important;transform:none!important}
+  body.report-print-mode .schedule-table-panel{padding:0!important;border:0!important}
+
+  body.report-print-mode section[aria-labelledby="materials-status-title"],
+  body.report-print-mode section[aria-labelledby="tool-machine-title"]{break-before:auto}
+  body.report-print-mode section[aria-labelledby="tool-machine-title"]{margin-top:8mm!important;padding-top:0!important}
+
+  body.report-print-mode a[href]:after{content:none!important}
+}
+
+@media(max-width:760px){
+  .page-header-print-actions{width:100%;justify-content:flex-start}
+}
