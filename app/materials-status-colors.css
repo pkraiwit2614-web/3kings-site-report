@@ -1,0 +1,24 @@
+/* Dashboard 7B — keep material status labels visually tied to the stacked status bar */
+.materials-summary .materials-kpis .good > span,
+.materials-summary .plot-status-grid .good > span{
+  color:var(--green);
+  font-weight:800;
+}
+
+.materials-summary .materials-kpis .danger > span,
+.materials-summary .plot-status-grid .danger > span{
+  color:var(--red);
+  font-weight:800;
+}
+
+.materials-summary .materials-kpis .warn > span,
+.materials-summary .plot-foot > span:first-child{
+  color:var(--amber);
+  font-weight:800;
+}
+
+.materials-summary .materials-kpis .neutral > span,
+.materials-summary .plot-foot > span:nth-child(2){
+  color:#adb5bd;
+  font-weight:800;
+}
