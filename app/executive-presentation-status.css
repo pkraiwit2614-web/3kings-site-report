@@ -1,0 +1,131 @@
+/* Executive Presentation — status-color hierarchy for construction progress cards */
+
+/* Overview: Actual / Plan / Variance */
+.ep-kpis > div:nth-child(1) {
+  background: #eef9f3;
+  border-color: #cce5d6;
+}
+.ep-kpis > div:nth-child(1) span,
+.ep-kpis > div:nth-child(1) b {
+  color: #247951;
+}
+
+.ep-kpis > div:nth-child(2) {
+  background: #fff8e7;
+  border-color: #ead8a4;
+}
+.ep-kpis > div:nth-child(2) span,
+.ep-kpis > div:nth-child(2) b {
+  color: #96630d;
+}
+
+/* Positive / zero variance uses a different green from Actual. */
+.ep-kpis > div:nth-child(3) {
+  background: #eefaf8;
+  border-color: #bfe4df;
+}
+.ep-kpis > div:nth-child(3) span,
+.ep-kpis > div:nth-child(3) b {
+  color: #187a70;
+}
+
+/* Negative variance switches to red. */
+.ep-kpis > div:nth-child(3):has(.danger-text) {
+  background: #fff2f1;
+  border-color: #edcac6;
+}
+.ep-kpis > div:nth-child(3):has(.danger-text) span,
+.ep-kpis > div:nth-child(3):has(.danger-text) b {
+  color: #b23c36 !important;
+}
+
+/* Overview counters: งาน / ล่าช้า / เสร็จ / รูป */
+.ep-kpis + .ep-card-meta {
+  gap: 7px;
+}
+.ep-kpis + .ep-card-meta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-weight: 750;
+}
+.ep-kpis + .ep-card-meta > span:nth-child(1) {
+  background: #eef4fb;
+  border-color: #c8daee;
+  color: #315f9e;
+}
+.ep-kpis + .ep-card-meta > span:nth-child(1) b {
+  color: #244f88;
+}
+.ep-kpis + .ep-card-meta > span:nth-child(2) {
+  background: #fff2f1;
+  border-color: #edcac6;
+  color: #a93d37;
+}
+.ep-kpis + .ep-card-meta > span:nth-child(2) b {
+  color: #b23c36;
+}
+.ep-kpis + .ep-card-meta > span:nth-child(3) {
+  background: #eef9f3;
+  border-color: #cce5d6;
+  color: #247951;
+}
+.ep-kpis + .ep-card-meta > span:nth-child(3) b {
+  color: #1f704b;
+}
+.ep-kpis + .ep-card-meta > span:nth-child(4) {
+  background: #f1f3f5;
+  border-color: #d8dde2;
+  color: #606a75;
+}
+
+/* Slide detail: keep Actual / Plan / Variance consistent with overview. */
+.ep-progress {
+  background: #eef9f3;
+  border-color: #cce5d6;
+}
+.ep-progress > span,
+.ep-progress > b {
+  color: #247951;
+}
+.ep-progress i {
+  background: #d7e9de;
+}
+.ep-progress em {
+  background: #2e9a6a;
+}
+
+.ep-info-grid > div:nth-child(1) {
+  background: #fff8e7;
+  border-color: #ead8a4;
+}
+.ep-info-grid > div:nth-child(1) span,
+.ep-info-grid > div:nth-child(1) b {
+  color: #96630d;
+}
+
+.ep-info-grid > div:nth-child(2) {
+  background: #eefaf8;
+  border-color: #bfe4df;
+}
+.ep-info-grid > div:nth-child(2) span,
+.ep-info-grid > div:nth-child(2) b {
+  color: #187a70;
+}
+.ep-info-grid > div:nth-child(2):has(.danger-text) {
+  background: #fff2f1;
+  border-color: #edcac6;
+}
+.ep-info-grid > div:nth-child(2):has(.danger-text) span,
+.ep-info-grid > div:nth-child(2):has(.danger-text) b {
+  color: #b23c36 !important;
+}
+
+@media (max-width: 620px) {
+  .ep-kpis + .ep-card-meta > span {
+    padding: 5px 7px;
+  }
+}
