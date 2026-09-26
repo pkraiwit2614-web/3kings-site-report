@@ -141,7 +141,7 @@ export default function PhotoMappingPage(){
     const task=taskById.get(taskId)
     if(!task||task.project_id!==photo.project_id){setMessage('Task ที่เลือกไม่ตรงกับ Plot ของรูป กรุณาเลือกใหม่');return}
     const now=new Date().toISOString()
-    const phase=phases[photo.id]??(photo.phase as Phase)||'other'
+    const phase=phases[photo.id] ?? ((photo.phase as Phase)||'other')
     setSaving(photo.id);setMessage('')
     const s=getSupabase()
     const {error}=await s.from('drive_photo_index').update({
