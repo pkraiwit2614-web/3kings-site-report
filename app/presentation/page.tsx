@@ -1,9 +1,9 @@
-import ExecutivePresentationV35 from '@/components/ExecutivePresentationV35'
+import ExecutivePresentationV37 from '@/components/ExecutivePresentationV37'
 import ExecutivePhotoLinks from '@/components/ExecutivePhotoLinks'
 
 export default function ExecutivePresentationPage(){
   return <>
-    <ExecutivePresentationV35 />
+    <ExecutivePresentationV37 />
     <ExecutivePhotoLinks />
   </>
 }
