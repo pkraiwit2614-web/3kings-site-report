@@ -25,11 +25,13 @@ const DONE_STATUSES=new Set([
 ])
 
 const MEANINGS={
-  danger:{prefix:'แดง',label:'Defect ยังไม่เสร็จ'},
-  warn:{prefix:'เหลือง',label:'รอ Hotel ตรวจ / Pending Handover'},
-  good:{prefix:'เขียว',label:'Hotel ตรวจแล้ว / ส่งมอบแล้ว'},
-  neutral:{prefix:'เทา',label:'Awaiting Sale'},
+  danger:{label:'Defect ยังไม่เสร็จ'},
+  warn:{label:'รอ Hotel ตรวจ / Pending Handover'},
+  good:{label:'Hotel ตรวจแล้ว / ส่งมอบแล้ว'},
+  neutral:{label:'Awaiting Sale'},
 } as const
+
+const COLOR_PREFIX=/^(แดง|เหลือง|เขียว|เทา)\s*[•:\-–—]?\s*/
 
 function extractRoomNo(fileName:string,folderName?:string|null){
   const find=(value:string)=>value.toUpperCase().match(/([AB]\d{3,4})/)?.[1]||null
@@ -151,15 +153,15 @@ export default function PresentationCondoEnhancer(){
           fillPhotoGrid(grid,photosForPeriod(safePhotos[building]),building,true)
         })
 
-        // Replace vague color-only labels with explicit meanings.
+        // Show presentation meanings only; keep color as a visual cue without naming the color.
         document.querySelectorAll<HTMLElement>('.condo-tone-row span').forEach(span=>{
           const tone=(['danger','warn','good','neutral'] as const).find(t=>span.classList.contains(t))
           if(!tone)return
           const meaning=MEANINGS[tone]
           const current=(span.dataset.originalText||span.textContent||'').trim()
           if(!span.dataset.originalText)span.dataset.originalText=current
-          const metrics=current.replace(new RegExp(`^${meaning.prefix}\\s*`),'').trim()
-          const next=`${meaning.prefix} • ${meaning.label}${metrics?` — ${metrics}`:''}`
+          const metrics=current.replace(COLOR_PREFIX,'').trim()
+          const next=`${meaning.label}${metrics?` — ${metrics}`:''}`
           if(span.textContent!==next)span.textContent=next
         })
 
@@ -189,9 +191,8 @@ export default function PresentationCondoEnhancer(){
               ;(['danger','warn','good','neutral'] as const).forEach(tone=>{
                 const item=document.createElement('div')
                 item.className=`${tone}`
-                const b=document.createElement('b'); b.textContent=MEANINGS[tone].prefix
                 const span=document.createElement('span'); span.textContent=MEANINGS[tone].label
-                item.append(b,span); legend.appendChild(item)
+                item.append(span); legend.appendChild(item)
               })
               const six=statusPanel.querySelector('.condo-six-status')
               statusPanel.insertBefore(legend,six||null)
@@ -226,8 +227,8 @@ export default function PresentationCondoEnhancer(){
     .verified-condo-slide-photos .verified-condo-date{font-size:9px}
     .verified-condo-slide-photos>.verified-condo-empty{min-height:480px;border:1px dashed #d8d1c6;border-radius:12px;background:#faf8f3}
     .verified-condo-legend{display:grid;grid-template-columns:1fr 1fr;gap:7px}
-    .verified-condo-legend>div{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:7px;padding:7px 9px;border-radius:9px;border:1px solid transparent;font-size:9px;font-weight:800}
-    .verified-condo-legend b{font-size:10px}.verified-condo-legend .danger{background:#fff2f1;border-color:#edcac6;color:#9f3530}.verified-condo-legend .warn{background:#fff8e7;border-color:#ead8a4;color:#8b5b0d}.verified-condo-legend .good{background:#eef9f3;border-color:#cce5d6;color:#206d49}.verified-condo-legend .neutral{background:#f1f3f5;border-color:#d8dde2;color:#59636d}
+    .verified-condo-legend>div{display:grid;grid-template-columns:1fr;align-items:center;gap:7px;padding:7px 9px;border-radius:9px;border:1px solid transparent;font-size:9px;font-weight:800}
+    .verified-condo-legend .danger{background:#fff2f1;border-color:#edcac6;color:#9f3530}.verified-condo-legend .warn{background:#fff8e7;border-color:#ead8a4;color:#8b5b0d}.verified-condo-legend .good{background:#eef9f3;border-color:#cce5d6;color:#206d49}.verified-condo-legend .neutral{background:#f1f3f5;border-color:#d8dde2;color:#59636d}
     @media(max-width:620px){.verified-condo-slide-photos{grid-template-columns:1fr}.verified-condo-slide-photos .verified-condo-photo,.verified-condo-slide-photos>.verified-condo-photo:only-child{height:260px}.verified-condo-legend{grid-template-columns:1fr}.condo-tone-row{grid-template-columns:1fr!important}}
   `}</style>
 }
