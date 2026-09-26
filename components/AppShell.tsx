@@ -12,7 +12,7 @@ const baseNav = [
   ['/schedule', 'แผนงานที่กำหนด'],
   ['/materials', 'วัสดุ เครื่องมือและผู้รับเหมา'],
   ['/defects', 'Defect Report'],
-  ['/reports/new', 'รายงานการทำงานประจำวัน'],
+  ['/reports/quick', 'รายงานการทำงานประจำวัน'],
   ['/site-photos', 'รูปภาพหน้างาน'],
   ['/reports', 'ประวัติรายงานการทำงานประจำวัน'],
   ['/procurement', 'การจัดซื้อ/จัดจ้าง'],
@@ -24,7 +24,7 @@ const mobilePrimary = [
   ['/presentation', 'Executive'],
   ['/schedule', 'แผนงาน'],
   ['/materials', 'วัสดุ/เครื่องมือ'],
-  ['/reports/new', 'รายงาน'],
+  ['/reports/quick', 'รายงาน'],
   ['/site-photos', 'รูปหน้างาน']
 ]
 
