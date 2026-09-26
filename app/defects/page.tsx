@@ -28,6 +28,8 @@ type Category={
   predicate:(r:RoomRow)=>boolean
 }
 
+type CustomerFilter='ALL'|'CUSTOMER'|'NO_CUSTOMER'
+
 const categories:Category[]=[
   {id:'customer',label:'มีลูกค้า',tone:'hotel',predicate:r=>r.customer_status==='มีลูกค้า'},
   {id:'no-customer',label:'ไม่มีลูกค้า',tone:'neutral',predicate:r=>r.customer_status==='ไม่มีลูกค้า'},
@@ -91,6 +93,7 @@ export default function DefectDetailPage(){
   const [loading,setLoading]=useState(true)
   const [filter,setFilter]=useState('')
   const [building,setBuilding]=useState('ALL')
+  const [customerFilter,setCustomerFilter]=useState<CustomerFilter>('ALL')
   const [q,setQ]=useState('')
 
   useEffect(()=>{
@@ -130,11 +133,15 @@ export default function DefectDetailPage(){
     const needle=q.trim().toLowerCase()
     return rows.filter(r=>{
       if(building!=='ALL'&&r.building!==building)return false
+      if(customerFilter==='CUSTOMER'&&r.customer_status!=='มีลูกค้า')return false
+      if(customerFilter==='NO_CUSTOMER'&&r.customer_status!=='ไม่มีลูกค้า')return false
       if(active&&!active.predicate(r))return false
       if(!needle)return true
       return [r.room_no,r.owner_name,r.customer_status,r.hotel_participation,statusLabel(r),r.next_action,r.follow_up].filter(Boolean).join(' ').toLowerCase().includes(needle)
     })
-  },[rows,building,active,q])
+  },[rows,building,customerFilter,active,q])
+
+  const customerScopeLabel=customerFilter==='CUSTOMER'?'มีลูกค้า':customerFilter==='NO_CUSTOMER'?'ไม่มีลูกค้า':'ทุกประเภทลูกค้า'
 
   return <AppShell>
     <PageHeader
@@ -152,14 +159,14 @@ export default function DefectDetailPage(){
         <div className="selected-copy">
           <span>{active?'รายการที่เลือก':'รายละเอียดทุกห้อง'}</span>
           <h2>{active?.label||'Above Condo — ทุกสถานะ'}</h2>
-          <p>{building==='ALL'?'ตึก A + B':`ตึก ${building}`} • แสดง {filtered.length} ห้อง</p>
+          <p>{building==='ALL'?'ตึก A + B':`ตึก ${building}`} • {customerScopeLabel} • แสดง {filtered.length} ห้อง</p>
         </div>
         <div className="selected-breakdown">
-          <div className="break-card customer"><span>มีลูกค้า</span><b>{customerCount}</b><small>ห้อง</small></div>
-          <div className="break-card no-customer"><span>ไม่มีลูกค้า</span><b>{noCustomerCount}</b><small>ห้อง</small></div>
+          <button type="button" onClick={()=>setCustomerFilter(v=>v==='CUSTOMER'?'ALL':'CUSTOMER')} className={`break-card customer ${customerFilter==='CUSTOMER'?'active':''}`}><span>มีลูกค้า</span><b>{customerCount}</b><small>ห้อง</small></button>
+          <button type="button" onClick={()=>setCustomerFilter(v=>v==='NO_CUSTOMER'?'ALL':'NO_CUSTOMER')} className={`break-card no-customer ${customerFilter==='NO_CUSTOMER'?'active':''}`}><span>ไม่มีลูกค้า</span><b>{noCustomerCount}</b><small>ห้อง</small></button>
           <button type="button" onClick={()=>setBuilding('A')} className={`break-card building ${building==='A'?'active':''}`}><span>ตึก A</span><b>{aCount}</b><small>ห้อง</small></button>
           <button type="button" onClick={()=>setBuilding('B')} className={`break-card building ${building==='B'?'active':''}`}><span>ตึก B</span><b>{bCount}</b><small>ห้อง</small></button>
-          <button type="button" onClick={()=>setBuilding('ALL')} className={`break-card total ${building==='ALL'?'active':''}`}><span>รวม</span><b>{totalCount}</b><small>ห้อง</small></button>
+          <button type="button" onClick={()=>{setBuilding('ALL');setCustomerFilter('ALL')}} className={`break-card total ${building==='ALL'&&customerFilter==='ALL'?'active':''}`}><span>รวม</span><b>{totalCount}</b><small>ห้อง</small></button>
         </div>
       </section>
 
@@ -168,7 +175,7 @@ export default function DefectDetailPage(){
           <input value={q} onChange={e=>setQ(e.target.value)} placeholder="ค้นหาเลขห้องหรือชื่อเจ้าของ" aria-label="ค้นหาเลขห้องหรือชื่อเจ้าของ"/>
           <select value={building} onChange={e=>setBuilding(e.target.value)} aria-label="กรองอาคาร"><option value="ALL">ตึก A + B</option><option value="A">ตึก A</option><option value="B">ตึก B</option></select>
           <select value={filter} onChange={e=>setFilter(e.target.value)} aria-label="กรองสถานะ"><option value="">ทุกสถานะ</option>{categories.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</select>
-          {(q||building!=='ALL'||filter)&&<button type="button" className="button" onClick={()=>{setQ('');setBuilding('ALL');setFilter('')}}>ล้างตัวกรอง</button>}
+          {(q||building!=='ALL'||filter||customerFilter!=='ALL')&&<button type="button" className="button" onClick={()=>{setQ('');setBuilding('ALL');setFilter('');setCustomerFilter('ALL')}}>ล้างตัวกรอง</button>}
         </div>
       </section>
 
@@ -195,7 +202,7 @@ export default function DefectDetailPage(){
     <style jsx>{`
       .header-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}.update-meta{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;line-height:1.25;margin-right:2px}.update-meta span{font-size:8.5px;color:var(--muted);font-weight:700}.update-meta b{font-size:10px;color:var(--navy);font-weight:800;white-space:nowrap}.drive-button{background:#f3f8ff;border-color:#bfd7ec;color:#245e8b;white-space:nowrap}
       .selected-status{scroll-margin-top:16px;display:grid;grid-template-columns:minmax(230px,1fr) minmax(570px,1.9fr);align-items:center;gap:16px;padding:15px 17px;border:1px solid var(--line);border-left:6px solid #8b949e;border-radius:14px;background:var(--surface);margin-bottom:12px}.selected-status.hotel{border-left-color:#2f6fb0;background:#f5f9fe}.selected-status.danger{border-left-color:#d84d45;background:#fff8f7}.selected-status.warn{border-left-color:#e2ad32;background:#fffaf0}.selected-status.good{border-left-color:#2e9a6a;background:#f6fbf8}.selected-copy>span{font-size:9px;font-weight:800;color:var(--muted)}.selected-copy h2{margin:3px 0;font-size:18px;color:var(--navy);line-height:1.3}.selected-copy p{margin:0;font-size:10px;color:var(--muted)}
-      .selected-breakdown{display:grid;grid-template-columns:repeat(5,minmax(92px,1fr));gap:7px}.break-card{min-height:66px;border:1px solid var(--line);border-radius:11px;background:#fff;padding:8px 9px;text-align:center;display:flex;flex-direction:column;justify-content:center;color:var(--text)}.break-card span{display:block;font-size:8.5px;font-weight:800;color:var(--muted)}.break-card b{display:block;margin-top:2px;font-size:21px;line-height:1;color:var(--navy);font-variant-numeric:tabular-nums}.break-card small{display:block;margin-top:3px;font-size:8px;color:var(--muted)}.break-card.customer{background:#edf7ff;border:2px solid #bad9ef}.break-card.customer span,.break-card.customer b{color:#2a6997}.break-card.no-customer{background:#f1f3f5;border:2px solid #d4dae0}.break-card.no-customer span,.break-card.no-customer b{color:#606a76}.break-card.building,.break-card.total{cursor:pointer}.break-card.active{background:#eef6fc;border-color:#8bbbdc;box-shadow:inset 0 0 0 1px #8bbbdc}
+      .selected-breakdown{display:grid;grid-template-columns:repeat(5,minmax(92px,1fr));gap:7px}.break-card{min-height:66px;border:1px solid var(--line);border-radius:11px;background:#fff;padding:8px 9px;text-align:center;display:flex;flex-direction:column;justify-content:center;color:var(--text);font:inherit;cursor:pointer;transition:.15s ease}.break-card:hover{transform:translateY(-1px);box-shadow:0 5px 14px rgba(25,42,63,.08)}.break-card span{display:block;font-size:8.5px;font-weight:800;color:var(--muted)}.break-card b{display:block;margin-top:2px;font-size:21px;line-height:1;color:var(--navy);font-variant-numeric:tabular-nums}.break-card small{display:block;margin-top:3px;font-size:8px;color:var(--muted)}.break-card.customer{background:#edf7ff;border:2px solid #bad9ef}.break-card.customer span,.break-card.customer b{color:#2a6997}.break-card.customer.active{border-color:#4b9bd3;box-shadow:inset 0 0 0 1px #4b9bd3,0 5px 14px rgba(75,155,211,.12)}.break-card.no-customer{background:#f1f3f5;border:2px solid #d4dae0}.break-card.no-customer span,.break-card.no-customer b{color:#606a76}.break-card.no-customer.active{border-color:#7f8790;box-shadow:inset 0 0 0 1px #7f8790,0 5px 14px rgba(95,104,115,.12)}.break-card.building.active{background:#eef6fc;border-color:#8bbbdc;box-shadow:inset 0 0 0 1px #8bbbdc}.break-card.total{background:#17243a;border:2px solid #17243a}.break-card.total span,.break-card.total b,.break-card.total small{color:#fff}.break-card.total.active{border-color:#d5a94b;box-shadow:inset 0 0 0 1px #d5a94b,0 5px 16px rgba(23,36,58,.16)}
       .filter-panel{padding:12px;margin-bottom:12px}.detail-toolbar{margin:0}.detail-toolbar input{min-width:260px}.detail-toolbar select{max-width:320px}.detail-panel{padding-bottom:0}.detail-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:10px}.detail-head h2{margin:0;font-size:17px}.detail-head p{margin:3px 0 0;font-size:10px;color:var(--muted)}
       .legend{display:flex;gap:9px;flex-wrap:wrap;font-size:8.5px;color:var(--muted)}.legend span{display:flex;align-items:center;gap:4px}.legend i{width:8px;height:8px;border-radius:50%}.customer-dot{background:#4b9bd3}.no-customer-dot{background:#7f8790}.bad-dot{background:#d84d45}.warn-dot{background:#e2ad32}.good-dot{background:#2e9a6a}
       .defect-table{max-height:680px;margin:0 -19px}.defect-table table{min-width:1120px}.defect-table th,.defect-table td{vertical-align:middle}.defect-table th.center,.defect-table td.center{text-align:center}.defect-table td{font-size:11.5px}.room-cell b{display:block;color:var(--navy);font-size:12.5px}.room-cell small{display:block;font-size:8.5px;color:var(--muted)}
