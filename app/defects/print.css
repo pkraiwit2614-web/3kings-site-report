@@ -1,0 +1,50 @@
+.page-header-print-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.defect-print-button{white-space:nowrap}
+
+@media print{
+  @page{size:A4 landscape;margin:10mm}
+
+  html,body{background:#fff!important}
+  body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+
+  .page-header{margin-bottom:12px!important}
+  .page-header h1{font-size:22px!important}
+  .page-header p{font-size:10px!important}
+  .page-header-print-actions .header-actions{display:none!important}
+  .defect-print-button{display:none!important}
+
+  .filter-panel{display:none!important}
+  .selected-status{break-inside:avoid;page-break-inside:avoid;margin-bottom:10px!important;padding:10px 12px!important;grid-template-columns:minmax(220px,1fr) minmax(500px,1.8fr)!important}
+  .selected-copy h2{font-size:16px!important}
+  .selected-copy p{font-size:9px!important}
+  .selected-breakdown{gap:5px!important}
+  .break-card{min-height:52px!important;padding:5px 6px!important;box-shadow:none!important;transform:none!important}
+  .break-card b{font-size:17px!important}
+
+  .detail-panel{padding:10px 0 0!important;border:0!important;box-shadow:none!important;background:#fff!important}
+  .detail-head{margin:0 0 8px!important}
+  .detail-head h2{font-size:15px!important}
+  .detail-head p,.legend{font-size:8px!important}
+
+  .defect-table{max-height:none!important;overflow:visible!important;margin:0!important;border-radius:0!important}
+  .defect-table table{width:100%!important;min-width:0!important;table-layout:fixed!important;background:#fff!important}
+  .defect-table thead{display:table-header-group!important}
+  .defect-table tr{break-inside:avoid;page-break-inside:avoid}
+  .defect-table th{position:static!important;background:#eef3f8!important;color:#40536d!important;font-size:8px!important;padding:6px 5px!important}
+  .defect-table td{font-size:8px!important;padding:6px 5px!important;overflow-wrap:anywhere!important;word-break:normal!important}
+  .defect-table th:nth-child(1),.defect-table td:nth-child(1){width:8%}
+  .defect-table th:nth-child(2),.defect-table td:nth-child(2){width:6%}
+  .defect-table th:nth-child(3),.defect-table td:nth-child(3){width:19%}
+  .defect-table th:nth-child(4),.defect-table td:nth-child(4){width:11%}
+  .defect-table th:nth-child(5),.defect-table td:nth-child(5){width:12%}
+  .defect-table th:nth-child(6),.defect-table td:nth-child(6){width:18%}
+  .defect-table th:nth-child(7),.defect-table td:nth-child(7){width:26%}
+
+  .room-cell b{font-size:9px!important}
+  .room-cell small{font-size:7px!important}
+  .customer-badge,.program-badge,.state-badge{font-size:7px!important;padding:3px 5px!important;white-space:normal!important;line-height:1.25!important}
+}
+
+@media(max-width:760px){
+  .page-header-print-actions{width:100%;justify-content:flex-start}
+}
