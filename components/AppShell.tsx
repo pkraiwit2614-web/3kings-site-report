@@ -8,6 +8,7 @@ import BrandLogo from '@/components/BrandLogo'
 
 const baseNav = [
   ['/', 'Dashboard'],
+  ['/data-health', 'Data Health'],
   ['/presentation', 'Executive Presentation'],
   ['/schedule', 'แผนงานที่กำหนด'],
   ['/materials', 'วัสดุ เครื่องมือและผู้รับเหมา'],
