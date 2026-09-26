@@ -76,7 +76,6 @@ export default function SitePhotosGallery(){
   return <>
     <div className="site-photo-summary">
       <span>Preview ล่าสุดจาก Photo Index: <b>{indexedCount}</b> หน้างาน</span>
-      <span>รูปตัวอย่างโหลดแบบ Lazy เพื่อไม่ให้หน้าเว็บหนัก</span>
     </div>
     <div className="site-photo-groups">
       {groups.map(group=><section key={group.title} className="panel site-photo-group">
