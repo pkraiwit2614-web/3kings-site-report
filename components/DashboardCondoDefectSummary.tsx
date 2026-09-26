@@ -66,15 +66,27 @@ export default function DashboardCondoDefectSummary(){
     buildingA:rows.filter(r=>r.building==='A').length,
     buildingB:rows.filter(r=>r.building==='B').length,
   }),[rows])
+
   const sourceDate=useMemo(()=>latestDate(rows),[rows])
   const coverage=useMemo(()=>finalStatuses.reduce((sum,s)=>sum+rows.filter(r=>r.status_group===s.group).length,0),[rows])
+  const toneTotals=useMemo(()=>{
+    const count=(tone:FinalStatus['tone'])=>finalStatuses.filter(s=>s.tone===tone).reduce((sum,s)=>sum+rows.filter(r=>r.status_group===s.group).length,0)
+    return {danger:count('danger'),warn:count('warn'),good:count('good'),neutral:count('neutral')}
+  },[rows])
+
+  const totalForChart=Math.max(1,summary.total)
+  const dangerEnd=toneTotals.danger/totalForChart*360
+  const warnEnd=dangerEnd+toneTotals.warn/totalForChart*360
+  const goodEnd=warnEnd+toneTotals.good/totalForChart*360
+  const donutBackground=`conic-gradient(#d84d45 0deg ${dangerEnd}deg,#e2ad32 ${dangerEnd}deg ${warnEnd}deg,#2e9a6a ${warnEnd}deg ${goodEnd}deg,#7c8794 ${goodEnd}deg 360deg)`
 
   return <section className="panel dashboard-module condo-summary" style={{marginBottom:18}}>
     <div className="module-title">
       <span>9</span>
       <div><b>ABOVE CONDO — HANDOVER / DEFECT STATUS</b><small>สถานะทั้งโครงการ • กดแต่ละช่องเพื่อเปิดรายชื่อห้องที่เกี่ยวข้อง</small></div>
-      <Link href="/defects">ดูผังรายละเอียด →</Link>
+      <Link href="/defects">ดูรายละเอียด →</Link>
     </div>
+
     {loading?<p className="muted" style={{padding:16}}>กำลังโหลดสถานะห้อง…</p>:!rows.length?<div className="empty">ยังไม่มีข้อมูลสถานะห้อง</div>:<>
       <div className="topline">
         <div className="summary-chips">
@@ -88,29 +100,55 @@ export default function DashboardCondoDefectSummary(){
         </div>
       </div>
 
-      <div className="status-grid">
-        {finalStatuses.map(s=>{
-          const list=rows.filter(r=>r.status_group===s.group)
-          const a=list.filter(r=>r.building==='A').length
-          const b=list.filter(r=>r.building==='B').length
-          return <Link key={s.key} href={`/defects?filter=${s.key}#room-list`} className={`status-card ${s.tone}`}>
-            <div className="status-copy"><span>{s.label}</span><small>{s.note}</small><em>ตึก A {a} • ตึก B {b}</em></div>
-            <div className="status-count"><b>{list.length}</b><small>ห้อง</small></div>
-          </Link>
-        })}
+      <div className="status-visual">
+        <div className="donut-panel">
+          <div className="donut" style={{background:donutBackground}}>
+            <div className="donut-hole"><b>{summary.total}</b><span>ห้องทั้งหมด</span></div>
+          </div>
+          <div className="donut-legend">
+            <span><i className="danger-dot"/>ยังไม่เสร็จ <b>{toneTotals.danger}</b></span>
+            <span><i className="warn-dot"/>รอตรวจ / รอส่งมอบ <b>{toneTotals.warn}</b></span>
+            <span><i className="good-dot"/>ตรวจแล้ว / ส่งมอบแล้ว <b>{toneTotals.good}</b></span>
+            <span><i className="neutral-dot"/>Awaiting Sale <b>{toneTotals.neutral}</b></span>
+          </div>
+        </div>
+
+        <div className="status-grid">
+          {finalStatuses.map(s=>{
+            const list=rows.filter(r=>r.status_group===s.group)
+            const a=list.filter(r=>r.building==='A').length
+            const b=list.filter(r=>r.building==='B').length
+            const customer=list.filter(r=>r.customer_status==='มีลูกค้า').length
+            const noCustomer=list.filter(r=>r.customer_status==='ไม่มีลูกค้า').length
+            return <Link key={s.key} href={`/defects?filter=${s.key}#room-list`} className={`status-card ${s.tone}`}>
+              <div className="status-top"><span>{s.label}</span><div className="status-count"><b>{list.length}</b><small>ห้อง</small></div></div>
+              <small className="status-note">{s.note}</small>
+              <div className="customer-split">
+                <span className="customer-pill">มีลูกค้า <b>{customer}</b></span>
+                <span className="no-customer-pill">ไม่มีลูกค้า <b>{noCustomer}</b></span>
+              </div>
+              <em>ตึก A {a} • ตึก B {b}</em>
+            </Link>
+          })}
+        </div>
       </div>
+
       <div className={`coverage ${coverage===summary.total?'complete':'attention'}`}><span>Coverage Check</span><b>{coverage} / {summary.total} ห้อง</b><small>{coverage===summary.total?'ครบทุกห้องในสถานะปลายทาง 1 กลุ่ม':'มีห้องที่ต้องตรวจสอบการจัดกลุ่มสถานะ'}</small></div>
     </>}
+
     <style jsx>{`
       .condo-summary{margin-top:18px;overflow:hidden}.empty{padding:22px;color:var(--muted);font-size:12px}
       .topline{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:14px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#fbfdff 0%,#f7fafc 100%)}
       .summary-chips{display:grid;grid-template-columns:repeat(3,minmax(150px,1fr));gap:9px;flex:1;max-width:660px}.summary-chip{min-height:68px;border:1px solid var(--line);border-radius:13px;padding:11px 13px;background:#fff;display:grid;grid-template-columns:1fr auto auto;align-items:center;column-gap:6px;min-width:0;transition:.15s ease}.summary-chip:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(25,42,63,.07)}.summary-chip span{font-size:11px;font-weight:800;color:#42526a;line-height:1.3}.summary-chip b{font-size:27px;line-height:1;font-weight:850;color:var(--navy);font-variant-numeric:tabular-nums}.summary-chip em{font-style:normal;font-size:9.5px;color:var(--muted);font-weight:700}.summary-chip.total{border-color:#c9d9e8;background:#f8fbfe}.summary-chip.customer{background:#edf7ff;border-color:#c8e0f2}.summary-chip.no-customer{background:#f3f5f7;border-color:#d9dee4}
       .source{min-width:245px;display:flex;justify-content:center;align-items:flex-end;flex-direction:column;text-align:right;color:var(--muted);font-size:10.5px;line-height:1.5}.source span{white-space:nowrap}.source b{color:var(--navy);font-weight:850;font-size:12px}.source i{display:inline-block;width:1px;height:11px;background:var(--line);margin:0 8px;vertical-align:-1px}.source small{font-size:9.5px;margin-top:3px}
-      .status-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:9px;padding:14px}.status-card{min-height:94px;border:1px solid var(--line);border-top-width:5px;border-radius:13px;padding:12px;background:var(--surface);display:flex;justify-content:space-between;align-items:center;gap:10px;min-width:0;transition:.15s ease}.status-card:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(25,42,63,.08)}.status-copy{min-width:0}.status-copy>span{display:block;font-size:11px;font-weight:850;color:#26364b;line-height:1.35}.status-copy>small{display:block;margin-top:4px;font-size:9px;color:var(--muted);line-height:1.35}.status-copy>em{display:block;margin-top:8px;font-size:9px;font-style:normal;color:#657386;font-weight:700;white-space:nowrap}.status-count{flex:0 0 auto;text-align:right}.status-count b{display:block;font-size:28px;line-height:.95;font-weight:850;font-variant-numeric:tabular-nums}.status-count small{display:block;margin-top:5px;font-size:9px;color:var(--muted);font-weight:700}.status-card.danger{border-top-color:#d84d45;background:#fff7f6}.status-card.danger .status-count b{color:#b93c36}.status-card.warn{border-top-color:#d9a229;background:#fffaf0}.status-card.warn .status-count b{color:#9b6812}.status-card.good{border-top-color:#2e9a6a;background:#f6fbf8}.status-card.good .status-count b{color:#237b56}.status-card.neutral{border-top-color:#7c8794;background:#f5f7f9}.status-card.neutral .status-count b{color:#5c6672}
+      .status-visual{display:grid;grid-template-columns:220px minmax(0,1fr);gap:14px;padding:14px}.donut-panel{border:1px solid #dfe5eb;border-radius:15px;background:#fbfcfd;padding:15px 13px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:270px}.donut{width:154px;height:154px;border-radius:50%;display:grid;place-items:center;box-shadow:inset 0 0 0 1px rgba(255,255,255,.7)}.donut-hole{width:96px;height:96px;border-radius:50%;background:white;border:1px solid #e3e8ed;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:0 3px 12px rgba(25,42,63,.06)}.donut-hole b{font-size:30px;line-height:1;font-weight:850;color:var(--navy)}.donut-hole span{margin-top:5px;font-size:9.5px;font-weight:700;color:var(--muted)}
+      .donut-legend{width:100%;margin-top:14px;display:grid;gap:7px}.donut-legend span{display:grid;grid-template-columns:10px 1fr auto;align-items:center;gap:7px;font-size:9px;color:#536276}.donut-legend i{width:9px;height:9px;border-radius:50%}.donut-legend b{font-size:10px;color:var(--text);font-weight:850}.danger-dot{background:#d84d45}.warn-dot{background:#e2ad32}.good-dot{background:#2e9a6a}.neutral-dot{background:#7c8794}
+      .status-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.status-card{min-height:130px;border:2px solid var(--line);border-left-width:6px;border-radius:14px;padding:12px 13px;background:var(--surface);display:flex;flex-direction:column;min-width:0;transition:.15s ease}.status-card:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(25,42,63,.08)}.status-top{display:flex;justify-content:space-between;align-items:flex-start;gap:9px}.status-top>span{font-size:11px;font-weight:850;color:#26364b;line-height:1.35}.status-count{flex:0 0 auto;display:flex;align-items:baseline;gap:4px}.status-count b{font-size:28px;line-height:.95;font-weight:850;font-variant-numeric:tabular-nums}.status-count small{font-size:8.5px;color:var(--muted);font-weight:700}.status-note{display:block;margin-top:3px;font-size:9px;color:var(--muted);line-height:1.35}.customer-split{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}.customer-split span{border:1px solid transparent;border-radius:999px;padding:5px 7px;font-size:8.5px;font-weight:750;white-space:nowrap;text-align:center}.customer-split b{font-size:10px;font-weight:850}.customer-pill{background:#edf7ff;border-color:#c9e0f1!important;color:#2d668e}.no-customer-pill{background:#f0f2f4;border-color:#d8dde2!important;color:#626b76}.status-card>em{display:block;margin-top:auto;padding-top:9px;font-size:8.8px;font-style:normal;color:#657386;font-weight:700}
+      .status-card.danger{border-color:#efc8c4;border-left-color:#d84d45;background:#fff7f6}.status-card.danger .status-count b{color:#b93c36}.status-card.warn{border-color:#ead89f;border-left-color:#e2ad32;background:#fffaf0}.status-card.warn .status-count b{color:#9b6812}.status-card.good{border-color:#cde6d7;border-left-color:#2e9a6a;background:#f5fbf7}.status-card.good .status-count b{color:#237b56}.status-card.neutral{border-color:#d8dde2;border-left-color:#7c8794;background:#f5f7f9}.status-card.neutral .status-count b{color:#5c6672}
       .coverage{margin:0 14px 14px;border:1px solid var(--line);border-radius:11px;padding:10px 12px;display:flex;align-items:center;gap:11px;background:var(--surface-2);font-size:10px;color:var(--muted)}.coverage span{font-weight:850;color:var(--navy);font-size:10.5px}.coverage b{font-size:12px;color:var(--text);font-variant-numeric:tabular-nums}.coverage small{margin-left:auto}.coverage.complete{background:#f6fbf8;border-color:#d0e7da}.coverage.attention{background:#fff9ef;border-color:#ecdca9}
-      @media(max-width:1180px){.status-grid{grid-template-columns:repeat(3,1fr)}.topline{align-items:flex-start}.source{min-width:210px}}
-      @media(max-width:850px){.topline{display:grid}.summary-chips{max-width:none;width:100%}.source{align-items:flex-start;text-align:left;min-width:0}.status-grid{grid-template-columns:repeat(2,1fr)}}
-      @media(max-width:620px){.summary-chips{grid-template-columns:1fr 1fr}.summary-chip.total{grid-column:1/-1}.summary-chip{min-height:62px}.status-grid{grid-template-columns:1fr 1fr;padding:10px;gap:8px}.status-card{min-height:90px;padding:11px}.status-copy>span{font-size:10.5px}.status-count b{font-size:25px}.coverage{margin:0 10px 10px;align-items:flex-start;flex-wrap:wrap}.coverage small{width:100%;margin-left:0}.source span{white-space:normal}}
+      @media(max-width:1180px){.status-visual{grid-template-columns:190px 1fr}.donut{width:138px;height:138px}.donut-hole{width:86px;height:86px}.status-grid{grid-template-columns:repeat(2,1fr)}}
+      @media(max-width:850px){.topline{display:grid}.summary-chips{max-width:none;width:100%}.source{align-items:flex-start;text-align:left;min-width:0}.status-visual{grid-template-columns:1fr}.donut-panel{min-height:0;display:grid;grid-template-columns:150px 1fr;gap:15px;justify-items:center}.donut-legend{margin-top:0}.status-grid{grid-template-columns:repeat(2,1fr)}}
+      @media(max-width:620px){.summary-chips{grid-template-columns:1fr 1fr}.summary-chip.total{grid-column:1/-1}.summary-chip{min-height:62px}.status-visual{padding:10px;gap:10px}.donut-panel{grid-template-columns:1fr;padding:13px}.donut-legend{margin-top:10px}.status-grid{grid-template-columns:1fr 1fr;gap:8px}.status-card{min-height:128px;padding:11px}.customer-split{grid-template-columns:1fr}.coverage{margin:0 10px 10px;align-items:flex-start;flex-wrap:wrap}.coverage small{width:100%;margin-left:0}.source span{white-space:normal}}
       @media(max-width:430px){.status-grid{grid-template-columns:1fr}.summary-chips{grid-template-columns:1fr}.summary-chip.total{grid-column:auto}}
     `}</style>
   </section>
