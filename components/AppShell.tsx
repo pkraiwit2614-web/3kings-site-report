@@ -8,7 +8,6 @@ import BrandLogo from '@/components/BrandLogo'
 
 const baseNav = [
   ['/', 'Dashboard'],
-  ['/data-health', 'Data Health'],
   ['/presentation', 'Executive Presentation'],
   ['/schedule', 'แผนงานที่กำหนด'],
   ['/materials', 'วัสดุ เครื่องมือและผู้รับเหมา'],
@@ -38,6 +37,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const nav = useMemo(() => {
     const items=[...baseNav]
     if(role==='manager'||role==='engineer') items.push(['/photo-mapping','Photo Mapping'])
+    items.push(['/data-health','Data Health'])
     if(role==='manager') items.push(['/users','User & Access'])
     return items
   }, [role])
