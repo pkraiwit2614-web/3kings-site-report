@@ -10,8 +10,8 @@ const baseNav = [
   ['/', 'Dashboard'],
   ['/presentation', 'Executive Presentation'],
   ['/schedule', 'แผนงานที่กำหนด'],
-  ['/defects', 'สรุปห้องและ Defect'],
   ['/materials', 'วัสดุ เครื่องมือและผู้รับเหมา'],
+  ['/defects', 'Defect Report'],
   ['/reports/new', 'รายงานการทำงานประจำวัน'],
   ['/site-photos', 'รูปภาพหน้างาน'],
   ['/reports', 'ประวัติรายงานการทำงานประจำวัน'],
@@ -89,19 +89,23 @@ export default function AppShell({ children }: { children: ReactNode }) {
     </nav>
 
     <style jsx global>{`
-      .portfolio-status-strip>button:nth-child(1)>b,
-      .portfolio-status-strip>button:nth-child(2)>b,
-      .portfolio-status-strip>button:nth-child(3)>b,
-      .portfolio-status-strip>button:nth-child(1)>small,
-      .portfolio-status-strip>button:nth-child(2)>small,
-      .portfolio-status-strip>button:nth-child(3)>small{font-size:0}
-      .portfolio-status-strip>button:nth-child(1)>b::after{content:'ตามแผน';font-size:14px}
-      .portfolio-status-strip>button:nth-child(2)>b::after{content:'เสี่ยงล่าช้า';font-size:14px}
-      .portfolio-status-strip>button:nth-child(3)>b::after{content:'ล่าช้า';font-size:14px}
-      .portfolio-status-strip>button:nth-child(1)>small::after{content:'Δ ≥ -3% • คลิกดูรายละเอียด';font-size:10px}
-      .portfolio-status-strip>button:nth-child(2)>small::after{content:'Δ -10% ถึง < -3% • คลิกดูรายละเอียด';font-size:10px}
-      .portfolio-status-strip>button:nth-child(3)>small::after{content:'Δ < -10% • คลิกดูรายละเอียด';font-size:10px}
-      #site-performance a[href^='/projects/']{grid-template-columns:80px minmax(0,1fr)!important;gap:8px!important;overflow:hidden;min-width:0}
+      .dashboard-module{overflow:hidden}
+      .dashboard-module .module-title{min-height:62px;padding:12px 14px;display:grid;grid-template-columns:34px minmax(0,1fr) auto;align-items:center;gap:11px;background:linear-gradient(135deg,#172a43,#213d5e);color:#fff}
+      .dashboard-module .module-title>span{width:30px;height:30px;display:grid;place-items:center;border-radius:9px;background:rgba(229,189,104,.16);border:1px solid rgba(229,189,104,.34);color:#f2cc79;font-size:12px!important;font-weight:800;line-height:1}
+      .dashboard-module .module-title>div{min-width:0}
+      .dashboard-module .module-title>div>b{display:block;color:#fff;font-size:13px;line-height:1.25;font-weight:800;letter-spacing:.035em}
+      .dashboard-module .module-title>div>small{display:block;margin-top:4px;color:#c3d0df;font-size:10.5px;line-height:1.45;font-weight:500;letter-spacing:0}
+      .dashboard-module .module-title>a{color:#f1cf84;font-size:10.5px;font-weight:700;white-space:nowrap}
+      .dashboard-module .module-title>a:hover{color:#fff}
+      .executive-section-title b,.dashboard-module h2{letter-spacing:-.01em}
+      .executive-kpi span,.resource-kpis span{font-size:10.5px!important;font-weight:700!important;letter-spacing:.025em!important;text-transform:none!important}
+      .executive-kpi b,.resource-kpis b{font-variant-numeric:tabular-nums}
+      .portfolio-status-strip>button>b{font-size:13px!important;line-height:1.2;font-weight:800}
+      .portfolio-status-strip>button>small{font-size:9.5px!important;line-height:1.4!important}
+      .portfolio-status-strip>button>strong{font-variant-numeric:tabular-nums}
+      .discipline-row b,.alert-row b,.resource-list b{font-weight:700}
+      .discipline-row small,.alert-row small,.resource-list small{line-height:1.45}
+      #site-performance a[href^='/projects/']{grid-template-columns:80px minmax(0,1fr)!important;gap:9px!important;overflow:hidden;min-width:0}
       #site-performance a[href^='/projects/']>svg{width:80px!important;height:80px!important;max-width:100%}
       #site-performance a[href^='/projects/']>div{min-width:0}
       #site-performance a[href^='/projects/'] .row.between{flex-direction:column;align-items:flex-start;gap:5px;min-width:0}
@@ -110,8 +114,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
       #site-performance a[href^='/projects/'] .badge{margin-top:2px;max-width:124px}
       #site-performance a[href^='/projects/'] div[style*='grid-template-columns']{min-width:0}
       #site-performance a[href^='/projects/'] div[style*='grid-template-columns']>div{min-width:0;overflow:hidden}
-      #site-performance a[href^='/projects/'] div[style*='grid-template-columns'] small{white-space:nowrap;font-size:9px}
+      #site-performance a[href^='/projects/'] div[style*='grid-template-columns'] small{white-space:nowrap;font-size:9.5px}
       @media(max-width:760px){
+        .dashboard-module .module-title{grid-template-columns:30px minmax(0,1fr);padding:11px 12px;min-height:58px}
+        .dashboard-module .module-title>a{grid-column:2;margin-top:1px}
+        .dashboard-module .module-title>span{width:28px;height:28px}
         #site-performance a[href^='/projects/']{grid-template-columns:72px minmax(0,1fr)!important;padding:10px!important}
         #site-performance a[href^='/projects/']>svg{width:72px!important;height:72px!important}
       }
