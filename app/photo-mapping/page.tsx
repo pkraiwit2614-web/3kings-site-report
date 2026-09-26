@@ -12,6 +12,9 @@ type Photo={
   drive_url:string;photo_date:string;phase:string;match_method:string;match_score:number|null;verified_by:string|null;verified_at:string|null;mapping_note:string|null
 }
 type Filter='unmatched'|'suggested'|'verified'|'all'
+type Phase='before'|'during'|'after'|'other'
+
+const PAGE_SIZE=500
 
 function dateTH(value:string|null|undefined){
   if(!value)return '-'
@@ -36,6 +39,12 @@ function statusLabel(p:Photo){
   if(p.schedule_task_id) return 'ระบบจับคู่'
   return 'ยังไม่จับคู่'
 }
+function phaseLabel(phase:string){
+  if(phase==='before')return 'Before / ก่อนทำ'
+  if(phase==='during')return 'During / ระหว่างทำ'
+  if(phase==='after')return 'After / หลังทำ'
+  return 'Other / รูปประกอบ'
+}
 
 export default function PhotoMappingPage(){
   const [projects,setProjects]=useState<Project[]>([])
@@ -48,36 +57,72 @@ export default function PhotoMappingPage(){
   const [q,setQ]=useState('')
   const [selected,setSelected]=useState<Record<string,string>>({})
   const [notes,setNotes]=useState<Record<string,string>>({})
+  const [phases,setPhases]=useState<Record<string,Phase>>({})
   const [saving,setSaving]=useState('')
   const [message,setMessage]=useState('')
+  const [loadError,setLoadError]=useState('')
   const [loading,setLoading]=useState(true)
 
   const load=async()=>{
+    setLoading(true);setLoadError('')
     const s=getSupabase()
-    const [{data:{user}},p,t,ph]=await Promise.all([
+    const p=await s.from('projects').select('id,code,name').eq('active',true).order('sort_order')
+    if(p.error)throw p.error
+    const projectRows=(p.data||[]) as Project[]
+    const villaRows=projectRows.filter(x=>/^AV-P[6-9]$/.test(x.code))
+    const villaProjectIds=villaRows.map(x=>x.id)
+    if(!villaProjectIds.length)throw new Error('ไม่พบโครงการ AV-P6 ถึง AV-P9')
+
+    const [{data:{user}},t]=await Promise.all([
       s.auth.getUser(),
-      s.from('projects').select('id,code,name').eq('active',true).order('sort_order'),
-      s.from('v_schedule_tasks').select('id,project_id,source_task_no,task_name,area,category').order('planned_start'),
-      s.from('drive_photo_index').select('id,project_id,schedule_task_id,drive_file_id,drive_folder_name,file_name,drive_url,photo_date,phase,match_method,match_score,verified_by,verified_at,mapping_note').eq('is_active',true).order('photo_date',{ascending:false}).limit(600)
+      s.from('v_schedule_tasks').select('id,project_id,source_task_no,task_name,area,category').in('project_id',villaProjectIds).order('planned_start')
     ])
+    if(t.error)throw t.error
+
+    let photoRows:Photo[]=[]
+    for(let from=0;;from+=PAGE_SIZE){
+      const ph=await s.from('drive_photo_index')
+        .select('id,project_id,schedule_task_id,drive_file_id,drive_folder_name,file_name,drive_url,photo_date,phase,match_method,match_score,verified_by,verified_at,mapping_note')
+        .eq('is_active',true)
+        .in('project_id',villaProjectIds)
+        .order('photo_date',{ascending:false})
+        .range(from,from+PAGE_SIZE-1)
+      if(ph.error)throw ph.error
+      const rows=(ph.data||[]) as Photo[]
+      photoRows=photoRows.concat(rows)
+      if(rows.length<PAGE_SIZE)break
+    }
+
     setUserId(user?.id||'')
-    if(user){const {data:profile}=await s.from('profiles').select('role').eq('user_id',user.id).maybeSingle();setRole(profile?.role||'')}
-    setProjects((p.data||[]) as Project[]);setTasks((t.data||[]) as Task[]);setPhotos((ph.data||[]) as Photo[]);setLoading(false)
+    if(user){
+      const {data:profile,error:profileError}=await s.from('profiles').select('role').eq('user_id',user.id).maybeSingle()
+      if(profileError)throw profileError
+      setRole(profile?.role||'')
+    }
+    setProjects(projectRows)
+    setTasks((t.data||[]) as Task[])
+    setPhotos(photoRows)
+    setLoading(false)
   }
 
-  useEffect(()=>{load().catch(()=>setLoading(false))},[])
+  useEffect(()=>{load().catch(err=>{setLoadError(err instanceof Error?err.message:'โหลดข้อมูลไม่สำเร็จ');setLoading(false)})},[])
 
   const villaProjects=useMemo(()=>projects.filter(p=>/^AV-P[6-9]$/.test(p.code)),[projects])
   const villaIds=useMemo(()=>new Set(villaProjects.map(p=>p.id)),[villaProjects])
   const editable=role==='manager'||role==='engineer'
+  const taskById=useMemo(()=>new Map(tasks.map(t=>[t.id,t])),[tasks])
 
   const filtered=useMemo(()=>photos.filter(p=>{
     if(!villaIds.has(p.project_id))return false
     if(project&&p.project_id!==project)return false
     if(filter!=='all'&&statusOf(p)!==filter)return false
-    if(q&&!`${p.file_name} ${p.drive_folder_name||''}`.toLowerCase().includes(q.toLowerCase()))return false
+    if(q){
+      const currentTask=p.schedule_task_id?taskById.get(p.schedule_task_id):undefined
+      const haystack=`${p.file_name} ${p.drive_folder_name||''} ${currentTask?.task_name||''} ${currentTask?.area||''}`.toLowerCase()
+      if(!haystack.includes(q.toLowerCase()))return false
+    }
     return true
-  }),[photos,villaIds,project,filter,q])
+  }),[photos,villaIds,project,filter,q,taskById])
 
   const counts=useMemo(()=>{
     const list=photos.filter(p=>villaIds.has(p.project_id))
@@ -93,20 +138,25 @@ export default function PhotoMappingPage(){
     if(!editable||!userId)return
     const taskId=selected[photo.id]??photo.schedule_task_id??''
     if(!taskId){setMessage(`กรุณาเลือก Task สำหรับ ${photo.file_name}`);return}
+    const task=taskById.get(taskId)
+    if(!task||task.project_id!==photo.project_id){setMessage('Task ที่เลือกไม่ตรงกับ Plot ของรูป กรุณาเลือกใหม่');return}
+    const now=new Date().toISOString()
+    const phase=phases[photo.id]??(photo.phase as Phase)||'other'
     setSaving(photo.id);setMessage('')
     const s=getSupabase()
     const {error}=await s.from('drive_photo_index').update({
       schedule_task_id:taskId,
+      phase,
       match_method:'manual',
       match_score:1,
       verified_by:userId,
-      verified_at:new Date().toISOString(),
+      verified_at:now,
       mapping_note:(notes[photo.id]??photo.mapping_note??'').trim()||null,
-      updated_at:new Date().toISOString(),
+      updated_at:now,
     }).eq('id',photo.id)
     if(error){setMessage(`บันทึกไม่สำเร็จ: ${error.message}`);setSaving('');return}
-    setPhotos(v=>v.map(x=>x.id===photo.id?{...x,schedule_task_id:taskId,match_method:'manual',match_score:1,verified_by:userId,verified_at:new Date().toISOString(),mapping_note:(notes[photo.id]??photo.mapping_note??'').trim()||null}:x))
-    setSaving('');setMessage(`ยืนยัน ${photo.file_name} แล้ว`)
+    setPhotos(v=>v.map(x=>x.id===photo.id?{...x,schedule_task_id:taskId,phase,match_method:'manual',match_score:1,verified_by:userId,verified_at:now,mapping_note:(notes[photo.id]??photo.mapping_note??'').trim()||null}:x))
+    setSaving('');setMessage(`ยืนยัน ${photo.file_name} → ${task.task_name} แล้ว`)
   }
 
   const clearMapping=async(photo:Photo)=>{
@@ -115,37 +165,39 @@ export default function PhotoMappingPage(){
     const {error}=await getSupabase().from('drive_photo_index').update({schedule_task_id:null,match_method:'unmatched',match_score:null,verified_by:null,verified_at:null,mapping_note:null,updated_at:new Date().toISOString()}).eq('id',photo.id)
     if(error){setMessage(`ล้าง Mapping ไม่สำเร็จ: ${error.message}`);setSaving('');return}
     setPhotos(v=>v.map(x=>x.id===photo.id?{...x,schedule_task_id:null,match_method:'unmatched',match_score:null,verified_by:null,verified_at:null,mapping_note:null}:x))
-    setSelected(v=>({...v,[photo.id]:''}));setSaving('')
+    setSelected(v=>({...v,[photo.id]:''}));setSaving('');setMessage(`ล้าง Mapping ของ ${photo.file_name} แล้ว`)
   }
 
   return <AppShell>
-    <PageHeader title="Photo Mapping Inbox" subtitle="ยืนยันรูป Picture Progress ให้ตรงกับ Schedule Task ก่อนใช้เป็นหลักฐานใน Executive Presentation"/>
+    <PageHeader title="Photo Mapping Inbox" subtitle="ตรวจและยืนยัน Picture Progress ให้ตรง Schedule Task — Verified Photo จะถูกใช้ก่อน Auto Match และ fallback ใน Executive Presentation"/>
 
     {!editable&&<div className="notice" style={{marginBottom:14}}>บัญชีนี้ดู Mapping ได้ แต่การยืนยัน/แก้ไขจำกัดเฉพาะ Manager และ Engineer</div>}
     {message&&<div className="notice" style={{marginBottom:14}}>{message}</div>}
+    {loadError&&<div className="notice" style={{marginBottom:14,borderColor:'var(--red)',color:'var(--red)'}}>โหลดข้อมูลไม่สำเร็จ: {loadError} <button className="button" style={{marginLeft:8}} onClick={()=>load().catch(err=>{setLoadError(err instanceof Error?err.message:'โหลดข้อมูลไม่สำเร็จ');setLoading(false)})}>ลองใหม่</button></div>}
 
     <section className="executive-kpi-grid" style={{marginBottom:14}}>
-      <button className="executive-kpi" onClick={()=>setFilter('all')}><span>รูป P6–P9 ที่โหลดรอบนี้</span><b>{counts.total}</b><small>หน้า Inbox โหลดล่าสุดสูงสุด 600 รูป</small></button>
-      <button className="executive-kpi danger" onClick={()=>setFilter('unmatched')}><span>ยังไม่จับคู่</span><b>{counts.unmatched}</b><small>ต้องระบุ Task</small></button>
+      <button className="executive-kpi" onClick={()=>setFilter('all')}><span>รูป P6–P9 ทั้งหมด</span><b>{counts.total}</b><small>โหลดครบจาก Photo Index แบบแบ่งหน้า</small></button>
+      <button className="executive-kpi danger" onClick={()=>setFilter('unmatched')}><span>ยังไม่จับคู่</span><b>{counts.unmatched}</b><small>ใช้เป็น Plot fallback เท่านั้น</small></button>
       <button className="executive-kpi warn" onClick={()=>setFilter('suggested')}><span>ระบบจับคู่ / Manual เดิม</span><b>{counts.suggested}</b><small>ควรตรวจยืนยัน</small></button>
-      <button className="executive-kpi" onClick={()=>setFilter('verified')}><span>ยืนยันแล้ว</span><b>{counts.verified}</b><small>Verified evidence</small></button>
+      <button className="executive-kpi" onClick={()=>setFilter('verified')}><span>ยืนยันแล้ว</span><b>{counts.verified}</b><small>Verified task evidence</small></button>
     </section>
 
     <section className="panel" style={{position:'sticky',top:0,zIndex:20,marginBottom:14}}>
       <div className="toolbar">
         <select value={project} onChange={e=>setProject(e.target.value)}><option value="">P6–P9 ทั้งหมด</option>{villaProjects.map(p=><option key={p.id} value={p.id}>{p.code} — {p.name}</option>)}</select>
         <select value={filter} onChange={e=>setFilter(e.target.value as Filter)}><option value="unmatched">ยังไม่จับคู่</option><option value="suggested">ระบบจับคู่ / Manual เดิม</option><option value="verified">ยืนยันแล้ว</option><option value="all">ทั้งหมด</option></select>
-        <input value={q} onChange={e=>setQ(e.target.value)} placeholder="ค้นหาชื่อรูป / ชื่อโฟลเดอร์"/>
-        <span className="small muted">แสดง {filtered.length} รูป</span>
+        <input value={q} onChange={e=>setQ(e.target.value)} placeholder="ค้นหารูป / โฟลเดอร์ / Task / Area"/>
+        <span className="small muted">แสดง {filtered.length} / {counts.total} รูป</span>
       </div>
     </section>
 
-    {loading?<div className="panel">กำลังโหลดรูปและ Schedule…</div>:<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(340px,1fr))',gap:12}}>
+    {loading?<div className="panel">กำลังโหลด Photo Index ทั้งหมดและ Schedule…</div>:<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(340px,1fr))',gap:12}}>
       {filtered.map(photo=>{
         const p=projects.find(x=>x.id===photo.project_id)
         const taskList=tasks.filter(t=>t.project_id===photo.project_id&&t.source_task_no!=='1')
-        const currentTask=tasks.find(t=>t.id===photo.schedule_task_id)
+        const currentTask=photo.schedule_task_id?taskById.get(photo.schedule_task_id):undefined
         const selectedTask=selected[photo.id]??photo.schedule_task_id??''
+        const selectedPhase=phases[photo.id]??((photo.phase||'other') as Phase)
         const status=statusOf(photo)
         return <article className="panel" key={photo.id} style={{padding:0,overflow:'hidden'}}>
           <div style={{height:210,background:'#edf1f4',display:'grid',placeItems:'center',overflow:'hidden'}}>
@@ -154,15 +206,20 @@ export default function PhotoMappingPage(){
           <div style={{padding:12}}>
             <div className="row between" style={{gap:8,alignItems:'flex-start'}}><div style={{minWidth:0}}><b style={{display:'block',wordBreak:'break-word'}}>{photo.file_name}</b><small className="muted">{p?.code||'-'} • {dateTH(photo.photo_date)} • {photo.drive_folder_name||'-'}</small></div><span className={`badge ${status==='verified'?'success':status==='suggested'?'warning':'danger'}`}>{statusLabel(photo)}</span></div>
             {currentTask&&<p className="small" style={{margin:'10px 0 6px'}}><b>Mapping ปัจจุบัน:</b> {currentTask.task_name}{currentTask.area?` — ${currentTask.area}`:''}{photo.match_score!==null?` • ${Math.round(Number(photo.match_score)*100)}%`:''}</p>}
-            {photo.verified_at&&<p className="small muted" style={{margin:'0 0 8px'}}>Verified {dateTimeTH(photo.verified_at)}</p>}
+            <p className="small muted" style={{margin:'0 0 8px'}}>Phase: {phaseLabel(photo.phase)}{photo.verified_at?` • Verified ${dateTimeTH(photo.verified_at)}`:''}</p>
             <label className="small" style={{display:'block',fontWeight:800}}>Schedule Task
               <select disabled={!editable||saving===photo.id} value={selectedTask} onChange={e=>setSelected(v=>({...v,[photo.id]:e.target.value}))} style={{width:'100%',marginTop:5}}>
                 <option value="">-- เลือก Task --</option>
                 {taskList.map(t=><option key={t.id} value={t.id}>{t.source_task_no||'-'}. {t.task_name}{t.area?` — ${t.area}`:''}</option>)}
               </select>
             </label>
+            <label className="small" style={{display:'block',fontWeight:800,marginTop:8}}>Photo Phase
+              <select disabled={!editable||saving===photo.id} value={selectedPhase} onChange={e=>setPhases(v=>({...v,[photo.id]:e.target.value as Phase}))} style={{width:'100%',marginTop:5}}>
+                <option value="before">Before / ก่อนทำ</option><option value="during">During / ระหว่างทำ</option><option value="after">After / หลังทำ</option><option value="other">Other / รูปประกอบ</option>
+              </select>
+            </label>
             <label className="small" style={{display:'block',fontWeight:800,marginTop:8}}>หมายเหตุ Mapping
-              <input disabled={!editable||saving===photo.id} value={notes[photo.id]??photo.mapping_note??''} onChange={e=>setNotes(v=>({...v,[photo.id]:e.target.value}))} placeholder="เช่น รูปนี้ใช้ยืนยันงานฝ้าชั้น 2" style={{width:'100%',marginTop:5}}/>
+              <input disabled={!editable||saving===photo.id} value={notes[photo.id]??photo.mapping_note??''} onChange={e=>setNotes(v=>({...v,[photo.id]:e.target.value}))} placeholder="เช่น ยืนยันงานฝ้าชั้น 2 หลังปิดแผ่น" style={{width:'100%',marginTop:5}}/>
             </label>
             <div className="row" style={{marginTop:10,flexWrap:'wrap'}}>
               <button className="button primary" disabled={!editable||!selectedTask||saving===photo.id} onClick={()=>save(photo)}>{saving===photo.id?'กำลังบันทึก…':'ยืนยัน Mapping'}</button>
@@ -172,7 +229,7 @@ export default function PhotoMappingPage(){
           </div>
         </article>
       })}
-      {!filtered.length&&<div className="panel"><p className="muted">ไม่พบรูปตามตัวกรองนี้</p></div>}
+      {!filtered.length&&!loading&&<div className="panel"><p className="muted">ไม่พบรูปตามตัวกรองนี้</p></div>}
     </div>}
   </AppShell>
 }
