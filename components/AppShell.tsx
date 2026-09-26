@@ -35,7 +35,12 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [role, setRole] = useState('')
   const [ready, setReady] = useState(false)
   const [mobileMore, setMobileMore] = useState(false)
-  const nav = useMemo(() => role === 'manager' ? [...baseNav, ['/users', 'User & Access']] : baseNav, [role])
+  const nav = useMemo(() => {
+    const items=[...baseNav]
+    if(role==='manager'||role==='engineer') items.push(['/photo-mapping','Photo Mapping'])
+    if(role==='manager') items.push(['/users','User & Access'])
+    return items
+  }, [role])
   const extraNav = useMemo(() => nav.filter(([href]) => !mobilePrimary.some(([mobileHref]) => mobileHref === href)), [nav])
 
   useEffect(() => {
