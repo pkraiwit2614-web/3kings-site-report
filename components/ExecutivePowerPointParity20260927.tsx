@@ -53,7 +53,9 @@ function extractRoomNo(fileName:string,folderName?:string|null){
 function fileSafe(value:string){return value.replace(/[\\/:*?"<>|]/g,'-').replace(/\s+/g,' ').trim()}
 function formatDateTime(value:string|null|undefined){
   if(!value)return '-'
-  return new Intl.DateTimeFormat('th-TH',{timeZone:'Asia/Bangkok',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}).format(new Date(value))
+  const d=new Date(value)
+  if(Number.isNaN(d.getTime()))return '-'
+  return new Intl.DateTimeFormat('th-TH',{timeZone:'Asia/Bangkok',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}).format(d)
 }
 function statusStyle(value:string|null|undefined){
   const s=String(value||'').toLowerCase()
@@ -202,10 +204,15 @@ export default function ExecutivePowerPointParity20260927(){
         const PptxGenJS=mod.default
         const pptx:any=new PptxGenJS()
         pptx.layout='LAYOUT_WIDE'
-        pptx.author='3 Kings Construction';pptx.company='3 Kings Construction';pptx.subject='Executive Presentation View';pptx.title='3 Kings Construction Executive Presentation'
-        pptx.lang='th-TH'
+        pptx.author='3 Kings Construction';pptx.company='3 Kings Construction';pptx.subject='Executive Presentation View';pptx.title='3 Kings Construction Executive Presentation';pptx.lang='th-TH'
         const imageCache=new Map<string,string>()
         const slideView=isSlideView()
+
+        const addMetricCard=(slide:any,x:number,y:number,w:number,h:number,label:string,value:string,fill:string,line:string,text:string)=>{
+          slide.addText(`${label}\n${value}`,{
+            x,y,w,h,fontSize:11.5,bold:true,color:text,fill:{color:fill},line:{color:line,width:.9},margin:.08,valign:'mid',breakLine:false
+          })
+        }
 
         const addImageGrid=async(slide:any,taskPhotos:PPhoto[],taskId?:string)=>{
           const positions=[
@@ -218,7 +225,7 @@ export default function ExecutivePowerPointParity20260927(){
             if(data)slide.addImage({data,x:pos.x,y:pos.y,w:pos.w,h:pos.h})
             else slide.addText('รูปไม่พร้อมใช้งาน',{x:pos.x,y:pos.y,w:pos.w,h:pos.h,fontSize:11,color:'7A8490',align:'center',valign:'mid',fill:{color:'F3F4F5'},line:{color:'D7DCE2'}})
             slide.addText(`${phaseLabel(photo.phase,taskId?photo.task_id===taskId:true)} • ${taskId?evidenceLabel(photo,taskId):sourceLabel(photo.source)}\n${dateTH(photo.report_date)}`,{
-              x:pos.x,y:pos.y+pos.h+.04,w:pos.w,h:.34,fontSize:7.5,color:'5E6976',margin:0,breakLine:false
+              x:pos.x,y:pos.y+pos.h+.04,w:pos.w,h:.34,fontSize:7.5,color:'5E6976',margin:0
             })
           }
         }
@@ -228,33 +235,23 @@ export default function ExecutivePowerPointParity20260927(){
           const status=statusStyle(task.site_status)
           const delay=Number(task.delay_days)||0;const dStyle=delayStyle(delay)
           const actual=Math.max(0,Math.min(1,Number(task.actual_progress)||0))
-          slide.addText(`${project.code} • ${task.category||'งานก่อสร้าง'}`,{x:.55,y:.34,w:6.0,h:.25,fontSize:10.5,bold:true,color:'A97920',charSpacing:.4})
-          slide.addText(task.task_name||'-',{x:.55,y:.70,w:5.35,h:.62,fontSize:28,bold:true,color:'17243A',margin:0,breakLine:false,fit:'shrink'})
+          const plan=pct(Number(task.current_plan_progress)||0)
+          const variance=Number(task.current_variance)||0
+
+          slide.addText(`${project.code} • ${task.category||'งานก่อสร้าง'}`,{x:.55,y:.34,w:6.0,h:.25,fontSize:10.5,bold:true,color:'A97920',charSpacing:.4,margin:0})
+          slide.addText(task.task_name||'-',{x:.55,y:.70,w:5.35,h:.62,fontSize:28,bold:true,color:'17243A',margin:0,fit:'shrink'})
           slide.addText(task.area||'-',{x:.55,y:1.40,w:5.25,h:.28,fontSize:11.5,color:'687486',margin:0})
           slide.addText(task.site_status||'ยังไม่ระบุสถานะ',{x:10.50,y:.38,w:2.35,h:.36,fontSize:10.5,bold:true,color:status.text,fill:{color:status.fill},line:{color:status.line,width:1},margin:.08,align:'center',valign:'mid'})
 
           slide.addText('ACTUAL PROGRESS',{x:.55,y:1.90,w:2.7,h:.22,fontSize:9.5,bold:true,color:'7B715F',charSpacing:.6,margin:0})
           slide.addText(pct(actual),{x:.55,y:2.14,w:2.2,h:.44,fontSize:25,bold:true,color:'17243A',margin:0})
-          slide.addShape(pptx.ShapeType.rect,{x:.55,y:2.62,w:5.10,h:.10,line:{color:'E4E0D7',transparency:100},fill:{color:'E4E0D7'},radius:.03})
-          slide.addShape(pptx.ShapeType.rect,{x:.55,y:2.62,w:5.10*actual,h:.10,line:{color:'2F6FB0',transparency:100},fill:{color:'2F6FB0'},radius:.03})
+          slide.addShape(pptx.ShapeType.rect,{x:.55,y:2.62,w:5.10,h:.10,line:{color:'E4E0D7',transparency:100},fill:{color:'E4E0D7'}})
+          if(actual>0)slide.addShape(pptx.ShapeType.rect,{x:.55,y:2.62,w:5.10*actual,h:.10,line:{color:'2F6FB0',transparency:100},fill:{color:'2F6FB0'}})
 
-          const plan=pct(Number(task.current_plan_progress)||0)
-          const variance=Number(task.current_variance)||0
-          ;[
-            {x:.55,label:'Plan',value:plan,text:'17243A'},
-            {x:3.15,label:'Variance',value:`${variance>0?'+':''}${Math.round(variance*100)}%`,text:variance<0?'B23C36':'17243A'},
-          ].forEach(m=>{
-            slide.addText(m.label,{x:m.x,y:2.91,w:2.4,h:.18,fontSize:8.5,bold:true,color:'7A705F',margin:0})
-            slide.addText(m.value,{x:m.x,y:3.10,w:2.4,h:.30,fontSize:14,bold:true,color:m.text,margin:0})
-            slide.addShape(pptx.ShapeType.roundRect,{x:m.x-.03,y:2.84,w:2.48,h:.64,rectRadius:.05,line:{color:'DDD5C7',width:.8},fill:{color:'FFFDF8'},transparency:100})
-          })
-
-          slide.addText('Delay',{x:.55,y:3.72,w:2.35,h:.18,fontSize:8.5,bold:true,color:dStyle.text,margin:0})
-          slide.addText(delay>0?`${delay} วัน`:'—',{x:.55,y:3.93,w:2.35,h:.30,fontSize:14,bold:true,color:dStyle.text,margin:0})
-          slide.addShape(pptx.ShapeType.roundRect,{x:.52,y:3.63,w:2.42,h:.70,line:{color:dStyle.line,width:.8},fill:{color:dStyle.fill},transparency:100})
-          slide.addText('อัปเดต',{x:3.15,y:3.72,w:2.35,h:.18,fontSize:8.5,bold:true,color:'6B7480',margin:0})
-          slide.addText(dateTH(task.source_updated_at),{x:3.15,y:3.93,w:2.35,h:.30,fontSize:12,bold:true,color:'27364A',margin:0})
-          slide.addShape(pptx.ShapeType.roundRect,{x:3.12,y:3.63,w:2.42,h:.70,line:{color:'E0E4E8',width:.8},fill:{color:'F6F7F8'},transparency:100})
+          addMetricCard(slide,.55,2.88,2.45,.62,'Plan',plan,'FFFDF8','DDD5C7','17243A')
+          addMetricCard(slide,3.15,2.88,2.45,.62,'Variance',`${variance>0?'+':''}${Math.round(variance*100)}%`,'FFFDF8','DDD5C7',variance<0?'B23C36':'17243A')
+          addMetricCard(slide,.55,3.65,2.45,.68,'Delay',delay>0?`${delay} วัน`:'—',dStyle.fill,dStyle.line,dStyle.text)
+          addMetricCard(slide,3.15,3.65,2.45,.68,'อัปเดต',dateTH(task.source_updated_at),'F6F7F8','E0E4E8','27364A')
 
           slide.addText('หมายเหตุ / งานถัดไป',{x:.55,y:4.58,w:4.9,h:.22,fontSize:10.5,bold:true,color:'7A705F',margin:0})
           slide.addText(shortNote(task),{x:.55,y:4.85,w:5.05,h:1.08,fontSize:13.5,color:'27364A',valign:'top',margin:.08,fill:{color:'F3F0E8'},line:{color:'DDD5C7',width:1},fit:'shrink'})
@@ -280,14 +277,14 @@ export default function ExecutivePowerPointParity20260927(){
             ['Awaiting Sale','Non-Hotel - Awaiting Sale','F0F2F4','5F6873'],
           ] as const
           const slide:any=pptx.addSlide();slide.background={color:'FFFDF9'}
-          slide.addText(`CONDO ${building} • DEFECT / HANDOVER STATUS`,{x:.55,y:.34,w:5.7,h:.26,fontSize:10.5,bold:true,color:'A97920'})
+          slide.addText(`CONDO ${building} • DEFECT / HANDOVER STATUS`,{x:.55,y:.34,w:5.7,h:.26,fontSize:10.5,bold:true,color:'A97920',margin:0})
           slide.addText(project.name,{x:.55,y:.72,w:5.25,h:.55,fontSize:27,bold:true,color:'17243A',margin:0})
           const closed=count('Hotel - Checked Complete')+count('Non-Hotel - Handover Complete')
           const remaining=count('Hotel - Incomplete')+count('Hotel - Awaiting Check')+count('Non-Hotel - Pending Handover')
           slide.addText(`ปิดแล้ว ${rooms.length?Math.round(closed/rooms.length*100):0}% • เหลือติดตาม ${remaining} ห้อง`,{x:.55,y:1.40,w:5.0,h:.34,fontSize:15,bold:true,color:'233A5D',margin:0})
           status.forEach(([label,group,fill,text],idx)=>{
             const x=.55+(idx%2)*2.55;const y=2.03+Math.floor(idx/2)*.78
-            slide.addText(`${label}\n${count(group)} ห้อง`,{x,y,w:2.37,h:.62,fontSize:10.5,bold:true,color:text,fill:{color:fill},line:{color:text,width:.9,transparency:35},margin:.08,breakLine:false})
+            addMetricCard(slide,x,y,2.37,.62,label,`${count(group)} ห้อง`,fill,text,text)
           })
           const incomplete=rooms.filter((x:any)=>x.status_group==='Hotel - Incomplete').map((x:any)=>x.room_no).sort()
           slide.addText(`ห้อง Defect ยังไม่เสร็จ: ${incomplete.length?incomplete.join(', '):'ไม่มี'}`,{x:.55,y:4.62,w:5.02,h:.65,fontSize:10.5,color:'27364A',fill:{color:'FFF4F2'},line:{color:'E4B5B0',width:1},margin:.09,fit:'shrink'})
@@ -307,18 +304,16 @@ export default function ExecutivePowerPointParity20260927(){
             const cover:any=pptx.addSlide();cover.background={color:'F6F2E9'}
             const actual=projectTasks.length?projectTasks.reduce((sum:number,x:any)=>sum+(Number(x.actual_progress)||0),0)/projectTasks.length:0
             const plan=projectTasks.length?projectTasks.reduce((sum:number,x:any)=>sum+(Number(x.current_plan_progress)||0),0)/projectTasks.length:0
-            cover.addText('3 KINGS CONSTRUCTION',{x:.65,y:.48,w:4.2,h:.3,fontSize:11,bold:true,color:'A97920',charSpacing:1.5})
+            cover.addText('3 KINGS CONSTRUCTION',{x:.65,y:.48,w:4.2,h:.3,fontSize:11,bold:true,color:'A97920',charSpacing:1.5,margin:0})
             cover.addText(project.name,{x:.65,y:1.08,w:7.2,h:.68,fontSize:28,bold:true,color:'17243A',margin:0})
-            cover.addText(`${dateTH(filters.start)} – ${dateTH(filters.end)}`,{x:.65,y:1.88,w:5,h:.34,fontSize:13,color:'687486'})
-            cover.addText(`Actual ${pct(actual)}   •   Plan ${pct(plan)}   •   งานในช่วง ${projectTasks.length} รายการ`,{x:.65,y:2.52,w:7.2,h:.46,fontSize:16,bold:true,color:'233A5D'})
-            const projectPhotos=pickPhotos(project.id)
-            await addImageGrid(cover,projectPhotos)
+            cover.addText(`${dateTH(filters.start)} – ${dateTH(filters.end)}`,{x:.65,y:1.88,w:5,h:.34,fontSize:13,color:'687486',margin:0})
+            cover.addText(`Actual ${pct(actual)}   •   Plan ${pct(plan)}   •   งานในช่วง ${projectTasks.length} รายการ`,{x:.65,y:2.52,w:7.2,h:.46,fontSize:16,bold:true,color:'233A5D',margin:0})
+            await addImageGrid(cover,pickPhotos(project.id))
           }
           for(let index=0;index<projectTasks.length;index++)await addTaskSlide(project,projectTasks[index],index,projectTasks.length)
         }
 
-        const name=`Executive-Presentation_${fileSafe(filters.start)}_${fileSafe(filters.end)}.pptx`
-        await pptx.writeFile({fileName:name,compression:true})
+        await pptx.writeFile({fileName:`Executive-Presentation_${fileSafe(filters.start)}_${fileSafe(filters.end)}.pptx`,compression:true})
       }catch(error){
         console.error('PowerPoint parity export failed',error)
         window.alert('ไม่สามารถสร้าง PowerPoint ได้ กรุณาลองใหม่อีกครั้ง')
