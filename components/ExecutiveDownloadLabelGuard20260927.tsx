@@ -12,34 +12,96 @@ export default function ExecutiveDownloadLabelGuard20260927(){
 
     const patch=()=>{
       if(stopped)return
+
       const wrap=document.querySelector<HTMLElement>('.ui-request-exec-ready')
-      if(!wrap)return
+      const headerPpt=wrap?.querySelector<HTMLButtonElement>(':scope > [data-ui-request="presentation-ppt"]')||null
+      const printButton=wrap?.querySelector<HTMLButtonElement>(':scope > [data-ui-request="presentation-print"]')||null
+      const meta=wrap?.querySelector<HTMLElement>(':scope > .ui-polish-update-meta')||null
 
-      const ppt=wrap.querySelector<HTMLButtonElement>('[data-ui-request="presentation-ppt"]')
-      const pdf=wrap.querySelector<HTMLButtonElement>('[data-ui-request="presentation-print"]')
-      pdf?.classList.add('executive-pdf-download-label')
+      if(headerPpt){
+        headerPpt.classList.add('executive-header-ppt-hidden')
+      }
 
-      const meta=wrap.querySelector<HTMLElement>('.ui-polish-update-meta')
-      if(meta&&ppt&&meta.nextElementSibling!==ppt)wrap.insertBefore(ppt,meta.nextElementSibling)
-      if(ppt&&pdf&&ppt.nextElementSibling!==pdf)wrap.insertBefore(pdf,ppt.nextElementSibling)
+      if(printButton){
+        printButton.classList.remove('executive-pdf-download-label','primary')
+        printButton.classList.add('report-print-button')
+        if(printButton.textContent!=='🖨️ Print')printButton.textContent='🖨️ Print'
+        if(meta&&meta.nextElementSibling!==printButton)wrap?.insertBefore(printButton,meta.nextElementSibling)
+        if(headerPpt&&printButton.nextElementSibling!==headerPpt)wrap?.insertBefore(headerPpt,printButton.nextElementSibling)
+      }
+
+      const stage=document.querySelector<HTMLElement>('.ep-stage')
+      const controls=stage?.querySelector<HTMLElement>(':scope > .ep-stage-controls')||null
+      if(!controls)return
+
+      const fullscreen=[...controls.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent?.includes('Fullscreen'))||null
+      if(!fullscreen)return
+
+      let actions=controls.querySelector<HTMLElement>(':scope > .executive-stage-actions')
+      if(!actions){
+        actions=document.createElement('div')
+        actions.className='executive-stage-actions'
+        controls.insertBefore(actions,fullscreen)
+        actions.append(fullscreen)
+      }else if(fullscreen.parentElement!==actions){
+        actions.append(fullscreen)
+      }
+
+      let stagePpt=actions.querySelector<HTMLButtonElement>(':scope > .executive-stage-ppt')
+      if(!stagePpt){
+        stagePpt=document.createElement('button')
+        stagePpt.type='button'
+        stagePpt.className='button primary executive-stage-ppt'
+        stagePpt.textContent='ดาวน์โหลด PowerPoint'
+        stagePpt.addEventListener('click',()=>{
+          const source=document.querySelector<HTMLButtonElement>('.ui-request-exec-ready > [data-ui-request="presentation-ppt"]')
+          if(source){
+            source.click()
+            return
+          }
+          const buttons=document.querySelectorAll<HTMLButtonElement>('.ep-actions > div:last-child button')
+          buttons[1]?.click()
+        })
+        actions.insertBefore(stagePpt,fullscreen)
+      }else if(stagePpt.nextElementSibling!==fullscreen){
+        actions.insertBefore(stagePpt,fullscreen)
+      }
+
+      const source=document.querySelector<HTMLButtonElement>('.ui-request-exec-ready > [data-ui-request="presentation-ppt"]')
+      const busy=Boolean(source?.disabled)||Boolean(source?.textContent?.includes('กำลังสร้าง'))
+      stagePpt.disabled=busy
+      const nextLabel=busy?'กำลังสร้าง PowerPoint…':'ดาวน์โหลด PowerPoint'
+      if(stagePpt.textContent!==nextLabel)stagePpt.textContent=nextLabel
     }
 
     patch()
     const observer=new MutationObserver(patch)
-    observer.observe(document.body,{subtree:true,childList:true})
+    observer.observe(document.body,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['disabled']})
     const timer=window.setInterval(patch,700)
-    return()=>{stopped=true;observer.disconnect();window.clearInterval(timer)}
+    return()=>{
+      stopped=true
+      observer.disconnect()
+      window.clearInterval(timer)
+    }
   },[path])
 
   return <style jsx global>{`
-    body.ui-executive-page .executive-pdf-download-label{
-      font-size:0!important;
+    body.ui-executive-page .executive-header-ppt-hidden{
+      display:none!important;
     }
-    body.ui-executive-page .executive-pdf-download-label::after{
-      content:'ดาวน์โหลด PDF';
-      font-size:12px;
-      font-weight:700;
-      line-height:1;
+    body.ui-executive-page .executive-stage-actions{
+      display:flex!important;
+      align-items:center!important;
+      justify-content:flex-end!important;
+      gap:8px!important;
+    }
+    body.ui-executive-page .ep-stage:fullscreen .executive-stage-ppt{
+      display:none!important;
+    }
+    @media print{
+      body.ui-executive-page .executive-stage-ppt{
+        display:none!important;
+      }
     }
   `}</style>
 }
