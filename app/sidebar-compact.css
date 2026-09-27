@@ -2,14 +2,14 @@
    Keep this as the final desktop sidebar geometry override so older versioned CSS
    cannot silently restore the wider sidebar. Mobile remains unchanged. */
 :root{
-  --sidebar-desktop-width:224px;
+  --sidebar-desktop-width:216px;
 }
 
 @media (min-width:761px){
   .sidebar{
     width:var(--sidebar-desktop-width);
-    padding-left:14px;
-    padding-right:14px;
+    padding-left:13px;
+    padding-right:13px;
   }
 
   .main{
@@ -17,9 +17,9 @@
   }
 
   .sidebar .brand{
-    gap:10px;
-    padding-left:4px;
-    padding-right:4px;
+    gap:9px;
+    padding-left:3px;
+    padding-right:3px;
   }
 
   .sidebar .brand>div,
@@ -34,8 +34,8 @@
   }
 
   .sidebar nav a{
-    padding-left:10px;
-    padding-right:10px;
+    padding-left:9px;
+    padding-right:9px;
   }
 }
 
