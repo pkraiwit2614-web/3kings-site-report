@@ -1,0 +1,45 @@
+@media (min-width: 761px) {
+  .sidebar {
+    overflow: hidden;
+  }
+
+  .sidebar .brand,
+  .sidebar .userbox {
+    flex: 0 0 auto;
+  }
+
+  .sidebar nav {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    align-content: start;
+    grid-auto-rows: max-content;
+    padding-right: 4px;
+    padding-bottom: 8px;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(229, 189, 104, 0.45) transparent;
+  }
+
+  .sidebar nav::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .sidebar nav::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .sidebar nav::-webkit-scrollbar-thumb {
+    background: rgba(229, 189, 104, 0.4);
+    border-radius: 999px;
+  }
+
+  .sidebar nav::-webkit-scrollbar-thumb:hover {
+    background: rgba(229, 189, 104, 0.62);
+  }
+
+  .sidebar .userbox {
+    margin-top: 12px;
+  }
+}
