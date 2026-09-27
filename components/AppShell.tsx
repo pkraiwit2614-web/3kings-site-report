@@ -6,7 +6,9 @@ import { ReactNode, useEffect, useMemo, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import BrandLogo from '@/components/BrandLogo'
 
-const baseNav = [
+type NavItem = [string,string]
+
+const managementNav: NavItem[] = [
   ['/', 'Dashboard'],
   ['/presentation', 'Executive Presentation'],
   ['/schedule', 'แผนงานที่กำหนด'],
@@ -19,17 +21,53 @@ const baseNav = [
   ['/weekly', 'รายงานการทำงานประจำสัปดาห์']
 ]
 
-const MOBILE_PRIMARY_COUNT = 6
+const reportUserNav: NavItem[] = [
+  ['/', 'Dashboard'],
+  ['/reports/quick', 'รายงานวันนี้'],
+  ['/schedule', 'แผนงานที่กำหนด'],
+  ['/site-photos', 'รูปภาพหน้างาน'],
+  ['/defects', 'Defect Report'],
+  ['/materials', 'วัสดุ เครื่องมือและผู้รับเหมา'],
+  ['/reports', 'ประวัติรายงานการทำงานประจำวัน'],
+  ['/procurement', 'การจัดซื้อ/จัดจ้าง'],
+  ['/weekly', 'รายงานการทำงานประจำสัปดาห์'],
+  ['/presentation', 'Executive Presentation']
+]
+
+const viewerNav: NavItem[] = [
+  ['/', 'Dashboard'],
+  ['/schedule', 'แผนงานที่กำหนด'],
+  ['/site-photos', 'รูปภาพหน้างาน'],
+  ['/defects', 'Defect Report'],
+  ['/materials', 'วัสดุ เครื่องมือและผู้รับเหมา'],
+  ['/reports', 'ประวัติรายงานการทำงานประจำวัน'],
+  ['/procurement', 'การจัดซื้อ/จัดจ้าง'],
+  ['/weekly', 'รายงานการทำงานประจำสัปดาห์'],
+  ['/presentation', 'Executive Presentation']
+]
+
+const MOBILE_PRIMARY_COUNT = 5
 const mobileLabel: Record<string,string> = {
   '/': 'Dashboard',
   '/presentation': 'Executive',
   '/schedule': 'แผนงาน',
-  '/materials': 'วัสดุ/เครื่องมือ',
+  '/materials': 'วัสดุ',
   '/defects': 'Defect',
-  '/reports/quick': 'รายงาน'
+  '/reports/quick': 'รายงานวันนี้',
+  '/site-photos': 'รูปหน้างาน',
+  '/reports': 'ประวัติรายงาน'
 }
 
 const DRIVE_WATCH_PATHS = new Set(['/', '/presentation', '/schedule', '/materials', '/site-photos', '/procurement', '/photo-mapping', '/data-health'])
+
+function roleLabel(role:string,userName:string){
+  if(userName.trim().toLowerCase()==='golf') return 'Site Supervisor'
+  if(role==='manager') return 'Admin'
+  if(role==='engineer') return 'Engineer'
+  if(role==='foreman') return 'Report User · กรอกรายงาน'
+  if(role==='viewer') return 'Viewer · ดูข้อมูล'
+  return 'User'
+}
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const path = usePathname(); const router = useRouter()
@@ -37,15 +75,15 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [role, setRole] = useState('')
   const [ready, setReady] = useState(false)
   const [mobileMore, setMobileMore] = useState(false)
-  const nav = useMemo(() => {
-    const items=[...baseNav]
-    if(role==='manager'||role==='engineer') items.push(['/photo-mapping','Photo Mapping'])
-    items.push(['/data-health','Data Health'])
-    if(role==='manager') items.push(['/users','User & Access'])
+  const nav = useMemo<NavItem[]>(() => {
+    if(role==='viewer') return viewerNav
+    if(role==='foreman') return reportUserNav
+    const items=[...managementNav]
+    if(role==='manager') items.push(['/photo-mapping','Photo Mapping'],['/data-health','Data Health'],['/users','User & Access'])
     return items
   }, [role])
-  const mobilePrimary = useMemo(() => nav.slice(0, MOBILE_PRIMARY_COUNT).map(([href,label]) => [href, mobileLabel[href] || label]), [nav])
-  const extraNav = useMemo(() => nav.slice(MOBILE_PRIMARY_COUNT), [nav])
+  const mobilePrimary = useMemo<NavItem[]>(() => nav.slice(0, MOBILE_PRIMARY_COUNT).map(([href,label]) => [href, mobileLabel[href] || label]), [nav])
+  const extraNav = useMemo<NavItem[]>(() => nav.slice(MOBILE_PRIMARY_COUNT), [nav])
 
   useEffect(() => {
     const supabase = getSupabase()
@@ -53,7 +91,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       if (!data.user) { router.replace('/login'); return }
       const { data: profile } = await supabase.from('profiles').select('full_name,role,active').eq('user_id', data.user.id).maybeSingle()
       if (!profile?.active) { await supabase.auth.signOut(); router.replace('/login'); return }
-      setUserName(profile.full_name || data.user.email || 'User'); setRole(profile.role || 'user'); setReady(true)
+      setUserName(profile.full_name || data.user.email || 'User'); setRole(profile.role || 'viewer'); setReady(true)
     })
   }, [router])
 
@@ -130,7 +168,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
     router.replace('/login')
   }
 
-  const displayRole = userName.trim().toLowerCase() === 'golf' ? 'Site Supervisor' : role
+  const displayRole = roleLabel(role,userName)
 
   if (!ready) return <div className="loading-screen">กำลังโหลดระบบ…</div>
 
