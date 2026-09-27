@@ -1,0 +1,44 @@
+'use client'
+
+import {useEffect} from 'react'
+import {usePathname,useRouter} from 'next/navigation'
+import {getSupabase} from '@/lib/supabase'
+
+const WRITE_REPORT_PATHS=[
+  /^\/reports\/quick\/?$/,
+  /^\/reports\/new\/?$/,
+  /^\/reports\/[^/]+\/edit\/?$/,
+]
+
+export default function RolePermissionGuard20260927(){
+  const path=usePathname()
+  const router=useRouter()
+
+  useEffect(()=>{
+    let cancelled=false
+    const apply=async()=>{
+      const body=document.body
+      body.classList.remove('role-viewer','role-report-user','role-engineer','role-manager')
+      const s=getSupabase()
+      const {data:{user}}=await s.auth.getUser()
+      if(cancelled||!user)return
+      const {data:profile}=await s.from('profiles').select('role,active').eq('user_id',user.id).maybeSingle()
+      if(cancelled||!profile?.active)return
+      const role=String(profile.role||'viewer')
+      body.classList.add(`role-${role==='foreman'?'report-user':role}`)
+      if(role==='viewer'&&WRITE_REPORT_PATHS.some(rx=>rx.test(path))){
+        router.replace('/reports')
+      }
+    }
+    void apply()
+    return()=>{cancelled=true}
+  },[path,router])
+
+  return <style jsx global>{`
+    body.role-viewer .sidebar a[href='/reports/quick'],
+    body.role-viewer .mobile-nav a[href='/reports/quick'],
+    body.role-viewer .mobile-more-links a[href='/reports/quick'],
+    body.role-viewer a[href='/reports/new'],
+    body.role-viewer a[href^='/reports/'][href$='/edit']{display:none!important}
+  `}</style>
+}
