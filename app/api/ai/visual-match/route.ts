@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { getVercelOidcToken } from '@vercel/oidc'
 
 export const runtime='nodejs'
 export const maxDuration=60
@@ -53,7 +54,7 @@ function parseJsonText(raw:string){
 }
 
 async function gatewayScore(request:NextRequest,task:any,photos:any[]){
-  const token=process.env.AI_GATEWAY_API_KEY||process.env.VERCEL_OIDC_TOKEN
+  const token=process.env.AI_GATEWAY_API_KEY||await getVercelOidcToken()
   if(!token)throw new Error('ai_gateway_auth_unavailable')
   const model=await visionModel()
   const content:any[]=[{
