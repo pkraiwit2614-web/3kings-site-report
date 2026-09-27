@@ -17,18 +17,21 @@ export default function ReportsPage(){
   const[rows,setRows]=useState<any[]>([])
   const[projects,setProjects]=useState<Project[]>([])
   const[userId,setUserId]=useState('')
+  const[role,setRole]=useState('viewer')
   const[retrying,setRetrying]=useState<Record<string,boolean>>({})
   const[retryMessage,setRetryMessage]=useState('')
 
   useEffect(()=>{
     const load = async () => {
       const s=getSupabase()
-      const [{data:{user}},r,p] = await Promise.all([
-        s.auth.getUser(),
-        s.from('daily_reports').select('*,report_items(*),report_photos(*)').order('report_date',{ascending:false}).order('created_at',{ascending:false}).limit(100),
-        s.from('projects').select('*')
-      ])
+      const {data:{user}}=await s.auth.getUser()
       setUserId(user?.id||'')
+      const [r,p,profile] = await Promise.all([
+        s.from('daily_reports').select('*,report_items(*),report_photos(*)').order('report_date',{ascending:false}).order('created_at',{ascending:false}).limit(100),
+        s.from('projects').select('*'),
+        user?s.from('profiles').select('role').eq('user_id',user.id).maybeSingle():Promise.resolve({data:null})
+      ])
+      setRole(String(profile.data?.role||'viewer'))
       const reports = await Promise.all((r.data||[]).map(async (report:any) => {
         const photos = await Promise.all((report.report_photos||[]).map(async (photo:any) => {
           const { data } = await s.storage.from('site-photos').createSignedUrl(photo.storage_path, 3600)
@@ -39,7 +42,7 @@ export default function ReportsPage(){
       setRows(reports)
       setProjects((p.data||[]) as Project[])
     }
-    load()
+    void load()
   },[])
 
   const retryPhoto=async(photo:any)=>{
@@ -66,14 +69,20 @@ export default function ReportsPage(){
     }
   }
 
+  const isViewer=role==='viewer'
+  const canEdit=(report:any)=>!isViewer&&(role==='manager'||role==='engineer'||report.reporter_id===userId)
+
   return <AppShell>
-    <PageHeader title="Report History" subtitle="V3.4 • ประวัติรายงาน • Edit/Revision • Photo Archive Retry"/>
-    {retryMessage&&<div className="notice" style={{marginBottom:12}}>{retryMessage}</div>}
+    <PageHeader
+      title={isViewer?'ประวัติรายงาน':'Report History'}
+      subtitle={isViewer?'ดูรายงานหน้างาน ความคืบหน้า กำลังคน และรูปประกอบ':'V3.4 • ประวัติรายงาน • Edit/Revision • Photo Archive Retry'}
+    />
+    {!isViewer&&retryMessage&&<div className="notice" style={{marginBottom:12}}>{retryMessage}</div>}
     <div className="stack">{rows.map(r=><div className="panel report-card" key={r.id}>
-      <div className="row between"><div><h2>{projects.find(p=>p.id===r.project_id)?.code||'-'} • {dateTH(r.report_date)}</h2><p>{r.summary||'ไม่มีสรุปเพิ่มเติม'}</p></div><div className="right"><StatusBadge value={r.status}/><b>Progress {pct(r.overall_progress)}</b><small className="muted">Rev. {r.revision_no||1}</small><Link href={`/reports/${r.id}/edit`} className="button" style={{fontSize:11,padding:'7px 10px'}}>แก้ไข / Revision</Link></div></div>
+      <div className="row between"><div><h2>{projects.find(p=>p.id===r.project_id)?.code||'-'} • {dateTH(r.report_date)}</h2><p>{r.summary||'ไม่มีสรุปเพิ่มเติม'}</p></div><div className="right"><StatusBadge value={r.status}/><b>Progress {pct(r.overall_progress)}</b>{!isViewer&&<small className="muted">Rev. {r.revision_no||1}</small>}{canEdit(r)&&<Link href={`/reports/${r.id}/edit`} className="button" style={{fontSize:11,padding:'7px 10px'}}>แก้ไข / Revision</Link>}</div></div>
       <div className="mini-grid"><span>กำลังคน <b>{r.total_manpower||0} คน</b></span><span>รายการงาน <b>{r.report_items?.length||0} งาน</b></span><span>รูปประกอบ <b>{r.report_photos?.length||0} รูป</b></span></div>
       {(r.report_items||[]).slice(0,6).map((x:any)=><div className="subitem" key={x.id}><span>{x.work_item}</span><b>{Math.round((x.actual_progress||0)*100)}%</b></div>)}
-      {!!r.report_photos?.length && <div className="photo-grid">{r.report_photos.map((photo:any)=>photo.signed_url && <figure key={photo.id} style={{position:'relative'}}><Image src={photo.signed_url} alt={photo.caption||'รูปหน้างาน'} width={640} height={480} sizes="(max-width: 760px) 50vw, 220px"/><figcaption><b>{phaseLabel[photo.phase]||photo.phase||'รูปหน้างาน'}</b>{photo.caption ? ` • ${photo.caption}` : ''}<small style={{display:'block',marginTop:4,color:photo.archive_status==='failed'?'var(--red)':'var(--muted)'}}>{archiveLabel[photo.archive_status]||photo.archive_status||'-'}{photo.archive_retry_count?` • Retry ${photo.archive_retry_count} ครั้ง`:''}</small>{photo.archive_error&&photo.archive_status==='failed'&&<small style={{display:'block',marginTop:3,color:'var(--red)'}}>{photo.archive_error}</small>}<span style={{display:'flex',gap:6,marginTop:6,flexWrap:'wrap'}}>{photo.archive_drive_url&&<a href={photo.archive_drive_url} target="_blank" rel="noreferrer" className="button" style={{fontSize:10,padding:'5px 8px'}}>เปิด Original ใน Drive ↗</a>}{photo.archive_status==='failed'&&photo.uploaded_by===userId&&<button type="button" className="button" disabled={retrying[photo.id]} onClick={()=>retryPhoto(photo)} style={{fontSize:10,padding:'5px 8px'}}>{retrying[photo.id]?'กำลัง Retry…':'Retry Archive'}</button>}</span></figcaption></figure>)}</div>}
+      {!!r.report_photos?.length && <div className="photo-grid">{r.report_photos.map((photo:any)=>photo.signed_url && <figure key={photo.id} style={{position:'relative'}}><Image src={photo.signed_url} alt={photo.caption||'รูปหน้างาน'} width={640} height={480} sizes="(max-width: 760px) 50vw, 220px"/><figcaption><b>{phaseLabel[photo.phase]||photo.phase||'รูปหน้างาน'}</b>{photo.caption ? ` • ${photo.caption}` : ''}{!isViewer&&<><small style={{display:'block',marginTop:4,color:photo.archive_status==='failed'?'var(--red)':'var(--muted)'}}>{archiveLabel[photo.archive_status]||photo.archive_status||'-'}{photo.archive_retry_count?` • Retry ${photo.archive_retry_count} ครั้ง`:''}</small>{photo.archive_error&&photo.archive_status==='failed'&&<small style={{display:'block',marginTop:3,color:'var(--red)'}}>{photo.archive_error}</small>}<span style={{display:'flex',gap:6,marginTop:6,flexWrap:'wrap'}}>{photo.archive_drive_url&&<a href={photo.archive_drive_url} target="_blank" rel="noreferrer" className="button" style={{fontSize:10,padding:'5px 8px'}}>เปิด Original ใน Drive ↗</a>}{photo.archive_status==='failed'&&photo.uploaded_by===userId&&<button type="button" className="button" disabled={retrying[photo.id]} onClick={()=>retryPhoto(photo)} style={{fontSize:10,padding:'5px 8px'}}>{retrying[photo.id]?'กำลัง Retry…':'Retry Archive'}</button>}</span></>}</figcaption></figure>)}</div>}
     </div>)}</div>
   </AppShell>
 }
