@@ -13,5 +13,6 @@ export default function ExecutivePresentationPage(){
     <ExecutivePresentationPhotoDisplay />
     <PresentationCondoEnhancer />
     <ExecutivePhotoLinks />
+    <style>{`.ep-fallback-note{display:none!important}`}</style>
   </>
 }
