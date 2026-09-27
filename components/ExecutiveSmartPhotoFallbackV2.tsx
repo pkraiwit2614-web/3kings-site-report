@@ -29,7 +29,7 @@ function taskSimilarity(a:TaskRow,b:TaskRow){
   if(a.id===b.id)return 1
   const fa=family(a),fb=family(b);const sameFamily=fa>=0&&fa===fb;const sameArea=Boolean(a.area&&b.area&&norm(a.area)===norm(b.area));const sameCategory=Boolean(a.category&&b.category&&norm(a.category)===norm(b.category))
   const at=tokens(`${a.task_name} ${a.area||''}`),bt=tokens(`${b.task_name} ${b.area||''}`);const intersection=[...at].filter(x=>bt.has(x)).length;const union=new Set([...at,...bt]).size;const jaccard=union?intersection/union:0
-  return (sameFamily?.55:0)+(sameArea?.2:0)+(sameCategory?.1:0)+(jaccard*.15)
+  return (sameFamily ? .55 : 0)+(sameArea ? .2 : 0)+(sameCategory ? .1 : 0)+(jaccard*.15)
 }
 function newest(a:PhotoRow,b:PhotoRow){return b.photo_date.localeCompare(a.photo_date)||String(b.indexed_at||'').localeCompare(String(a.indexed_at||''))||b.drive_file_id.localeCompare(a.drive_file_id)}
 function rotateFrom<T>(rows:T[],offset:number){if(rows.length<2)return rows;const start=((offset%rows.length)+rows.length)%rows.length;return [...rows.slice(start),...rows.slice(0,start)]}
