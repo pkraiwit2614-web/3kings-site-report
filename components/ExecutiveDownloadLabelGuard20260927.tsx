@@ -17,8 +17,7 @@ export default function ExecutiveDownloadLabelGuard20260927(){
 
       const ppt=wrap.querySelector<HTMLButtonElement>('[data-ui-request="presentation-ppt"]')
       const pdf=wrap.querySelector<HTMLButtonElement>('[data-ui-request="presentation-print"]')
-      if(ppt&&ppt.textContent!=='ดาวน์โหลด PowerPoint')ppt.textContent='ดาวน์โหลด PowerPoint'
-      if(pdf&&pdf.textContent!=='ดาวน์โหลด PDF')pdf.textContent='ดาวน์โหลด PDF'
+      pdf?.classList.add('executive-pdf-download-label')
 
       const meta=wrap.querySelector<HTMLElement>('.ui-polish-update-meta')
       if(meta&&ppt&&meta.nextElementSibling!==ppt)wrap.insertBefore(ppt,meta.nextElementSibling)
@@ -27,10 +26,20 @@ export default function ExecutiveDownloadLabelGuard20260927(){
 
     patch()
     const observer=new MutationObserver(patch)
-    observer.observe(document.body,{subtree:true,childList:true,characterData:true})
+    observer.observe(document.body,{subtree:true,childList:true})
     const timer=window.setInterval(patch,700)
     return()=>{stopped=true;observer.disconnect();window.clearInterval(timer)}
   },[path])
 
-  return null
+  return <style jsx global>{`
+    body.ui-executive-page .executive-pdf-download-label{
+      font-size:0!important;
+    }
+    body.ui-executive-page .executive-pdf-download-label::after{
+      content:'ดาวน์โหลด PDF';
+      font-size:12px;
+      font-weight:700;
+      line-height:1;
+    }
+  `}</style>
 }
