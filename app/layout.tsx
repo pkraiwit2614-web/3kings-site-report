@@ -11,6 +11,7 @@ import './report-print.css'
 import './sidebar-scroll.css'
 import TaskDropdownOrder from '@/components/TaskDropdownOrder'
 import UiPolish20260927 from '@/components/UiPolish20260927'
+import UiRequestedChanges20260927 from '@/components/UiRequestedChanges20260927'
 import { Noto_Sans_Thai } from 'next/font/google'
 import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
@@ -23,5 +24,5 @@ const notoSansThai = Noto_Sans_Thai({
 export const metadata: Metadata = { title: '3 Kings Site Report', description: 'Daily site reporting and management dashboard' }
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
-  return <html lang="th"><body className={notoSansThai.className}><TaskDropdownOrder /><UiPolish20260927 />{children}</body></html>
+  return <html lang="th"><body className={notoSansThai.className}><TaskDropdownOrder /><UiPolish20260927 /><UiRequestedChanges20260927 />{children}</body></html>
 }
