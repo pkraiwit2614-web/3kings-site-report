@@ -31,13 +31,14 @@
   .defect-table tr{break-inside:avoid;page-break-inside:avoid}
   .defect-table th{position:static!important;background:#eef3f8!important;color:#40536d!important;font-size:8px!important;padding:6px 5px!important}
   .defect-table td{font-size:8px!important;padding:6px 5px!important;overflow-wrap:anywhere!important;word-break:normal!important}
-  .defect-table th:nth-child(1),.defect-table td:nth-child(1){width:8%}
-  .defect-table th:nth-child(2),.defect-table td:nth-child(2){width:6%}
-  .defect-table th:nth-child(3),.defect-table td:nth-child(3){width:19%}
-  .defect-table th:nth-child(4),.defect-table td:nth-child(4){width:11%}
-  .defect-table th:nth-child(5),.defect-table td:nth-child(5){width:12%}
-  .defect-table th:nth-child(6),.defect-table td:nth-child(6){width:18%}
-  .defect-table th:nth-child(7),.defect-table td:nth-child(7){width:26%}
+  .defect-table th:nth-child(1),.defect-table td:nth-child(1){width:7%}
+  .defect-table th:nth-child(2),.defect-table td:nth-child(2){width:5%}
+  .defect-table th:nth-child(3),.defect-table td:nth-child(3){width:16%}
+  .defect-table th:nth-child(4),.defect-table td:nth-child(4){width:9%}
+  .defect-table th:nth-child(5),.defect-table td:nth-child(5){width:10%}
+  .defect-table th:nth-child(6),.defect-table td:nth-child(6){width:11%}
+  .defect-table th:nth-child(7),.defect-table td:nth-child(7){width:17%}
+  .defect-table th:nth-child(8),.defect-table td:nth-child(8){width:25%}
 
   .room-cell b{font-size:9px!important}
   .room-cell small{font-size:7px!important}
