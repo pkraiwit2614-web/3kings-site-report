@@ -12,8 +12,18 @@ function text(value: unknown) {
   return String(value).trim()
 }
 
+function uniqueText(values: unknown) {
+  if (!Array.isArray(values)) return [] as string[]
+  return [...new Set(values.map(text).filter(Boolean))]
+}
+
 export async function GET() {
-  return NextResponse.json({ ok: true, service: '3 Kings Drive Photo Index V3.5', route: '/api/sync/drive-photos' })
+  return NextResponse.json({
+    ok: true,
+    service: '3 Kings Drive Photo Index V3.6',
+    route: '/api/sync/drive-photos',
+    reconciliation: 'explicit-full-scan-only',
+  })
 }
 
 export async function POST(request: NextRequest) {
@@ -59,8 +69,42 @@ export async function POST(request: NextRequest) {
       p_rows: cleaned,
     })
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
-    const result = data as Record<string, unknown> | null
-    return NextResponse.json(result ?? { ok: false, error: 'empty_rpc_response' }, { status: result?.ok === false ? 403 : 200 })
+
+    const result = (data as Record<string, unknown> | null) ?? { ok: false, error: 'empty_rpc_response' }
+    if (result.ok === false) return NextResponse.json(result, { status: 403 })
+
+    // Never infer a complete Drive inventory from an ordinary/limited scan.
+    // Deactivation is allowed only when the caller explicitly certifies a complete scan.
+    const reconcile = Array.isArray(body) ? null : body?.reconcile
+    const fullScan = reconcile?.complete === true
+    if (!fullScan) return NextResponse.json({ ...result, reconciliation: { applied: false, reason: 'not_full_scan' } })
+
+    const folderIds = uniqueText(reconcile?.folderIds)
+    const scope = text(reconcile?.scope) === 'project' ? 'project' : 'folders'
+    if (scope === 'folders' && !folderIds.length) {
+      return NextResponse.json({
+        ...result,
+        reconciliation: { applied: false, reason: 'missing_full_scan_folder_ids' },
+      })
+    }
+
+    const seenFileIds = uniqueText(cleaned.map((row: any) => row.drive_file_id))
+    const { data: reconcileData, error: reconcileError } = await supabase.rpc('drive_photo_index_reconcile_full_scan', {
+      p_sync_key: syncKey,
+      p_project_code: projectCode,
+      p_seen_file_ids: seenFileIds,
+      p_scope: scope,
+      p_folder_ids: folderIds,
+      p_source_folder: sourceFolder,
+    })
+    if (reconcileError) {
+      return NextResponse.json({
+        ...result,
+        reconciliation: { applied: false, error: reconcileError.message },
+      }, { status: 500 })
+    }
+
+    return NextResponse.json({ ...result, reconciliation: reconcileData })
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : 'unknown_error' }, { status: 500 })
   }
