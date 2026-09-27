@@ -20,6 +20,8 @@ export default function ExecutiveDownloadLabelGuard20260927(){
 
       if(headerPpt){
         headerPpt.classList.add('executive-header-ppt-hidden')
+        headerPpt.setAttribute('aria-hidden','true')
+        headerPpt.tabIndex=-1
       }
 
       if(printButton){
@@ -86,7 +88,11 @@ export default function ExecutiveDownloadLabelGuard20260927(){
   },[path])
 
   return <style jsx global>{`
-    body.ui-executive-page .executive-header-ppt-hidden{
+    /* Keep the header PowerPoint source button available for the export handler,
+       but remove it completely from the visible/focusable header UI.
+       This selector is intentionally more specific than HeaderActionPattern. */
+    body.ui-executive-page .page-header .ui-request-exec-ready > [data-ui-request="presentation-ppt"],
+    body.ui-executive-page .page-header .ui-request-exec-ready > .executive-header-ppt-hidden{
       display:none!important;
     }
     body.ui-executive-page .executive-stage-actions{
