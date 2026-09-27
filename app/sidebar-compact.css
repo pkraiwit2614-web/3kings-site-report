@@ -1,0 +1,46 @@
+/* Compact desktop sidebar — 2026-09-27
+   Keep this as the final desktop sidebar geometry override so older versioned CSS
+   cannot silently restore the wider sidebar. Mobile remains unchanged. */
+:root{
+  --sidebar-desktop-width:224px;
+}
+
+@media (min-width:761px){
+  .sidebar{
+    width:var(--sidebar-desktop-width);
+    padding-left:14px;
+    padding-right:14px;
+  }
+
+  .main{
+    margin-left:var(--sidebar-desktop-width);
+  }
+
+  .sidebar .brand{
+    gap:10px;
+    padding-left:4px;
+    padding-right:4px;
+  }
+
+  .sidebar .brand>div,
+  .sidebar .userbox{
+    min-width:0;
+  }
+
+  .sidebar .brand b{
+    display:block;
+    white-space:normal;
+    overflow-wrap:anywhere;
+  }
+
+  .sidebar nav a{
+    padding-left:10px;
+    padding-right:10px;
+  }
+}
+
+@media print{
+  .main{
+    margin-left:0!important;
+  }
+}
