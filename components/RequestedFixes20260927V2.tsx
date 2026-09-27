@@ -224,23 +224,26 @@ export default function RequestedFixes20260927V2(){
 
     @media(max-width:900px){
       body.ui-weekly-v2 .page-header{grid-template-columns:1fr!important}
-      .requested-weekly-actions-v2{align-items:flex-start;min-width:0}
-      .requested-v2-primary-row{grid-template-columns:auto minmax(148px,auto)}
-      .requested-v2-update-meta{align-items:flex-start}
-      .requested-v2-secondary-button,.requested-v2-print{margin-left:0}
-      body.ui-defect-v2 .page-header-print-actions{align-items:flex-start!important}
-      body.ui-defect-v2 .header-actions{justify-content:start!important}
-      body.ui-defect-v2 .header-actions .update-meta{align-items:flex-start!important}
+      .requested-weekly-actions-v2{align-items:flex-end;min-width:0;width:100%}
+      .requested-v2-primary-row{grid-template-columns:auto 148px;justify-content:end}
+      .requested-v2-update-meta{align-items:flex-end}
+      .requested-v2-secondary-button,.requested-v2-print{margin-left:auto}
+      body.ui-defect-v2 .page-header-print-actions{align-items:flex-end!important;width:100%}
+      body.ui-defect-v2 .header-actions{justify-content:end!important;width:100%}
+      body.ui-defect-v2 .header-actions .update-meta{align-items:flex-end!important}
     }
-    @media(max-width:560px){
-      .requested-v2-primary-row{grid-template-columns:1fr}
-      .requested-v2-update-meta{grid-row:1}
-      .requested-v2-main-button{grid-row:2}
-      .requested-v2-secondary-button,.requested-v2-print{width:100%!important}
+
+    @media(max-width:340px){
+      .requested-v2-primary-row{grid-template-columns:1fr;width:100%}
+      .requested-v2-update-meta{grid-row:auto;align-items:flex-start}
+      .requested-v2-main-button{grid-row:auto}
+      .requested-v2-secondary-button,.requested-v2-print{width:100%!important;margin-left:0}
       body.ui-defect-v2 .header-actions{grid-template-columns:1fr!important;width:100%}
       body.ui-defect-v2 .header-actions .update-meta,
       body.ui-defect-v2 .header-actions .drive-button,
-      body.ui-defect-v2 .header-actions a.button:not(.drive-button){grid-column:1!important;grid-row:auto!important;width:100%}
+      body.ui-defect-v2 .header-actions a.button:not(.drive-button){grid-column:1!important;grid-row:auto!important;width:100%;align-items:flex-start!important}
+      body.ui-defect-v2 .page-header-print-actions{align-items:stretch!important}
+      body.ui-defect-v2 .page-header-print-actions>.report-print-button{width:100%!important}
     }
   `}</style>
 }
