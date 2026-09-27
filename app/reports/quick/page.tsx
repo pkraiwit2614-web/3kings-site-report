@@ -17,7 +17,7 @@ type QuickItem={
 }
 type QuickDraft={version:number;savedAt:string;date:string;projectId:string;manpower:number;weather:string;summary:string;items:Array<Omit<QuickItem,'files'>>}
 
-const LOCAL_KEY='3kings:v40:daily-report-quick'
+const LOCAL_KEY_PREFIX='3kings:v40:daily-report-quick'
 const statusOptions=[
   ['in_progress','กำลังทำ'],['awaiting_inspection','รอตรวจ'],['blocked','ติดปัญหา'],['delayed','ล่าช้า'],['completed','เสร็จแล้ว']
 ]
@@ -40,6 +40,7 @@ export default function DailyReportQuickPage(){
   const [summary,setSummary]=useState('')
   const [items,setItems]=useState<QuickItem[]>([emptyItem()])
   const [draftKey,setDraftKey]=useState(newKey())
+  const [draftStorageKey,setDraftStorageKey]=useState('')
   const [draftStatus,setDraftStatus]=useState('กำลังเตรียมร่าง…')
   const [saving,setSaving]=useState(false)
   const [message,setMessage]=useState('')
@@ -49,24 +50,28 @@ export default function DailyReportQuickPage(){
     let alive=true
     const load=async()=>{
       const s=getSupabase()
-      const [p,t]=await Promise.all([
+      const [{data:{user},error:userError},p,t]=await Promise.all([
+        s.auth.getUser(),
         s.from('projects').select('id,code,name,active').eq('active',true).order('sort_order'),
         s.from('v_schedule_tasks').select('id,project_id,source_task_no,task_name,area,category,actual_progress,contractor,target_close,planned_start,planned_end').order('planned_start')
       ])
       if(!alive)return
+      if(userError||!user)throw new Error('กรุณาเข้าสู่ระบบใหม่')
       if(p.error)throw p.error
       if(t.error)throw t.error
+      const localKey=`${LOCAL_KEY_PREFIX}:${user.id}`
+      setDraftStorageKey(localKey)
       const ps=(p.data||[]) as Project[]
       setProjects(ps);setTasks((t.data||[]) as Task[])
       let restored:QuickDraft|null=null
-      try{restored=JSON.parse(localStorage.getItem(LOCAL_KEY)||'null')}catch{}
+      try{restored=JSON.parse(localStorage.getItem(localKey)||'null')}catch{}
       if(restored?.version===40){
         setDate(restored.date||todayISO());setProjectId(restored.projectId||ps[0]?.id||'');setManpower(Number(restored.manpower)||0)
         setWeather(restored.weather||'');setSummary(restored.summary||'')
         setItems(Array.isArray(restored.items)&&restored.items.length?restored.items.map(x=>({...x,key:x.key||newKey(),files:[]})):[emptyItem()])
-        setDraftStatus(`กู้ร่างล่าสุดแล้ว • ${new Date(restored.savedAt).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})}`)
+        setDraftStatus(`กู้ร่างล่าสุดของบัญชีนี้แล้ว • ${new Date(restored.savedAt).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})}`)
       }else{
-        setProjectId(ps[0]?.id||'');setDraftStatus('พร้อม Auto-save ในเครื่อง')
+        setProjectId(ps[0]?.id||'');setDraftStatus('พร้อม Auto-save แยกตามผู้ใช้งาน')
       }
     }
     load().catch(e=>{if(alive){setMessage(`โหลดข้อมูลไม่สำเร็จ: ${e?.message||'unknown error'}`);setDraftStatus('ยังไม่พร้อม')}})
@@ -74,13 +79,13 @@ export default function DailyReportQuickPage(){
   },[])
 
   useEffect(()=>{
-    if(!projectId)return
+    if(!projectId||!draftStorageKey)return
     const timer=window.setTimeout(()=>{
       const payload:QuickDraft={version:40,savedAt:new Date().toISOString(),date,projectId,manpower,weather,summary,items:items.map(({files,...rest})=>rest)}
-      try{localStorage.setItem(LOCAL_KEY,JSON.stringify(payload));setDraftStatus(`บันทึกร่างแล้ว • ${new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}`)}catch{setDraftStatus('บันทึกร่างในเครื่องไม่สำเร็จ')}
+      try{localStorage.setItem(draftStorageKey,JSON.stringify(payload));setDraftStatus(`บันทึกร่างของบัญชีนี้แล้ว • ${new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}`)}catch{setDraftStatus('บันทึกร่างในเครื่องไม่สำเร็จ')}
     },500)
     return()=>window.clearTimeout(timer)
-  },[date,projectId,manpower,weather,summary,items])
+  },[date,projectId,manpower,weather,summary,items,draftStorageKey])
 
   const availableTasks=useMemo(()=>tasks.filter(t=>t.project_id===projectId&&t.source_task_no!=='1').sort((a,b)=>{
     const ad=(a.actual_progress||0)>=1?1:0,bd=(b.actual_progress||0)>=1?1:0
@@ -193,7 +198,7 @@ export default function DailyReportQuickPage(){
         }
       }
 
-      try{localStorage.removeItem(LOCAL_KEY)}catch{}
+      try{if(draftStorageKey)localStorage.removeItem(draftStorageKey)}catch{}
       setDraftKey(newKey());setMessage(`ส่งรายงานแล้ว ${validItems.length} งาน • ${manpower||0} คน${photoCount?` • รูป ${photoCount} รูป`:''}${archiveFailed?` • Archive รอตรวจ ${archiveFailed} รูป`:''}`)
       window.setTimeout(()=>router.push('/reports'),1200)
     }catch(err:any){setMessage(`${err?.message||'ส่งรายงานไม่สำเร็จ'} • ร่างข้อความยังอยู่ในเครื่อง`)}
@@ -251,7 +256,7 @@ export default function DailyReportQuickPage(){
         <div className="quick-step"><span>3</span><div><b>ตรวจแล้วส่ง</b><small>{selectedProject?`${selectedProject.code} — ${selectedProject.name}`:'ยังไม่ได้เลือก Plot'} • {validItems.length} งาน • {manpower||0} คน • {photoCount} รูป</small></div></div>
         <div className="quick-review-list">{validItems.map((x,i)=><div key={x.key}><b>{i+1}. {x.work_item||'ยังไม่ได้ระบุงาน'}</b><span>{x.actual_progress}% • {statusLabel(x.status)}{x.files.length?` • ${x.files.length} รูป`:''}</span></div>)}</div>
         <button className="primary big quick-submit" disabled={saving||!projectId}>{saving?'กำลังบันทึกและส่งรูป…':'ส่ง Daily Report'}</button>
-        <small className="muted">ข้อความจะ Auto-save ในเครื่อง • รูปเริ่มอัปโหลดเมื่อกดส่ง • ถ้าส่งไม่สำเร็จสามารถกดส่งซ้ำได้</small>
+        <small className="muted">ข้อความจะ Auto-save แยกตามบัญชีผู้ใช้ • รูปเริ่มอัปโหลดเมื่อกดส่ง • ถ้าส่งไม่สำเร็จสามารถกดส่งซ้ำได้</small>
       </section>
     </form>
 
