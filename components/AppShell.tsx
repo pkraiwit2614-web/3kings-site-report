@@ -61,6 +61,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
     router.replace('/login')
   }
 
+  const displayRole = userName.trim().toLowerCase() === 'golf' ? 'Site Supervisor' : role
+
   if (!ready) return <div className="loading-screen">กำลังโหลดระบบ…</div>
 
   const extraActive = extraNav.some(([href]) => path === href)
@@ -69,7 +71,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
     <aside className="sidebar">
       <div className="brand"><BrandLogo className="brand-logo"/><div><b>3 Kings Construction</b><small>Site Report V3.4</small></div></div>
       <nav>{nav.map(([href,label]) => <Link key={href} className={path===href?'active':''} href={href}>{label}</Link>)}</nav>
-      <div className="userbox"><b>{userName}</b><span>{role}</span><button onClick={signOut}>ออกจากระบบ</button></div>
+      <div className="userbox"><b>{userName}</b><span>{displayRole}</span><button onClick={signOut}>ออกจากระบบ</button></div>
     </aside>
 
     <main className="main">{children}</main>
@@ -79,7 +81,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       <section className="mobile-more-sheet" aria-label="เมนูเพิ่มเติม">
         <div className="mobile-more-handle" />
         <div className="mobile-more-user">
-          <div><b>{userName}</b><span>{role}</span></div>
+          <div><b>{userName}</b><span>{displayRole}</span></div>
           <button type="button" onClick={()=>setMobileMore(false)}>ปิด</button>
         </div>
         <div className="mobile-more-links">
