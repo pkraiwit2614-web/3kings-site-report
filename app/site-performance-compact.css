@@ -1,0 +1,5 @@
+/* Dashboard section 5 only: keep one sync timestamp in the section header
+   and remove the duplicated per-Plot sync line from each performance card. */
+#site-performance a[href^="/projects/"] > div > small:last-child {
+  display: none;
+}
