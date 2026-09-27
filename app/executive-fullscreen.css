@@ -290,3 +290,90 @@
     min-height: calc(100vh - 96px);
   }
 }
+
+/* Executive task slides — keep task identity, status and photo evidence in one compact header. */
+@media (min-width: 821px) {
+  body .ep-stage .ep-slide:has(.ep-task-info) {
+    position: relative;
+  }
+
+  body .ep-stage .ep-slide:has(.ep-task-info) > header {
+    justify-content: flex-start;
+    align-items: flex-start;
+    gap: 10px;
+    padding-right: 360px;
+  }
+
+  body .ep-stage .ep-slide:has(.ep-task-info) > header > div {
+    min-width: 0;
+    max-width: calc(100% - 134px);
+  }
+
+  body .ep-stage .ep-slide:has(.ep-task-info) > header > .badge {
+    margin-top: 25px;
+    margin-left: 2px;
+  }
+
+  body .ep-stage .ep-slide:has(.ep-task-info) .ep-photo-head {
+    position: absolute;
+    top: 24px;
+    right: 24px;
+    z-index: 5;
+    width: min(336px, 29vw);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    text-align: right;
+  }
+
+  body .ep-stage .ep-slide:has(.ep-task-info) .ep-photo-head > div {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+  }
+
+  body .ep-stage .ep-slide:has(.ep-task-info) .ep-photo-head b,
+  body .ep-stage .ep-slide:has(.ep-task-info) .ep-photo-head span,
+  body .ep-stage .ep-slide:has(.ep-task-info) .ep-photo-head a {
+    white-space: nowrap;
+  }
+
+  body .ep-stage .ep-slide:has(.ep-task-info) .ep-slide-body {
+    grid-template-columns: minmax(245px, .68fr) minmax(0, 2fr);
+    gap: 16px;
+  }
+
+  body .ep-stage:not(:fullscreen) .ep-slide:has(.ep-task-info) .ep-photo-grid img {
+    height: 255px;
+  }
+
+  body .ep-stage:not(:fullscreen) .ep-slide:has(.ep-task-info) .ep-photo-grid.count-1 img {
+    height: 525px;
+  }
+
+  body .ep-stage:fullscreen .ep-slide:has(.ep-task-info) > header {
+    padding-right: min(440px, 34vw);
+  }
+
+  body .ep-stage:fullscreen .ep-slide:has(.ep-task-info) .ep-photo-head {
+    top: clamp(14px, 1.45vh, 22px);
+    right: clamp(16px, 1.6vw, 26px);
+    width: min(410px, 32vw);
+  }
+
+  body .ep-stage:fullscreen .ep-slide:has(.ep-task-info) .ep-slide-body {
+    grid-template-columns: minmax(230px, .62fr) minmax(0, 2.18fr);
+    gap: clamp(10px, 1vw, 15px);
+    padding-top: clamp(7px, .9vh, 11px);
+  }
+
+  body .ep-stage:fullscreen .ep-slide:has(.ep-task-info) .ep-photo-grid figcaption {
+    min-height: 23px;
+    padding: 3px 6px;
+  }
+}
