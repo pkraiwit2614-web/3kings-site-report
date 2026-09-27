@@ -31,6 +31,7 @@ type SmartPhoto = PhotoRow & {
   sourceTask?:TaskRow
 }
 
+const PHOTO_PAGE_SIZE=500
 const FAMILY_GROUPS = [
   ['ฝ้า','เพดาน','ชายคา','ceiling'],
   ['กระเบื้อง','tile'],
@@ -69,7 +70,7 @@ function taskSimilarity(a:TaskRow,b:TaskRow){
   const intersection=[...at].filter(x=>bt.has(x)).length
   const union=new Set([...at,...bt]).size
   const jaccard=union?intersection/union:0
-  return (sameFamily?.55:0)+(sameArea?.2:0)+(sameCategory?.1:0)+(jaccard*.15)
+  return (sameFamily ? .55 : 0)+(sameArea ? .2 : 0)+(sameCategory ? .1 : 0)+(jaccard*.15)
 }
 
 function newest(a:PhotoRow,b:PhotoRow){
@@ -84,7 +85,7 @@ function hash(value:string){
   return h>>>0
 }
 
-function rotateRecent<T>(rows:T[],seed:string,windowSize=24){
+function rotateRecent<T>(rows:T[],seed:string,windowSize=12){
   const head=rows.slice(0,windowSize); const tail=rows.slice(windowSize)
   if(head.length<2) return rows
   const offset=hash(seed)%head.length
@@ -108,6 +109,27 @@ function phaseLabel(value:string|null){
   if(value==='after') return 'หลังทำ'
   if(value==='during') return 'ระหว่างทำ'
   return 'รูปหน้างาน'
+}
+
+function setText(el:Element|null,value:string){
+  if(el&&el.textContent!==value) el.textContent=value
+}
+
+async function loadAllPhotos(s:any){
+  let rows:PhotoRow[]=[]
+  for(let from=0;;from+=PHOTO_PAGE_SIZE){
+    const result=await s.from('drive_photo_index')
+      .select('drive_file_id,drive_folder_id,project_id,schedule_task_id,file_name,photo_date,phase,verified_at,indexed_at')
+      .eq('is_active',true)
+      .order('photo_date',{ascending:false})
+      .order('indexed_at',{ascending:false})
+      .range(from,from+PHOTO_PAGE_SIZE-1)
+    if(result.error) throw result.error
+    const batch=(result.data||[]) as PhotoRow[]
+    rows=rows.concat(batch)
+    if(batch.length<PHOTO_PAGE_SIZE) break
+  }
+  return rows
 }
 
 function currentPhotoMode(){
@@ -177,12 +199,10 @@ function choosePhotos(project:ProjectRow,targetTask:TaskRow,photos:PhotoRow[],ta
   uniquePush(selected,unmatched,4)
   uniquePush(selected,otherMapped,4)
 
-  // Latest mode should always lead with the newest selected evidence, while
-  // direct task matches still win selection before similar / plot fallback.
   return selected.sort((a,b)=>newest(a,b)).slice(0,4)
 }
 
-function relationText(photo:SmartPhoto,targetTask:TaskRow){
+function relationText(photo:SmartPhoto){
   if(photo.relation==='direct') return photo.verified_at?'ตรง Task • Verified':'ตรง Task'
   if(photo.relation==='similar') return `งานใกล้เคียง • ${photo.sourceTask?.task_name||'Related task'}`
   if(photo.sourceTask) return `Plot fallback • ${photo.sourceTask.task_name}`
@@ -194,20 +214,19 @@ export default function ExecutiveSmartPhotoFallback(){
     let disposed=false
     let observer:MutationObserver|null=null
     let scheduled=false
+    let cleanupEvents:(()=>void)|undefined
 
     const setup=async()=>{
       const s=getSupabase()
-      const [photoResult,taskResult,projectResult]=await Promise.all([
-        s.from('drive_photo_index')
-          .select('drive_file_id,drive_folder_id,project_id,schedule_task_id,file_name,photo_date,phase,verified_at,indexed_at')
-          .eq('is_active',true)
-          .order('photo_date',{ascending:false}),
+      const [photos,taskResult,projectResult]=await Promise.all([
+        loadAllPhotos(s),
         s.from('v_schedule_tasks').select('id,project_id,task_name,area,category'),
         s.from('projects').select('id,code,name').eq('active',true),
       ])
       if(disposed) return
+      if(taskResult.error) throw taskResult.error
+      if(projectResult.error) throw projectResult.error
 
-      const photos=(photoResult.data||[]) as PhotoRow[]
       const tasks=(taskResult.data||[]) as TaskRow[]
       const projects=(projectResult.data||[]) as ProjectRow[]
       const taskById=new Map(tasks.map(t=>[t.id,t]))
@@ -224,7 +243,9 @@ export default function ExecutiveSmartPhotoFallback(){
           if(!freshest||!img) return
           const wanted=`/api/drive-photo?fileId=${encodeURIComponent(freshest.drive_file_id)}`
           if(img.dataset.smartCoverFile!==freshest.drive_file_id){
-            img.src=wanted; img.alt=freshest.file_name; img.dataset.smartCoverFile=freshest.drive_file_id
+            img.src=wanted
+            img.alt=freshest.file_name
+            img.dataset.smartCoverFile=freshest.drive_file_id
             if(freshest.drive_folder_id) img.dataset.photoFolderUrl=`https://drive.google.com/drive/folders/${freshest.drive_folder_id}`
           }
         })
@@ -250,6 +271,7 @@ export default function ExecutiveSmartPhotoFallback(){
           empty.replaceWith(grid)
         }
         if(!grid) return
+        grid.classList.add('smart-photo-grid')
 
         while(grid.children.length<selected.length){
           const figure=document.createElement('figure')
@@ -267,32 +289,30 @@ export default function ExecutiveSmartPhotoFallback(){
           if(!img||!caption) return
           const wanted=`/api/drive-photo?fileId=${encodeURIComponent(photo.drive_file_id)}`
           if(img.dataset.smartPhotoFile!==photo.drive_file_id){
-            img.src=wanted; img.alt=photo.file_name; img.dataset.smartPhotoFile=photo.drive_file_id
+            img.src=wanted
+            img.alt=photo.file_name
+            img.dataset.smartPhotoFile=photo.drive_file_id
           }
           if(photo.drive_folder_id) img.dataset.photoFolderUrl=`https://drive.google.com/drive/folders/${photo.drive_folder_id}`
           img.title=photo.relation==='direct'?'รูปที่ผูกกับงานนี้':photo.relation==='similar'?'รูปจากงานใกล้เคียงใน Plot เดียวกัน':'รูปล่าสุดสำหรับ fallback ใน Plot เดียวกัน'
-          const left=caption.querySelector('div'); const right=caption.querySelector(':scope > span:last-child')
-          if(left) left.innerHTML=`<b>${phaseLabel(photo.phase)}</b><span>${relationText(photo,targetTask)}</span>`
-          if(right) right.textContent=dateLabel(photo.photo_date)
+          setText(caption.querySelector('div b'),phaseLabel(photo.phase))
+          setText(caption.querySelector('div span'),relationText(photo))
+          setText(caption.querySelector(':scope > span:last-child'),dateLabel(photo.photo_date))
           figure.dataset.smartRelation=photo.relation
         })
 
-        const head=slide.querySelector<HTMLElement>('.ep-photo-head span')
-        if(head){
-          const latest=selected.reduce((v,p)=>!v||p.photo_date>v?p.photo_date:v,'')
-          const directCount=selected.filter(p=>p.relation==='direct').length
-          const similarCount=selected.filter(p=>p.relation==='similar').length
-          const plotCount=selected.filter(p=>p.relation==='plot').length
-          head.textContent=`วันที่รูปล่าสุด: ${latest?dateLabel(latest):'-'} • ตรง Task ${directCount} • งานใกล้เคียง ${similarCount} • Plot fallback ${plotCount}`
-        }
-
-        const note=slide.querySelector<HTMLElement>('.ep-fallback-note')
+        const latest=selected.reduce((v,p)=>!v||p.photo_date>v?p.photo_date:v,'')
+        const directCount=selected.filter(p=>p.relation==='direct').length
         const similarCount=selected.filter(p=>p.relation==='similar').length
         const plotCount=selected.filter(p=>p.relation==='plot').length
+        setText(slide.querySelector('.ep-photo-head span'),`วันที่รูปล่าสุด: ${latest?dateLabel(latest):'-'} • ตรง Task ${directCount} • งานใกล้เคียง ${similarCount} • Plot fallback ${plotCount}`)
+
+        const note=slide.querySelector<HTMLElement>('.ep-fallback-note')
         if(note){
-          note.textContent=similarCount||plotCount
+          const noteText=similarCount||plotCount
             ?`Smart fallback: ใช้รูปงานใกล้เคียง ${similarCount} รูป และรูปล่าสุดระดับ Plot ${plotCount} รูป โดยไม่วน fallback ชุดเดิมทุก Task`
             :'รูปทั้งหมดตรงกับ Task นี้'
+          setText(note,noteText)
         }
       }
 
@@ -313,14 +333,13 @@ export default function ExecutiveSmartPhotoFallback(){
       document.addEventListener('change',scheduleDecorate,true)
       document.addEventListener('click',scheduleDecorate,true)
 
-      return()=>{
+      cleanupEvents=()=>{
         document.removeEventListener('change',scheduleDecorate,true)
         document.removeEventListener('click',scheduleDecorate,true)
       }
     }
 
-    let cleanupEvents:(()=>void)|undefined
-    setup().then(fn=>{cleanupEvents=fn}).catch(()=>{})
+    setup().catch(()=>{})
     return()=>{
       disposed=true
       observer?.disconnect()
