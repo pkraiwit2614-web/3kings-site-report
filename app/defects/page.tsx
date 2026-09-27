@@ -207,14 +207,14 @@ export default function DefectDetailPage(){
           <div><h2>รายชื่อห้อง</h2><p>แสดง {filtered.length} ห้อง</p></div>
           <div className="legend"><span><i className="customer-dot"/>มีลูกค้า</span><span><i className="no-customer-dot"/>ไม่มีลูกค้า</span><span><i className="bad-dot"/>ยังไม่เสร็จ</span><span><i className="warn-dot"/>รอตรวจ / รอส่งมอบ</span><span><i className="good-dot"/>ปิดแล้ว</span></div>
         </div>
-        <div className="table-wrap defect-table"><table><thead><tr><th>ห้อง</th><th className="center">อาคาร</th><th>ชื่อลูกค้า/เจ้าของ</th><th className="center">ลูกค้า</th><th className="center">โรงแรม</th><th className="center">วันที่ Hotel แจ้ง</th><th className="center">สถานะ</th><th>ต้องทำต่อ</th></tr></thead><tbody>
+        <div className="table-wrap defect-table"><table><thead><tr><th>ห้อง</th><th className="center">อาคาร</th><th className="center">วันที่ Hotel แจ้ง</th><th>ชื่อลูกค้า/เจ้าของ</th><th className="center">ลูกค้า</th><th className="center">โรงแรม</th><th className="center">สถานะ</th><th>ต้องทำต่อ</th></tr></thead><tbody>
           {filtered.map(r=><tr key={r.room_no}>
             <td className="room-cell"><b>{r.room_no}</b><small>ชั้น {r.floor??'-'}</small></td>
             <td className="center"><b>{r.building}</b></td>
+            <td className="center"><span className="notice-date" title="วันที่ตาม Hotel Defect Notice">{hotelNoticeDateTH(r.room_no)}</span></td>
             <td>{r.owner_name||<span className="muted">—</span>}</td>
             <td className="center"><span className={`customer-badge ${r.customer_status==='มีลูกค้า'?'customer':'no-customer'}`}>{r.customer_status}</span></td>
             <td className="center"><span className={`program-badge ${r.hotel_participation==='ร่วมโรงแรม'?'hotel':'nonhotel'}`}>{r.hotel_participation}</span></td>
-            <td className="center"><span className="notice-date" title="วันที่ตาม Hotel Defect Notice">{hotelNoticeDateTH(r.room_no)}</span></td>
             <td className="center"><span className={`state-badge ${statusTone(r)}`}>{statusLabel(r)}</span></td>
             <td>{r.next_action||r.follow_up||'-'}</td>
           </tr>)}
