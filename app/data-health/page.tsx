@@ -65,7 +65,7 @@ export default function DataHealthPage(){
         s.from('v_schedule_tasks').select('project_id,source_updated_at,source_file,updated_at'),
         s.from('drive_sync_runs').select('sync_type,project_code,source_file,source_sheet,status,message,created_at').order('created_at',{ascending:false}).limit(200),
         s.from('drive_photo_index').select('project_id,schedule_task_id,match_method,is_active,indexed_at').eq('is_active',true),
-        s.from('condo_room_status').select('source_modified_at'),
+        s.from('condo_room_status').select('source_modified_at,synced_at'),
         s.from('daily_reports').select('project_id,report_date,status,created_at').order('created_at',{ascending:false}).limit(200),
         s.from('tool_machine').select('source_updated_at')
       ])
@@ -108,6 +108,10 @@ export default function DataHealthPage(){
   const materialsSync=latestSync('materials')
   const toolSource=useMemo(()=>tools.map(x=>x.source_updated_at).filter(Boolean).sort().reverse()[0]||null,[tools])
   const condoLatest=useMemo(()=>condo.map(x=>x.source_modified_at).filter(Boolean).sort().reverse()[0]||null,[condo])
+  const condoDbSync=useMemo(()=>condo.map(x=>x.synced_at).filter(Boolean).sort().reverse()[0]||null,[condo])
+  const condoAutoSync=latestSync('defects')
+  const condoHealth:HealthTone=!condoLatest?'bad':condoAutoSync?'ok':'warn'
+  const condoHealthLabel=!condoLatest?'ไม่พบข้อมูล':condoAutoSync?'Auto Sync ทำงาน':'ยังไม่มี Auto Sync'
   const reportsToday=reports.filter(x=>x.report_date===today&&x.status==='submitted')
   const reportedProjectIds=new Set(reportsToday.map(x=>x.project_id))
   const villaProjects=projects.filter(p=>/^AV-P[6-9]$/.test(p.code))
@@ -117,7 +121,7 @@ export default function DataHealthPage(){
     <PageHeader title="Data Health" subtitle="ตรวจความสดและความพร้อมของข้อมูลก่อนใช้ Dashboard / Executive Presentation" action={<Link href="/" className="button">← Dashboard</Link>} />
 
     <div className="notice small" style={{marginBottom:14}}>
-      เกณฑ์ V4 เบื้องต้น: Schedule Source เกิน 2 วันหรือ Last Sync เกิน 2 ชั่วโมง = ต้องตรวจสอบ • เกณฑ์นี้เป็น operational default และปรับได้ตามรอบอัปเดตจริงของหน้างาน
+      เกณฑ์ใช้งาน: Schedule ตรวจทุกชั่วโมงแบบ source-change detection • Defect ควรใช้ metadata check ถี่กว่าชุดอื่นและเขียนฐานข้อมูลเฉพาะเมื่อ Source เปลี่ยน • Picture Progress เป็นข้อมูลหนัก ควรสแกนเป็นรอบห่างกว่า Schedule/Defect
     </div>
 
     {error&&<div className="notice" style={{marginBottom:14}}>บางชุดข้อมูลโหลดไม่สำเร็จ: {error}</div>}
@@ -145,9 +149,12 @@ export default function DataHealthPage(){
       </section>
 
       <section className="dashboard-grid two-main">
-        <div className="panel"><div className="panel-head"><div><h2>Above Condo Status</h2><span className="muted small">ล่าสุดจาก condo_room_status</span></div><HealthBadge tone={condoLatest?'ok':'bad'} label={condoLatest?'มีข้อมูล':'ไม่พบข้อมูล'}/></div>
+        <div className="panel"><div className="panel-head"><div><h2>Above Condo Status</h2><span className="muted small">ตรวจ Source timestamp, DB sync และ Auto Sync แยกกัน</span></div><HealthBadge tone={condoHealth} label={condoHealthLabel}/></div>
           <p><b>Source updated:</b> {dateTimeTH(condoLatest)}</p>
+          <p><b>DB synced:</b> {dateTimeTH(condoDbSync)}</p>
+          <p><b>Auto-sync check:</b> {dateTimeTH(condoAutoSync?.created_at)}</p>
           <p><b>Rows:</b> {condo.length} ห้อง</p>
+          {!condoAutoSync&&<p className="small muted">ปัจจุบันหน้า Defect มี client freshness check แล้ว แต่ Drive → Supabase ยังต้องมี defect sync job แยกจาก Schedule/Materials</p>}
           <Link className="button" href="/defects">เปิด Defect Report</Link>
         </div>
 
