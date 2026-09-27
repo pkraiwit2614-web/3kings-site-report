@@ -28,6 +28,8 @@ const mobilePrimary = [
   ['/site-photos', 'รูปหน้างาน']
 ]
 
+const DRIVE_WATCH_PATHS = new Set(['/', '/presentation', '/schedule', '/materials', '/site-photos', '/procurement', '/photo-mapping', '/data-health'])
+
 export default function AppShell({ children }: { children: ReactNode }) {
   const path = usePathname(); const router = useRouter()
   const [userName, setUserName] = useState('')
@@ -56,21 +58,41 @@ export default function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => { setMobileMore(false) }, [path])
 
   useEffect(() => {
-    if (path !== '/defects') return
+    const isDefect = path === '/defects'
+    const isDriveBacked = DRIVE_WATCH_PATHS.has(path) || path.startsWith('/projects/')
+    if (!isDefect && !isDriveBacked) return
+
     let cancelled = false
-    const storageKey = '3kings:defect-latest-sync'
+    const storageKey = isDefect ? '3kings:defect-latest-sync' : '3kings:drive-latest-write'
+    const intervalMs = isDefect ? 5 * 60 * 1000 : 10 * 60 * 1000
 
-    const checkForDefectUpdate = async () => {
+    const checkForDataUpdate = async () => {
       if (cancelled || document.visibilityState !== 'visible') return
-      const { data, error } = await getSupabase()
-        .from('condo_room_status')
-        .select('synced_at')
-        .order('synced_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      if (cancelled || error || !data?.synced_at) return
+      const supabase = getSupabase()
+      let latest: string | null = null
 
-      const latest = String(data.synced_at)
+      if (isDefect) {
+        const { data, error } = await supabase
+          .from('condo_room_status')
+          .select('synced_at')
+          .order('synced_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (cancelled || error || !data?.synced_at) return
+        latest = String(data.synced_at)
+      } else {
+        const { data, error } = await supabase
+          .from('drive_sync_runs')
+          .select('created_at')
+          .eq('status', 'success')
+          .gt('rows_written', 0)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (cancelled || error || !data?.created_at) return
+        latest = String(data.created_at)
+      }
+
       const previous = window.sessionStorage.getItem(storageKey)
       if (!previous) {
         window.sessionStorage.setItem(storageKey, latest)
@@ -83,12 +105,12 @@ export default function AppShell({ children }: { children: ReactNode }) {
     }
 
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') void checkForDefectUpdate()
+      if (document.visibilityState === 'visible') void checkForDataUpdate()
     }
-    const onFocus = () => { void checkForDefectUpdate() }
+    const onFocus = () => { void checkForDataUpdate() }
 
-    void checkForDefectUpdate()
-    const timer = window.setInterval(() => { void checkForDefectUpdate() }, 5 * 60 * 1000)
+    void checkForDataUpdate()
+    const timer = window.setInterval(() => { void checkForDataUpdate() }, intervalMs)
     window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onVisibility)
 
