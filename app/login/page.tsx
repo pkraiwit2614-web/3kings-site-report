@@ -13,6 +13,10 @@ function toLoginEmail(value: string) {
   return `${login.toLowerCase()}@${INTERNAL_LOGIN_DOMAIN}`
 }
 
+function landingForRole(role:string){
+  return role==='foreman' ? '/reports/quick' : '/'
+}
+
 export default function LoginPage() {
   const router = useRouter()
   const [loginId, setLoginId] = useState('')
@@ -22,9 +26,18 @@ export default function LoginPage() {
   const [message, setMessage] = useState('')
 
   useEffect(() => {
-    getSupabase().auth.getSession().then(({ data }) => {
-      if (data.session) router.replace('/')
-    })
+    let cancelled=false
+    const restore=async()=>{
+      const s=getSupabase()
+      const {data:{session}}=await s.auth.getSession()
+      if(!session?.user||cancelled)return
+      const {data:profile}=await s.from('profiles').select('role,active').eq('user_id',session.user.id).maybeSingle()
+      if(cancelled)return
+      if(!profile?.active){await s.auth.signOut();return}
+      router.replace(landingForRole(String(profile.role||'viewer')))
+    }
+    void restore()
+    return()=>{cancelled=true}
   }, [router])
 
   const submit = async (e: FormEvent) => {
@@ -32,14 +45,20 @@ export default function LoginPage() {
     setLoading(true)
     setMessage('')
     try {
-      const { error } = await getSupabase().auth.signInWithPassword({
+      const s=getSupabase()
+      const { data, error } = await s.auth.signInWithPassword({
         email: toLoginEmail(loginId),
         password,
       })
-      if (error) throw error
-      router.replace('/')
+      if (error || !data.user) throw error || new Error('login_failed')
+      const {data:profile,error:profileError}=await s.from('profiles').select('role,active').eq('user_id',data.user.id).maybeSingle()
+      if(profileError||!profile?.active){
+        await s.auth.signOut()
+        throw new Error('inactive_user')
+      }
+      router.replace(landingForRole(String(profile.role||'viewer')))
     } catch {
-      setMessage('รหัสผู้ใช้หรือรหัสผ่านไม่ถูกต้อง กรุณาตรวจสอบแล้วลองอีกครั้ง หรือติดต่อผู้ดูแลระบบ')
+      setMessage('รหัสผู้ใช้หรือรหัสผ่านไม่ถูกต้อง หรือบัญชีถูกปิดใช้งาน กรุณาตรวจสอบแล้วลองอีกครั้ง หรือติดต่อผู้ดูแลระบบ')
     } finally {
       setLoading(false)
     }
