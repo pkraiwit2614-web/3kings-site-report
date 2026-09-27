@@ -19,14 +19,15 @@ const baseNav = [
   ['/weekly', 'รายงานการทำงานประจำสัปดาห์']
 ]
 
-const mobilePrimary = [
-  ['/', 'Dashboard'],
-  ['/presentation', 'Executive'],
-  ['/schedule', 'แผนงาน'],
-  ['/materials', 'วัสดุ/เครื่องมือ'],
-  ['/reports/quick', 'รายงาน'],
-  ['/site-photos', 'รูปหน้างาน']
-]
+const MOBILE_PRIMARY_COUNT = 6
+const mobileLabel: Record<string,string> = {
+  '/': 'Dashboard',
+  '/presentation': 'Executive',
+  '/schedule': 'แผนงาน',
+  '/materials': 'วัสดุ/เครื่องมือ',
+  '/defects': 'Defect',
+  '/reports/quick': 'รายงาน'
+}
 
 const DRIVE_WATCH_PATHS = new Set(['/', '/presentation', '/schedule', '/materials', '/site-photos', '/procurement', '/photo-mapping', '/data-health'])
 
@@ -43,7 +44,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
     if(role==='manager') items.push(['/users','User & Access'])
     return items
   }, [role])
-  const extraNav = useMemo(() => nav.filter(([href]) => !mobilePrimary.some(([mobileHref]) => mobileHref === href)), [nav])
+  const mobilePrimary = useMemo(() => nav.slice(0, MOBILE_PRIMARY_COUNT).map(([href,label]) => [href, mobileLabel[href] || label]), [nav])
+  const extraNav = useMemo(() => nav.slice(MOBILE_PRIMARY_COUNT), [nav])
 
   useEffect(() => {
     const supabase = getSupabase()
