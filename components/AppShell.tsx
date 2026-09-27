@@ -55,6 +55,51 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   useEffect(() => { setMobileMore(false) }, [path])
 
+  useEffect(() => {
+    if (path !== '/defects') return
+    let cancelled = false
+    const storageKey = '3kings:defect-latest-sync'
+
+    const checkForDefectUpdate = async () => {
+      if (cancelled || document.visibilityState !== 'visible') return
+      const { data, error } = await getSupabase()
+        .from('condo_room_status')
+        .select('synced_at')
+        .order('synced_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (cancelled || error || !data?.synced_at) return
+
+      const latest = String(data.synced_at)
+      const previous = window.sessionStorage.getItem(storageKey)
+      if (!previous) {
+        window.sessionStorage.setItem(storageKey, latest)
+        return
+      }
+      if (previous !== latest) {
+        window.sessionStorage.setItem(storageKey, latest)
+        window.location.reload()
+      }
+    }
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') void checkForDefectUpdate()
+    }
+    const onFocus = () => { void checkForDefectUpdate() }
+
+    void checkForDefectUpdate()
+    const timer = window.setInterval(() => { void checkForDefectUpdate() }, 5 * 60 * 1000)
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibility)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [path])
+
   const signOut = async () => {
     setMobileMore(false)
     await getSupabase().auth.signOut()
