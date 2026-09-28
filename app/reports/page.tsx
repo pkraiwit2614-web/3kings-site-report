@@ -19,6 +19,7 @@ export default function ReportsPage(){
   const[userId,setUserId]=useState('')
   const[role,setRole]=useState('viewer')
   const[retrying,setRetrying]=useState<Record<string,boolean>>({})
+  const[deleting,setDeleting]=useState<Record<string,boolean>>({})
   const[retryMessage,setRetryMessage]=useState('')
 
   useEffect(()=>{
@@ -69,17 +70,43 @@ export default function ReportsPage(){
     }
   }
 
+  const deleteReport=async(report:any)=>{
+    if(role!=='manager'||deleting[report.id]) return
+    const projectCode=projects.find(p=>p.id===report.project_id)?.code||'-'
+    if(!window.confirm(`ยืนยันลบรายงาน ${projectCode} • ${dateTH(report.report_date)} ?\n\nรายงาน รายการงาน รูปอ้างอิงในระบบ และ Revision ที่ผูกกับรายงานนี้จะถูกนำออกจาก Web App และไม่สามารถย้อนกลับได้`)) return
+    setDeleting(v=>({...v,[report.id]:true}))
+    setRetryMessage('')
+    try{
+      const s=getSupabase()
+      const {data:{session}}=await s.auth.getSession()
+      if(!session?.access_token) throw new Error('Session หมดอายุ กรุณาเข้าสู่ระบบใหม่')
+      const response=await fetch(`/api/reports/${report.id}`,{
+        method:'DELETE',
+        headers:{'authorization':`Bearer ${session.access_token}`}
+      })
+      const result=await response.json().catch(()=>({}))
+      if(!response.ok) throw new Error(result?.error||'ลบรายงานไม่สำเร็จ')
+      setRows(prev=>prev.filter(r=>r.id!==report.id))
+      const hasCleanupWarning=Array.isArray(result?.cleanup_warnings)&&result.cleanup_warnings.length>0
+      setRetryMessage(hasCleanupWarning?'ลบรายงานออกจากระบบแล้ว • มีไฟล์ชั่วคราวบางส่วนที่ระบบล้างไม่ได้ แต่จะไม่แสดงในรายงาน':'ลบรายงานออกจากระบบเรียบร้อยแล้ว')
+    }catch(err:any){
+      setRetryMessage(err?.message||'ลบรายงานไม่สำเร็จ')
+    }finally{
+      setDeleting(v=>({...v,[report.id]:false}))
+    }
+  }
+
   const isViewer=role==='viewer'
   const canEdit=(report:any)=>!isViewer&&(role==='manager'||role==='engineer'||report.reporter_id===userId)
 
   return <AppShell>
     <PageHeader
       title={isViewer?'ประวัติรายงาน':'Report History'}
-      subtitle={isViewer?'ดูรายงานหน้างาน ความคืบหน้า กำลังคน และรูปประกอบ':'V3.4 • ประวัติรายงาน • Edit/Revision • Photo Archive Retry'}
+      subtitle={isViewer?'ดูรายงานหน้างาน ความคืบหน้า กำลังคน และรูปประกอบ':'V3.4 • ประวัติรายงาน • Edit/Revision • Admin Delete • Photo Archive Retry'}
     />
     {!isViewer&&retryMessage&&<div className="notice" style={{marginBottom:12}}>{retryMessage}</div>}
     <div className="stack">{rows.map(r=><div className="panel report-card" key={r.id}>
-      <div className="row between"><div><h2>{projects.find(p=>p.id===r.project_id)?.code||'-'} • {dateTH(r.report_date)}</h2><p>{r.summary||'ไม่มีสรุปเพิ่มเติม'}</p></div><div className="right"><StatusBadge value={r.status}/><b>Progress {pct(r.overall_progress)}</b>{!isViewer&&<small className="muted">Rev. {r.revision_no||1}</small>}{canEdit(r)&&<Link href={`/reports/${r.id}/edit`} className="button" style={{fontSize:11,padding:'7px 10px'}}>แก้ไข / Revision</Link>}</div></div>
+      <div className="row between"><div><h2>{projects.find(p=>p.id===r.project_id)?.code||'-'} • {dateTH(r.report_date)}</h2><p>{r.summary||'ไม่มีสรุปเพิ่มเติม'}</p></div><div className="right"><StatusBadge value={r.status}/><b>Progress {pct(r.overall_progress)}</b>{!isViewer&&<small className="muted">Rev. {r.revision_no||1}</small>}{canEdit(r)&&<Link href={`/reports/${r.id}/edit`} className="button" style={{fontSize:11,padding:'7px 10px'}}>แก้ไข / Revision</Link>}{role==='manager'&&<button type="button" className="button" disabled={deleting[r.id]} onClick={()=>deleteReport(r)} style={{fontSize:11,padding:'7px 10px',borderColor:'var(--red)',color:'var(--red)'}}>{deleting[r.id]?'กำลังลบ…':'ลบรายงาน'}</button>}</div></div>
       <div className="mini-grid"><span>กำลังคน <b>{r.total_manpower||0} คน</b></span><span>รายการงาน <b>{r.report_items?.length||0} งาน</b></span><span>รูปประกอบ <b>{r.report_photos?.length||0} รูป</b></span></div>
       {(r.report_items||[]).slice(0,6).map((x:any)=><div className="subitem" key={x.id}><span>{x.work_item}</span><b>{Math.round((x.actual_progress||0)*100)}%</b></div>)}
       {!!r.report_photos?.length && <div className="photo-grid">{r.report_photos.map((photo:any)=>photo.signed_url && <figure key={photo.id} style={{position:'relative'}}><Image src={photo.signed_url} alt={photo.caption||'รูปหน้างาน'} width={640} height={480} sizes="(max-width: 760px) 50vw, 220px"/><figcaption><b>{phaseLabel[photo.phase]||photo.phase||'รูปหน้างาน'}</b>{photo.caption ? ` • ${photo.caption}` : ''}{!isViewer&&<><small style={{display:'block',marginTop:4,color:photo.archive_status==='failed'?'var(--red)':'var(--muted)'}}>{archiveLabel[photo.archive_status]||photo.archive_status||'-'}{photo.archive_retry_count?` • Retry ${photo.archive_retry_count} ครั้ง`:''}</small>{photo.archive_error&&photo.archive_status==='failed'&&<small style={{display:'block',marginTop:3,color:'var(--red)'}}>{photo.archive_error}</small>}<span style={{display:'flex',gap:6,marginTop:6,flexWrap:'wrap'}}>{photo.archive_drive_url&&<a href={photo.archive_drive_url} target="_blank" rel="noreferrer" className="button" style={{fontSize:10,padding:'5px 8px'}}>เปิด Original ใน Drive ↗</a>}{photo.archive_status==='failed'&&photo.uploaded_by===userId&&<button type="button" className="button" disabled={retrying[photo.id]} onClick={()=>retryPhoto(photo)} style={{fontSize:10,padding:'5px 8px'}}>{retrying[photo.id]?'กำลัง Retry…':'Retry Archive'}</button>}</span></>}</figcaption></figure>)}</div>}
