@@ -14,6 +14,7 @@ const managementNav: NavItem[] = [
   ['/schedule', 'แผนงานที่กำหนด'],
   ['/materials', 'วัสดุ เครื่องมือและผู้รับเหมา'],
   ['/defects', 'Defect Report'],
+  ['/defect-flow', 'Handover / Defect Flow'],
   ['/reports/quick', 'รายงานการทำงานประจำวัน'],
   ['/site-photos', 'รูปภาพหน้างาน'],
   ['/procurement', 'การจัดซื้อ/จัดจ้าง'],
@@ -27,6 +28,7 @@ const reportUserNav: NavItem[] = [
   ['/schedule', 'แผนงานที่กำหนด'],
   ['/site-photos', 'รูปภาพหน้างาน'],
   ['/defects', 'Defect Report'],
+  ['/defect-flow', 'Handover / Defect Flow'],
   ['/materials', 'วัสดุ เครื่องมือและผู้รับเหมา'],
   ['/reports', 'ประวัติรายงานการทำงานประจำวัน'],
   ['/procurement', 'การจัดซื้อ/จัดจ้าง'],
@@ -39,6 +41,7 @@ const viewerNav: NavItem[] = [
   ['/schedule', 'แผนงานที่กำหนด'],
   ['/site-photos', 'รูปภาพหน้างาน'],
   ['/defects', 'Defect Report'],
+  ['/defect-flow', 'Handover / Defect Flow'],
   ['/materials', 'วัสดุ เครื่องมือและผู้รับเหมา'],
   ['/reports', 'ประวัติรายงานการทำงานประจำวัน'],
   ['/procurement', 'การจัดซื้อ/จัดจ้าง'],
@@ -53,6 +56,7 @@ const mobileLabel: Record<string,string> = {
   '/schedule': 'แผนงาน',
   '/materials': 'วัสดุ',
   '/defects': 'Defect',
+  '/defect-flow': 'Flow',
   '/reports/quick': 'รายงานวันนี้',
   '/site-photos': 'รูปหน้างาน',
   '/reports': 'ประวัติรายงาน'
@@ -98,7 +102,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => { setMobileMore(false) }, [path])
 
   useEffect(() => {
-    const isDefect = path === '/defects'
+    const isDefect = path === '/defects' || path === '/defect-flow'
     const isDriveBacked = DRIVE_WATCH_PATHS.has(path) || path.startsWith('/projects/')
     if (!isDefect && !isDriveBacked) return
 
