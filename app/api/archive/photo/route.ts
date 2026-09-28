@@ -107,7 +107,12 @@ export async function POST(request: Request) {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
+        'accept': 'application/json, text/plain, */*',
         'x-archive-key': archiveKey,
+        // n8n 2.33+ can return a misleading 403 "Authorization data is wrong!"
+        // when Webhook -> Ignore Bots rejects server-to-server user agents.
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36',
+        'x-3kings-client': 'site-report-photo-archive/1.0',
       },
       body: JSON.stringify({
         photo_id: photoId,
@@ -128,7 +133,11 @@ export async function POST(request: Request) {
     })
 
     if (!response.ok) {
-      const detail = (await response.text()).slice(0, 1000) || `n8n HTTP ${response.status}`
+      const responseText = (await response.text()).trim()
+      const rawDetail = responseText || `n8n HTTP ${response.status}`
+      const detail = response.status === 403 && /Authorization data is wrong!?/i.test(rawDetail)
+        ? `n8n webhook rejected request (HTTP 403): ${rawDetail}`
+        : rawDetail
       await markFailed(detail)
       return NextResponse.json({ ok: false, error: detail }, { status: 502 })
     }
