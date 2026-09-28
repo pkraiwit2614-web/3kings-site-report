@@ -18,6 +18,7 @@ type RoomRow={
   follow_up:string|null
   priority:string|null
   next_action:string|null
+  defect_detail:string|null
   source_modified_at:string|null
 }
 
@@ -130,7 +131,7 @@ export default function DefectDetailPage(){
     let alive=true
     ;(async()=>{
       try{
-        const {data,error}=await getSupabase().from('condo_room_status').select('room_no,building,floor,owner_name,hotel_participation,customer_status,current_status,status_group,follow_up,priority,next_action,source_modified_at').order('building').order('floor').order('room_no')
+        const {data,error}=await getSupabase().from('condo_room_status').select('room_no,building,floor,owner_name,hotel_participation,customer_status,current_status,status_group,follow_up,priority,next_action,defect_detail,source_modified_at').order('building').order('floor').order('room_no')
         if(alive&&!error)setRows((data||[]) as RoomRow[])
       }finally{
         if(alive)setLoading(false)
@@ -160,7 +161,7 @@ export default function DefectDetailPage(){
       if(customerFilter==='NO_CUSTOMER'&&r.customer_status!=='ไม่มีลูกค้า')return false
       if(active&&!active.predicate(r))return false
       if(!needle)return true
-      return [r.room_no,r.owner_name,r.customer_status,r.hotel_participation,statusLabel(r),r.next_action,r.follow_up].filter(Boolean).join(' ').toLowerCase().includes(needle)
+      return [r.room_no,r.owner_name,r.customer_status,r.hotel_participation,r.defect_detail,statusLabel(r),r.next_action,r.follow_up].filter(Boolean).join(' ').toLowerCase().includes(needle)
     })
   },[rows,building,customerFilter,active,q])
 
@@ -195,7 +196,7 @@ export default function DefectDetailPage(){
 
       <section className="panel filter-panel">
         <div className="toolbar detail-toolbar">
-          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="ค้นหาเลขห้องหรือชื่อเจ้าของ" aria-label="ค้นหาเลขห้องหรือชื่อเจ้าของ"/>
+          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="ค้นหาเลขห้อง ชื่อเจ้าของ หรือรายละเอียดงาน" aria-label="ค้นหาเลขห้อง ชื่อเจ้าของ หรือรายละเอียดงาน"/>
           <select value={building} onChange={e=>setBuilding(e.target.value)} aria-label="กรองอาคาร"><option value="ALL">ตึก A + B</option><option value="A">ตึก A</option><option value="B">ตึก B</option></select>
           <select value={filter} onChange={e=>setFilter(e.target.value)} aria-label="กรองสถานะ"><option value="">ทุกสถานะ</option>{categories.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</select>
           {(q||building!=='ALL'||filter||customerFilter!=='ALL')&&<button type="button" className="button" onClick={()=>{setQ('');setBuilding('ALL');setFilter('');setCustomerFilter('ALL')}}>ล้างตัวกรอง</button>}
@@ -207,7 +208,7 @@ export default function DefectDetailPage(){
           <div><h2>รายชื่อห้อง</h2><p>แสดง {filtered.length} ห้อง</p></div>
           <div className="legend"><span><i className="customer-dot"/>มีลูกค้า</span><span><i className="no-customer-dot"/>ไม่มีลูกค้า</span><span><i className="bad-dot"/>ยังไม่เสร็จ</span><span><i className="warn-dot"/>รอตรวจ / รอส่งมอบ</span><span><i className="good-dot"/>ปิดแล้ว</span></div>
         </div>
-        <div className="table-wrap defect-table"><table><thead><tr><th>ห้อง</th><th className="center">อาคาร</th><th className="center">วันที่ Hotel แจ้ง</th><th>ชื่อลูกค้า/เจ้าของ</th><th className="center">ลูกค้า</th><th className="center">โรงแรม</th><th className="center">สถานะ</th><th>ต้องทำต่อ</th></tr></thead><tbody>
+        <div className="table-wrap defect-table"><table><thead><tr><th>ห้อง</th><th className="center">อาคาร</th><th className="center">วันที่ Hotel แจ้ง</th><th>ชื่อลูกค้า/เจ้าของ</th><th className="center">ลูกค้า</th><th className="center">โรงแรม</th><th>รายละเอียดงาน</th><th className="center">สถานะ</th><th>ต้องทำต่อ</th></tr></thead><tbody>
           {filtered.map(r=><tr key={r.room_no}>
             <td className="room-cell"><b>{r.room_no}</b><small>ชั้น {r.floor??'-'}</small></td>
             <td className="center"><b>{r.building}</b></td>
@@ -215,10 +216,11 @@ export default function DefectDetailPage(){
             <td>{r.owner_name||<span className="muted">—</span>}</td>
             <td className="center"><span className={`customer-badge ${r.customer_status==='มีลูกค้า'?'customer':'no-customer'}`}>{r.customer_status}</span></td>
             <td className="center"><span className={`program-badge ${r.hotel_participation==='ร่วมโรงแรม'?'hotel':'nonhotel'}`}>{r.hotel_participation}</span></td>
+            <td className="defect-detail">{r.defect_detail||<span className="muted">—</span>}</td>
             <td className="center"><span className={`state-badge ${statusTone(r)}`}>{statusLabel(r)}</span></td>
             <td>{r.next_action||r.follow_up||'-'}</td>
           </tr>)}
-          {!filtered.length&&<tr><td colSpan={8} className="muted" style={{padding:28,textAlign:'center'}}>ไม่พบห้องตามเงื่อนไข</td></tr>}
+          {!filtered.length&&<tr><td colSpan={9} className="muted" style={{padding:28,textAlign:'center'}}>ไม่พบห้องตามเงื่อนไข</td></tr>}
         </tbody></table></div>
       </section>
     </>}
@@ -227,9 +229,9 @@ export default function DefectDetailPage(){
       .header-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}.update-meta{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;line-height:1.25;margin-right:2px}.update-meta span{font-size:8.5px;color:var(--muted);font-weight:700}.update-meta b{font-size:10px;color:var(--navy);font-weight:800;white-space:nowrap}.drive-button{background:#f3f8ff;border-color:#bfd7ec;color:#245e8b;white-space:nowrap}
       .selected-status{scroll-margin-top:16px;display:grid;grid-template-columns:minmax(230px,1fr) minmax(570px,1.9fr);align-items:center;gap:16px;padding:15px 17px;border:1px solid var(--line);border-left:6px solid #8b949e;border-radius:14px;background:var(--surface);margin-bottom:12px}.selected-status.hotel{border-left-color:#2f6fb0;background:#f5f9fe}.selected-status.danger{border-left-color:#d84d45;background:#fff8f7}.selected-status.warn{border-left-color:#e2ad32;background:#fffaf0}.selected-status.good{border-left-color:#2e9a6a;background:#f6fbf8}.selected-copy>span{font-size:9px;font-weight:800;color:var(--muted)}.selected-copy h2{margin:3px 0;font-size:18px;color:var(--navy);line-height:1.3}.selected-copy p{margin:0;font-size:10px;color:var(--muted)}
       .selected-breakdown{display:grid;grid-template-columns:repeat(5,minmax(92px,1fr));gap:7px}.break-card{min-height:66px;border:1px solid var(--line);border-radius:11px;background:#fff;padding:8px 9px;text-align:center;display:flex;flex-direction:column;justify-content:center;color:var(--text);font:inherit;cursor:pointer;transition:.15s ease}.break-card:hover{transform:translateY(-1px);box-shadow:0 5px 14px rgba(25,42,63,.08)}.break-card span{display:block;font-size:8.5px;font-weight:800;color:var(--muted)}.break-card b{display:block;margin-top:2px;font-size:21px;line-height:1;color:var(--navy);font-variant-numeric:tabular-nums}.break-card small{display:block;margin-top:3px;font-size:8px;color:var(--muted)}.break-card.customer{background:#edf7ff;border:2px solid #bad9ef}.break-card.customer span,.break-card.customer b{color:#2a6997}.break-card.customer.active{border-color:#4b9bd3;box-shadow:inset 0 0 0 1px #4b9bd3,0 5px 14px rgba(75,155,211,.12)}.break-card.no-customer{background:#f1f3f5;border:2px solid #d4dae0}.break-card.no-customer span,.break-card.no-customer b{color:#606a76}.break-card.no-customer.active{border-color:#7f8790;box-shadow:inset 0 0 0 1px #7f8790,0 5px 14px rgba(95,104,115,.12)}.break-card.building.active{background:#eef6fc;border-color:#8bbbdc;box-shadow:inset 0 0 0 1px #8bbbdc}.break-card.total{background:#17243a;border:2px solid #17243a}.break-card.total span,.break-card.total b,.break-card.total small{color:#fff}.break-card.total.active{border-color:#d5a94b;box-shadow:inset 0 0 0 1px #d5a94b,0 5px 16px rgba(23,36,58,.16)}
-      .filter-panel{padding:12px;margin-bottom:12px}.detail-toolbar{margin:0}.detail-toolbar input{min-width:260px}.detail-toolbar select{max-width:320px}.detail-panel{padding-bottom:0}.detail-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:10px}.detail-head h2{margin:0;font-size:17px}.detail-head p{margin:3px 0 0;font-size:10px;color:var(--muted)}
+      .filter-panel{padding:12px;margin-bottom:12px}.detail-toolbar{margin:0}.detail-toolbar input{min-width:320px}.detail-toolbar select{max-width:320px}.detail-panel{padding-bottom:0}.detail-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:10px}.detail-head h2{margin:0;font-size:17px}.detail-head p{margin:3px 0 0;font-size:10px;color:var(--muted)}
       .legend{display:flex;gap:9px;flex-wrap:wrap;font-size:8.5px;color:var(--muted)}.legend span{display:flex;align-items:center;gap:4px}.legend i{width:8px;height:8px;border-radius:50%}.customer-dot{background:#4b9bd3}.no-customer-dot{background:#7f8790}.bad-dot{background:#d84d45}.warn-dot{background:#e2ad32}.good-dot{background:#2e9a6a}
-      .defect-table{max-height:680px;margin:0 -19px}.defect-table table{min-width:1210px}.defect-table th,.defect-table td{vertical-align:middle}.defect-table th.center,.defect-table td.center{text-align:center}.defect-table td{font-size:11.5px}.room-cell b{display:block;color:var(--navy);font-size:12.5px}.room-cell small{display:block;font-size:8.5px;color:var(--muted)}.notice-date{font-size:10px;font-weight:800;color:var(--navy);white-space:nowrap;font-variant-numeric:tabular-nums}
+      .defect-table{max-height:680px;margin:0 -19px}.defect-table table{min-width:1480px}.defect-table th,.defect-table td{vertical-align:middle}.defect-table th.center,.defect-table td.center{text-align:center}.defect-table td{font-size:11.5px}.room-cell b{display:block;color:var(--navy);font-size:12.5px}.room-cell small{display:block;font-size:8.5px;color:var(--muted)}.notice-date{font-size:10px;font-weight:800;color:var(--navy);white-space:nowrap;font-variant-numeric:tabular-nums}.defect-detail{min-width:240px;max-width:360px;white-space:normal;line-height:1.45}
       .customer-badge,.program-badge,.state-badge{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;padding:5px 8px;font-size:9px;font-weight:750;border:1px solid transparent;white-space:nowrap}.customer-badge.customer{background:#edf7ff;border-color:#c5dfef;color:#2b6994}.customer-badge.no-customer{background:#f0f2f4;border-color:#d7dce1;color:#606a75}.program-badge.hotel{background:#f2edfb;border-color:#dacdf0;color:#5d3d9d}.program-badge.nonhotel{background:#f0f2f4;border-color:#d8dde2;color:#5f6873}.state-badge.danger{background:#fdeceb;border-color:#f1cdca;color:#9e312d}.state-badge.warn{background:#fff3dc;border-color:#f0dfb8;color:#85570d}.state-badge.good{background:#e9f6ef;border-color:#cfe9da;color:#196645}.state-badge.neutral{background:#f0f2f4;border-color:#d8dde2;color:#5f6873}
       @media(max-width:1050px){.selected-status{grid-template-columns:1fr}.selected-breakdown{grid-template-columns:repeat(5,1fr)}}
       @media(max-width:760px){.header-actions{justify-content:flex-start}.update-meta{width:100%;align-items:flex-start}.selected-breakdown{grid-template-columns:repeat(2,1fr)}.break-card.total{grid-column:1/-1}.detail-toolbar input{min-width:0}.detail-toolbar select{max-width:none}.detail-head{align-items:flex-start;flex-direction:column}}
