@@ -22,6 +22,7 @@ const statusOptions=[
   ['in_progress','กำลังทำ'],['awaiting_inspection','รอตรวจ'],['blocked','ติดปัญหา'],['delayed','ล่าช้า'],['completed','เสร็จแล้ว']
 ]
 const phaseOptions=[['before','ก่อนทำ'],['during','ระหว่างทำ'],['after','หลังทำ']] as const
+const MAX_PHOTOS_PER_TASK=10
 const newKey=()=>typeof crypto!=='undefined'&&'randomUUID' in crypto?crypto.randomUUID():`${Date.now()}-${Math.random().toString(36).slice(2)}`
 const emptyItem=():QuickItem=>({key:newKey(),schedule_task_id:'',work_item:'',work_category:'',actual_progress:0,status:'in_progress',next_action:'',blocker:'',contractor:'',target_date:'',phase:'during',files:[]})
 const safeFileName=(name:string)=>name.replace(/[\\/:*?"<>|#%{}[\]~]/g,'-').replace(/\s+/g,'-').slice(0,120)||'site-photo'
@@ -97,6 +98,12 @@ export default function DailyReportQuickPage(){
   const photoCount=items.reduce((sum,x)=>sum+x.files.length,0)
 
   const updateItem=(key:string,patch:Partial<QuickItem>)=>setItems(v=>v.map(x=>x.key===key?{...x,...patch}:x))
+  const choosePhotos=(item:QuickItem,files:File[])=>{
+    const limited=files.slice(0,MAX_PHOTOS_PER_TASK)
+    updateItem(item.key,{files:limited})
+    if(files.length>MAX_PHOTOS_PER_TASK)setMessage(`แต่ละงานแนบรูปได้สูงสุด ${MAX_PHOTOS_PER_TASK} รูป • ระบบเลือกไว้เฉพาะ ${MAX_PHOTOS_PER_TASK} รูปแรก`)
+    else if(message.startsWith('แต่ละงานแนบรูปได้สูงสุด'))setMessage('')
+  }
   const chooseTask=(item:QuickItem,taskId:string)=>{
     const t=tasks.find(x=>x.id===taskId)
     updateItem(item.key,{
@@ -120,6 +127,7 @@ export default function DailyReportQuickPage(){
     if(!validItems.length){setMessage('กรุณาเลือกหรือกรอกงานอย่างน้อย 1 งาน');return}
     const noName=validItems.find(x=>!x.work_item.trim())
     if(noName){setMessage('มีรายการที่ยังไม่มีชื่องาน กรุณาเลือกงานจาก Schedule หรือกรอกชื่องาน');return}
+    if(validItems.some(x=>x.files.length>MAX_PHOTOS_PER_TASK)){setMessage(`แต่ละงานแนบรูปได้สูงสุด ${MAX_PHOTOS_PER_TASK} รูป`);return}
     if(validItems.some(x=>(x.status==='blocked'||x.status==='delayed')&&!x.blocker.trim())){setMessage('งานที่ติดปัญหา/ล่าช้า กรุณาระบุสาเหตุสั้น ๆ');return}
 
     submitLock.current=true;setSaving(true)
@@ -236,9 +244,9 @@ export default function DailyReportQuickPage(){
               <label>งานถัดไป / สิ่งที่ต้องทำต่อ<input value={item.next_action} onChange={e=>updateItem(item.key,{next_action:e.target.value})} placeholder="เช่น พรุ่งนี้ติดตั้งต่อ / รอตรวจ / ตามของ"/></label>
 
               <div className="quick-photo-box">
-                <div><b>รูปของงานนี้</b><span>รูปจะผูกกับ Task นี้โดยตรง</span></div>
+                <div><b>รูปของงานนี้</b><span>รูปจะผูกกับ Task นี้โดยตรง • สูงสุด {MAX_PHOTOS_PER_TASK} รูป</span></div>
                 <div className="phase-buttons">{phaseOptions.map(([value,label])=><button type="button" key={value} className={item.phase===value?'active':''} onClick={()=>updateItem(item.key,{phase:value})}>{label}</button>)}</div>
-                <label className="photo-picker">📷 ถ่ายรูป / เลือกรูป<input type="file" accept="image/*" multiple onChange={e=>updateItem(item.key,{files:Array.from(e.target.files||[])})}/><span>{item.files.length?`${item.files.length} รูปที่เลือก`:'ยังไม่ได้เลือกรูป'}</span></label>
+                <label className="photo-picker">📷 ถ่ายรูป / เลือกรูป<input type="file" accept="image/*" multiple onChange={e=>choosePhotos(item,Array.from(e.target.files||[]))}/><span>{item.files.length?`${item.files.length}/${MAX_PHOTOS_PER_TASK} รูปที่เลือก`:`ยังไม่ได้เลือกรูป • สูงสุด ${MAX_PHOTOS_PER_TASK} รูป`}</span></label>
               </div>
             </article>
           })}
