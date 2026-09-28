@@ -14,7 +14,6 @@ const managementNav: NavItem[] = [
   ['/schedule', 'แผนงานที่กำหนด'],
   ['/materials', 'วัสดุ เครื่องมือและผู้รับเหมา'],
   ['/defects', 'Defect Report'],
-  ['/defect-flow', 'Handover / Defect Flow'],
   ['/reports/quick', 'รายงานการทำงานประจำวัน'],
   ['/site-photos', 'รูปภาพหน้างาน'],
   ['/procurement', 'การจัดซื้อ/จัดจ้าง'],
@@ -83,7 +82,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
     if(role==='viewer') return viewerNav
     if(role==='foreman') return reportUserNav
     const items=[...managementNav]
-    if(role==='manager') items.push(['/photo-mapping','Photo Mapping'],['/data-health','Data Health'],['/users','User & Access'])
+    if(role==='manager') items.push(['/defect-flow','Handover / Defect Flow'],['/photo-mapping','Photo Mapping'],['/data-health','Data Health'],['/users','User & Access'])
+    else items.push(['/defect-flow','Handover / Defect Flow'])
     return items
   }, [role])
   const mobilePrimary = useMemo<NavItem[]>(() => nav.slice(0, MOBILE_PRIMARY_COUNT).map(([href,label]) => [href, mobileLabel[href] || label]), [nav])
