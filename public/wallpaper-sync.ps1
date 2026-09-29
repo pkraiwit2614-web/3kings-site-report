@@ -6,7 +6,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$ImageUrl = 'https://3kings-site-report.vercel.app/api/wallpaper-png'
+$ImageUrl = 'https://3kings-site-report.vercel.app/api/wallpaper-render'
 $TaskName = '3Kings Dynamic Wallpaper'
 $Root = Join-Path $env:LOCALAPPDATA '3KingsWallpaper'
 $TokenPath = Join-Path $Root 'device-token.txt'
