@@ -13,7 +13,7 @@ const managementNav: NavItem[] = [
   ['/presentation', 'Executive Presentation'],
   ['/schedule', 'แผนงานที่กำหนด'],
   ['/materials', 'วัสดุ เครื่องมือและผู้รับเหมา'],
-  ['/defects', 'Defect Report'],
+  ['/defect-flow', 'Defect Report'],
   ['/reports/quick', 'รายงานการทำงานประจำวัน'],
   ['/site-photos', 'รูปภาพหน้างาน'],
   ['/procurement', 'การจัดซื้อ/จัดจ้าง'],
@@ -26,8 +26,7 @@ const reportUserNav: NavItem[] = [
   ['/reports/quick', 'รายงานวันนี้'],
   ['/schedule', 'แผนงานที่กำหนด'],
   ['/site-photos', 'รูปภาพหน้างาน'],
-  ['/defects', 'Defect Report'],
-  ['/defect-flow', 'Handover / Defect Flow'],
+  ['/defect-flow', 'Defect Report'],
   ['/materials', 'วัสดุ เครื่องมือและผู้รับเหมา'],
   ['/reports', 'ประวัติรายงานการทำงานประจำวัน'],
   ['/procurement', 'การจัดซื้อ/จัดจ้าง'],
@@ -39,8 +38,7 @@ const viewerNav: NavItem[] = [
   ['/', 'Dashboard'],
   ['/schedule', 'แผนงานที่กำหนด'],
   ['/site-photos', 'รูปภาพหน้างาน'],
-  ['/defects', 'Defect Report'],
-  ['/defect-flow', 'Handover / Defect Flow'],
+  ['/defect-flow', 'Defect Report'],
   ['/materials', 'วัสดุ เครื่องมือและผู้รับเหมา'],
   ['/reports', 'ประวัติรายงานการทำงานประจำวัน'],
   ['/procurement', 'การจัดซื้อ/จัดจ้าง'],
@@ -54,8 +52,7 @@ const mobileLabel: Record<string,string> = {
   '/presentation': 'Executive',
   '/schedule': 'แผนงาน',
   '/materials': 'วัสดุ',
-  '/defects': 'Defect',
-  '/defect-flow': 'Flow',
+  '/defect-flow': 'Defect',
   '/reports/quick': 'รายงานวันนี้',
   '/site-photos': 'รูปหน้างาน',
   '/reports': 'ประวัติรายงาน'
@@ -72,6 +69,11 @@ function roleLabel(role:string,userName:string){
   return 'User'
 }
 
+function navIsActive(path:string,href:string){
+  if(href==='/defect-flow') return path==='/defect-flow'||path==='/defects'
+  return path===href
+}
+
 export default function AppShell({ children }: { children: ReactNode }) {
   const path = usePathname(); const router = useRouter()
   const [userName, setUserName] = useState('')
@@ -82,8 +84,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
     if(role==='viewer') return viewerNav
     if(role==='foreman') return reportUserNav
     const items=[...managementNav]
-    if(role==='manager') items.push(['/defect-flow','Handover / Defect Flow'],['/photo-mapping','Photo Mapping'],['/data-health','Data Health'],['/users','User & Access'])
-    else items.push(['/defect-flow','Handover / Defect Flow'])
+    if(role==='manager') items.push(['/photo-mapping','Photo Mapping'],['/data-health','Data Health'],['/users','User & Access'])
     return items
   }, [role])
   const mobilePrimary = useMemo<NavItem[]>(() => nav.slice(0, MOBILE_PRIMARY_COUNT).map(([href,label]) => [href, mobileLabel[href] || label]), [nav])
@@ -176,16 +177,23 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   if (!ready) return <div className="loading-screen">กำลังโหลดระบบ…</div>
 
-  const extraActive = extraNav.some(([href]) => path === href)
+  const extraActive = extraNav.some(([href]) => navIsActive(path,href))
+  const isDefectSection = path==='/defect-flow'||path==='/defects'
 
   return <div className="app-shell">
     <aside className="sidebar">
       <div className="brand"><BrandLogo className="brand-logo"/><div><b>3 Kings Construction</b><small>Site Report V3.4</small></div></div>
-      <nav>{nav.map(([href,label]) => <Link key={href} className={path===href?'active':''} href={href}>{label}</Link>)}</nav>
+      <nav>{nav.map(([href,label]) => <Link key={href} className={navIsActive(path,href)?'active':''} href={href}>{label}</Link>)}</nav>
       <div className="userbox"><b>{userName}</b><span>{displayRole}</span><button onClick={signOut}>ออกจากระบบ</button></div>
     </aside>
 
-    <main className="main">{children}</main>
+    <main className="main">
+      {isDefectSection&&<nav className="defect-section-tabs" aria-label="Defect navigation">
+        <Link href="/defect-flow" className={path==='/defect-flow'?'active':''}>Live Handover / Defect Flow</Link>
+        <Link href="/defects" className={path==='/defects'?'active':''}>Defect Report</Link>
+      </nav>}
+      {children}
+    </main>
 
     {mobileMore && <>
       <button className="mobile-more-backdrop" aria-label="ปิดเมนูเพิ่มเติม" onClick={()=>setMobileMore(false)} />
@@ -196,18 +204,22 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <button type="button" onClick={()=>setMobileMore(false)}>ปิด</button>
         </div>
         <div className="mobile-more-links">
-          {extraNav.map(([href,label]) => <Link key={href} className={path===href?'active':''} href={href}>{label}<span>›</span></Link>)}
+          {extraNav.map(([href,label]) => <Link key={href} className={navIsActive(path,href)?'active':''} href={href}>{label}<span>›</span></Link>)}
         </div>
         <button className="mobile-logout" type="button" onClick={signOut}>ออกจากระบบ</button>
       </section>
     </>}
 
     <nav className="mobile-nav" aria-label="เมนูหลักบนมือถือ">
-      {mobilePrimary.map(([href,label]) => <Link key={href} className={path===href?'active':''} href={href}>{label}</Link>)}
+      {mobilePrimary.map(([href,label]) => <Link key={href} className={navIsActive(path,href)?'active':''} href={href}>{label}</Link>)}
       <button type="button" className={(mobileMore||extraActive)?'active':''} onClick={()=>setMobileMore(v=>!v)}>เพิ่มเติม</button>
     </nav>
 
     <style jsx global>{`
+      .defect-section-tabs{display:inline-flex;align-items:center;gap:4px;padding:4px;margin:0 0 12px;border:1px solid #d9e0e7;border-radius:12px;background:#f4f7fa;box-shadow:0 3px 10px rgba(23,42,67,.05)}
+      .defect-section-tabs a{display:flex;align-items:center;justify-content:center;min-height:34px;padding:7px 12px;border-radius:9px;color:#617083;font-size:11px;font-weight:800;text-decoration:none;white-space:nowrap;transition:background .15s ease,color .15s ease,box-shadow .15s ease}
+      .defect-section-tabs a:hover{background:#e9eef4;color:#213d5e}
+      .defect-section-tabs a.active{background:#172a43;color:#fff;box-shadow:0 3px 8px rgba(23,42,67,.18)}
       .dashboard-module{overflow:hidden}
       .dashboard-module .module-title{min-height:62px;padding:12px 14px;display:grid;grid-template-columns:34px minmax(0,1fr) auto;align-items:center;gap:11px;background:linear-gradient(135deg,#172a43,#213d5e);color:#fff}
       .dashboard-module .module-title>span{width:30px;height:30px;display:grid;place-items:center;border-radius:9px;background:rgba(229,189,104,.16);border:1px solid rgba(229,189,104,.34);color:#f2cc79;font-size:12px!important;font-weight:800;line-height:1}
@@ -235,12 +247,15 @@ export default function AppShell({ children }: { children: ReactNode }) {
       #site-performance a[href^='/projects/'] div[style*='grid-template-columns']>div{min-width:0;overflow:hidden}
       #site-performance a[href^='/projects/'] div[style*='grid-template-columns'] small{white-space:nowrap;font-size:9.5px}
       @media(max-width:760px){
+        .defect-section-tabs{display:flex;width:100%;overflow-x:auto;justify-content:flex-start}
+        .defect-section-tabs a{flex:0 0 auto}
         .dashboard-module .module-title{grid-template-columns:30px minmax(0,1fr);padding:11px 12px;min-height:58px}
         .dashboard-module .module-title>a{grid-column:2;margin-top:1px}
         .dashboard-module .module-title>span{width:28px;height:28px}
         #site-performance a[href^='/projects/']{grid-template-columns:72px minmax(0,1fr)!important;padding:10px!important}
         #site-performance a[href^='/projects/']>svg{width:72px!important;height:72px!important}
       }
+      @media print{.defect-section-tabs{display:none!important}}
     `}</style>
   </div>
 }
