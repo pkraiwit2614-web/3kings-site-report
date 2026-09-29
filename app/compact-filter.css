@@ -1,0 +1,162 @@
+/* Compact Filter Standard — scoped only to search/filter controls explicitly marked by CompactFilterStandard20260929. */
+
+.compact-filter-shell{
+  padding:8px!important;
+  border-radius:14px!important;
+}
+
+.compact-filter{
+  display:flex!important;
+  align-items:center!important;
+  gap:6px!important;
+  flex-wrap:nowrap!important;
+  margin:0!important;
+  padding:6px 8px!important;
+}
+
+.compact-filter-shell .compact-filter,
+.compact-filter.compact-filter-inline{
+  padding:0!important;
+}
+
+.compact-filter>input,
+.compact-filter>select,
+.compact-filter>button.button{
+  min-height:32px!important;
+  height:auto!important;
+  margin:0!important;
+  padding:6px 8px!important;
+  border-radius:8px!important;
+  font-size:11.5px!important;
+  line-height:1.2!important;
+}
+
+.compact-filter>input{
+  flex:1 1 280px!important;
+  min-width:180px!important;
+}
+
+.compact-filter>select{
+  flex:0 1 190px!important;
+  min-width:125px!important;
+  max-width:220px!important;
+}
+
+.compact-filter>button.button{
+  flex:0 0 auto!important;
+  white-space:nowrap!important;
+}
+
+.compact-filter>.small,
+.compact-filter>.muted,
+.compact-filter>.schedule-row-count{
+  margin-left:auto!important;
+  font-size:10.5px!important;
+  line-height:1.25!important;
+  white-space:nowrap!important;
+}
+
+.compact-filter-inline{
+  flex-wrap:wrap!important;
+}
+
+.compact-filter-inline>label.small{
+  margin:0!important;
+  font-size:10.5px!important;
+  line-height:1.2!important;
+  white-space:nowrap!important;
+}
+
+.compact-filter-control{
+  min-height:32px!important;
+  height:auto!important;
+  padding:6px 8px!important;
+  border-radius:8px!important;
+  font-size:11px!important;
+  line-height:1.2!important;
+}
+
+.compact-filter-labelled{
+  align-items:flex-end!important;
+}
+
+.compact-filter-labelled>label{
+  display:grid!important;
+  gap:3px!important;
+  flex:1 1 150px!important;
+  min-width:135px!important;
+  margin:0!important;
+  font-size:10px!important;
+  line-height:1.2!important;
+  font-weight:700!important;
+}
+
+.compact-filter-labelled>label:first-child{
+  flex:1.4 1 210px!important;
+}
+
+.compact-filter-labelled>label>input,
+.compact-filter-labelled>label>select{
+  width:100%!important;
+  min-width:0!important;
+  min-height:32px!important;
+  height:auto!important;
+  margin:0!important;
+  padding:6px 8px!important;
+  border-radius:8px!important;
+  font-size:11.5px!important;
+  line-height:1.2!important;
+}
+
+/* Keep dedicated compact filter shells visually light; data/table panels are intentionally untouched. */
+.compact-filter-shell.filter-panel,
+.compact-filter-shell.ep-filter{
+  margin-bottom:10px!important;
+}
+
+@media(max-width:760px){
+  .compact-filter{
+    flex-wrap:wrap!important;
+  }
+
+  .compact-filter>input{
+    flex:1 1 100%!important;
+    min-width:100%!important;
+  }
+
+  .compact-filter>select{
+    flex:1 1 calc(50% - 4px)!important;
+    min-width:0!important;
+    max-width:none!important;
+  }
+
+  .compact-filter>.small,
+  .compact-filter>.muted,
+  .compact-filter>.schedule-row-count{
+    width:100%!important;
+    margin-left:0!important;
+    white-space:normal!important;
+  }
+
+  .compact-filter-labelled{
+    display:grid!important;
+    grid-template-columns:1fr 1fr!important;
+    align-items:end!important;
+  }
+
+  .compact-filter-labelled>label,
+  .compact-filter-labelled>label:first-child{
+    min-width:0!important;
+  }
+}
+
+@media(max-width:480px){
+  .compact-filter>select,
+  .compact-filter>button.button{
+    flex:1 1 100%!important;
+  }
+
+  .compact-filter-labelled{
+    grid-template-columns:1fr!important;
+  }
+}
