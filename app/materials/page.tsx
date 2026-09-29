@@ -109,37 +109,36 @@ export default function MaterialsPage(){
     <PageHeader title="วัสดุ เครื่องมือและผู้รับเหมา" subtitle={`ค้นหาวัสดุ งาน ผู้ขาย ผู้รับเหมา หรือเลข PO ได้จากหน้าเดียว • วัสดุ/งาน ${rows.length} รายการ • จัดซื้อ/จัดจ้าง ${procurement.length} รายการ • เครื่องมือ ${tools.length} รายการ`}/>
 
     <section aria-labelledby="materials-status-title">
-      <div style={{display:'flex',justifyContent:'space-between',gap:12,alignItems:'end',flexWrap:'wrap',marginBottom:10}}>
+      <div style={{display:'flex',justifyContent:'space-between',gap:12,alignItems:'end',flexWrap:'wrap',marginBottom:8}}>
         <div>
           <h2 id="materials-status-title" style={{margin:'0 0 3px'}}>Materials Status</h2>
           <div className="small muted">ค้นหาคำเดียวแล้วตรวจได้ทั้งสถานะวัสดุ รายละเอียดล่าสุด และ PO/ผู้รับเหมาที่เกี่ยวข้อง</div>
         </div>
         <b className="small">แสดง {filtered.length} / {rows.length} รายการ</b>
       </div>
-      <div className="panel" style={{padding:'10px 14px',marginBottom:14,display:'flex',justifyContent:'space-between',gap:10,alignItems:'center',flexWrap:'wrap'}}>
-        <input
-          aria-label="ค้นหาวัสดุ งาน PO ผู้ขาย ผู้รับเหมา รุ่น สถานะ หรือรายละเอียด"
-          placeholder="ค้นหาวัสดุ / งาน / PO / ผู้ขาย / ผู้รับเหมา / รุ่น / สถานะ / รายละเอียด"
-          value={q}
-          onChange={e=>setQ(e.target.value)}
-          style={{flex:'1 1 420px',minWidth:240,maxWidth:820,padding:'10px 11px',border:'1px solid #d8d2c7',borderRadius:10,background:'#fffdf9',color:'#182231',outline:'none'}}
-        />
-        <b className="small">อัปเดตข้อมูลล่าสุด: {dateTimeTH(latestSyncAt)}</b>
+      <div className="panel" style={{padding:8,marginBottom:10}}>
+        <div className="toolbar" style={{marginBottom:0,gap:8,flexWrap:'wrap'}}>
+          <input
+            aria-label="ค้นหาวัสดุ งาน PO ผู้ขาย ผู้รับเหมา รุ่น สถานะ หรือรายละเอียด"
+            placeholder="ค้นหาวัสดุ / งาน / PO / ผู้ขาย / ผู้รับเหมา / รุ่น / สถานะ / รายละเอียด"
+            value={q}
+            onChange={e=>setQ(e.target.value)}
+            style={{minWidth:260,padding:'7px 9px',fontSize:12,borderRadius:9}}
+          />
+          <select value={project} onChange={e=>setProject(e.target.value)} style={{minWidth:130,maxWidth:180,padding:'7px 9px',fontSize:12,borderRadius:9}}><option value="">ทุก Plot</option>{projects.filter(p=>/^AV-P[6-9]$/.test(p.code)).map(p=><option key={p.id} value={p.id}>{p.code} — {p.name}</option>)}</select>
+          <select value={orderStatus} onChange={e=>setOrderStatus(e.target.value)} style={{minWidth:150,maxWidth:190,padding:'7px 9px',fontSize:12,borderRadius:9}}>
+            <option value="">ทุกสถานะการสั่งซื้อ</option>
+            <option value="สั่งแล้ว">สั่งแล้ว</option>
+            <option value="สั่งมาไม่พอ">สั่งมาไม่พอ</option>
+            <option value="ยังไม่สั่ง">ยังไม่สั่ง</option>
+            <option value="เจ้าของจัดหา">เจ้าของจัดหา</option>
+            <option value="ไม่เกี่ยวข้อง">ไม่เกี่ยวข้อง</option>
+          </select>
+          {(project||orderStatus||q)&&<button type="button" className="button" style={{padding:'7px 10px',fontSize:12,borderRadius:9}} onClick={()=>{setProject('');setOrderStatus('');setQ('')}}>ล้าง</button>}
+          <span className="small muted" style={{marginLeft:'auto',whiteSpace:'nowrap'}}>Drive Sync • ล่าสุด {dateTimeTH(latestSyncAt)}</span>
+        </div>
       </div>
-      <div className="toolbar">
-        <select value={project} onChange={e=>setProject(e.target.value)}><option value="">ทุก Plot</option>{projects.filter(p=>/^AV-P[6-9]$/.test(p.code)).map(p=><option key={p.id} value={p.id}>{p.code} — {p.name}</option>)}</select>
-        <select value={orderStatus} onChange={e=>setOrderStatus(e.target.value)}>
-          <option value="">ทุกสถานะการสั่งซื้อ</option>
-          <option value="สั่งแล้ว">สั่งแล้ว</option>
-          <option value="สั่งมาไม่พอ">สั่งมาไม่พอ</option>
-          <option value="ยังไม่สั่ง">ยังไม่สั่ง</option>
-          <option value="เจ้าของจัดหา">เจ้าของจัดหา</option>
-          <option value="ไม่เกี่ยวข้อง">ไม่เกี่ยวข้อง</option>
-        </select>
-        {(project||orderStatus||q)&&<button type="button" className="button" onClick={()=>{setProject('');setOrderStatus('');setQ('')}}>ล้างการค้นหา</button>}
-        <span className="small muted" style={{flex:1}}>ข้อมูล Materials จาก Drive Sync</span>
-      </div>
-      <div className="panel table-wrap" style={{maxHeight:520,overflow:'auto'}}>
+      <div className="panel table-wrap" style={{maxHeight:560,overflow:'auto'}}>
         <table style={{minWidth:1180}}>
           <thead><tr><th>Plot</th><th>หมวด</th><th>วัสดุ / งาน</th><th>ยี่ห้อ / รุ่น / สเปก</th><th>สถานะ</th><th>รายละเอียดล่าสุด</th><th>ผู้ติดต่อ</th></tr></thead>
           <tbody>{filtered.map(x=>{
@@ -186,30 +185,31 @@ export default function MaterialsPage(){
       </div>
     </section>}
 
-    <section aria-labelledby="tool-machine-title" style={{marginTop:30,paddingTop:4}}>
-      <div style={{display:'flex',justifyContent:'space-between',gap:12,alignItems:'end',flexWrap:'wrap',marginBottom:10}}>
+    <section aria-labelledby="tool-machine-title" style={{marginTop:26,paddingTop:4}}>
+      <div style={{display:'flex',justifyContent:'space-between',gap:12,alignItems:'end',flexWrap:'wrap',marginBottom:8}}>
         <div>
           <h2 id="tool-machine-title" style={{margin:'0 0 3px'}}>Tool &amp; Machine</h2>
           <div className="small muted">ทะเบียนเครื่องมือและเครื่องจักรจากชีท 06-Tools &amp; Machine</div>
         </div>
         <b className="small">แสดง {filteredTools.length} / {tools.length} รายการ</b>
       </div>
-      <div className="panel" style={{padding:'10px 14px',marginBottom:14}}>
-        <input
-          aria-label="ค้นหาเครื่องมือและเครื่องจักร"
-          placeholder="ค้นหารหัส / เครื่องมือ / ยี่ห้อ / รุ่น / ผู้รับผิดชอบ"
-          value={toolQ}
-          onChange={e=>setToolQ(e.target.value)}
-          style={{width:'100%',maxWidth:720,padding:'10px 11px',border:'1px solid #d8d2c7',borderRadius:10,background:'#fffdf9',color:'#182231',outline:'none'}}
-        />
+      <div className="panel" style={{padding:8,marginBottom:10}}>
+        <div className="toolbar" style={{marginBottom:0,gap:8,flexWrap:'wrap'}}>
+          <input
+            aria-label="ค้นหาเครื่องมือและเครื่องจักร"
+            placeholder="ค้นหารหัส / เครื่องมือ / ยี่ห้อ / รุ่น / ผู้รับผิดชอบ"
+            value={toolQ}
+            onChange={e=>setToolQ(e.target.value)}
+            style={{minWidth:240,padding:'7px 9px',fontSize:12,borderRadius:9}}
+          />
+          <select value={toolCategory} onChange={e=>setToolCategory(e.target.value)} style={{minWidth:125,maxWidth:170,padding:'7px 9px',fontSize:12,borderRadius:9}}><option value="">ทุกหมวด</option>{toolCategories.map(v=><option key={v} value={v}>{v}</option>)}</select>
+          <select value={toolStatus} onChange={e=>setToolStatus(e.target.value)} style={{minWidth:125,maxWidth:170,padding:'7px 9px',fontSize:12,borderRadius:9}}><option value="">ทุกสถานะ</option>{toolStatuses.map(v=><option key={v} value={v}>{v}</option>)}</select>
+          <select value={toolLocation} onChange={e=>setToolLocation(e.target.value)} style={{minWidth:125,maxWidth:180,padding:'7px 9px',fontSize:12,borderRadius:9}}><option value="">ทุกสถานที่</option>{toolLocations.map(v=><option key={v} value={v}>{v}</option>)}</select>
+          {(toolQ||toolCategory||toolStatus||toolLocation)&&<button type="button" className="button" style={{padding:'7px 10px',fontSize:12,borderRadius:9}} onClick={()=>{setToolQ('');setToolCategory('');setToolStatus('');setToolLocation('')}}>ล้าง</button>}
+          <span className="small muted" style={{marginLeft:'auto',whiteSpace:'nowrap'}}>ข้อมูลทะเบียนจาก Drive Sync</span>
+        </div>
       </div>
-      <div className="toolbar">
-        <select value={toolCategory} onChange={e=>setToolCategory(e.target.value)}><option value="">ทุกหมวด</option>{toolCategories.map(v=><option key={v} value={v}>{v}</option>)}</select>
-        <select value={toolStatus} onChange={e=>setToolStatus(e.target.value)}><option value="">ทุกสถานะ</option>{toolStatuses.map(v=><option key={v} value={v}>{v}</option>)}</select>
-        <select value={toolLocation} onChange={e=>setToolLocation(e.target.value)}><option value="">ทุกสถานที่</option>{toolLocations.map(v=><option key={v} value={v}>{v}</option>)}</select>
-        <span className="small muted" style={{flex:1}}>ข้อมูลทะเบียนจาก Drive Sync</span>
-      </div>
-      <div className="panel table-wrap" style={{maxHeight:560,overflow:'auto'}}><table><thead><tr><th>รหัส</th><th>หมวด</th><th>เครื่องมือ / เครื่องจักร</th><th>ยี่ห้อ / รุ่น</th><th>จำนวน</th><th>สถานะ</th><th>สถานที่ล่าสุด</th><th>ผู้รับผิดชอบ</th><th>วันที่อัปเดต</th><th>หมายเหตุ</th></tr></thead><tbody>{filteredTools.map(x=><tr key={x.id}><td><b>{x.item_code||'-'}</b></td><td>{x.category||'-'}</td><td><b>{x.item_name||'-'}</b></td><td>{[x.brand,x.model_spec].filter(Boolean).join(' / ')||'-'}</td><td>{x.quantity??'-'} {x.unit||''}</td><td><StatusBadge value={x.status}/></td><td>{x.location||'-'}</td><td>{x.responsible_person||'-'}</td><td>{dateTH(x.source_updated_at)}</td><td>{x.notes||'-'}</td></tr>)}</tbody></table></div>
+      <div className="panel table-wrap" style={{maxHeight:600,overflow:'auto'}}><table><thead><tr><th>รหัส</th><th>หมวด</th><th>เครื่องมือ / เครื่องจักร</th><th>ยี่ห้อ / รุ่น</th><th>จำนวน</th><th>สถานะ</th><th>สถานที่ล่าสุด</th><th>ผู้รับผิดชอบ</th><th>วันที่อัปเดต</th><th>หมายเหตุ</th></tr></thead><tbody>{filteredTools.map(x=><tr key={x.id}><td><b>{x.item_code||'-'}</b></td><td>{x.category||'-'}</td><td><b>{x.item_name||'-'}</b></td><td>{[x.brand,x.model_spec].filter(Boolean).join(' / ')||'-'}</td><td>{x.quantity??'-'} {x.unit||''}</td><td><StatusBadge value={x.status}/></td><td>{x.location||'-'}</td><td>{x.responsible_person||'-'}</td><td>{dateTH(x.source_updated_at)}</td><td>{x.notes||'-'}</td></tr>)}</tbody></table></div>
     </section>
   </AppShell>
 }
