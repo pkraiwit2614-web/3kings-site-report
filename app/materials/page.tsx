@@ -25,9 +25,15 @@ function uniqueText(rows:any[],key:string){
   return Array.from(new Set(rows.map(x=>`${x?.[key]||''}`.trim()).filter(Boolean))).sort((a,b)=>a.localeCompare(b,'th'))
 }
 
+function textSearch(values:unknown[],needle:string){
+  if(!needle) return true
+  return values.map(v=>String(v??'')).join(' ').toLowerCase().includes(needle)
+}
+
 export default function MaterialsPage(){
   const [projects,setProjects]=useState<Project[]>([])
   const [rows,setRows]=useState<any[]>([])
+  const [procurement,setProcurement]=useState<any[]>([])
   const [tools,setTools]=useState<any[]>([])
   const [project,setProject]=useState('')
   const [orderStatus,setOrderStatus]=useState('')
@@ -53,21 +59,41 @@ export default function MaterialsPage(){
     Promise.all([
       s.from('projects').select('*').eq('active',true).order('sort_order'),
       s.from('materials').select('*').order('project_id').order('source_row'),
+      s.from('procurement_items').select('*').order('source_updated_at',{ascending:false}).order('source_row'),
       s.from('tool_machine').select('*').order('item_no'),
       s.from('drive_sync_runs').select('created_at').eq('status','success').eq('sync_type','materials').order('created_at',{ascending:false}).limit(1).maybeSingle()
-    ]).then(([p,m,t,sync])=>{
+    ]).then(([p,m,pr,t,sync])=>{
       setProjects((p.data||[]) as Project[])
       setRows(m.data||[])
+      setProcurement(pr.data||[])
       setTools(t.data||[])
       setLatestSyncAt(sync.data?.created_at||null)
     })
   },[])
 
-  const filtered=useMemo(()=>rows.filter(x=>
-    (!project||x.project_id===project)&&
-    (!orderStatus||x.status===orderStatus)&&
-    (!q||`${x.item_name} ${x.category||''} ${x.status||''} ${x.model_spec||''} ${x.brand||''}`.toLowerCase().includes(q.toLowerCase()))
-  ),[rows,project,orderStatus,q])
+  const projectById=useMemo(()=>new Map(projects.map(p=>[p.id,p])),[projects])
+  const needle=q.trim().toLowerCase()
+
+  const filtered=useMemo(()=>rows.filter(x=>{
+    const p=projectById.get(x.project_id)
+    return (!project||x.project_id===project)&&
+      (!orderStatus||x.status===orderStatus)&&
+      textSearch([
+        p?.code,p?.name,x.data_group,x.source_item_no,x.category,x.item_name,x.status,x.status_detail,
+        x.brand,x.model_spec,x.quantity_unit,x.contact_name,x.contact_phone,x.notes
+      ],needle)
+  }),[rows,project,orderStatus,needle,projectById])
+
+  const filteredProcurement=useMemo(()=>{
+    if(!needle&&!project) return []
+    return procurement.filter(x=>{
+      const p=projectById.get(x.project_id)
+      return (!project||x.project_id===project)&&textSearch([
+        p?.code,p?.name,x.vendor,x.item_name,x.procurement_status,x.payment_status,x.current_status,
+        x.pr_no,x.po_no,x.expected_delivery_text,x.condition_note,x.source_updated_at
+      ],needle)
+    })
+  },[procurement,project,needle,projectById])
 
   const toolStatuses=useMemo(()=>uniqueText(tools,'status'),[tools])
   const toolCategories=useMemo(()=>uniqueText(tools,'category'),[tools])
@@ -80,23 +106,23 @@ export default function MaterialsPage(){
   ),[tools,toolStatus,toolCategory,toolLocation,toolQ])
 
   return <AppShell>
-    <PageHeader title="วัสดุ เครื่องมือและผู้รับเหมา" subtitle={`ข้อมูล Materials Status และทะเบียน Tool & Machine จากไฟล์ล่าสุดใน Google Drive • วัสดุ/งาน ${rows.length} รายการ • เครื่องมือ ${tools.length} รายการ`}/>
+    <PageHeader title="วัสดุ เครื่องมือและผู้รับเหมา" subtitle={`ค้นหาวัสดุ งาน ผู้ขาย ผู้รับเหมา หรือเลข PO ได้จากหน้าเดียว • วัสดุ/งาน ${rows.length} รายการ • จัดซื้อ/จัดจ้าง ${procurement.length} รายการ • เครื่องมือ ${tools.length} รายการ`}/>
 
     <section aria-labelledby="materials-status-title">
       <div style={{display:'flex',justifyContent:'space-between',gap:12,alignItems:'end',flexWrap:'wrap',marginBottom:10}}>
         <div>
           <h2 id="materials-status-title" style={{margin:'0 0 3px'}}>Materials Status</h2>
-          <div className="small muted">วัสดุ อุปกรณ์ และรายการผู้รับเหมา</div>
+          <div className="small muted">ค้นหาคำเดียวแล้วตรวจได้ทั้งสถานะวัสดุ รายละเอียดล่าสุด และ PO/ผู้รับเหมาที่เกี่ยวข้อง</div>
         </div>
         <b className="small">แสดง {filtered.length} / {rows.length} รายการ</b>
       </div>
       <div className="panel" style={{padding:'10px 14px',marginBottom:14,display:'flex',justifyContent:'space-between',gap:10,alignItems:'center',flexWrap:'wrap'}}>
         <input
-          aria-label="ค้นหาวัสดุ รุ่น สถานะ หรือหมวด"
-          placeholder="ค้นหาวัสดุ / รุ่น / สถานะ / หมวด"
+          aria-label="ค้นหาวัสดุ งาน PO ผู้ขาย ผู้รับเหมา รุ่น สถานะ หรือรายละเอียด"
+          placeholder="ค้นหาวัสดุ / งาน / PO / ผู้ขาย / ผู้รับเหมา / รุ่น / สถานะ / รายละเอียด"
           value={q}
           onChange={e=>setQ(e.target.value)}
-          style={{flex:'1 1 340px',minWidth:220,maxWidth:620,padding:'10px 11px',border:'1px solid #d8d2c7',borderRadius:10,background:'#fffdf9',color:'#182231',outline:'none'}}
+          style={{flex:'1 1 420px',minWidth:240,maxWidth:820,padding:'10px 11px',border:'1px solid #d8d2c7',borderRadius:10,background:'#fffdf9',color:'#182231',outline:'none'}}
         />
         <b className="small">อัปเดตข้อมูลล่าสุด: {dateTimeTH(latestSyncAt)}</b>
       </div>
@@ -110,10 +136,55 @@ export default function MaterialsPage(){
           <option value="เจ้าของจัดหา">เจ้าของจัดหา</option>
           <option value="ไม่เกี่ยวข้อง">ไม่เกี่ยวข้อง</option>
         </select>
+        {(project||orderStatus||q)&&<button type="button" className="button" onClick={()=>{setProject('');setOrderStatus('');setQ('')}}>ล้างการค้นหา</button>}
         <span className="small muted" style={{flex:1}}>ข้อมูล Materials จาก Drive Sync</span>
       </div>
-      <div className="panel table-wrap" style={{maxHeight:500,overflow:'auto'}}><table><thead><tr><th>Plot</th><th>หมวด</th><th>วัสดุ / งาน</th><th>ยี่ห้อ / รุ่น / สเปก</th><th>สถานะ</th><th>รายละเอียด / หมายเหตุ</th></tr></thead><tbody>{filtered.map(x=><tr key={x.id}><td>{projects.find(p=>p.id===x.project_id)?.code||'-'}</td><td>{x.category||'-'}</td><td><b>{x.item_name}</b><small>{x.quantity_unit||'ยังไม่ระบุปริมาณ/หน่วย'}</small></td><td>{[x.brand,x.model_spec].filter(Boolean).join(' / ')||'-'}</td><td><StatusBadge value={x.status}/></td><td>{x.status_detail||x.notes||'-'}</td></tr>)}</tbody></table></div>
+      <div className="panel table-wrap" style={{maxHeight:520,overflow:'auto'}}>
+        <table style={{minWidth:1180}}>
+          <thead><tr><th>Plot</th><th>หมวด</th><th>วัสดุ / งาน</th><th>ยี่ห้อ / รุ่น / สเปก</th><th>สถานะ</th><th>รายละเอียดล่าสุด</th><th>ผู้ติดต่อ</th></tr></thead>
+          <tbody>{filtered.map(x=>{
+            const detail=[x.status_detail,x.notes].filter(Boolean).filter((v:string,i:number,a:string[])=>a.indexOf(v)===i)
+            return <tr key={x.id}>
+              <td><b>{projectById.get(x.project_id)?.code||'-'}</b></td>
+              <td>{x.category||'-'}</td>
+              <td><b>{x.item_name}</b><small>{x.quantity_unit||'ยังไม่ระบุปริมาณ/หน่วย'}</small></td>
+              <td>{[x.brand,x.model_spec].filter(Boolean).join(' / ')||'-'}</td>
+              <td><StatusBadge value={x.status}/></td>
+              <td>{detail.length?detail.map((v:string,i:number)=><div key={`${x.id}-d-${i}`} style={{marginBottom:i<detail.length-1?4:0}}>{v}</div>):'-'}</td>
+              <td>{x.contact_name||x.contact_phone?<><b>{x.contact_name||'-'}</b><small>{x.contact_phone||''}</small></>:'-'}</td>
+            </tr>
+          })}</tbody>
+        </table>
+        {!filtered.length&&<p className="muted" style={{padding:16}}>ไม่พบวัสดุ/งานตามคำค้นหรือ Filter ที่เลือก</p>}
+      </div>
     </section>
+
+    {(needle||project)&&<section aria-labelledby="material-procurement-title" style={{marginTop:24}}>
+      <div style={{display:'flex',justifyContent:'space-between',gap:12,alignItems:'end',flexWrap:'wrap',marginBottom:10}}>
+        <div>
+          <h2 id="material-procurement-title" style={{margin:'0 0 3px'}}>PO / จัดซื้อจัดจ้างที่เกี่ยวข้อง</h2>
+          <div className="small muted">ใช้คำค้นและ Plot เดียวกับด้านบน เพื่อดูว่า PO เซ็นแล้วหรือยัง ติดขั้นตอนไหน และต้องตามอะไรต่อ</div>
+        </div>
+        <b className="small">พบ {filteredProcurement.length} รายการ</b>
+      </div>
+      <div className="panel table-wrap" style={{maxHeight:430,overflow:'auto'}}>
+        <table style={{minWidth:1320}}>
+          <thead><tr><th>Plot</th><th>PO / PR</th><th>ผู้ขาย / ผู้รับเหมา</th><th>รายการ</th><th>สถานะ PO / ชำระ</th><th>ขั้นตอนปัจจุบัน</th><th>กำหนดส่ง / เข้าหน้างาน</th><th>รายละเอียด / สิ่งที่ต้องตาม</th><th>อัปเดต</th></tr></thead>
+          <tbody>{filteredProcurement.map(x=><tr key={x.id}>
+            <td><b>{projectById.get(x.project_id)?.code||'-'}</b></td>
+            <td><b>{[x.po_no,x.pr_no].filter(Boolean).join(' / ')||'-'}</b></td>
+            <td>{x.vendor||'ยังไม่ระบุ'}</td>
+            <td><b>{x.item_name||'-'}</b></td>
+            <td>{x.payment_status||x.procurement_status||'-'}</td>
+            <td><StatusBadge value={x.current_status}/></td>
+            <td><b>{x.expected_delivery_text||'ยังไม่ระบุ'}</b></td>
+            <td>{x.condition_note||'-'}</td>
+            <td>{dateTH(x.source_updated_at)}</td>
+          </tr>)}</tbody>
+        </table>
+        {!filteredProcurement.length&&<p className="muted" style={{padding:16}}>ไม่พบรายการจัดซื้อ/PO ที่ตรงกับคำค้นนี้</p>}
+      </div>
+    </section>}
 
     <section aria-labelledby="tool-machine-title" style={{marginTop:30,paddingTop:4}}>
       <div style={{display:'flex',justifyContent:'space-between',gap:12,alignItems:'end',flexWrap:'wrap',marginBottom:10}}>
