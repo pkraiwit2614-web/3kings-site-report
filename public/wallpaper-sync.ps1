@@ -36,6 +36,30 @@ function Ensure-Root {
   New-Item -ItemType Directory -Path $ProfileDir -Force | Out-Null
 }
 
+function Close-WallpaperBrowserProfile {
+  # Edge/Chrome may keep background processes alive after the dedicated login window is closed.
+  # Those processes hold a lock on BrowserProfile and can make a new headless process start without
+  # the saved Supabase session. Stop ONLY browser processes whose command line points at our dedicated
+  # wallpaper profile; normal Edge/Chrome windows are left untouched.
+  try {
+    $needle = $ProfileDir.ToLowerInvariant()
+    $processes = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+      Where-Object {
+        ($_.Name -ieq 'msedge.exe' -or $_.Name -ieq 'chrome.exe') -and
+        $_.CommandLine -and $_.CommandLine.ToLowerInvariant().Contains($needle)
+      }
+    foreach($p in $processes){
+      Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue
+    }
+    if($processes){ Start-Sleep -Milliseconds 800 }
+  } catch {}
+
+  # Remove stale Chromium singleton lock files only inside the dedicated profile root.
+  foreach($name in @('SingletonLock','SingletonCookie','SingletonSocket')){
+    Remove-Item -LiteralPath (Join-Path $ProfileDir $name) -Force -ErrorAction SilentlyContinue
+  }
+}
+
 function Invoke-BrowserQuiet {
   param(
     [Parameter(Mandatory=$true)][string[]]$Arguments,
@@ -82,6 +106,7 @@ Ensure-Root
 $browser = Find-Browser
 
 if($Login){
+  Close-WallpaperBrowserProfile
   Write-Host 'Opening the dedicated 3 Kings wallpaper browser profile...'
   Write-Host 'Sign in to the Web App once, confirm that the wallpaper page appears, then close that browser window.'
   Start-Process -FilePath $browser -ArgumentList @("--user-data-dir=$ProfileDir",'--profile-directory=Default','--no-first-run',$AppUrl)
@@ -98,6 +123,9 @@ if($Install){
   & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $InstalledScript
   exit $LASTEXITCODE
 }
+
+# Make sure no background process is still holding the dedicated profile before headless Edge starts.
+Close-WallpaperBrowserProfile
 
 Add-Type -AssemblyName System.Windows.Forms
 $screen = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
@@ -122,13 +150,13 @@ $commonArgs = @(
 )
 
 # Validate the actual rendered panels rather than relying on a React data attribute.
-# Headless Chromium can occasionally return the server-rendered attribute while the client UI is already hydrated.
 $dumpArgs = $commonArgs + @('--dump-dom',$FreshAppUrl)
 $dump = Invoke-BrowserQuiet -Arguments $dumpArgs -CaptureOutput
 $dom = $dump.Output
 $isReady = ($dump.ExitCode -eq 0 -and (Test-WallpaperDomReady -Dom $dom))
 
 if(-not $isReady){
+  Close-WallpaperBrowserProfile
   Start-Sleep -Seconds 2
   $retryBust = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
   $FreshAppUrl = "$AppUrl?wallpaper_refresh=$retryBust"
@@ -146,14 +174,16 @@ if(-not $isReady){
   } elseif($dom -like '*TODAY*S COMMAND CENTER*'){
     Write-Host 'Wallpaper was not replaced: the wallpaper page opened but the live panels did not finish rendering.'
   } else {
-    Write-Host 'Wallpaper was not replaced: the dedicated browser session is not available to headless Edge.'
+    Write-Host 'Wallpaper was not replaced: the dedicated browser profile could not be opened with its saved session.'
     Write-Host "Run: powershell -ExecutionPolicy Bypass -File `"$InstalledScript`" -Login"
   }
   exit 2
 }
 
-# Use a new image filename every run. Windows can keep showing a cached bitmap when the same
-# wallpaper path is overwritten, even if the underlying PNG has changed.
+# dump-dom exits with the profile closed, but ensure no helper process retained the lock before screenshot.
+Close-WallpaperBrowserProfile
+
+# Use a new image filename every run so Windows does not keep a cached bitmap.
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $tempShot = Join-Path $Root "wallpaper-new-$stamp.png"
 $WallpaperPath = Join-Path $Root "wallpaper-$stamp.png"
@@ -184,7 +214,6 @@ namespace Wallpaper {
 $ok = [Wallpaper.NativeMethods]::SystemParametersInfo(20,0,$WallpaperPath,3)
 if(-not $ok){ throw 'Windows could not apply the wallpaper.' }
 
-# Keep the current image and remove obsolete generated images from earlier runs.
 Get-ChildItem -Path $Root -Filter 'wallpaper-*.png' -File -ErrorAction SilentlyContinue |
   Where-Object { $_.FullName -ne $WallpaperPath } |
   Remove-Item -Force -ErrorAction SilentlyContinue
