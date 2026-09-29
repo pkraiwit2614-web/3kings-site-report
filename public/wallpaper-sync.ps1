@@ -6,7 +6,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$ImageUrl = 'https://3kings-site-report.vercel.app/api/wallpaper-image'
+$ImageUrl = 'https://3kings-site-report.vercel.app/api/wallpaper-png'
 $TaskName = '3Kings Dynamic Wallpaper'
 $Root = Join-Path $env:LOCALAPPDATA '3KingsWallpaper'
 $TokenPath = Join-Path $Root 'device-token.txt'
@@ -75,8 +75,6 @@ $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $tempPath = Join-Path $Root "wallpaper-download-$stamp.png"
 $wallpaperPath = Join-Path $Root "wallpaper-$stamp.png"
 
-# Build the URI explicitly. PowerShell can misread "$ImageUrl?w=..." as a variable name,
-# which produces an invalid hostname. UriBuilder avoids that interpolation ambiguity.
 $uriBuilder = [System.UriBuilder]::new($ImageUrl)
 $uriBuilder.Query = "w=$width&h=$height&v=$stamp"
 $url = $uriBuilder.Uri.AbsoluteUri
