@@ -1,0 +1,217 @@
+/* Dynamic Work Wallpaper: keep all meaningful content above the Windows taskbar.
+   The screenshot still uses the full monitor resolution; the bottom band is intentionally content-free. */
+.wallpaper,
+.wallpaper *,
+.wallpaper *::before,
+.wallpaper *::after {
+  box-sizing: border-box;
+}
+
+.wallpaper {
+  --taskbar-safe: 64px;
+}
+
+/* A captured clock becomes stale between 15-minute wallpaper refreshes, so do not show it. */
+.wallpaper .clock {
+  display: none !important;
+}
+
+.wallpaper .hero-right {
+  justify-content: flex-end !important;
+}
+
+.wallpaper .live {
+  min-width: 230px !important;
+}
+
+/* Reserve a real blank band behind the Windows taskbar. */
+.wallpaper .command {
+  padding-bottom: calc(14px + var(--taskbar-safe)) !important;
+  gap: 9px !important;
+}
+
+.wallpaper .brand-rail {
+  padding-bottom: calc(18px + var(--taskbar-safe)) !important;
+}
+
+.wallpaper footer {
+  min-height: 16px !important;
+  height: 16px !important;
+}
+
+/* Compact vertical rhythm on common laptop resolutions so nothing is pushed into the safe band. */
+@media (max-height: 800px) {
+  .wallpaper {
+    --taskbar-safe: 60px;
+  }
+
+  .wallpaper .command {
+    padding-top: 14px !important;
+    padding-left: 20px !important;
+    padding-right: 20px !important;
+    padding-bottom: calc(10px + var(--taskbar-safe)) !important;
+    gap: 7px !important;
+  }
+
+  .wallpaper .brand-rail {
+    padding-top: 18px !important;
+    padding-bottom: calc(14px + var(--taskbar-safe)) !important;
+  }
+
+  .wallpaper .brand-logo {
+    width: 56px !important;
+    height: 56px !important;
+  }
+
+  .wallpaper .brand-lockup b {
+    font-size: 16px !important;
+  }
+
+  .wallpaper .brand-lockup span {
+    font-size: 10px !important;
+    margin-top: 4px !important;
+  }
+
+  .wallpaper .rail-rule {
+    margin: 18px 0 18px !important;
+  }
+
+  .wallpaper .rail-copy {
+    margin-top: 38px !important;
+    gap: 9px !important;
+    font-size: 9px !important;
+  }
+
+  .wallpaper .hero h1 {
+    font-size: 30px !important;
+    margin: 5px 0 5px !important;
+  }
+
+  .wallpaper .eyebrow {
+    font-size: 9px !important;
+  }
+
+  .wallpaper .hero p {
+    font-size: 10px !important;
+  }
+
+  .wallpaper .live {
+    min-width: 190px !important;
+    padding: 7px 10px !important;
+  }
+
+  .wallpaper .live b {
+    font-size: 18px !important;
+  }
+
+  .wallpaper .kpi-strip {
+    gap: 7px !important;
+  }
+
+  .wallpaper .kpi {
+    padding: 6px 9px !important;
+    border-radius: 10px !important;
+  }
+
+  .wallpaper .kpi b {
+    font-size: 21px !important;
+  }
+
+  .wallpaper .kpi span {
+    font-size: 8.5px !important;
+  }
+
+  .wallpaper .kpi small {
+    font-size: 7.5px !important;
+    margin-top: 2px !important;
+  }
+
+  .wallpaper .dashboard-grid {
+    gap: 8px !important;
+  }
+
+  .wallpaper .panel-head {
+    height: 36px !important;
+    flex-basis: 36px !important;
+    padding: 0 10px !important;
+  }
+
+  .wallpaper .panel-head b {
+    font-size: 10px !important;
+  }
+
+  .wallpaper .panel-head span {
+    font-size: 11px !important;
+  }
+
+  .wallpaper .work-row,
+  .wallpaper .compact-rows .work-row {
+    min-height: 35px !important;
+    padding: 3px 8px !important;
+    grid-template-columns: 6px 48px minmax(0,1fr) 96px !important;
+    gap: 7px !important;
+  }
+
+  .wallpaper .signal {
+    height: 22px !important;
+  }
+
+  .wallpaper .code {
+    font-size: 9px !important;
+    padding: 4px !important;
+  }
+
+  .wallpaper .row-copy strong {
+    font-size: 9.5px !important;
+  }
+
+  .wallpaper .row-copy small {
+    font-size: 7.8px !important;
+    margin-top: 2px !important;
+  }
+
+  .wallpaper .row-status b,
+  .wallpaper .row-status span {
+    font-size: 7.3px !important;
+  }
+
+  .wallpaper .handover-line {
+    min-height: 28px !important;
+    padding: 4px 9px !important;
+    font-size: 7.5px !important;
+  }
+
+  .wallpaper .defect-grid {
+    padding: 7px !important;
+    gap: 5px !important;
+  }
+
+  .wallpaper .defect-tile {
+    padding: 6px !important;
+  }
+
+  .wallpaper .defect-tile span {
+    font-size: 7.3px !important;
+    min-height: 18px !important;
+  }
+
+  .wallpaper .defect-tile b {
+    font-size: 21px !important;
+    margin: 4px 0 3px !important;
+  }
+
+  .wallpaper .defect-tile small {
+    font-size: 7px !important;
+  }
+
+  .wallpaper .defect-note {
+    height: 22px !important;
+    flex-basis: 22px !important;
+    font-size: 7px !important;
+  }
+
+  .wallpaper footer,
+  .wallpaper footer small {
+    font-size: 6.5px !important;
+  }
+}
