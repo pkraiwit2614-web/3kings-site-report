@@ -110,21 +110,26 @@ export default function ProcurementPage(){
     })
   },[rows,siteFilter,statusFilter,updateFilter,followUpOnly,needle,projectById])
 
+  const compactControlStyle={
+    minHeight:34,
+    padding:'6px 9px',
+    borderRadius:8,
+    fontSize:12
+  } as const
+
   return <AppShell>
     <PageHeader title="การจัดซื้อ/จัดจ้าง" subtitle="ค้นหาจากวัสดุ งาน ผู้ขาย ผู้รับเหมา เลข PO หรือสถานะ เพื่อดูว่าตอนนี้ติดอยู่ขั้นตอนไหนและต้องตามอะไรต่อ"/>
 
-    <section className="panel" style={{marginBottom:14,position:'sticky',top:0,zIndex:18}}>
-      <div style={{padding:'10px 10px 0'}}>
+    <section className="panel" style={{marginBottom:10,position:'sticky',top:0,zIndex:18,padding:8,borderRadius:14}}>
+      <div className="toolbar" style={{padding:0,background:'var(--surface)',borderRadius:10,marginBottom:0,flexWrap:'wrap',gap:6,alignItems:'center'}}>
         <input
           aria-label="ค้นหาจัดซื้อจัดจ้าง"
-          placeholder="ค้นหาวัสดุ / งาน / PO / ผู้ขาย / ผู้รับเหมา / สถานะ / รายละเอียด"
+          placeholder="ค้นหา วัสดุ / งาน / PO / ผู้ขาย / ผู้รับเหมา / สถานะ"
           value={q}
           onChange={e=>setQ(e.target.value)}
-          style={{width:'100%',padding:'11px 12px',border:'1px solid #d8d2c7',borderRadius:10,background:'#fffdf9',color:'#182231',outline:'none'}}
+          style={{...compactControlStyle,flex:'1 1 300px',minWidth:220,border:'1px solid #d8d2c7',background:'#fffdf9',color:'#182231',outline:'none'}}
         />
-      </div>
-      <div className="toolbar" style={{padding:10,background:'var(--surface)',borderRadius:12,marginBottom:0,flexWrap:'wrap'}}>
-        <select value={siteFilter} onChange={e=>setSiteFilter(e.target.value)}>
+        <select value={siteFilter} onChange={e=>setSiteFilter(e.target.value)} style={{...compactControlStyle,minWidth:145,maxWidth:220}}>
           <option value="">ทุก Plot / หน้างาน</option>
           {siteOptions.map(p=><option key={p.id} value={p.id}>{p.code}{p.name&&p.name!==p.code?` — ${p.name}`:''}</option>)}
         </select>
@@ -133,25 +138,27 @@ export default function ProcurementPage(){
           className="button"
           aria-pressed={followUpOnly}
           onClick={()=>setFollowUpOnly(v=>!v)}
-          style={followUpOnly?{fontWeight:800,boxShadow:'inset 0 0 0 2px currentColor'}:undefined}
+          style={{...compactControlStyle,whiteSpace:'nowrap',...(followUpOnly?{fontWeight:800,boxShadow:'inset 0 0 0 2px currentColor'}:{})}}
         >
-          {followUpOnly?'✓ ':''}เฉพาะติดค้าง / ต้องตาม
+          {followUpOnly?'✓ ':''}ติดค้าง / ต้องตาม
         </button>
-        <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}>
-          <option value="">ทุกสถานะปัจจุบัน</option>
+        <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} style={{...compactControlStyle,minWidth:140,maxWidth:205}}>
+          <option value="">ทุกสถานะ</option>
           {statuses.map(x=><option key={x} value={x}>{x}</option>)}
         </select>
-        <select value={updateFilter} onChange={e=>setUpdateFilter(e.target.value)}>
-          <option value="">ทุกวันที่อัปเดตข้อมูล</option>
+        <select value={updateFilter} onChange={e=>setUpdateFilter(e.target.value)} style={{...compactControlStyle,minWidth:140,maxWidth:190}}>
+          <option value="">ทุกวันที่อัปเดต</option>
           {updateDates.map(x=><option key={x} value={x}>{dateTH(x)}</option>)}
         </select>
-        {(q||siteFilter||statusFilter||updateFilter||followUpOnly)&&<button type="button" className="button" onClick={()=>{setQ('');setSiteFilter('');setStatusFilter('');setUpdateFilter('');setFollowUpOnly(false)}}>ล้างการค้นหา</button>}
-        <span className="muted small" style={{marginLeft:'auto'}}>แสดง {filteredRows.length} / {rows.length} รายการ{latestUpdate?` • ข้อมูลล่าสุด ${dateTH(latestUpdate)}`:''}</span>
+        {(q||siteFilter||statusFilter||updateFilter||followUpOnly)&&<button type="button" className="button" onClick={()=>{setQ('');setSiteFilter('');setStatusFilter('');setUpdateFilter('');setFollowUpOnly(false)}} style={{...compactControlStyle,whiteSpace:'nowrap'}}>ล้าง</button>}
+      </div>
+      <div className="muted small" style={{marginTop:5,textAlign:'right',fontSize:11,lineHeight:1.25}}>
+        แสดง {filteredRows.length} / {rows.length} รายการ{latestUpdate?` • ข้อมูลล่าสุด ${dateTH(latestUpdate)}`:''}
       </div>
     </section>
 
     <div className="panel" style={{padding:0,overflow:'hidden'}}>
-      <div className="table-wrap" style={{maxHeight:'calc(100vh - 270px)',overflow:'auto'}}>
+      <div className="table-wrap" style={{maxHeight:'calc(100vh - 205px)',overflow:'auto'}}>
         <table style={{minWidth:1450}}>
           <thead style={{position:'sticky',top:0,zIndex:12,background:'var(--surface)'}}><tr><th>Site / Plot</th><th>PO / PR</th><th>ผู้ขาย / ผู้รับเหมา</th><th>รายการ</th><th>สถานะ PO / ชำระ</th><th>ขั้นตอนปัจจุบัน</th><th>กำหนดส่ง / เข้าหน้างาน</th><th>รายละเอียด / สิ่งที่ต้องตาม</th><th>อัปเดตข้อมูล</th></tr></thead>
           <tbody>{filteredRows.map(x=><tr key={x.id}>
