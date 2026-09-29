@@ -38,6 +38,7 @@ function parseDeliveryDate(row:any){
 export default function ProcurementPage(){
   const [rows,setRows]=useState<any[]>([])
   const [projects,setProjects]=useState<Project[]>([])
+  const [siteFilter,setSiteFilter]=useState('')
   const [statusFilter,setStatusFilter]=useState('')
   const [updateFilter,setUpdateFilter]=useState('')
 
@@ -52,6 +53,12 @@ export default function ProcurementPage(){
     })
   },[])
 
+  const siteOptions=useMemo(()=>{
+    const usedProjectIds=new Set(rows.map(x=>String(x.project_id||'')).filter(Boolean))
+    return projects
+      .filter(p=>usedProjectIds.has(p.id))
+      .sort((a,b)=>(a.sort_order??999999)-(b.sort_order??999999)||a.code.localeCompare(b.code,'th'))
+  },[rows,projects])
   const statuses=useMemo(()=>[...new Set(rows.map(x=>String(x.current_status||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th')),[rows])
   const updateDates=useMemo(()=>[...new Set(rows.map(x=>String(x.source_updated_at||'').trim()).filter(Boolean))].sort((a,b)=>b.localeCompare(a)),[rows])
   const latestUpdate=updateDates[0]||''
@@ -59,6 +66,7 @@ export default function ProcurementPage(){
   const filteredRows=useMemo(()=>{
     const today=new Date(); today.setHours(0,0,0,0); const todayTs=today.getTime()
     return rows.filter(x=>{
+      if(siteFilter&&String(x.project_id||'')!==siteFilter) return false
       if(statusFilter&&String(x.current_status||'')!==statusFilter) return false
       if(updateFilter&&String(x.source_updated_at||'')!==updateFilter) return false
       return true
@@ -71,13 +79,17 @@ export default function ProcurementPage(){
       if(aFuture!==bFuture) return aFuture?-1:1
       return aFuture?ad-bd:bd-ad
     })
-  },[rows,statusFilter,updateFilter])
+  },[rows,siteFilter,statusFilter,updateFilter])
 
   return <AppShell>
     <PageHeader title="การจัดซื้อ/จัดจ้าง" subtitle="ติดตามสถานะจัดซื้อ การชำระ ผู้ขาย/ผู้รับเหมา และกำหนดส่งหรือเข้าหน้างาน"/>
 
     <section className="panel" style={{marginBottom:14,position:'sticky',top:0,zIndex:18}}>
       <div className="toolbar" style={{padding:10,background:'var(--surface)',borderRadius:12}}>
+        <select value={siteFilter} onChange={e=>setSiteFilter(e.target.value)}>
+          <option value="">ทุก Plot / หน้างาน</option>
+          {siteOptions.map(p=><option key={p.id} value={p.id}>{p.code}{p.name&&p.name!==p.code?` — ${p.name}`:''}</option>)}
+        </select>
         <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}>
           <option value="">ทุกสถานะปัจจุบัน</option>
           {statuses.map(x=><option key={x} value={x}>{x}</option>)}
@@ -86,7 +98,7 @@ export default function ProcurementPage(){
           <option value="">ทุกวันที่อัปเดตข้อมูล</option>
           {updateDates.map(x=><option key={x} value={x}>{dateTH(x)}</option>)}
         </select>
-        {(statusFilter||updateFilter)&&<button type="button" className="button" onClick={()=>{setStatusFilter('');setUpdateFilter('')}}>ล้างตัวกรอง</button>}
+        {(siteFilter||statusFilter||updateFilter)&&<button type="button" className="button" onClick={()=>{setSiteFilter('');setStatusFilter('');setUpdateFilter('')}}>ล้างตัวกรอง</button>}
         <span className="muted small" style={{marginLeft:'auto'}}>แสดง {filteredRows.length} / {rows.length} รายการ{latestUpdate?` • ข้อมูลล่าสุด ${dateTH(latestUpdate)}`:''}</span>
       </div>
     </section>
@@ -109,6 +121,6 @@ export default function ProcurementPage(){
         {!filteredRows.length&&<p className="muted" style={{padding:16}}>ไม่พบรายการตามตัวกรองที่เลือก</p>}
       </div>
     </div>
-    <p className="muted small" style={{marginTop:8}}>เรียงกำหนดส่ง/เข้าหน้างาน: วันที่กำลังจะถึงก่อน • รายการที่เลยกำหนดแล้วเรียงจากล่าสุดไปเก่าสุด • รายการที่ไม่ระบุวันที่อยู่ท้ายตาราง</p>
+    <p className="muted small" style={{marginTop:8}}>เลือก Plot / หน้างานเพื่อดูว่ารายการใดกำลังติดอยู่ในขั้นตอนจัดซื้อหรือจัดจ้างใด • เรียงกำหนดส่ง/เข้าหน้างาน: วันที่กำลังจะถึงก่อน • รายการที่เลยกำหนดแล้วเรียงจากล่าสุดไปเก่าสุด • รายการที่ไม่ระบุวันที่อยู่ท้ายตาราง</p>
   </AppShell>
 }
