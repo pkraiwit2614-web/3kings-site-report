@@ -43,6 +43,11 @@ function parseDeliveryDate(row:any){
   return null
 }
 
+function searchable(values:unknown[],needle:string){
+  if(!needle) return true
+  return values.map(v=>String(v??'')).join(' ').toLowerCase().includes(needle)
+}
+
 export default function ProcurementPage(){
   const [rows,setRows]=useState<any[]>([])
   const [projects,setProjects]=useState<Project[]>([])
@@ -50,6 +55,13 @@ export default function ProcurementPage(){
   const [statusFilter,setStatusFilter]=useState('')
   const [updateFilter,setUpdateFilter]=useState('')
   const [followUpOnly,setFollowUpOnly]=useState(false)
+  const [q,setQ]=useState('')
+
+  useEffect(()=>{
+    const params=new URLSearchParams(window.location.search)
+    const qParam=params.get('q')||''
+    if(qParam) setQ(qParam)
+  },[])
 
   useEffect(()=>{
     const s=getSupabase()
@@ -62,6 +74,7 @@ export default function ProcurementPage(){
     })
   },[])
 
+  const projectById=useMemo(()=>new Map(projects.map(p=>[p.id,p])),[projects])
   const siteOptions=useMemo(()=>{
     const usedProjectIds=new Set(rows.map(x=>String(x.project_id||'')).filter(Boolean))
     return projects
@@ -71,14 +84,20 @@ export default function ProcurementPage(){
   const statuses=useMemo(()=>[...new Set(rows.map(x=>String(x.current_status||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th')),[rows])
   const updateDates=useMemo(()=>[...new Set(rows.map(x=>String(x.source_updated_at||'').trim()).filter(Boolean))].sort((a,b)=>b.localeCompare(a)),[rows])
   const latestUpdate=updateDates[0]||''
+  const needle=q.trim().toLowerCase()
 
   const filteredRows=useMemo(()=>{
     const today=new Date(); today.setHours(0,0,0,0); const todayTs=today.getTime()
     return rows.filter(x=>{
+      const p=projectById.get(x.project_id)
       if(siteFilter&&String(x.project_id||'')!==siteFilter) return false
       if(statusFilter&&String(x.current_status||'')!==statusFilter) return false
       if(updateFilter&&String(x.source_updated_at||'')!==updateFilter) return false
       if(followUpOnly&&!needsFollowUp(x)) return false
+      if(!searchable([
+        p?.code,p?.name,x.vendor,x.item_name,x.procurement_status,x.payment_status,x.current_status,
+        x.pr_no,x.po_no,x.expected_delivery_text,x.condition_note,x.source_updated_at
+      ],needle)) return false
       return true
     }).sort((a,b)=>{
       const ad=parseDeliveryDate(a), bd=parseDeliveryDate(b)
@@ -89,13 +108,22 @@ export default function ProcurementPage(){
       if(aFuture!==bFuture) return aFuture?-1:1
       return aFuture?ad-bd:bd-ad
     })
-  },[rows,siteFilter,statusFilter,updateFilter,followUpOnly])
+  },[rows,siteFilter,statusFilter,updateFilter,followUpOnly,needle,projectById])
 
   return <AppShell>
-    <PageHeader title="การจัดซื้อ/จัดจ้าง" subtitle="ติดตามสถานะจัดซื้อ การชำระ ผู้ขาย/ผู้รับเหมา และกำหนดส่งหรือเข้าหน้างาน"/>
+    <PageHeader title="การจัดซื้อ/จัดจ้าง" subtitle="ค้นหาจากวัสดุ งาน ผู้ขาย ผู้รับเหมา เลข PO หรือสถานะ เพื่อดูว่าตอนนี้ติดอยู่ขั้นตอนไหนและต้องตามอะไรต่อ"/>
 
     <section className="panel" style={{marginBottom:14,position:'sticky',top:0,zIndex:18}}>
-      <div className="toolbar" style={{padding:10,background:'var(--surface)',borderRadius:12}}>
+      <div style={{padding:'10px 10px 0'}}>
+        <input
+          aria-label="ค้นหาจัดซื้อจัดจ้าง"
+          placeholder="ค้นหาวัสดุ / งาน / PO / ผู้ขาย / ผู้รับเหมา / สถานะ / รายละเอียด"
+          value={q}
+          onChange={e=>setQ(e.target.value)}
+          style={{width:'100%',padding:'11px 12px',border:'1px solid #d8d2c7',borderRadius:10,background:'#fffdf9',color:'#182231',outline:'none'}}
+        />
+      </div>
+      <div className="toolbar" style={{padding:10,background:'var(--surface)',borderRadius:12,marginBottom:0,flexWrap:'wrap'}}>
         <select value={siteFilter} onChange={e=>setSiteFilter(e.target.value)}>
           <option value="">ทุก Plot / หน้างาน</option>
           {siteOptions.map(p=><option key={p.id} value={p.id}>{p.code}{p.name&&p.name!==p.code?` — ${p.name}`:''}</option>)}
@@ -117,29 +145,30 @@ export default function ProcurementPage(){
           <option value="">ทุกวันที่อัปเดตข้อมูล</option>
           {updateDates.map(x=><option key={x} value={x}>{dateTH(x)}</option>)}
         </select>
-        {(siteFilter||statusFilter||updateFilter||followUpOnly)&&<button type="button" className="button" onClick={()=>{setSiteFilter('');setStatusFilter('');setUpdateFilter('');setFollowUpOnly(false)}}>ล้างตัวกรอง</button>}
+        {(q||siteFilter||statusFilter||updateFilter||followUpOnly)&&<button type="button" className="button" onClick={()=>{setQ('');setSiteFilter('');setStatusFilter('');setUpdateFilter('');setFollowUpOnly(false)}}>ล้างการค้นหา</button>}
         <span className="muted small" style={{marginLeft:'auto'}}>แสดง {filteredRows.length} / {rows.length} รายการ{latestUpdate?` • ข้อมูลล่าสุด ${dateTH(latestUpdate)}`:''}</span>
       </div>
     </section>
 
     <div className="panel" style={{padding:0,overflow:'hidden'}}>
-      <div className="table-wrap" style={{maxHeight:'calc(100vh - 245px)',overflow:'auto'}}>
-        <table>
-          <thead style={{position:'sticky',top:0,zIndex:12,background:'var(--surface)'}}><tr><th>Site / Plot</th><th>ผู้ขาย / ผู้รับเหมา</th><th>รายการ</th><th>สถานะชำระ / จัดซื้อ</th><th>สถานะปัจจุบัน</th><th>กำหนดส่ง / เข้าหน้างาน</th><th>อัปเดตข้อมูล</th><th>เงื่อนไข / หมายเหตุ</th></tr></thead>
+      <div className="table-wrap" style={{maxHeight:'calc(100vh - 270px)',overflow:'auto'}}>
+        <table style={{minWidth:1450}}>
+          <thead style={{position:'sticky',top:0,zIndex:12,background:'var(--surface)'}}><tr><th>Site / Plot</th><th>PO / PR</th><th>ผู้ขาย / ผู้รับเหมา</th><th>รายการ</th><th>สถานะ PO / ชำระ</th><th>ขั้นตอนปัจจุบัน</th><th>กำหนดส่ง / เข้าหน้างาน</th><th>รายละเอียด / สิ่งที่ต้องตาม</th><th>อัปเดตข้อมูล</th></tr></thead>
           <tbody>{filteredRows.map(x=><tr key={x.id}>
-            <td>{projects.find(p=>p.id===x.project_id)?.code||'-'}</td>
+            <td><b>{projectById.get(x.project_id)?.code||'-'}</b><small>{projectById.get(x.project_id)?.name||''}</small></td>
+            <td><b>{[x.po_no,x.pr_no].filter(Boolean).join(' / ')||'-'}</b></td>
             <td>{x.vendor||'ยังไม่ระบุ'}</td>
             <td><b>{x.item_name}</b></td>
             <td>{x.payment_status||x.procurement_status||'-'}</td>
             <td><StatusBadge value={x.current_status}/></td>
             <td><b>{x.expected_delivery_text||'ยังไม่ระบุ'}</b></td>
-            <td>{dateTH(x.source_updated_at)}</td>
             <td>{x.condition_note||'-'}</td>
+            <td>{dateTH(x.source_updated_at)}</td>
           </tr>)}</tbody>
         </table>
-        {!filteredRows.length&&<p className="muted" style={{padding:16}}>ไม่พบรายการตามตัวกรองที่เลือก</p>}
+        {!filteredRows.length&&<p className="muted" style={{padding:16}}>ไม่พบรายการตามคำค้นหรือ Filter ที่เลือก</p>}
       </div>
     </div>
-    <p className="muted small" style={{marginTop:8}}>เลือก Plot / หน้างานเพื่อดูว่ารายการใดกำลังติดอยู่ในขั้นตอนจัดซื้อหรือจัดจ้างใด • ใช้ “เฉพาะติดค้าง / ต้องตาม” เพื่อตัดรายการที่ส่งมอบหรือปิดงานแล้วออก • เรียงกำหนดส่ง/เข้าหน้างาน: วันที่กำลังจะถึงก่อน • รายการที่เลยกำหนดแล้วเรียงจากล่าสุดไปเก่าสุด • รายการที่ไม่ระบุวันที่อยู่ท้ายตาราง</p>
+    <p className="muted small" style={{marginTop:8}}>พิมพ์ชื่อวัสดุหรือเลข PO เพื่อดูรายการที่เกี่ยวข้องได้ทันที • ใช้ Filter Plot/หน้างานและ “เฉพาะติดค้าง / ต้องตาม” ร่วมกับการค้นหาได้ • ขั้นตอนปัจจุบันและรายละเอียดใช้สำหรับตามต่อกับจัดซื้อ บัญชี ร้านค้า หรือผู้รับเหมา</p>
   </AppShell>
 }
