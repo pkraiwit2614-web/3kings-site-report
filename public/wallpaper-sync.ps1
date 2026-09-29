@@ -37,6 +37,32 @@ function Ensure-Root {
   New-Item -ItemType Directory -Path $ProfileDir -Force | Out-Null
 }
 
+function Invoke-BrowserQuiet {
+  param(
+    [Parameter(Mandatory=$true)][string[]]$Arguments,
+    [switch]$CaptureOutput
+  )
+
+  # Windows PowerShell 5.1 can convert Chromium diagnostic stderr into NativeCommandError
+  # when ErrorActionPreference is Stop. Chromium often writes harmless task-manager/debug
+  # diagnostics to stderr even when the command succeeds, so suppress native stderr only
+  # for this invocation while preserving strict error handling everywhere else.
+  $previousPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = 'SilentlyContinue'
+    if($CaptureOutput){
+      $output = (& $script:browser @Arguments 2>$null | Out-String)
+    } else {
+      & $script:browser @Arguments 2>$null | Out-Null
+      $output = ''
+    }
+    $exitCode = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $previousPreference
+  }
+  return [pscustomobject]@{ ExitCode = $exitCode; Output = $output }
+}
+
 if($Uninstall){
   try { & schtasks.exe /Delete /TN $TaskName /F | Out-Null } catch {}
   Write-Host 'Scheduled task removed. The last wallpaper image is kept on this PC.'
@@ -81,8 +107,9 @@ $commonArgs = @(
 
 # Validate authentication and successful data rendering before touching the current wallpaper.
 $dumpArgs = $commonArgs + @('--dump-dom',$AppUrl)
-$dom = (& $browser @dumpArgs 2>$null | Out-String)
-if($LASTEXITCODE -ne 0 -or $dom -notmatch 'data-wallpaper-state="ready"'){
+$dump = Invoke-BrowserQuiet -Arguments $dumpArgs -CaptureOutput
+$dom = $dump.Output
+if($dump.ExitCode -ne 0 -or $dom -notmatch 'data-wallpaper-state="ready"'){
   Write-Host 'Wallpaper was not replaced: the Web App session is signed out or data is not ready.'
   Write-Host "Run: powershell -ExecutionPolicy Bypass -File `"$InstalledScript`" -Login"
   exit 2
@@ -91,8 +118,8 @@ if($LASTEXITCODE -ne 0 -or $dom -notmatch 'data-wallpaper-state="ready"'){
 $tempShot = Join-Path $Root 'wallpaper-new.png'
 Remove-Item $tempShot -Force -ErrorAction SilentlyContinue
 $shotArgs = $commonArgs + @("--screenshot=$tempShot",$AppUrl)
-& $browser @shotArgs 2>$null | Out-Null
-if($LASTEXITCODE -ne 0 -or -not (Test-Path $tempShot) -or (Get-Item $tempShot).Length -lt 50000){
+$shot = Invoke-BrowserQuiet -Arguments $shotArgs
+if($shot.ExitCode -ne 0 -or -not (Test-Path $tempShot) -or (Get-Item $tempShot).Length -lt 50000){
   Write-Host 'Wallpaper was not replaced: screenshot generation failed.'
   exit 3
 }
