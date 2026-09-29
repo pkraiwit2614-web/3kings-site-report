@@ -74,12 +74,23 @@ $height = [Math]::Max(720, $screen.Height)
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $tempPath = Join-Path $Root "wallpaper-download-$stamp.png"
 $wallpaperPath = Join-Path $Root "wallpaper-$stamp.png"
-$url = "$ImageUrl?w=$width&h=$height&v=$stamp"
+
+# Build the URI explicitly. PowerShell can misread "$ImageUrl?w=..." as a variable name,
+# which produces an invalid hostname. UriBuilder avoids that interpolation ambiguity.
+$uriBuilder = [System.UriBuilder]::new($ImageUrl)
+$uriBuilder.Query = "w=$width&h=$height&v=$stamp"
+$url = $uriBuilder.Uri.AbsoluteUri
+
+$parsedUri = $null
+if(-not [System.Uri]::TryCreate($url, [System.UriKind]::Absolute, [ref]$parsedUri) -or $parsedUri.Scheme -ne 'https'){
+  Write-Host "Wallpaper was not replaced: generated server URI is invalid: $url"
+  exit 2
+}
 
 Remove-Item -LiteralPath $tempPath -Force -ErrorAction SilentlyContinue
 
 try {
-  Invoke-WebRequest -UseBasicParsing -Uri $url -Headers @{
+  Invoke-WebRequest -UseBasicParsing -Uri $parsedUri -Headers @{
     'X-Wallpaper-Token' = $deviceToken
     'Cache-Control' = 'no-cache'
   } -OutFile $tempPath -TimeoutSec 60
@@ -132,3 +143,4 @@ Get-ChildItem -Path $Root -Filter 'wallpaper-*.png' -File -ErrorAction SilentlyC
 
 Write-Host "Wallpaper updated: $wallpaperPath"
 Write-Host "Server image: ${width}x${height}"
+Write-Host "Source: $($parsedUri.GetLeftPart([System.UriPartial]::Path))"
