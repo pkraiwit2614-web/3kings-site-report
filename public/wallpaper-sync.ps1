@@ -58,6 +58,20 @@ function Invoke-BrowserQuiet {
   return [pscustomobject]@{ ExitCode = $exitCode; Output = $output }
 }
 
+function Test-WallpaperDomReady {
+  param([string]$Dom)
+  if([string]::IsNullOrWhiteSpace($Dom)){ return $false }
+  $markers = @(
+    'CRITICAL FOLLOW-UP / BLOCKERS',
+    'PROCUREMENT FOLLOW-UP',
+    'CONDO HANDOVER / DEFECT'
+  )
+  foreach($marker in $markers){
+    if($Dom -notlike "*$marker*"){ return $false }
+  }
+  return $true
+}
+
 if($Uninstall){
   try { & schtasks.exe /Delete /TN $TaskName /F | Out-Null } catch {}
   Write-Host 'Scheduled task removed. The last wallpaper image is kept on this PC.'
@@ -70,7 +84,7 @@ $browser = Find-Browser
 if($Login){
   Write-Host 'Opening the dedicated 3 Kings wallpaper browser profile...'
   Write-Host 'Sign in to the Web App once, confirm that the wallpaper page appears, then close that browser window.'
-  Start-Process -FilePath $browser -ArgumentList @("--user-data-dir=$ProfileDir",'--no-first-run',$AppUrl)
+  Start-Process -FilePath $browser -ArgumentList @("--user-data-dir=$ProfileDir",'--profile-directory=Default','--no-first-run',$AppUrl)
   exit 0
 }
 
@@ -98,21 +112,43 @@ $commonArgs = @(
   '--headless=new',
   '--hide-scrollbars',
   '--no-first-run',
+  '--profile-directory=Default',
   '--disk-cache-size=1',
   '--media-cache-size=1',
   "--user-data-dir=$ProfileDir",
   "--window-size=$width,$height",
   '--force-device-scale-factor=1',
-  '--virtual-time-budget=15000'
+  '--virtual-time-budget=30000'
 )
 
-# Validate authentication and successful data rendering before touching the current wallpaper.
+# Validate the actual rendered panels rather than relying on a React data attribute.
+# Headless Chromium can occasionally return the server-rendered attribute while the client UI is already hydrated.
 $dumpArgs = $commonArgs + @('--dump-dom',$FreshAppUrl)
 $dump = Invoke-BrowserQuiet -Arguments $dumpArgs -CaptureOutput
 $dom = $dump.Output
-if($dump.ExitCode -ne 0 -or $dom -notmatch 'data-wallpaper-state="ready"'){
-  Write-Host 'Wallpaper was not replaced: the Web App session is signed out or data is not ready.'
-  Write-Host "Run: powershell -ExecutionPolicy Bypass -File `"$InstalledScript`" -Login"
+$isReady = ($dump.ExitCode -eq 0 -and (Test-WallpaperDomReady -Dom $dom))
+
+if(-not $isReady){
+  Start-Sleep -Seconds 2
+  $retryBust = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+  $FreshAppUrl = "$AppUrl?wallpaper_refresh=$retryBust"
+  $dumpArgs = $commonArgs + @('--dump-dom',$FreshAppUrl)
+  $dump = Invoke-BrowserQuiet -Arguments $dumpArgs -CaptureOutput
+  $dom = $dump.Output
+  $isReady = ($dump.ExitCode -eq 0 -and (Test-WallpaperDomReady -Dom $dom))
+}
+
+if(-not $isReady){
+  if($dom -like '*BUILDING TODAY*'){
+    Write-Host 'Wallpaper was not replaced: the page is authenticated but still loading data.'
+  } elseif($dom -like '*WALLPAPER UPDATE PAUSED*'){
+    Write-Host 'Wallpaper was not replaced: the wallpaper page reported a data-loading error.'
+  } elseif($dom -like '*TODAY*S COMMAND CENTER*'){
+    Write-Host 'Wallpaper was not replaced: the wallpaper page opened but the live panels did not finish rendering.'
+  } else {
+    Write-Host 'Wallpaper was not replaced: the dedicated browser session is not available to headless Edge.'
+    Write-Host "Run: powershell -ExecutionPolicy Bypass -File `"$InstalledScript`" -Login"
+  }
   exit 2
 }
 
