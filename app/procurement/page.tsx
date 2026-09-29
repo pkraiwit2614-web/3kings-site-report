@@ -160,14 +160,14 @@ export default function ProcurementPage(){
     <div className="panel" style={{padding:0,overflow:'hidden'}}>
       <div className="table-wrap" style={{maxHeight:'calc(100vh - 205px)',overflow:'auto'}}>
         <table style={{minWidth:1450}}>
-          <thead style={{position:'sticky',top:0,zIndex:12,background:'var(--surface)'}}><tr><th>Site / Plot</th><th>PO / PR</th><th>ผู้ขาย / ผู้รับเหมา</th><th>รายการ</th><th>สถานะ PO / ชำระ</th><th>ขั้นตอนปัจจุบัน</th><th>กำหนดส่ง / เข้าหน้างาน</th><th>รายละเอียด / สิ่งที่ต้องตาม</th><th>อัปเดตข้อมูล</th></tr></thead>
+          <thead style={{position:'sticky',top:0,zIndex:12,background:'var(--surface)'}}><tr><th>Site / Plot</th><th>PO / PR</th><th>ผู้ขาย / ผู้รับเหมา</th><th>รายการ</th><th>สถานะ PO / ชำระ</th><th style={{width:180,minWidth:180,maxWidth:180}}>ขั้นตอนปัจจุบัน</th><th>กำหนดส่ง / เข้าหน้างาน</th><th>รายละเอียด / สิ่งที่ต้องตาม</th><th>อัปเดตข้อมูล</th></tr></thead>
           <tbody>{filteredRows.map(x=><tr key={x.id}>
             <td><b>{projectById.get(x.project_id)?.code||'-'}</b><small>{projectById.get(x.project_id)?.name||''}</small></td>
             <td><b>{[x.po_no,x.pr_no].filter(Boolean).join(' / ')||'-'}</b></td>
             <td>{x.vendor||'ยังไม่ระบุ'}</td>
             <td><b>{x.item_name}</b></td>
             <td>{x.payment_status||x.procurement_status||'-'}</td>
-            <td><StatusBadge value={x.current_status}/></td>
+            <td style={{width:180,minWidth:180,maxWidth:180,whiteSpace:'normal',overflowWrap:'anywhere'}}><StatusBadge value={x.current_status} multiline/></td>
             <td><b>{x.expected_delivery_text||'ยังไม่ระบุ'}</b></td>
             <td>{x.condition_note||'-'}</td>
             <td>{dateTH(x.source_updated_at)}</td>
