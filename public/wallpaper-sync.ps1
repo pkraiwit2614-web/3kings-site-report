@@ -9,7 +9,6 @@ $AppUrl = 'https://3kings-site-report.vercel.app/wallpaper'
 $TaskName = '3Kings Dynamic Wallpaper'
 $Root = Join-Path $env:LOCALAPPDATA '3KingsWallpaper'
 $ProfileDir = Join-Path $Root 'BrowserProfile'
-$WallpaperPath = Join-Path $Root 'wallpaper.png'
 $InstalledScript = Join-Path $Root 'wallpaper-sync.ps1'
 
 function Find-Browser {
@@ -43,10 +42,6 @@ function Invoke-BrowserQuiet {
     [switch]$CaptureOutput
   )
 
-  # Windows PowerShell 5.1 can convert Chromium diagnostic stderr into NativeCommandError
-  # when ErrorActionPreference is Stop. Chromium often writes harmless task-manager/debug
-  # diagnostics to stderr even when the command succeeds, so suppress native stderr only
-  # for this invocation while preserving strict error handling everywhere else.
   $previousPreference = $ErrorActionPreference
   try {
     $ErrorActionPreference = 'SilentlyContinue'
@@ -94,19 +89,25 @@ Add-Type -AssemblyName System.Windows.Forms
 $screen = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
 $width = [Math]::Max(1280, $screen.Width)
 $height = [Math]::Max(720, $screen.Height)
+
+# Force a fresh route request on every run so a prior prerender/CSS response is not reused.
+$cacheBust = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+$FreshAppUrl = "$AppUrl?wallpaper_refresh=$cacheBust"
+
 $commonArgs = @(
   '--headless=new',
   '--hide-scrollbars',
   '--no-first-run',
-  '--disable-background-networking',
+  '--disk-cache-size=1',
+  '--media-cache-size=1',
   "--user-data-dir=$ProfileDir",
   "--window-size=$width,$height",
   '--force-device-scale-factor=1',
-  '--virtual-time-budget=12000'
+  '--virtual-time-budget=15000'
 )
 
 # Validate authentication and successful data rendering before touching the current wallpaper.
-$dumpArgs = $commonArgs + @('--dump-dom',$AppUrl)
+$dumpArgs = $commonArgs + @('--dump-dom',$FreshAppUrl)
 $dump = Invoke-BrowserQuiet -Arguments $dumpArgs -CaptureOutput
 $dom = $dump.Output
 if($dump.ExitCode -ne 0 -or $dom -notmatch 'data-wallpaper-state="ready"'){
@@ -115,9 +116,13 @@ if($dump.ExitCode -ne 0 -or $dom -notmatch 'data-wallpaper-state="ready"'){
   exit 2
 }
 
-$tempShot = Join-Path $Root 'wallpaper-new.png'
+# Use a new image filename every run. Windows can keep showing a cached bitmap when the same
+# wallpaper path is overwritten, even if the underlying PNG has changed.
+$stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+$tempShot = Join-Path $Root "wallpaper-new-$stamp.png"
+$WallpaperPath = Join-Path $Root "wallpaper-$stamp.png"
 Remove-Item $tempShot -Force -ErrorAction SilentlyContinue
-$shotArgs = $commonArgs + @("--screenshot=$tempShot",$AppUrl)
+$shotArgs = $commonArgs + @("--screenshot=$tempShot",$FreshAppUrl)
 $shot = Invoke-BrowserQuiet -Arguments $shotArgs
 if($shot.ExitCode -ne 0 -or -not (Test-Path $tempShot) -or (Get-Item $tempShot).Length -lt 50000){
   Write-Host 'Wallpaper was not replaced: screenshot generation failed.'
@@ -142,4 +147,11 @@ namespace Wallpaper {
 }
 $ok = [Wallpaper.NativeMethods]::SystemParametersInfo(20,0,$WallpaperPath,3)
 if(-not $ok){ throw 'Windows could not apply the wallpaper.' }
+
+# Keep the current image and remove obsolete generated images from earlier runs.
+Get-ChildItem -Path $Root -Filter 'wallpaper-*.png' -File -ErrorAction SilentlyContinue |
+  Where-Object { $_.FullName -ne $WallpaperPath } |
+  Remove-Item -Force -ErrorAction SilentlyContinue
+
 Write-Host "Wallpaper updated: $WallpaperPath"
+Write-Host "Fresh source: $FreshAppUrl"
