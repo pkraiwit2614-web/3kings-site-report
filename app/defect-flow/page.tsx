@@ -20,6 +20,7 @@ type StatusItem={label:string;lines:string[];count:number;tone:Tone;href?:string
 const GROUP={
   checked:'Hotel - Checked Complete',
   awaiting:'Hotel - Awaiting Check',
+  roomInspection:'Hotel - Awaiting Room Inspection',
   incomplete:'Hotel - Incomplete',
   handover:'Non-Hotel - Handover Complete',
   pending:'Non-Hotel - Pending Handover',
@@ -151,6 +152,7 @@ function buildingCounts(rows:FlowRow[],building:'A'|'B'){
     customerHotelChecked:status('มีลูกค้า','ร่วมโรงแรม',GROUP.checked),
     customerHotelHandover:status('มีลูกค้า','ร่วมโรงแรม',GROUP.handover),
     customerHotelAwaiting:status('มีลูกค้า','ร่วมโรงแรม',GROUP.awaiting),
+    customerHotelRoomInspection:status('มีลูกค้า','ร่วมโรงแรม',GROUP.roomInspection),
     customerHotelIncomplete:status('มีลูกค้า','ร่วมโรงแรม',GROUP.incomplete),
     customerNonHandover:status('มีลูกค้า','ไม่ร่วมโรงแรม',GROUP.handover),
     customerNonPending:status('มีลูกค้า','ไม่ร่วมโรงแรม',GROUP.pending),
@@ -172,6 +174,7 @@ function BuildingFlow({top,building,data}:{top:number;building:'A'|'B';data:Retu
   const hotelCustomer:StatusItem[]=[
     {label:'Hotel Checked',lines:['Hotel Engineer','ตรวจแล้ว'],count:data.customerHotelChecked,tone:'good',href:defectHref({filter:'hotel-customer-checked',building})},
     ...(data.customerHotelHandover>0?[{label:'Handover',lines:['ส่งมอบลูกค้าแล้ว'],count:data.customerHotelHandover,tone:'good' as Tone,href:defectHref({filter:'hotel-customer',building,q:'ส่งมอบลูกค้าแล้ว'})}]:[]),
+    ...(data.customerHotelRoomInspection>0?[{label:'Awaiting Room',lines:['ยังไม่ตรวจห้อง','ยังไม่มี Defect'],count:data.customerHotelRoomInspection,tone:'warn' as Tone,href:defectHref({filter:'hotel-customer',building,q:'ยังไม่ตรวจห้อง'})}]:[]),
     {label:'Awaiting Hotel',lines:['Defect เสร็จ /','รอ Hotel ตรวจ'],count:data.customerHotelAwaiting,tone:'warn',href:defectHref({filter:'hotel-customer-awaiting',building})},
     {label:'Incomplete',lines:['Defect ยังไม่เสร็จ'],count:data.customerHotelIncomplete,tone:'danger',href:defectHref({filter:'hotel-customer-incomplete',building})},
   ]
@@ -185,8 +188,10 @@ function BuildingFlow({top,building,data}:{top:number;building:'A'|'B';data:Retu
     {label:'Handover',lines:['ส่งมอบลูกค้าแล้ว'],count:data.customerNonHandover,tone:'good',href:defectHref({filter:'nonhotel-customer-complete',building})},
     {label:'Pending',lines:['Pending Handover','รอลูกค้าเข้าตรวจรับ'],count:data.customerNonPending,tone:'warn',href:defectHref({filter:'nonhotel-customer-pending',building})},
   ]
-  const nonHotelNoCustomer:StatusItem[]=[
+  const nonHotelNoCustomer:StatusItem[]=data.noNonAwaitingSale>0?[
     {label:'Awaiting Sale',lines:['Awaiting Sale','ยังไม่มีลูกค้า'],count:data.noNonAwaitingSale,tone:'neutral',href:defectHref({filter:'nonhotel-nosale',building})},
+  ]:[
+    {label:'Clear',lines:['ไม่มีห้องคงค้าง'],count:0,tone:'good'},
   ]
   return <g>
     <a href={defectHref({building})} className="flow-link" aria-label={`เปิดรายละเอียดตึก ${building}`}>
@@ -243,13 +248,14 @@ export default function DefectFlowPage(){
   const synced=useMemo(()=>latestDate(rows),[rows])
   const endpoints=useMemo(()=>({
     awaitingSale:rows.filter(r=>r.status_group===GROUP.awaitingSale).length,
+    roomInspection:rows.filter(r=>r.status_group===GROUP.roomInspection).length,
     checked:rows.filter(r=>r.status_group===GROUP.checked).length,
     handover:rows.filter(r=>r.status_group===GROUP.handover).length,
     awaiting:rows.filter(r=>r.status_group===GROUP.awaiting).length,
     pending:rows.filter(r=>r.status_group===GROUP.pending).length,
     incomplete:rows.filter(r=>r.status_group===GROUP.incomplete).length,
   }),[rows])
-  const coverage=endpoints.awaitingSale+endpoints.checked+endpoints.handover+endpoints.awaiting+endpoints.pending+endpoints.incomplete
+  const coverage=endpoints.awaitingSale+endpoints.roomInspection+endpoints.checked+endpoints.handover+endpoints.awaiting+endpoints.pending+endpoints.incomplete
 
   const exportPng=async()=>{
     const svg=svgRef.current
@@ -277,7 +283,8 @@ export default function DefectFlowPage(){
   }
 
   const footerItems:StatusItem[]=[
-    {label:'Awaiting Sale',lines:['Awaiting Sale'],count:endpoints.awaitingSale,tone:'neutral',href:defectHref({filter:'status-awaiting-sale'})},
+    ...(endpoints.awaitingSale>0?[{label:'Awaiting Sale',lines:['Awaiting Sale'],count:endpoints.awaitingSale,tone:'neutral' as Tone,href:defectHref({filter:'status-awaiting-sale'})}]:[]),
+    ...(endpoints.roomInspection>0?[{label:'Awaiting Room',lines:['ยังไม่ตรวจห้อง'],count:endpoints.roomInspection,tone:'warn' as Tone,href:defectHref({filter:'hotel-customer',q:'ยังไม่ตรวจห้อง'})}]:[]),
     {label:'Hotel Checked',lines:['Hotel Engineer ตรวจแล้ว'],count:endpoints.checked,tone:'good',href:defectHref({filter:'status-hotel-checked'})},
     {label:'Handover',lines:['ส่งมอบแล้ว'],count:endpoints.handover,tone:'good',href:defectHref({filter:'status-handover-complete'})},
     {label:'Awaiting Hotel',lines:['Defect เสร็จ / รอ Hotel ตรวจ'],count:endpoints.awaiting,tone:'warn',href:defectHref({filter:'status-awaiting-hotel'})},
