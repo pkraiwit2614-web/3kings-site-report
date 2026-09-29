@@ -8,7 +8,7 @@
 }
 
 .wallpaper {
-  --taskbar-safe: 64px;
+  --taskbar-safe: 72px;
 }
 
 /* A captured clock becomes stale between 15-minute wallpaper refreshes, so do not show it. */
@@ -42,176 +42,183 @@
 /* Compact vertical rhythm on common laptop resolutions so nothing is pushed into the safe band. */
 @media (max-height: 800px) {
   .wallpaper {
-    --taskbar-safe: 60px;
+    --taskbar-safe: 100px;
   }
 
   .wallpaper .command {
-    padding-top: 14px !important;
+    padding-top: 12px !important;
     padding-left: 20px !important;
     padding-right: 20px !important;
-    padding-bottom: calc(10px + var(--taskbar-safe)) !important;
-    gap: 7px !important;
+    padding-bottom: calc(8px + var(--taskbar-safe)) !important;
+    gap: 6px !important;
   }
 
   .wallpaper .brand-rail {
-    padding-top: 18px !important;
-    padding-bottom: calc(14px + var(--taskbar-safe)) !important;
+    padding-top: 16px !important;
+    padding-bottom: calc(12px + var(--taskbar-safe)) !important;
   }
 
   .wallpaper .brand-logo {
-    width: 56px !important;
-    height: 56px !important;
+    width: 54px !important;
+    height: 54px !important;
   }
 
   .wallpaper .brand-lockup b {
-    font-size: 16px !important;
+    font-size: 15px !important;
   }
 
   .wallpaper .brand-lockup span {
-    font-size: 10px !important;
-    margin-top: 4px !important;
+    font-size: 9.5px !important;
+    margin-top: 3px !important;
   }
 
   .wallpaper .rail-rule {
-    margin: 18px 0 18px !important;
+    margin: 14px 0 14px !important;
   }
 
   .wallpaper .rail-copy {
-    margin-top: 38px !important;
-    gap: 9px !important;
-    font-size: 9px !important;
-  }
-
-  .wallpaper .hero h1 {
-    font-size: 30px !important;
-    margin: 5px 0 5px !important;
-  }
-
-  .wallpaper .eyebrow {
-    font-size: 9px !important;
-  }
-
-  .wallpaper .hero p {
-    font-size: 10px !important;
-  }
-
-  .wallpaper .live {
-    min-width: 190px !important;
-    padding: 7px 10px !important;
-  }
-
-  .wallpaper .live b {
-    font-size: 18px !important;
-  }
-
-  .wallpaper .kpi-strip {
-    gap: 7px !important;
-  }
-
-  .wallpaper .kpi {
-    padding: 6px 9px !important;
-    border-radius: 10px !important;
-  }
-
-  .wallpaper .kpi b {
-    font-size: 21px !important;
-  }
-
-  .wallpaper .kpi span {
+    margin-top: 30px !important;
+    gap: 8px !important;
     font-size: 8.5px !important;
   }
 
+  .wallpaper .hero h1 {
+    font-size: 28px !important;
+    margin: 4px 0 4px !important;
+  }
+
+  .wallpaper .eyebrow {
+    font-size: 8.5px !important;
+  }
+
+  .wallpaper .hero p {
+    font-size: 9.5px !important;
+  }
+
+  .wallpaper .live {
+    min-width: 188px !important;
+    padding: 6px 9px !important;
+  }
+
+  .wallpaper .live b {
+    font-size: 17px !important;
+  }
+
+  .wallpaper .kpi-strip {
+    gap: 6px !important;
+  }
+
+  .wallpaper .kpi {
+    padding: 5px 8px !important;
+    border-radius: 9px !important;
+  }
+
+  .wallpaper .kpi b {
+    font-size: 20px !important;
+  }
+
+  .wallpaper .kpi span {
+    font-size: 8px !important;
+  }
+
   .wallpaper .kpi small {
-    font-size: 7.5px !important;
-    margin-top: 2px !important;
+    font-size: 7px !important;
+    margin-top: 1px !important;
   }
 
   .wallpaper .dashboard-grid {
-    gap: 8px !important;
+    gap: 7px !important;
   }
 
   .wallpaper .panel-head {
-    height: 36px !important;
-    flex-basis: 36px !important;
-    padding: 0 10px !important;
+    height: 34px !important;
+    flex-basis: 34px !important;
+    padding: 0 9px !important;
   }
 
   .wallpaper .panel-head b {
-    font-size: 10px !important;
+    font-size: 9.5px !important;
   }
 
   .wallpaper .panel-head span {
-    font-size: 11px !important;
+    font-size: 10.5px !important;
   }
 
   .wallpaper .work-row,
   .wallpaper .compact-rows .work-row {
-    min-height: 35px !important;
-    padding: 3px 8px !important;
-    grid-template-columns: 6px 48px minmax(0,1fr) 96px !important;
-    gap: 7px !important;
+    min-height: 32px !important;
+    padding: 2px 7px !important;
+    grid-template-columns: 6px 46px minmax(0,1fr) 94px !important;
+    gap: 6px !important;
   }
 
   .wallpaper .signal {
-    height: 22px !important;
+    height: 20px !important;
   }
 
   .wallpaper .code {
-    font-size: 9px !important;
-    padding: 4px !important;
+    font-size: 8.5px !important;
+    padding: 3px !important;
   }
 
   .wallpaper .row-copy strong {
-    font-size: 9.5px !important;
+    font-size: 9px !important;
   }
 
   .wallpaper .row-copy small {
-    font-size: 7.8px !important;
-    margin-top: 2px !important;
+    font-size: 7.4px !important;
+    margin-top: 1px !important;
   }
 
   .wallpaper .row-status b,
   .wallpaper .row-status span {
-    font-size: 7.3px !important;
+    font-size: 7px !important;
   }
 
   .wallpaper .handover-line {
-    min-height: 28px !important;
-    padding: 4px 9px !important;
-    font-size: 7.5px !important;
+    min-height: 24px !important;
+    padding: 3px 8px !important;
+    font-size: 7px !important;
   }
 
   .wallpaper .defect-grid {
-    padding: 7px !important;
-    gap: 5px !important;
+    padding: 6px !important;
+    gap: 4px !important;
   }
 
   .wallpaper .defect-tile {
-    padding: 6px !important;
+    padding: 5px !important;
   }
 
   .wallpaper .defect-tile span {
-    font-size: 7.3px !important;
-    min-height: 18px !important;
+    font-size: 7px !important;
+    min-height: 16px !important;
   }
 
   .wallpaper .defect-tile b {
-    font-size: 21px !important;
-    margin: 4px 0 3px !important;
+    font-size: 20px !important;
+    margin: 3px 0 2px !important;
   }
 
   .wallpaper .defect-tile small {
-    font-size: 7px !important;
+    font-size: 6.6px !important;
   }
 
   .wallpaper .defect-note {
-    height: 22px !important;
-    flex-basis: 22px !important;
-    font-size: 7px !important;
+    height: 18px !important;
+    flex-basis: 18px !important;
+    padding: 0 9px !important;
+    font-size: 6.5px !important;
   }
 
-  .wallpaper footer,
+  .wallpaper footer {
+    height: 14px !important;
+    min-height: 14px !important;
+    margin: 0 !important;
+    font-size: 6px !important;
+  }
+
   .wallpaper footer small {
-    font-size: 6.5px !important;
+    font-size: 6px !important;
   }
 }
