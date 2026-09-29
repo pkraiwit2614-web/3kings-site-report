@@ -8,7 +8,8 @@ $ErrorActionPreference = 'Stop'
 $AppUrl = 'https://3kings-site-report.vercel.app/wallpaper'
 $TaskName = '3Kings Dynamic Wallpaper'
 $Root = Join-Path $env:LOCALAPPDATA '3KingsWallpaper'
-$ProfileDir = Join-Path $Root 'BrowserProfile'
+$LoginProfileDir = Join-Path $Root 'BrowserProfile'
+$HeadlessProfileDir = Join-Path $Root 'HeadlessProfile'
 $InstalledScript = Join-Path $Root 'wallpaper-sync.ps1'
 
 function Find-Browser {
@@ -33,31 +34,59 @@ function Find-Browser {
 
 function Ensure-Root {
   New-Item -ItemType Directory -Path $Root -Force | Out-Null
-  New-Item -ItemType Directory -Path $ProfileDir -Force | Out-Null
+  New-Item -ItemType Directory -Path $LoginProfileDir -Force | Out-Null
 }
 
-function Close-WallpaperBrowserProfile {
-  # Edge/Chrome may keep background processes alive after the dedicated login window is closed.
-  # Those processes hold a lock on BrowserProfile and can make a new headless process start without
-  # the saved Supabase session. Stop ONLY browser processes whose command line points at our dedicated
-  # wallpaper profile; normal Edge/Chrome windows are left untouched.
+function Close-BrowserProfileProcesses {
+  param([Parameter(Mandatory=$true)][string]$ProfilePath)
   try {
-    $needle = $ProfileDir.ToLowerInvariant()
-    $processes = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+    $needle = $ProfilePath.ToLowerInvariant()
+    $processes = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
       Where-Object {
         ($_.Name -ieq 'msedge.exe' -or $_.Name -ieq 'chrome.exe') -and
         $_.CommandLine -and $_.CommandLine.ToLowerInvariant().Contains($needle)
-      }
+      })
     foreach($p in $processes){
       Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue
     }
-    if($processes){ Start-Sleep -Milliseconds 800 }
+    if($processes.Count -gt 0){ Start-Sleep -Milliseconds 1200 }
   } catch {}
+}
 
-  # Remove stale Chromium singleton lock files only inside the dedicated profile root.
+function Remove-ProfileLocks {
+  param([Parameter(Mandatory=$true)][string]$ProfilePath)
   foreach($name in @('SingletonLock','SingletonCookie','SingletonSocket')){
-    Remove-Item -LiteralPath (Join-Path $ProfileDir $name) -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath (Join-Path $ProfilePath $name) -Force -ErrorAction SilentlyContinue
   }
+}
+
+function Initialize-HeadlessProfile {
+  Close-BrowserProfileProcesses -ProfilePath $LoginProfileDir
+  Close-BrowserProfileProcesses -ProfilePath $HeadlessProfileDir
+
+  if(-not (Test-Path $HeadlessProfileDir)){
+    if(-not (Test-Path (Join-Path $LoginProfileDir 'Default'))){
+      throw 'The dedicated login profile has not been created yet. Run the script with -Login first.'
+    }
+
+    Write-Host 'Preparing the dedicated headless wallpaper session...'
+    New-Item -ItemType Directory -Path $HeadlessProfileDir -Force | Out-Null
+
+    $roboArgs = @(
+      $LoginProfileDir,
+      $HeadlessProfileDir,
+      '/MIR','/R:1','/W:1','/NFL','/NDL','/NJH','/NJS','/NP',
+      '/XD','Cache','Code Cache','GPUCache','GrShaderCache','ShaderCache','DawnCache'
+    )
+    & robocopy.exe @roboArgs | Out-Null
+    $rc = $LASTEXITCODE
+    if($rc -ge 8){
+      Remove-Item -LiteralPath $HeadlessProfileDir -Recurse -Force -ErrorAction SilentlyContinue
+      throw "Could not prepare the headless browser profile. Robocopy exit code: $rc"
+    }
+  }
+
+  Remove-ProfileLocks -ProfilePath $HeadlessProfileDir
 }
 
 function Invoke-BrowserQuiet {
@@ -106,10 +135,22 @@ Ensure-Root
 $browser = Find-Browser
 
 if($Login){
-  Close-WallpaperBrowserProfile
-  Write-Host 'Opening the dedicated 3 Kings wallpaper browser profile...'
-  Write-Host 'Sign in to the Web App once, confirm that the wallpaper page appears, then close that browser window.'
-  Start-Process -FilePath $browser -ArgumentList @("--user-data-dir=$ProfileDir",'--profile-directory=Default','--no-first-run',$AppUrl)
+  Close-BrowserProfileProcesses -ProfilePath $LoginProfileDir
+  Remove-ProfileLocks -ProfilePath $LoginProfileDir
+
+  # Any new interactive login must seed a fresh headless profile on the next refresh.
+  Close-BrowserProfileProcesses -ProfilePath $HeadlessProfileDir
+  Remove-Item -LiteralPath $HeadlessProfileDir -Recurse -Force -ErrorAction SilentlyContinue
+
+  Write-Host 'Opening the dedicated 3 Kings wallpaper login profile...'
+  Write-Host 'Sign in, wait until TODAY''S COMMAND CENTER shows live data, then close this browser window.'
+  Start-Process -FilePath $browser -ArgumentList @(
+    "--user-data-dir=$LoginProfileDir",
+    '--profile-directory=Default',
+    '--no-first-run',
+    '--disable-background-mode',
+    $AppUrl
+  )
   exit 0
 }
 
@@ -124,15 +165,19 @@ if($Install){
   exit $LASTEXITCODE
 }
 
-# Make sure no background process is still holding the dedicated profile before headless Edge starts.
-Close-WallpaperBrowserProfile
+try {
+  Initialize-HeadlessProfile
+} catch {
+  Write-Host "Wallpaper was not replaced: $($_.Exception.Message)"
+  Write-Host "Run: powershell -ExecutionPolicy Bypass -File `"$InstalledScript`" -Login"
+  exit 2
+}
 
 Add-Type -AssemblyName System.Windows.Forms
 $screen = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
 $width = [Math]::Max(1280, $screen.Width)
 $height = [Math]::Max(720, $screen.Height)
 
-# Force a fresh route request on every run so a prior prerender/CSS response is not reused.
 $cacheBust = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
 $FreshAppUrl = "$AppUrl?wallpaper_refresh=$cacheBust"
 
@@ -140,23 +185,24 @@ $commonArgs = @(
   '--headless=new',
   '--hide-scrollbars',
   '--no-first-run',
+  '--disable-background-mode',
   '--profile-directory=Default',
   '--disk-cache-size=1',
   '--media-cache-size=1',
-  "--user-data-dir=$ProfileDir",
+  "--user-data-dir=$HeadlessProfileDir",
   "--window-size=$width,$height",
   '--force-device-scale-factor=1',
   '--virtual-time-budget=30000'
 )
 
-# Validate the actual rendered panels rather than relying on a React data attribute.
 $dumpArgs = $commonArgs + @('--dump-dom',$FreshAppUrl)
 $dump = Invoke-BrowserQuiet -Arguments $dumpArgs -CaptureOutput
 $dom = $dump.Output
 $isReady = ($dump.ExitCode -eq 0 -and (Test-WallpaperDomReady -Dom $dom))
 
 if(-not $isReady){
-  Close-WallpaperBrowserProfile
+  Close-BrowserProfileProcesses -ProfilePath $HeadlessProfileDir
+  Remove-ProfileLocks -ProfilePath $HeadlessProfileDir
   Start-Sleep -Seconds 2
   $retryBust = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
   $FreshAppUrl = "$AppUrl?wallpaper_refresh=$retryBust"
@@ -167,23 +213,25 @@ if(-not $isReady){
 }
 
 if(-not $isReady){
+  Write-Host "Headless Edge exit code: $($dump.ExitCode)"
   if($dom -like '*BUILDING TODAY*'){
-    Write-Host 'Wallpaper was not replaced: the page is authenticated but still loading data.'
+    Write-Host 'Wallpaper was not replaced: authenticated session found, but live data is still loading.'
   } elseif($dom -like '*WALLPAPER UPDATE PAUSED*'){
     Write-Host 'Wallpaper was not replaced: the wallpaper page reported a data-loading error.'
   } elseif($dom -like '*TODAY*S COMMAND CENTER*'){
-    Write-Host 'Wallpaper was not replaced: the wallpaper page opened but the live panels did not finish rendering.'
+    Write-Host 'Wallpaper was not replaced: the command center opened, but live panels did not finish rendering.'
+  } elseif($dom -like '*login*' -or $dom -like '*Sign in*'){
+    Write-Host 'Wallpaper was not replaced: the copied headless session is signed out.'
   } else {
-    Write-Host 'Wallpaper was not replaced: the dedicated browser profile could not be opened with its saved session.'
-    Write-Host "Run: powershell -ExecutionPolicy Bypass -File `"$InstalledScript`" -Login"
+    Write-Host 'Wallpaper was not replaced: Headless Edge could not render the saved wallpaper session.'
   }
+  Write-Host "Run -Login only if the message above says the copied session is signed out."
   exit 2
 }
 
-# dump-dom exits with the profile closed, but ensure no helper process retained the lock before screenshot.
-Close-WallpaperBrowserProfile
+Close-BrowserProfileProcesses -ProfilePath $HeadlessProfileDir
+Remove-ProfileLocks -ProfilePath $HeadlessProfileDir
 
-# Use a new image filename every run so Windows does not keep a cached bitmap.
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $tempShot = Join-Path $Root "wallpaper-new-$stamp.png"
 $WallpaperPath = Join-Path $Root "wallpaper-$stamp.png"
@@ -191,7 +239,7 @@ Remove-Item $tempShot -Force -ErrorAction SilentlyContinue
 $shotArgs = $commonArgs + @("--screenshot=$tempShot",$FreshAppUrl)
 $shot = Invoke-BrowserQuiet -Arguments $shotArgs
 if($shot.ExitCode -ne 0 -or -not (Test-Path $tempShot) -or (Get-Item $tempShot).Length -lt 50000){
-  Write-Host 'Wallpaper was not replaced: screenshot generation failed.'
+  Write-Host "Wallpaper was not replaced: screenshot generation failed. Edge exit code: $($shot.ExitCode)"
   exit 3
 }
 
