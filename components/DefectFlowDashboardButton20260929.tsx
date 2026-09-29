@@ -6,33 +6,40 @@ import { usePathname } from 'next/navigation'
 const BUTTON_ATTR='data-defect-flow-dashboard'
 const DASHBOARD_HREF='/?section=defect#dashboard-defect'
 
-function swapViewerSidebarItems(){
-  if(!document.body.classList.contains('role-viewer'))return
+function swapSidebarItemsForViewerAndAdmin(){
+  const body=document.body
+  const isViewer=body.classList.contains('role-viewer')
+  const isAdmin=body.classList.contains('role-manager')
+  if(!isViewer&&!isAdmin)return
+
   const nav=document.querySelector<HTMLElement>('.sidebar nav')
   if(!nav)return
 
-  const reports=nav.querySelector<HTMLAnchorElement>('a[href="/reports"]')
+  // Viewer has read-only report history; Admin has the daily report entry.
+  // Report User/foreman is intentionally excluded so its daily-report position stays unchanged.
+  const reportHref=isAdmin?'/reports/quick':'/reports'
+  const report=nav.querySelector<HTMLAnchorElement>(`a[href="${reportHref}"]`)
   const flow=nav.querySelector<HTMLAnchorElement>('a[href="/defect-flow"]')
-  if(!reports||!flow)return
+  if(!report||!flow)return
 
   const links=[...nav.querySelectorAll<HTMLAnchorElement>('a')]
-  const reportsIndex=links.indexOf(reports)
+  const reportIndex=links.indexOf(report)
   const flowIndex=links.indexOf(flow)
-  if(reportsIndex<0||flowIndex<0||reportsIndex<flowIndex)return
+  if(reportIndex<0||flowIndex<0||reportIndex>flowIndex)return
 
-  const reportsMarker=document.createComment('viewer-reports-position')
-  const flowMarker=document.createComment('viewer-flow-position')
-  nav.insertBefore(reportsMarker,reports)
+  const reportMarker=document.createComment('sidebar-report-position')
+  const flowMarker=document.createComment('sidebar-flow-position')
+  nav.insertBefore(reportMarker,report)
   nav.insertBefore(flowMarker,flow)
-  nav.replaceChild(flow,reportsMarker)
-  nav.replaceChild(reports,flowMarker)
+  nav.replaceChild(flow,reportMarker)
+  nav.replaceChild(report,flowMarker)
 }
 
 export default function DefectFlowDashboardButton20260929(){
   const path=usePathname()
 
   useEffect(()=>{
-    const applyOrder=()=>swapViewerSidebarItems()
+    const applyOrder=()=>swapSidebarItemsForViewerAndAdmin()
     applyOrder()
 
     const observer=new MutationObserver(applyOrder)
