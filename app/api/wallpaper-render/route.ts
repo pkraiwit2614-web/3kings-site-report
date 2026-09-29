@@ -1,5 +1,8 @@
 import type { NextRequest } from 'next/server'
 import sharp from 'sharp'
+import { Resvg } from '@resvg/resvg-js'
+import { promises as fs } from 'node:fs'
+import path from 'node:path'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -10,6 +13,7 @@ const TZ='Asia/Bangkok'
 const CLOSED_PROC=/(ส่งของแล้ว|รับของแล้ว|ปิดงาน|เสร็จสมบูรณ์|complete|completed|closed)/i
 const FOLLOW_PROC=/(ขอ ETA|ขอวัน|ยืนยัน|รอยืนยัน|รอเช็ก|ต้องยืนยัน|รอสินค้า|รอส่ง|รอผลิต|นัดเข้า|มัดจำ|รอวัสดุ)/i
 const ORIGINAL_LOGO_SOURCE='https://raw.githubusercontent.com/pkraiwit2614-web/3kings-site-report/2ac4e1e93248fef20e23b0a9897bcca880f3f497/components/BrandLogo.tsx'
+const FONT_DIR='/tmp/3kings-wallpaper-fonts'
 
 type Project={id:string;code:string;name:string;target_handover:string|null;sort_order:number}
 type Task={id:string;project_id:string;source_task_no:string|null;task_name:string;planned_start:string|null;planned_end:string|null;actual_progress:number|null;delay_days:number|null;site_status:string|null;blocker:string|null;next_action:string|null;target_close:string|null}
@@ -37,8 +41,16 @@ const assetsPromise=(async()=>{
       logo=png.toString('base64')
     }
   }
-  return {regular,bold,logo}
-})().catch(()=>({regular:null,bold:null,logo:null}))
+  let fontFiles:string[]=[]
+  if(regular&&bold){
+    await fs.mkdir(FONT_DIR,{recursive:true})
+    const regularPath=path.join(FONT_DIR,'NotoSansThai-Regular.ttf')
+    const boldPath=path.join(FONT_DIR,'NotoSansThai-Bold.ttf')
+    await Promise.all([fs.writeFile(regularPath,regular),fs.writeFile(boldPath,bold)])
+    fontFiles=[regularPath,boldPath]
+  }
+  return {regular,bold,logo,fontFiles}
+})().catch(()=>({regular:null,bold:null,logo:null,fontFiles:[]}))
 
 function clamp(n:number,min:number,max:number){return Math.min(max,Math.max(min,n))}
 function dateKey(d=new Date()){
@@ -152,8 +164,7 @@ export async function GET(req:NextRequest){
     const delayed=payload.tasks.filter(t=>t.source_task_no!=='1'&&(Number(t.actual_progress)||0)<.999&&(Number(t.delay_days)||0)>0).length
 
     const assets=await assetsPromise
-    const regularFace=assets.regular?`@font-face{font-family:NotoThai;src:url(data:font/ttf;base64,${assets.regular.toString('base64')});font-weight:400;}`:''
-    const boldFace=assets.bold?`@font-face{font-family:NotoThai;src:url(data:font/ttf;base64,${assets.bold.toString('base64')});font-weight:700;}`:''
+    if(!assets.fontFiles.length)return new Response('Thai font unavailable',{status:503})
     const logo=assets.logo?`<image href="data:image/png;base64,${assets.logo}" x="34" y="34" width="74" height="74" preserveAspectRatio="xMidYMid meet"/>`:`<circle cx="71" cy="71" r="37" fill="#f8fafc"/><text x="71" y="80" text-anchor="middle" font-size="24" font-weight="700" fill="#0f172a">3K</text>`
 
     const kpis=[
@@ -169,8 +180,8 @@ export async function GET(req:NextRequest){
     const defectSvg=defectData.map((d,i)=>{const x=1091+i*157;return `<g><rect x="${x}" y="625" width="145" height="168" rx="12" fill="#0b1d2b" stroke="${d[3]}" stroke-opacity=".45"/><text x="${x+72.5}" y="655" text-anchor="middle" class="def-label">${xml(d[0])}</text><text x="${x+72.5}" y="708" text-anchor="middle" font-size="39" font-weight="700" fill="${d[3]}">${xml(d[1])}</text><text x="${x+72.5}" y="739" text-anchor="middle" class="tiny muted-fill">${xml(d[2])}</text></g>`}).join('')
 
     const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
-      <style>${regularFace}${boldFace}
-        text{font-family:${assets.regular?'NotoThai,':'Arial,'}sans-serif;fill:#f8fafc}.bold{font-weight:700}.muted{font-size:15px;fill:#64748b}.muted-fill{fill:#94a3b8}.tiny{font-size:11px}.amber{fill:#fbbf24}.panel-title{font-size:17px;font-weight:700}.code{font-size:14px;font-weight:700;fill:#dbeafe}.row-title{font-size:17px;font-weight:700}.row-detail{font-size:13px;fill:#94a3b8}.right-top{font-size:14px;font-weight:700;fill:#e2e8f0}.right-bottom{font-size:12px;font-weight:700;fill:#cbd5e1}.late{font-size:12px;font-weight:700;fill:#fb7185}.kpi-label{font-size:13px;font-weight:700;fill:#e2e8f0}.def-label{font-size:11px;font-weight:700;fill:#cbd5e1}
+      <style>
+        text{font-family:"Noto Sans Thai",sans-serif;fill:#f8fafc}.bold{font-weight:700}.muted{font-size:15px;fill:#64748b}.muted-fill{fill:#94a3b8}.tiny{font-size:11px}.amber{fill:#fbbf24}.panel-title{font-size:17px;font-weight:700}.code{font-size:14px;font-weight:700;fill:#dbeafe}.row-title{font-size:17px;font-weight:700}.row-detail{font-size:13px;fill:#94a3b8}.right-top{font-size:14px;font-weight:700;fill:#e2e8f0}.right-bottom{font-size:12px;font-weight:700;fill:#cbd5e1}.late{font-size:12px;font-weight:700;fill:#fb7185}.kpi-label{font-size:13px;font-weight:700;fill:#e2e8f0}.def-label{font-size:11px;font-weight:700;fill:#cbd5e1}
       </style>
       <rect width="1920" height="1080" fill="#071421"/><rect width="220" height="1080" fill="#06101b"/><line x1="220" y1="0" x2="220" y2="1080" stroke="#334155" stroke-opacity=".45"/>
       ${logo}<text x="122" y="61" font-size="21" font-weight="700">3 Kings</text><text x="122" y="86" font-size="21" font-weight="700">Construction</text><text x="122" y="104" class="tiny muted-fill">SITE COMMAND</text>
@@ -185,7 +196,18 @@ export async function GET(req:NextRequest){
       <text x="250" y="936" font-size="10" fill="#475569">AUTO-REFRESH DATA · WALLPAPER UPDATE EVERY 15 MIN · SAFE AREA RESERVED BELOW FOR WINDOWS TASKBAR</text>
     </svg>`
 
-    const png=await sharp(Buffer.from(svg)).resize(width,height,{fit:'fill'}).png().toBuffer()
+    const renderer=new Resvg(svg,{
+      font:{
+        loadSystemFonts:false,
+        fontFiles:assets.fontFiles,
+        defaultFontFamily:'Noto Sans Thai',
+        sansSerifFamily:'Noto Sans Thai'
+      },
+      textRendering:2,
+      shapeRendering:2
+    })
+    const rendered=renderer.render().asPng()
+    const png=await sharp(rendered).resize(width,height,{fit:'fill'}).png().toBuffer()
     return new Response(new Uint8Array(png),{status:200,headers:{'Content-Type':'image/png','Cache-Control':'no-store, max-age=0','Content-Disposition':'inline; filename="3kings-command-center.png"'}})
   }catch(error){
     console.error('wallpaper-render failed',error)
