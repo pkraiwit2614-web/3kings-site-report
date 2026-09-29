@@ -71,7 +71,7 @@ const procurementStyles: Record<string,{background:string;color:string;borderCol
   'รอผลิต/จัดส่ง': {background:'#fff3d9',color:'#8b5d00',borderColor:'#e9c96f'}
 }
 
-export default function StatusBadge({ value }: { value?: string | null }) {
+export default function StatusBadge({ value, multiline = false }: { value?: string | null; multiline?: boolean }) {
   const clean = `${value || 'ยังไม่ระบุ'}`.trim().replace(/\s+/g,' ')
   const lookup = clean.toLowerCase()
   const canonical = aliases[lookup] || lookup
@@ -86,5 +86,34 @@ export default function StatusBadge({ value }: { value?: string | null }) {
   }
 
   const procurementStyle = procurementStyles[clean]
-  return <span className={`badge ${kind}`} style={{width:124,height:28,justifyContent:'center',alignItems:'center',padding:'0 9px',lineHeight:1,flex:'0 0 124px',...(procurementStyle||{})}}>{s}</span>
+  const adaptiveFontSize = s.length > 54 ? 9 : s.length > 38 ? 9.5 : s.length > 24 ? 10 : 11
+  const layoutStyle = multiline
+    ? {
+        width:'100%',
+        maxWidth:'100%',
+        minWidth:0,
+        minHeight:28,
+        height:'auto',
+        justifyContent:'center',
+        alignItems:'center',
+        padding:'5px 8px',
+        lineHeight:1.25,
+        flex:'0 1 auto',
+        whiteSpace:'normal' as const,
+        overflowWrap:'anywhere' as const,
+        wordBreak:'break-word' as const,
+        textAlign:'center' as const,
+        fontSize:adaptiveFontSize
+      }
+    : {
+        width:124,
+        height:28,
+        justifyContent:'center',
+        alignItems:'center',
+        padding:'0 9px',
+        lineHeight:1,
+        flex:'0 0 124px'
+      }
+
+  return <span className={`badge ${kind}`} title={multiline ? s : undefined} style={{...layoutStyle,...(procurementStyle||{})}}>{s}</span>
 }
