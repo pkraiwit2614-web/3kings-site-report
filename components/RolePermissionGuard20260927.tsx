@@ -9,7 +9,7 @@ const WRITE_REPORT_PATHS=[
   /^\/reports\/new\/?$/,
   /^\/reports\/[^/]+\/edit\/?$/,
 ]
-const OWNER_ONLY_PATHS=new Set(['/photo-mapping','/data-health','/users'])
+const OWNER_ONLY_PATHS=new Set(['/data-health','/users'])
 
 export default function RolePermissionGuard20260927(){
   const path=usePathname()
@@ -45,11 +45,8 @@ export default function RolePermissionGuard20260927(){
     body.role-viewer .mobile-more-links a[href='/reports/quick'],
     body.role-viewer a[href='/reports/new'],
     body.role-viewer a[href^='/reports/'][href$='/edit'],
-    body.role-viewer a[href='/photo-mapping'],
     body.role-viewer a[href='/data-health'],
-    body.role-report-user a[href='/photo-mapping'],
     body.role-report-user a[href='/data-health'],
-    body.role-engineer a[href='/photo-mapping'],
     body.role-engineer a[href='/data-health']{display:none!important}
   `}</style>
 }
