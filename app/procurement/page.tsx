@@ -13,6 +13,14 @@ const thaiMonths:Record<string,number>={
   'ก.ค.':6,'ส.ค.':7,'ก.ย.':8,'ต.ค.':9,'พ.ย.':10,'ธ.ค.':11
 }
 
+const completedStatusPattern=/(ส่งมอบเรียบร้อย|รับสินค้าเรียบร้อย|ส่งครบ|ปิดงาน|งานเสร็จ|เสร็จสมบูรณ์|completed|done|closed)/i
+
+function needsFollowUp(row:any){
+  const current=String(row.current_status||'').trim()
+  if(current&&completedStatusPattern.test(current)) return false
+  return true
+}
+
 function parseDeliveryDate(row:any){
   const text=String(row.expected_delivery_text||'').trim()
   const numeric=text.match(/(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/)
@@ -41,6 +49,7 @@ export default function ProcurementPage(){
   const [siteFilter,setSiteFilter]=useState('')
   const [statusFilter,setStatusFilter]=useState('')
   const [updateFilter,setUpdateFilter]=useState('')
+  const [followUpOnly,setFollowUpOnly]=useState(false)
 
   useEffect(()=>{
     const s=getSupabase()
@@ -69,6 +78,7 @@ export default function ProcurementPage(){
       if(siteFilter&&String(x.project_id||'')!==siteFilter) return false
       if(statusFilter&&String(x.current_status||'')!==statusFilter) return false
       if(updateFilter&&String(x.source_updated_at||'')!==updateFilter) return false
+      if(followUpOnly&&!needsFollowUp(x)) return false
       return true
     }).sort((a,b)=>{
       const ad=parseDeliveryDate(a), bd=parseDeliveryDate(b)
@@ -79,7 +89,7 @@ export default function ProcurementPage(){
       if(aFuture!==bFuture) return aFuture?-1:1
       return aFuture?ad-bd:bd-ad
     })
-  },[rows,siteFilter,statusFilter,updateFilter])
+  },[rows,siteFilter,statusFilter,updateFilter,followUpOnly])
 
   return <AppShell>
     <PageHeader title="การจัดซื้อ/จัดจ้าง" subtitle="ติดตามสถานะจัดซื้อ การชำระ ผู้ขาย/ผู้รับเหมา และกำหนดส่งหรือเข้าหน้างาน"/>
@@ -90,6 +100,15 @@ export default function ProcurementPage(){
           <option value="">ทุก Plot / หน้างาน</option>
           {siteOptions.map(p=><option key={p.id} value={p.id}>{p.code}{p.name&&p.name!==p.code?` — ${p.name}`:''}</option>)}
         </select>
+        <button
+          type="button"
+          className="button"
+          aria-pressed={followUpOnly}
+          onClick={()=>setFollowUpOnly(v=>!v)}
+          style={followUpOnly?{fontWeight:800,boxShadow:'inset 0 0 0 2px currentColor'}:undefined}
+        >
+          {followUpOnly?'✓ ':''}เฉพาะติดค้าง / ต้องตาม
+        </button>
         <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}>
           <option value="">ทุกสถานะปัจจุบัน</option>
           {statuses.map(x=><option key={x} value={x}>{x}</option>)}
@@ -98,7 +117,7 @@ export default function ProcurementPage(){
           <option value="">ทุกวันที่อัปเดตข้อมูล</option>
           {updateDates.map(x=><option key={x} value={x}>{dateTH(x)}</option>)}
         </select>
-        {(siteFilter||statusFilter||updateFilter)&&<button type="button" className="button" onClick={()=>{setSiteFilter('');setStatusFilter('');setUpdateFilter('')}}>ล้างตัวกรอง</button>}
+        {(siteFilter||statusFilter||updateFilter||followUpOnly)&&<button type="button" className="button" onClick={()=>{setSiteFilter('');setStatusFilter('');setUpdateFilter('');setFollowUpOnly(false)}}>ล้างตัวกรอง</button>}
         <span className="muted small" style={{marginLeft:'auto'}}>แสดง {filteredRows.length} / {rows.length} รายการ{latestUpdate?` • ข้อมูลล่าสุด ${dateTH(latestUpdate)}`:''}</span>
       </div>
     </section>
@@ -121,6 +140,6 @@ export default function ProcurementPage(){
         {!filteredRows.length&&<p className="muted" style={{padding:16}}>ไม่พบรายการตามตัวกรองที่เลือก</p>}
       </div>
     </div>
-    <p className="muted small" style={{marginTop:8}}>เลือก Plot / หน้างานเพื่อดูว่ารายการใดกำลังติดอยู่ในขั้นตอนจัดซื้อหรือจัดจ้างใด • เรียงกำหนดส่ง/เข้าหน้างาน: วันที่กำลังจะถึงก่อน • รายการที่เลยกำหนดแล้วเรียงจากล่าสุดไปเก่าสุด • รายการที่ไม่ระบุวันที่อยู่ท้ายตาราง</p>
+    <p className="muted small" style={{marginTop:8}}>เลือก Plot / หน้างานเพื่อดูว่ารายการใดกำลังติดอยู่ในขั้นตอนจัดซื้อหรือจัดจ้างใด • ใช้ “เฉพาะติดค้าง / ต้องตาม” เพื่อตัดรายการที่ส่งมอบหรือปิดงานแล้วออก • เรียงกำหนดส่ง/เข้าหน้างาน: วันที่กำลังจะถึงก่อน • รายการที่เลยกำหนดแล้วเรียงจากล่าสุดไปเก่าสุด • รายการที่ไม่ระบุวันที่อยู่ท้ายตาราง</p>
   </AppShell>
 }
