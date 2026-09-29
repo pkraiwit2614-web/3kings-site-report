@@ -2,47 +2,58 @@
 .defect-print-button{white-space:nowrap}
 
 @media print{
-  @page{size:A4 landscape;margin:10mm}
+  @page{size:A4 landscape;margin:8mm}
 
   html,body{background:#fff!important}
   body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 
-  .page-header{margin-bottom:12px!important}
-  .page-header h1{font-size:22px!important}
-  .page-header p{font-size:10px!important}
-  .defect-print-button{display:none!important}
+  .page-header{margin-bottom:8px!important;break-after:avoid;page-break-after:avoid}
+  .page-header h1{font-size:20px!important;margin-bottom:2px!important}
+  .page-header p{font-size:9px!important}
+  .page-header-print-actions,.defect-print-button{display:none!important}
 
   .filter-panel{display:none!important}
-  .selected-status{break-inside:avoid;page-break-inside:avoid;margin-bottom:10px!important;padding:10px 12px!important;grid-template-columns:minmax(220px,1fr) minmax(500px,1.8fr)!important}
-  .selected-copy h2{font-size:16px!important}
-  .selected-copy p{font-size:9px!important}
-  .selected-breakdown{gap:5px!important}
-  .break-card{min-height:52px!important;padding:5px 6px!important;box-shadow:none!important;transform:none!important}
-  .break-card b{font-size:17px!important}
 
-  .detail-panel{padding:10px 0 0!important;border:0!important;box-shadow:none!important;background:#fff!important}
-  .detail-head{margin:0 0 8px!important}
-  .detail-head h2{font-size:15px!important}
-  .detail-head p,.legend{font-size:8px!important}
+  .selected-status{break-inside:avoid!important;page-break-inside:avoid!important;margin-bottom:6px!important;padding:8px 10px!important;grid-template-columns:minmax(200px,.9fr) minmax(540px,2.1fr)!important;gap:10px!important;border-radius:8px!important}
+  .selected-copy>span{font-size:8px!important}
+  .selected-copy h2{font-size:14px!important;margin:1px 0!important}
+  .selected-copy p{font-size:8px!important}
+  .selected-breakdown{gap:4px!important}
+  .break-card{min-height:42px!important;padding:4px 5px!important;box-shadow:none!important;transform:none!important;border-radius:7px!important}
+  .break-card span{font-size:7px!important}
+  .break-card b{font-size:15px!important;margin-top:1px!important}
+  .break-card small{font-size:6.5px!important;margin-top:1px!important}
 
-  .defect-table{max-height:none!important;overflow:visible!important;margin:0!important;border-radius:0!important}
-  .defect-table table{width:100%!important;min-width:0!important;table-layout:fixed!important;background:#fff!important}
+  .detail-panel{padding:4px 0 0!important;border:0!important;box-shadow:none!important;background:#fff!important;break-inside:auto!important;page-break-inside:auto!important;overflow:visible!important}
+  .detail-head{margin:0 0 5px!important;break-after:avoid!important;page-break-after:avoid!important}
+  .detail-head h2{font-size:13px!important;margin:0!important}
+  .detail-head p,.legend{font-size:7.5px!important}
+
+  .defect-table{max-height:none!important;height:auto!important;overflow:visible!important;margin:0!important;border-radius:0!important}
+  .defect-table table{width:100%!important;min-width:0!important;max-width:100%!important;table-layout:fixed!important;background:#fff!important;border-collapse:collapse!important}
   .defect-table thead{display:table-header-group!important}
-  .defect-table tr{break-inside:avoid;page-break-inside:avoid}
-  .defect-table th{position:static!important;background:#eef3f8!important;color:#40536d!important;font-size:8px!important;padding:6px 5px!important}
-  .defect-table td{font-size:8px!important;padding:6px 5px!important;overflow-wrap:anywhere!important;word-break:normal!important}
-  .defect-table th:nth-child(1),.defect-table td:nth-child(1){width:7%}
-  .defect-table th:nth-child(2),.defect-table td:nth-child(2){width:5%}
-  .defect-table th:nth-child(3),.defect-table td:nth-child(3){width:16%}
-  .defect-table th:nth-child(4),.defect-table td:nth-child(4){width:9%}
-  .defect-table th:nth-child(5),.defect-table td:nth-child(5){width:10%}
-  .defect-table th:nth-child(6),.defect-table td:nth-child(6){width:11%}
-  .defect-table th:nth-child(7),.defect-table td:nth-child(7){width:17%}
-  .defect-table th:nth-child(8),.defect-table td:nth-child(8){width:25%}
+  .defect-table tbody{display:table-row-group!important}
+  .defect-table tr{break-inside:avoid!important;page-break-inside:avoid!important}
+  .defect-table th{position:static!important;background:#eef3f8!important;color:#40536d!important;font-size:8.5px!important;line-height:1.2!important;padding:4px 4px!important;white-space:normal!important}
+  .defect-table td{font-size:8.5px!important;line-height:1.25!important;padding:4px 4px!important;overflow-wrap:anywhere!important;word-break:normal!important;white-space:normal!important}
 
+  .defect-table th:nth-child(1),.defect-table td:nth-child(1){width:6%}
+  .defect-table th:nth-child(2),.defect-table td:nth-child(2){width:4%}
+  .defect-table th:nth-child(3),.defect-table td:nth-child(3){width:8%}
+  .defect-table th:nth-child(4),.defect-table td:nth-child(4){width:13%}
+  .defect-table th:nth-child(5),.defect-table td:nth-child(5){width:7%}
+  .defect-table th:nth-child(6),.defect-table td:nth-child(6){width:8%}
+  .defect-table th:nth-child(7),.defect-table td:nth-child(7){width:24%}
+  .defect-table th:nth-child(8),.defect-table td:nth-child(8){width:13%}
+  .defect-table th:nth-child(9),.defect-table td:nth-child(9){width:17%}
+
+  .defect-detail{min-width:0!important;max-width:none!important;line-height:1.25!important}
   .room-cell b{font-size:9px!important}
-  .room-cell small{font-size:7px!important}
-  .customer-badge,.program-badge,.state-badge{font-size:7px!important;padding:3px 5px!important;white-space:normal!important;line-height:1.25!important}
+  .room-cell small{font-size:7px!important;margin-top:1px!important}
+  .notice-date{font-size:8px!important;white-space:nowrap!important}
+  .customer-badge,.program-badge,.state-badge{font-size:7px!important;padding:2px 4px!important;white-space:normal!important;line-height:1.2!important;border-radius:6px!important}
+
+  .detail-panel,.defect-table,.defect-table table,.defect-table tbody{orphans:2;widows:2}
 }
 
 @media(max-width:760px){
