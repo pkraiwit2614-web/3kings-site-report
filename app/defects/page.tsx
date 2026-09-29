@@ -19,6 +19,8 @@ type RoomRow={
   priority:string|null
   next_action:string|null
   defect_detail:string|null
+  latest_source:string|null
+  source_note:string|null
   source_modified_at:string|null
 }
 
@@ -80,8 +82,16 @@ function dateTimeTH(value:string|null|undefined){
   return new Intl.DateTimeFormat('th-TH',{timeZone:'Asia/Bangkok',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(d)+' น.'
 }
 
-function hotelNoticeDateTH(roomNo:string){
-  const value=HOTEL_NOTICE_DATE_BY_ROOM[roomNo]
+function hotelNoticeDateTH(r:RoomRow){
+  const sourceText=[r.latest_source,r.source_note].filter(Boolean).join(' ')
+  const sourceDate=sourceText.match(/(\d{1,2})\/(\d{1,2})\/(20\d{2})/)
+  if(sourceDate){
+    const day=sourceDate[1].padStart(2,'0')
+    const month=sourceDate[2].padStart(2,'0')
+    const buddhistYear=Number(sourceDate[3])+543
+    return `${day}/${month}/${String(buddhistYear).slice(-2)}`
+  }
+  const value=HOTEL_NOTICE_DATE_BY_ROOM[r.room_no]
   if(!value)return '—'
   const m=value.match(/^(\d{4})-(\d{2})-(\d{2})$/)
   if(!m)return '—'
@@ -131,7 +141,7 @@ export default function DefectDetailPage(){
     let alive=true
     ;(async()=>{
       try{
-        const {data,error}=await getSupabase().from('condo_room_status').select('room_no,building,floor,owner_name,hotel_participation,customer_status,current_status,status_group,follow_up,priority,next_action,defect_detail,source_modified_at').order('building').order('floor').order('room_no')
+        const {data,error}=await getSupabase().from('condo_room_status').select('room_no,building,floor,owner_name,hotel_participation,customer_status,current_status,status_group,follow_up,priority,next_action,defect_detail,latest_source,source_note,source_modified_at').order('building').order('floor').order('room_no')
         if(alive&&!error)setRows((data||[]) as RoomRow[])
       }finally{
         if(alive)setLoading(false)
@@ -212,7 +222,7 @@ export default function DefectDetailPage(){
           {filtered.map(r=><tr key={r.room_no}>
             <td className="room-cell"><b>{r.room_no}</b><small>ชั้น {r.floor??'-'}</small></td>
             <td className="center"><b>{r.building}</b></td>
-            <td className="center"><span className="notice-date" title="วันที่ตาม Hotel Defect Notice">{hotelNoticeDateTH(r.room_no)}</span></td>
+            <td className="center"><span className="notice-date" title="วันที่ตาม Hotel Defect Notice">{hotelNoticeDateTH(r)}</span></td>
             <td>{r.owner_name||<span className="muted">—</span>}</td>
             <td className="center"><span className={`customer-badge ${r.customer_status==='มีลูกค้า'?'customer':'no-customer'}`}>{r.customer_status}</span></td>
             <td className="center"><span className={`program-badge ${r.hotel_participation==='ร่วมโรงแรม'?'hotel':'nonhotel'}`}>{r.hotel_participation}</span></td>
