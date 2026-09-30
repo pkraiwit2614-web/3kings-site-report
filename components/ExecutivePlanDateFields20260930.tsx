@@ -1,6 +1,7 @@
 'use client'
 
 import {useEffect,useMemo,useState} from 'react'
+import {createPortal} from 'react-dom'
 import {getSupabase} from '@/lib/supabase'
 import {dateTH} from '@/lib/format'
 import {sortTasksByNumber} from '@/lib/taskOrder'
@@ -26,28 +27,15 @@ function overlaps(task:TaskRow,start:string,end:string){
   return s<=end&&e>=start
 }
 
-function ensureDateField(grid:HTMLElement,key:'start'|'end',label:string,value:string){
-  let box=grid.querySelector<HTMLElement>(`[data-plan-date-field="${key}"]`)
-  if(!box){
-    box=document.createElement('div')
-    box.className='ep-plan-date-field'
-    box.dataset.planDateField=key
-    const span=document.createElement('span')
-    const strong=document.createElement('b')
-    box.append(span,strong)
-    grid.prepend(box)
-  }
-  const span=box.querySelector('span')
-  const strong=box.querySelector('b')
-  if(span&&span.textContent!==label)span.textContent=label
-  if(strong&&strong.textContent!==value)strong.textContent=value
-  return box
-}
-
 export default function ExecutivePlanDateFields20260930(){
   const [projects,setProjects]=useState<ProjectRow[]>([])
   const [tasks,setTasks]=useState<TaskRow[]>([])
   const [loaded,setLoaded]=useState(false)
+  const [host,setHost]=useState<HTMLElement|null>(null)
+  const [task,setTask]=useState<TaskRow|null>(null)
+  const [fallbackStart,setFallbackStart]=useState('')
+  const [fallbackEnd,setFallbackEnd]=useState('')
+  const [debugLabel,setDebugLabel]=useState('')
 
   useEffect(()=>{
     let cancelled=false
@@ -78,56 +66,35 @@ export default function ExecutivePlanDateFields20260930(){
       cancelAnimationFrame(frame)
       frame=requestAnimationFrame(()=>{
         const slide=document.querySelector<HTMLElement>('.ep-stage .ep-slide:not(.condo-slide)')
-        const grid=slide?.querySelector<HTMLElement>('.ep-info-grid')||null
-        if(!slide||!grid)return
+        const nextHost=slide?.querySelector<HTMLElement>('.ep-task-info')||null
+        if(!slide||!nextHost){
+          setHost(null)
+          setTask(null)
+          setFallbackStart('')
+          setFallbackEnd('')
+          setDebugLabel('')
+          return
+        }
 
         const code=(slide.querySelector<HTMLElement>('.ep-eyebrow')?.textContent||'').split('•')[0].trim()
         const projectId=projectByCode.get(code)||''
-
-        // Use the exact same date range and task ordering as ExecutivePresentationV41.
-        // This avoids fragile matching by task name/area and binds the visible slide 1:1
-        // to the same Progress row used to build the presentation.
         const dateInputs=[...document.querySelectorAll<HTMLInputElement>('.ep-filter input[type="date"]')]
         const startDate=dateInputs[0]?.value||'0000-01-01'
         const endDate=dateInputs[1]?.value||'9999-12-31'
         const counter=slide.closest('.ep-stage')?.querySelector<HTMLElement>('.ep-stage-controls span')?.textContent||''
         const counterMatch=counter.match(/(\d+)\s*\/\s*(\d+)/)
-        const slideIndex=Math.max(0,(Number(counterMatch?.[1]||1)-1))
-
+        const slideIndex=Math.max(0,Number(counterMatch?.[1]||1)-1)
         const projectTasks=orderedTasks.filter(t=>t.project_id===projectId&&overlaps(t,startDate,endDate))
-        const task=projectTasks[slideIndex]||null
+        const matchedTask=projectTasks[slideIndex]||null
 
-        // The header itself is rendered by ExecutivePresentationV41 from the same
-        // currentTask.planned_start / planned_end fields. Keep it as a display fallback
-        // so these cards can never remain visually blank while the extra lookup settles.
         const headerLine=slide.querySelector<HTMLElement>('header p')?.textContent?.trim()||''
         const headerPlan=headerLine.match(/Plan\s+(.+?)\s*(?:→|->|–)\s*(.+?)\s*$/i)
-        const headerStart=headerPlan?.[1]?.trim()||''
-        const headerEnd=headerPlan?.[2]?.trim()||''
 
-        const start=task?.planned_start?dateTH(task.planned_start):(headerStart||(!loaded?'กำลังโหลด…':'ไม่พบวันที่ใน Progress'))
-        const end=task?.planned_end?dateTH(task.planned_end):(headerEnd||(!loaded?'กำลังโหลด…':'ไม่พบวันที่ใน Progress'))
-
-        const startBox=ensureDateField(grid,'start','เริ่มในแผน',start)
-        const endBox=ensureDateField(grid,'end','จบในแผน',end)
-
-        if(task){
-          const source=`Progress: ${task.source_file||'-'} • ${task.source_sheet||'-'}${task.source_row?` • Row ${task.source_row}`:''}`
-          startBox.dataset.taskId=task.id
-          endBox.dataset.taskId=task.id
-          startBox.dataset.progressSource=task.source_file||''
-          endBox.dataset.progressSource=task.source_file||''
-          startBox.title=source
-          endBox.title=source
-        }else{
-          delete startBox.dataset.taskId
-          delete endBox.dataset.taskId
-          startBox.title=`ใช้วันที่จาก current Progress slide • ${code} • Slide ${slideIndex+1}`
-          endBox.title=startBox.title
-        }
-
-        if(grid.firstElementChild!==startBox)grid.prepend(startBox)
-        if(startBox.nextElementSibling!==endBox)startBox.after(endBox)
+        setHost(nextHost)
+        setTask(matchedTask)
+        setFallbackStart(headerPlan?.[1]?.trim()||'')
+        setFallbackEnd(headerPlan?.[2]?.trim()||'')
+        setDebugLabel(`${code} • Slide ${slideIndex+1}`)
       })
     }
 
@@ -135,30 +102,81 @@ export default function ExecutivePlanDateFields20260930(){
     const observer=new MutationObserver(sync)
     observer.observe(document.body,{subtree:true,childList:true,characterData:true})
     document.addEventListener('change',sync,true)
+    document.addEventListener('click',sync,true)
     window.addEventListener('resize',sync)
     return()=>{
       observer.disconnect()
       document.removeEventListener('change',sync,true)
+      document.removeEventListener('click',sync,true)
       window.removeEventListener('resize',sync)
       cancelAnimationFrame(frame)
     }
-  },[orderedTasks,projectByCode,loaded])
+  },[orderedTasks,projectByCode])
 
-  return <style jsx global>{`
-    .ep-info-grid>.ep-plan-date-field{
-      background:#fff8e8!important;
-      border-color:#e5cc8e!important;
-      border-left:4px solid #b8872e!important;
-    }
-    .ep-info-grid>.ep-plan-date-field span{
-      color:#746d61!important;
-      font-weight:900!important;
-    }
-    .ep-info-grid>.ep-plan-date-field b{
-      color:#17243a!important;
-      white-space:normal!important;
-      overflow-wrap:anywhere!important;
-      min-height:18px!important;
-    }
-  `}</style>
+  if(!host)return null
+
+  const start=task?.planned_start?dateTH(task.planned_start):(fallbackStart||(!loaded?'กำลังโหลด…':'ไม่พบวันที่ใน Progress'))
+  const end=task?.planned_end?dateTH(task.planned_end):(fallbackEnd||(!loaded?'กำลังโหลด…':'ไม่พบวันที่ใน Progress'))
+  const source=task
+    ? `Progress: ${task.source_file||'-'} • ${task.source_sheet||'-'}${task.source_row?` • Row ${task.source_row}`:''}`
+    : `Progress lookup: ${debugLabel}`
+
+  return createPortal(<>
+    <div className="ep-plan-date-grid" data-plan-task-id={task?.id||''} title={source}>
+      <div className="ep-plan-date-card">
+        <span>เริ่มในแผน</span>
+        <b>{start}</b>
+      </div>
+      <div className="ep-plan-date-card">
+        <span>จบในแผน</span>
+        <b>{end}</b>
+      </div>
+    </div>
+    <style jsx global>{`
+      .ep-task-info>.ep-progress{order:1}
+      .ep-task-info>.ep-plan-date-grid{order:2}
+      .ep-task-info>.ep-info-grid{order:3}
+      .ep-task-info>.ep-note{order:4}
+      .ep-task-info>.ep-owner{order:5}
+      .ep-plan-date-grid{
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:8px;
+        width:100%;
+      }
+      .ep-plan-date-card{
+        min-width:0;
+        min-height:68px;
+        padding:11px 12px;
+        border:1px solid #e5cc8e;
+        border-left:4px solid #b8872e;
+        border-radius:10px;
+        background:#fff8e8;
+        display:grid;
+        align-content:center;
+      }
+      .ep-plan-date-card span{
+        display:block;
+        font-size:10px;
+        color:#746d61;
+        font-weight:900;
+      }
+      .ep-plan-date-card b{
+        display:block;
+        margin-top:4px;
+        color:#17243a;
+        font-size:16px;
+        line-height:1.2;
+        white-space:normal;
+        overflow-wrap:anywhere;
+      }
+      @media(max-width:620px){
+        .ep-plan-date-card{min-height:60px;padding:9px 10px}
+        .ep-plan-date-card b{font-size:14px}
+      }
+      @media print{
+        .ep-plan-date-grid{break-inside:avoid}
+      }
+    `}</style>
+  </>,host)
 }
