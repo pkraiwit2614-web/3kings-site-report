@@ -3,12 +3,12 @@ import ExecutivePhotoLinks from '@/components/ExecutivePhotoLinks'
 import ExecutiveAIVisualMatcherV2 from '@/components/ExecutiveAIVisualMatcherV2'
 import ExecutivePresentationPhotoDisplay from '@/components/ExecutivePresentationPhotoDisplay'
 import PresentationCondoEnhancer from '@/components/PresentationCondoEnhancer'
-import ExecutiveTaskDateCards from '@/components/ExecutiveTaskDateCards'
+import ExecutivePlanDateFields20260930 from '@/components/ExecutivePlanDateFields20260930'
 
 export default function ExecutivePresentationPage(){
   return <>
     <ExecutivePresentationV41 />
-    <ExecutiveTaskDateCards />
+    <ExecutivePlanDateFields20260930 />
     <ExecutiveAIVisualMatcherV2 />
     <ExecutivePresentationPhotoDisplay />
     <PresentationCondoEnhancer />
