@@ -104,15 +104,6 @@ function SvgBranchCard({x,y,w=230,label,count,kind,href}:{x:number;y:number;w?:n
   return href?<a href={href} className="flow-link" aria-label={`เปิดรายละเอียด ${label} ${count} ห้อง`}>{card}</a>:card
 }
 
-function SvgTrackingCard({x,y,w=275,label,count,href}:{x:number;y:number;w?:number;label:string;count:number;href?:string}){
-  const card=<g>
-    <rect x={x} y={y} width={w} height={60} rx={12} fill="#fbfcfd" stroke={COLORS.line} strokeWidth={2}/>
-    <text x={x+w/2} y={y+24} textAnchor="middle" fontSize={15} fontWeight={800} fill={COLORS.text}>{label}</text>
-    <text x={x+w/2} y={y+46} textAnchor="middle" fontSize={22} fontWeight={900} fill={COLORS.navy}>{count} ห้อง</text>
-  </g>
-  return href?<a href={href} className="flow-link" aria-label={`เปิดรายละเอียด ${label} ${count} ห้อง`}>{card}</a>:card
-}
-
 function SvgCustomerCard({x,y,label,count,formula,customer,href}:{x:number;y:number;label:string;count:number;formula:string;customer:boolean;href?:string}){
   const card=<g>
     <rect x={x} y={y} width={230} height={120} rx={16} fill={customer?COLORS.customer:COLORS.noCustomer} stroke={customer?COLORS.customerStroke:COLORS.noCustomerStroke} strokeWidth={2}/>
@@ -128,7 +119,7 @@ function Arrow({x1,y1,x2,y2}:{x1:number;y1:number;x2:number;y2:number}){
 }
 
 function statusRow(y:number,items:StatusItem[]){
-  const left=1018,right=1874,gap=12
+  const left=670,right=1874,gap=12
   const w=(right-left-gap*(items.length-1))/items.length
   return items.map((item,i)=><SvgStatusCard key={`${y}-${item.label}`} x={left+i*(w+gap)} y={y} w={w} item={item}/>)
 }
@@ -161,6 +152,7 @@ function buildingCounts(rows:FlowRow[],building:'A'|'B'){
     noHotelChecked:status('ไม่มีลูกค้า','ร่วมโรงแรม',GROUP.checked),
     noHotelHandover:status('ไม่มีลูกค้า','ร่วมโรงแรม',GROUP.handover),
     noHotelAwaiting:status('ไม่มีลูกค้า','ร่วมโรงแรม',GROUP.awaiting),
+    noHotelPending:status('ไม่มีลูกค้า','ร่วมโรงแรม',GROUP.pending),
     noHotelIncomplete:status('ไม่มีลูกค้า','ร่วมโรงแรม',GROUP.incomplete),
     noNonAwaitingSale:status('ไม่มีลูกค้า','ไม่ร่วมโรงแรม',GROUP.awaitingSale),
   }
@@ -175,22 +167,20 @@ function BuildingFlow({top,building,data}:{top:number;building:'A'|'B';data:Retu
   const noNonHref=defectHref({filter:'nonhotel-no-customer',building})
   const hotelCustomer:StatusItem[]=[
     {label:'Hotel Checked',lines:['Hotel Engineer','ตรวจแล้ว'],count:data.customerHotelChecked,tone:'good',href:defectHref({filter:'hotel-customer-checked',building})},
-    ...(data.customerHotelHandover>0?[{label:'Handover',lines:['ส่งมอบลูกค้าแล้ว'],count:data.customerHotelHandover,tone:'good' as Tone,href:defectHref({filter:'hotel-customer',building,q:'ส่งมอบลูกค้าแล้ว'})}]:[]),
+    ...(data.customerHotelHandover>0?[{label:'Customer Accepted',lines:['ลูกค้าตรวจรับแล้ว'],count:data.customerHotelHandover,tone:'good' as Tone,href:defectHref({filter:'hotel-customer',building,q:'ลูกค้าตรวจรับแล้ว'})}]:[]),
     ...(data.customerHotelRoomInspection>0?[{label:'Awaiting Room',lines:['ยังไม่ตรวจห้อง','ยังไม่มี Defect'],count:data.customerHotelRoomInspection,tone:'warn' as Tone,href:defectHref({filter:'hotel-customer',building,q:'ยังไม่ตรวจห้อง'})}]:[]),
-    ...(data.customerHotelPending>0?[{label:'Pending',lines:['Pending Handover','รอลูกค้าเข้าตรวจรับ'],count:data.customerHotelPending,tone:'warn' as Tone,href:defectHref({filter:'hotel-customer',building,q:'Pending Handover'})}]:[]),
-    {label:'Awaiting Hotel',lines:['Defect เสร็จ /','รอ Hotel ตรวจ'],count:data.customerHotelAwaiting,tone:'warn',href:defectHref({filter:'hotel-customer-awaiting',building})},
-    {label:'Incomplete',lines:['Defect ยังไม่เสร็จ'],count:data.customerHotelIncomplete,tone:'danger',href:defectHref({filter:'hotel-customer-incomplete',building})},
+    {label:'Awaiting Acceptance',lines:['Defect เสร็จแล้ว','รอลูกค้า / Hotel ตรวจรับ'],count:data.customerHotelPending+data.customerHotelAwaiting,tone:'warn',href:defectHref({filter:'hotel-customer-awaiting-receive',building})},
+    {label:'New Defect',lines:['เพิ่งได้รับแจ้ง Defect'],count:data.customerHotelIncomplete,tone:'danger',href:defectHref({filter:'hotel-customer-incomplete',building})},
   ]
   const hotelNoCustomer:StatusItem[]=[
     {label:'Hotel Checked',lines:['Hotel Engineer','ตรวจแล้ว'],count:data.noHotelChecked,tone:'good',href:defectHref({filter:'hotel-nocustomer-checked',building})},
-    ...(data.noHotelHandover>0?[{label:'Handover',lines:['ส่งมอบลูกค้าแล้ว'],count:data.noHotelHandover,tone:'good' as Tone,href:defectHref({filter:'hotel-nocustomer',building,q:'ส่งมอบลูกค้าแล้ว'})}]:[]),
-    {label:'Awaiting Hotel',lines:['Defect เสร็จ /','รอ Hotel ตรวจ'],count:data.noHotelAwaiting,tone:'warn',href:defectHref({filter:'hotel-nocustomer-awaiting',building})},
-    {label:'Incomplete',lines:['Defect ยังไม่เสร็จ'],count:data.noHotelIncomplete,tone:'danger',href:defectHref({filter:'hotel-nocustomer-incomplete',building})},
+    ...(data.noHotelHandover>0?[{label:'Customer Accepted',lines:['ลูกค้าตรวจรับแล้ว'],count:data.noHotelHandover,tone:'good' as Tone,href:defectHref({filter:'hotel-nocustomer',building,q:'ลูกค้าตรวจรับแล้ว'})}]:[]),
+    {label:'Awaiting Acceptance',lines:['Defect เสร็จแล้ว','รอลูกค้า / Hotel ตรวจรับ'],count:data.noHotelAwaiting+data.noHotelPending,tone:'warn',href:defectHref({filter:'hotel-nocustomer-awaiting-receive',building})},
+    {label:'New Defect',lines:['เพิ่งได้รับแจ้ง Defect'],count:data.noHotelIncomplete,tone:'danger',href:defectHref({filter:'hotel-nocustomer-incomplete',building})},
   ]
   const nonHotelCustomer:StatusItem[]=[
-    {label:'Handover',lines:['ส่งมอบลูกค้าแล้ว'],count:data.customerNonHandover,tone:'good',href:defectHref({filter:'nonhotel-customer-complete',building})},
-    {label:'Pending',lines:['Pending Handover','รอลูกค้าเข้าตรวจรับ'],count:data.customerNonPending,tone:'warn',href:defectHref({filter:'nonhotel-customer-pending',building})},
-    ...(data.customerNonChecked>0?[{label:'Hotel Checked',lines:['Hotel Engineer','ตรวจแล้ว (ประวัติเดิม)'],count:data.customerNonChecked,tone:'good' as Tone,href:defectHref({filter:'nonhotel-customer',building,q:'Hotel ตรวจแล้ว'})}]:[]),
+    {label:'Customer Accepted',lines:['ลูกค้าตรวจรับแล้ว'],count:data.customerNonHandover,tone:'good',href:defectHref({filter:'nonhotel-customer-complete',building})},
+    {label:'Awaiting Acceptance',lines:['Defect เสร็จแล้ว','รอลูกค้า / Hotel ตรวจรับ'],count:data.customerNonPending+data.customerNonChecked,tone:'warn',href:defectHref({filter:'nonhotel-customer-awaiting-receive',building})},
   ]
   const nonHotelNoCustomer:StatusItem[]=data.noNonAwaitingSale>0?[
     {label:'Awaiting Sale',lines:['Awaiting Sale','ยังไม่มีลูกค้า'],count:data.noNonAwaitingSale,tone:'neutral',href:defectHref({filter:'nonhotel-nosale',building})},
@@ -213,13 +203,7 @@ function BuildingFlow({top,building,data}:{top:number;building:'A'|'B';data:Retu
     <SvgBranchCard x={356} y={b3} label="ร่วมโรงแรม" count={data.noHotel} kind="hotel" href={noHotelHref}/>
     <SvgBranchCard x={356} y={b4} label="ไม่ร่วมโรงแรม" count={data.noNon} kind="nonhotel" href={noNonHref}/>
 
-    {[b1,b2,b3,b4].map(y=><Arrow key={`a-${y}`} x1={586} y1={y+30} x2={654} y2={y+30}/>)}
-    <SvgTrackingCard x={658} y={b1} label="ติดตาม Defect / Handover" count={data.customerHotel} href={customerHotelHref}/>
-    <SvgTrackingCard x={658} y={b2} label="ติดตามส่งมอบ / ประวัติ Defect" count={data.customerNon} href={customerNonHref}/>
-    <SvgTrackingCard x={658} y={b3} label="ติดตาม Defect ของโรงแรม" count={data.noHotel} href={noHotelHref}/>
-    <SvgTrackingCard x={658} y={b4} label="สถานะการขาย" count={data.noNon} href={noNonHref}/>
-
-    {[b1,b2,b3,b4].map(y=><Arrow key={`b-${y}`} x1={933} y1={y+30} x2={1004} y2={y+30}/>)}
+    {[b1,b2,b3,b4].map(y=><Arrow key={`status-${y}`} x1={586} y1={y+30} x2={656} y2={y+30}/>)}
     {statusRow(b1+1,hotelCustomer)}
     {statusRow(b2+1,nonHotelCustomer)}
     {statusRow(b3+1,hotelNoCustomer)}
@@ -250,16 +234,20 @@ export default function DefectFlowPage(){
   const a=useMemo(()=>buildingCounts(rows,'A'),[rows])
   const b=useMemo(()=>buildingCounts(rows,'B'),[rows])
   const synced=useMemo(()=>latestDate(rows),[rows])
-  const endpoints=useMemo(()=>({
-    awaitingSale:rows.filter(r=>r.status_group===GROUP.awaitingSale).length,
-    roomInspection:rows.filter(r=>r.status_group===GROUP.roomInspection).length,
-    checked:rows.filter(r=>r.status_group===GROUP.checked).length,
-    handover:rows.filter(r=>r.status_group===GROUP.handover).length,
-    awaiting:rows.filter(r=>r.status_group===GROUP.awaiting).length,
-    pending:rows.filter(r=>r.status_group===GROUP.pending).length,
-    incomplete:rows.filter(r=>r.status_group===GROUP.incomplete).length,
-  }),[rows])
-  const coverage=endpoints.awaitingSale+endpoints.roomInspection+endpoints.checked+endpoints.handover+endpoints.awaiting+endpoints.pending+endpoints.incomplete
+  const endpoints=useMemo(()=>{
+    const checkedRows=rows.filter(r=>r.status_group===GROUP.checked)
+    const legacyNonHotelChecked=checkedRows.filter(r=>r.hotel_participation==='ไม่ร่วมโรงแรม').length
+    return {
+      awaitingSale:rows.filter(r=>r.status_group===GROUP.awaitingSale).length,
+      roomInspection:rows.filter(r=>r.status_group===GROUP.roomInspection).length,
+      checked:checkedRows.length-legacyNonHotelChecked,
+      handover:rows.filter(r=>r.status_group===GROUP.handover).length,
+      awaitingAcceptance:rows.filter(r=>r.status_group===GROUP.awaiting).length+rows.filter(r=>r.status_group===GROUP.pending).length+legacyNonHotelChecked,
+      incomplete:rows.filter(r=>r.status_group===GROUP.incomplete).length,
+      legacyNonHotelChecked,
+    }
+  },[rows])
+  const coverage=endpoints.awaitingSale+endpoints.roomInspection+endpoints.checked+endpoints.handover+endpoints.awaitingAcceptance+endpoints.incomplete
 
   const exportPng=async()=>{
     const svg=svgRef.current
@@ -290,10 +278,9 @@ export default function DefectFlowPage(){
     ...(endpoints.awaitingSale>0?[{label:'Awaiting Sale',lines:['Awaiting Sale'],count:endpoints.awaitingSale,tone:'neutral' as Tone,href:defectHref({filter:'status-awaiting-sale'})}]:[]),
     ...(endpoints.roomInspection>0?[{label:'Awaiting Room',lines:['ยังไม่ตรวจห้อง'],count:endpoints.roomInspection,tone:'warn' as Tone,href:defectHref({filter:'hotel-customer',q:'ยังไม่ตรวจห้อง'})}]:[]),
     {label:'Hotel Checked',lines:['Hotel Engineer ตรวจแล้ว'],count:endpoints.checked,tone:'good',href:defectHref({filter:'status-hotel-checked'})},
-    {label:'Handover',lines:['ส่งมอบแล้ว'],count:endpoints.handover,tone:'good',href:defectHref({filter:'status-handover-complete'})},
-    {label:'Awaiting Hotel',lines:['Defect เสร็จ / รอ Hotel ตรวจ'],count:endpoints.awaiting,tone:'warn',href:defectHref({filter:'status-awaiting-hotel'})},
-    {label:'Pending',lines:['Pending Handover'],count:endpoints.pending,tone:'warn',href:defectHref({filter:'status-pending-handover'})},
-    {label:'Incomplete',lines:['Defect ยังไม่เสร็จ'],count:endpoints.incomplete,tone:'danger',href:defectHref({filter:'status-incomplete'})},
+    {label:'Customer Accepted',lines:['ลูกค้าตรวจรับแล้ว'],count:endpoints.handover,tone:'good',href:defectHref({filter:'status-handover-complete'})},
+    {label:'Awaiting Acceptance',lines:['Defect เสร็จแล้ว • รอตรวจรับ'],count:endpoints.awaitingAcceptance,tone:'warn',href:defectHref({filter:'status-awaiting-acceptance'})},
+    {label:'New Defect',lines:['เพิ่งได้รับแจ้ง Defect'],count:endpoints.incomplete,tone:'danger',href:defectHref({filter:'status-incomplete'})},
   ]
 
   return <AppShell>
@@ -311,18 +298,18 @@ export default function DefectFlowPage(){
         <rect width="1920" height="1080" fill="#ffffff"/>
         <g fontFamily="system-ui,-apple-system,'Segoe UI',Arial,sans-serif">
           <text x={28} y={50} fontSize={31} fontWeight={900} fill={COLORS.navy}>สรุปเส้นทาง Handover / Defect — ตึก A และ B</text>
-          <text x={28} y={81} fontSize={15} fontWeight={700} fill={COLORS.muted}>สถานะลูกค้า → ร่วม/ไม่ร่วมโรงแรม → ประเภทการติดตาม → สถานะปัจจุบัน</text>
+          <text x={28} y={81} fontSize={15} fontWeight={700} fill={COLORS.muted}>สถานะลูกค้า → ร่วม/ไม่ร่วมโรงแรม → สถานะปัจจุบัน</text>
           <text x={1888} y={36} textAnchor="end" fontSize={12} fontWeight={700} fill={COLORS.muted}>อ้างอิง: Web App / Supabase — condo_room_status</text>
           <text x={1888} y={54} textAnchor="end" fontSize={12} fontWeight={700} fill={COLORS.muted}>Sync ล่าสุด {dateTimeTH(synced)}</text>
 
           <g fontSize={12} fontWeight={800}>
             <rect x={488} y={101} width={160} height={36} rx={9} fill={COLORS.customer}/><text x={568} y={124} textAnchor="middle" fill="#286e9d">มีลูกค้า = ห้องที่ขายแล้ว</text>
             <rect x={658} y={101} width={180} height={36} rx={9} fill={COLORS.noCustomer}/><text x={748} y={124} textAnchor="middle" fill={COLORS.neutral}>ไม่มีลูกค้า = ห้องที่ยังไม่ขาย</text>
-            <rect x={848} y={101} width={292} height={36} rx={9} fill={COLORS.hotel}/><text x={994} y={124} textAnchor="middle" fill="#6b4aa2">ร่วมโรงแรม = ติดตาม Defect / Hotel Engineer</text>
-            <rect x={1150} y={101} width={282} height={36} rx={9} fill={COLORS.nonhotel}/><text x={1291} y={124} textAnchor="middle" fill={COLORS.neutral}>ไม่ร่วมโรงแรม = ติดตามการส่งมอบ / การขาย</text>
+            <rect x={848} y={101} width={292} height={36} rx={9} fill={COLORS.hotel}/><text x={994} y={124} textAnchor="middle" fill="#6b4aa2">ร่วมโรงแรม = เข้าร่วม Hotel</text>
+            <rect x={1150} y={101} width={282} height={36} rx={9} fill={COLORS.nonhotel}/><text x={1291} y={124} textAnchor="middle" fill={COLORS.neutral}>ไม่ร่วมโรงแรม = ไม่เข้าร่วม Hotel</text>
           </g>
 
-          {[[44,230,'1. สถานะลูกค้า'],[356,230,'2. ร่วม / ไม่ร่วมโรงแรม'],[658,275,'3. ประเภทการติดตาม'],[1005,871,'4. สถานะปัจจุบัน']].map(([x,w,label])=><g key={String(label)}><rect x={Number(x)} y={149} width={Number(w)} height={34} rx={9} fill={COLORS.navy2}/><text x={Number(x)+Number(w)/2} y={172} textAnchor="middle" fontSize={14} fontWeight={900} fill="#fff">{label}</text></g>)}
+          {[[44,230,'1. สถานะลูกค้า'],[356,230,'2. ร่วม / ไม่ร่วมโรงแรม'],[670,1204,'3. สถานะปัจจุบัน']].map(([x,w,label])=><g key={String(label)}><rect x={Number(x)} y={149} width={Number(w)} height={34} rx={9} fill={COLORS.navy2}/><text x={Number(x)+Number(w)/2} y={172} textAnchor="middle" fontSize={14} fontWeight={900} fill="#fff">{label}</text></g>)}
 
           <BuildingFlow top={190} building="A" data={a}/>
           <BuildingFlow top={570} building="B" data={b}/>
