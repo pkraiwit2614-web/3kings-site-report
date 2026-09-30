@@ -54,6 +54,9 @@ function overlaps(task:TaskRow,start:string,end:string){
   const e=task.planned_end||task.planned_start||''
   return s<=end&&e>=start
 }
+function setText(el:HTMLElement|null,value:string){
+  if(el&&el.textContent!==value)el.textContent=value
+}
 function setDeltaClass(el:HTMLElement|null,value:number){
   if(!el)return
   el.classList.toggle('danger-text',value<0)
@@ -62,7 +65,7 @@ function setDeltaClass(el:HTMLElement|null,value:number){
 function setFirstTextNode(el:HTMLElement|null,value:string){
   if(!el)return
   const node=[...el.childNodes].find(n=>n.nodeType===Node.TEXT_NODE)
-  if(node)node.textContent=value
+  if(node){if(node.textContent!==value)node.textContent=value}
   else el.prepend(document.createTextNode(value))
 }
 
@@ -88,11 +91,11 @@ export default function ProgressSourceAccuracy20260930(){
         const actual=hero.querySelector<HTMLElement>('b')
         const plan=hero.querySelector<HTMLElement>('small')
         const variance=hero.querySelector<HTMLElement>('em')
-        if(actual)actual.textContent=pct(portfolio.actual)
-        if(plan)plan.textContent=`Plan ${pct(portfolio.plan)}`
+        setText(actual,pct(portfolio.actual))
+        setText(plan,`Plan ${pct(portfolio.plan)}`)
         if(variance){
           const delta=Math.round(portfolio.variance*100)
-          variance.textContent=`${delta>0?'+':''}${delta}% variance`
+          setText(variance,`${delta>0?'+':''}${delta}% variance`)
           setDeltaClass(variance,portfolio.variance)
         }
       }
@@ -107,14 +110,14 @@ export default function ProgressSourceAccuracy20260930(){
         const planMark=row.querySelector<HTMLElement>('.portfolio-track > em')
         const actualText=row.querySelector<HTMLElement>('.portfolio-track > strong')
         const meta=row.querySelector<HTMLElement>('.portfolio-bar-meta')
-        if(actualBar)actualBar.style.width=`${actual}%`
-        if(planMark)planMark.style.left=`${plan}%`
-        if(actualText)actualText.textContent=`${actual}%`
+        if(actualBar&&actualBar.style.width!==`${actual}%`)actualBar.style.width=`${actual}%`
+        if(planMark&&planMark.style.left!==`${plan}%`)planMark.style.left=`${plan}%`
+        setText(actualText,`${actual}%`)
         const planText=meta?.querySelector<HTMLElement>('span')||null
         const deltaText=meta?.querySelector<HTMLElement>('b')||null
-        if(planText)planText.textContent=`Plan ${plan}%`
-        if(deltaText){deltaText.textContent=`${delta>0?'+':''}${delta}%`;setDeltaClass(deltaText,m.variance)}
-        row.dataset.progressSource='current-file-duration-weighted'
+        setText(planText,`Plan ${plan}%`)
+        if(deltaText){setText(deltaText,`${delta>0?'+':''}${delta}%`);setDeltaClass(deltaText,m.variance)}
+        if(row.dataset.progressSource!=='current-file-duration-weighted')row.dataset.progressSource='current-file-duration-weighted'
       })
 
       const projectStatus=[...projectMetrics.entries()].filter(([,m])=>m.count>0).map(([id,m])=>({id,m,status:m.variance>=-.03?'ontrack':m.variance>=-.10?'atrisk':'delayed'}))
@@ -137,12 +140,12 @@ export default function ProgressSourceAccuracy20260930(){
           if(!m.count)return
           const plan=pctInt(m.plan),actual=pctInt(m.actual),delta=Math.round(m.variance*100)
           const bars=[...row.querySelectorAll<HTMLElement>('.discipline-bars span > i')]
-          if(bars[0])bars[0].style.width=`${plan}%`
-          if(bars[1])bars[1].style.width=`${actual}%`
+          if(bars[0]&&bars[0].style.width!==`${plan}%`)bars[0].style.width=`${plan}%`
+          if(bars[1]&&bars[1].style.width!==`${actual}%`)bars[1].style.width=`${actual}%`
           const value=row.querySelector<HTMLElement>('div:last-child > b')
           const deltaEl=row.querySelector<HTMLElement>('div:last-child > small')
-          if(value)value.textContent=`${actual}%`
-          if(deltaEl){deltaEl.textContent=`Δ ${delta>0?'+':''}${delta}%`;setDeltaClass(deltaEl,m.variance)}
+          setText(value,`${actual}%`)
+          if(deltaEl){setText(deltaEl,`Δ ${delta>0?'+':''}${delta}%`);setDeltaClass(deltaEl,m.variance)}
         })
       }
     }
@@ -162,14 +165,14 @@ export default function ProgressSourceAccuracy20260930(){
         const m=metric(period.filter(t=>t.project_id===project.id))
         if(!m.count)return
         const values=[...card.querySelectorAll<HTMLElement>('.ep-kpis > div > b')]
-        if(values[0])values[0].textContent=pct(m.actual)
-        if(values[1])values[1].textContent=pct(m.plan)
+        setText(values[0]||null,pct(m.actual))
+        setText(values[1]||null,pct(m.plan))
         if(values[2]){
           const delta=Math.round(m.variance*100)
-          values[2].textContent=`${delta>0?'+':''}${delta}%`
+          setText(values[2],`${delta>0?'+':''}${delta}%`)
           setDeltaClass(values[2],m.variance)
         }
-        card.dataset.progressSource='current-file-duration-weighted'
+        if(card.dataset.progressSource!=='current-file-duration-weighted')card.dataset.progressSource='current-file-duration-weighted'
       })
 
       const info=document.querySelector<HTMLElement>('.ep-stage .ep-slide:not(.condo-slide) .ep-task-info')
@@ -185,10 +188,12 @@ export default function ProgressSourceAccuracy20260930(){
       }
       if(!task)return
 
-      info.dataset.planStart=dateTH(task.planned_start)
-      info.dataset.planEnd=dateTH(task.planned_end)
-      info.dataset.planTaskId=task.id
-      info.dataset.planSource='Current Progress file'
+      const startLabel=dateTH(task.planned_start)
+      const endLabel=dateTH(task.planned_end)
+      if(info.dataset.planStart!==startLabel)info.dataset.planStart=startLabel
+      if(info.dataset.planEnd!==endLabel)info.dataset.planEnd=endLabel
+      if(info.dataset.planTaskId!==task.id)info.dataset.planTaskId=task.id
+      if(info.dataset.planSource!=='Current Progress file')info.dataset.planSource='Current Progress file'
 
       const cells=[...info.querySelectorAll<HTMLElement>('.ep-info-grid > div')]
       const planCell=cells.find(cell=>cell.querySelector<HTMLElement>('span')?.textContent?.trim()==='Plan')
@@ -198,10 +203,10 @@ export default function ProgressSourceAccuracy20260930(){
       const variance=actual-plan
       const planValue=planCell?.querySelector<HTMLElement>('b')||null
       const varianceValue=varianceCell?.querySelector<HTMLElement>('b')||null
-      if(planValue)planValue.textContent=pct(plan)
+      setText(planValue,pct(plan))
       if(varianceValue){
         const delta=Math.round(variance*100)
-        varianceValue.textContent=`${delta>0?'+':''}${delta}%`
+        setText(varianceValue,`${delta>0?'+':''}${delta}%`)
         setDeltaClass(varianceValue,variance)
       }
     }
@@ -225,7 +230,7 @@ export default function ProgressSourceAccuracy20260930(){
       dataRef.current={projects:(p.data||[]) as ProjectRow[],tasks:(t.data||[]) as TaskRow[]}
       apply()
       observer=new MutationObserver(apply)
-      observer.observe(document.body,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['style','class','data-plan-task-id']})
+      observer.observe(document.body,{subtree:true,childList:true})
       document.addEventListener('change',apply,true)
       document.addEventListener('click',apply,true)
     }
