@@ -97,8 +97,16 @@ export default function ExecutivePlanDateFields20260930(){
         const projectTasks=orderedTasks.filter(t=>t.project_id===projectId&&overlaps(t,startDate,endDate))
         const task=projectTasks[slideIndex]||null
 
-        const start=task?.planned_start?dateTH(task.planned_start):(!loaded?'กำลังโหลด…':'ไม่พบวันที่ใน Progress')
-        const end=task?.planned_end?dateTH(task.planned_end):(!loaded?'กำลังโหลด…':'ไม่พบวันที่ใน Progress')
+        // The header itself is rendered by ExecutivePresentationV41 from the same
+        // currentTask.planned_start / planned_end fields. Keep it as a display fallback
+        // so these cards can never remain visually blank while the extra lookup settles.
+        const headerLine=slide.querySelector<HTMLElement>('header p')?.textContent?.trim()||''
+        const headerPlan=headerLine.match(/Plan\s+(.+?)\s*(?:→|->|–)\s*(.+?)\s*$/i)
+        const headerStart=headerPlan?.[1]?.trim()||''
+        const headerEnd=headerPlan?.[2]?.trim()||''
+
+        const start=task?.planned_start?dateTH(task.planned_start):(headerStart||(!loaded?'กำลังโหลด…':'ไม่พบวันที่ใน Progress'))
+        const end=task?.planned_end?dateTH(task.planned_end):(headerEnd||(!loaded?'กำลังโหลด…':'ไม่พบวันที่ใน Progress'))
 
         const startBox=ensureDateField(grid,'start','เริ่มในแผน',start)
         const endBox=ensureDateField(grid,'end','จบในแผน',end)
@@ -114,7 +122,7 @@ export default function ExecutivePlanDateFields20260930(){
         }else{
           delete startBox.dataset.taskId
           delete endBox.dataset.taskId
-          startBox.title=`ไม่พบ Task สำหรับ ${code} • Slide ${slideIndex+1}`
+          startBox.title=`ใช้วันที่จาก current Progress slide • ${code} • Slide ${slideIndex+1}`
           endBox.title=startBox.title
         }
 
@@ -150,6 +158,7 @@ export default function ExecutivePlanDateFields20260930(){
       color:#17243a!important;
       white-space:normal!important;
       overflow-wrap:anywhere!important;
+      min-height:18px!important;
     }
   `}</style>
 }
