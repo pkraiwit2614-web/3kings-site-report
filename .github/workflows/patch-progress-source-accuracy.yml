@@ -1,0 +1,46 @@
+name: One-shot Progress source parity patch
+
+on:
+  push:
+    paths:
+      - '.github/workflows/patch-progress-source-accuracy.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch presentation aggregations
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          v41 = Path('components/ExecutivePresentationV41.tsx')
+          text = v41.read_text()
+          old = """    const list=periodTasks.filter(t=>t.project_id===project.id); const projectPhotos=photosInPeriod.filter(p=>p.project_id===project.id)\n    const plan=list.length?list.reduce((s,t)=>s+(t.current_plan_progress||0),0)/list.length:0; const actual=list.length?list.reduce((s,t)=>s+(t.actual_progress||0),0)/list.length:0\n"""
+          new = """    const list=periodTasks.filter(t=>t.project_id===project.id); const projectPhotos=photosInPeriod.filter(p=>p.project_id===project.id)\n    const progressWeight=(t:PresentationTask)=>Math.max(1,Number((t as any).planned_duration_days)||1)\n    const totalWeight=list.reduce((s,t)=>s+progressWeight(t),0)\n    const plan=totalWeight?list.reduce((s,t)=>s+progressWeight(t)*(Number((t as any).imported_plan_progress??t.current_plan_progress)||0),0)/totalWeight:0; const actual=totalWeight?list.reduce((s,t)=>s+progressWeight(t)*(Number(t.actual_progress)||0),0)/totalWeight:0\n"""
+          if old not in text:
+              raise SystemExit('ExecutivePresentationV41 aggregation target not found')
+          v41.write_text(text.replace(old,new,1))
+
+          parity = Path('components/ExecutivePowerPointParity20260927.tsx')
+          text = parity.read_text()
+          old = """            const actual=projectTasks.length?projectTasks.reduce((sum:number,x:any)=>sum+(Number(x.actual_progress)||0),0)/projectTasks.length:0\n            const plan=projectTasks.length?projectTasks.reduce((sum:number,x:any)=>sum+(Number(x.current_plan_progress)||0),0)/projectTasks.length:0\n"""
+          new = """            const projectWeight=projectTasks.reduce((sum:number,x:any)=>sum+Math.max(1,Number(x.planned_duration_days)||1),0)\n            const actual=projectWeight?projectTasks.reduce((sum:number,x:any)=>{const w=Math.max(1,Number(x.planned_duration_days)||1);return sum+w*(Number(x.actual_progress)||0)},0)/projectWeight:0\n            const plan=projectWeight?projectTasks.reduce((sum:number,x:any)=>{const w=Math.max(1,Number(x.planned_duration_days)||1);return sum+w*(Number(x.imported_plan_progress??x.current_plan_progress)||0)},0)/projectWeight:0\n"""
+          if old not in text:
+              raise SystemExit('ExecutivePowerPointParity aggregation target not found')
+          parity.write_text(text.replace(old,new,1))
+          PY
+      - name: Remove one-shot workflow and commit patch
+        run: |
+          rm -f .github/workflows/patch-progress-source-accuracy.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add components/ExecutivePresentationV41.tsx components/ExecutivePowerPointParity20260927.tsx .github/workflows/patch-progress-source-accuracy.yml
+          git commit -m "Use duration-weighted Progress metrics in presentation exports"
+          git push origin HEAD:main
