@@ -4,11 +4,13 @@ import ExecutiveAIVisualMatcherV2 from '@/components/ExecutiveAIVisualMatcherV2'
 import ExecutivePresentationPhotoDisplay from '@/components/ExecutivePresentationPhotoDisplay'
 import PresentationCondoEnhancer from '@/components/PresentationCondoEnhancer'
 import ExecutivePlanDateFields20260930 from '@/components/ExecutivePlanDateFields20260930'
+import ExecutivePresentationCarryoverGuard from '@/components/ExecutivePresentationCarryoverGuard'
 
 export default function ExecutivePresentationPage(){
   return <>
     <ExecutivePresentationV41 />
     <ExecutivePlanDateFields20260930 />
+    <ExecutivePresentationCarryoverGuard />
     <ExecutiveAIVisualMatcherV2 />
     <ExecutivePresentationPhotoDisplay />
     <PresentationCondoEnhancer />
