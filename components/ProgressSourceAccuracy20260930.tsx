@@ -78,6 +78,7 @@ export default function ProgressSourceAccuracy20260930(){
     let cancelled=false
     let observer:MutationObserver|null=null
     let frame=0
+    let dashboardApplied=false
 
     const applyDashboard=()=>{
       const {projects,tasks}=dataRef.current
@@ -127,26 +128,6 @@ export default function ProgressSourceAccuracy20260930(){
         const buttons=[...strip.querySelectorAll<HTMLElement>('button')]
         const values=[counts.ontrack,counts.atrisk,counts.delayed]
         buttons.slice(0,3).forEach((button,index)=>setFirstTextNode(button.querySelector<HTMLElement>('strong'),`${values[index]} `))
-      }
-
-      const modules=[...document.querySelectorAll<HTMLElement>('.dashboard-module')]
-      const discipline=modules.find(module=>module.querySelector<HTMLElement>('.module-title b')?.textContent?.includes('WORK PROGRESS BY DISCIPLINE'))
-      if(discipline){
-        const projectId=discipline.querySelector<HTMLSelectElement>('select')?.value||''
-        const base=tasks.filter(t=>String(t.source_task_no||'').trim()!=='1'&&(!projectId||t.project_id===projectId))
-        discipline.querySelectorAll<HTMLElement>('.discipline-row').forEach(row=>{
-          const category=row.querySelector<HTMLElement>('div:first-child > b')?.textContent?.trim()||''
-          const m=metric(base.filter(t=>(t.category||'ไม่ระบุหมวด')===category))
-          if(!m.count)return
-          const plan=pctInt(m.plan),actual=pctInt(m.actual),delta=Math.round(m.variance*100)
-          const bars=[...row.querySelectorAll<HTMLElement>('.discipline-bars span > i')]
-          if(bars[0]&&bars[0].style.width!==`${plan}%`)bars[0].style.width=`${plan}%`
-          if(bars[1]&&bars[1].style.width!==`${actual}%`)bars[1].style.width=`${actual}%`
-          const value=row.querySelector<HTMLElement>('div:last-child > b')
-          const deltaEl=row.querySelector<HTMLElement>('div:last-child > small')
-          setText(value,`${actual}%`)
-          if(deltaEl){setText(deltaEl,`Δ ${delta>0?'+':''}${delta}%`);setDeltaClass(deltaEl,m.variance)}
-        })
       }
     }
 
@@ -215,7 +196,14 @@ export default function ProgressSourceAccuracy20260930(){
       cancelAnimationFrame(frame)
       frame=requestAnimationFrame(()=>{
         if(cancelled)return
-        if(path==='/')applyDashboard()
+        if(path==='/'){
+          if(dashboardApplied)return
+          applyDashboard()
+          if(document.querySelector('.executive-kpi.hero')){
+            dashboardApplied=true
+            observer?.disconnect()
+          }
+        }
         if(path==='/presentation')applyPresentation()
       })
     }
@@ -229,10 +217,13 @@ export default function ProgressSourceAccuracy20260930(){
       if(cancelled)return
       dataRef.current={projects:(p.data||[]) as ProjectRow[],tasks:(t.data||[]) as TaskRow[]}
       apply()
+      if(path==='/'&&dashboardApplied)return
       observer=new MutationObserver(apply)
       observer.observe(document.body,{subtree:true,childList:true})
-      document.addEventListener('change',apply,true)
-      document.addEventListener('click',apply,true)
+      if(path==='/presentation'){
+        document.addEventListener('change',apply,true)
+        document.addEventListener('click',apply,true)
+      }
     }
 
     void load()
