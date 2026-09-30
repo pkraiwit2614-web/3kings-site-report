@@ -59,24 +59,40 @@ export default function ExecutivePresentationCarryoverGuard(){
         const labels=projects
           .map(p=>({code:p.code,count:countByProject.get(p.id)||0}))
           .filter(x=>x.count>0&&/^AV-P[6-9]$/.test(x.code))
-          .map(x=>`${x.code.replace('AV-','')} ${x.count}`)
+          .map(x=>`${x.code.replace('AV-','P')} ${x.count}`)
         filter.dataset.carryoverNote=labels.length
           ? `Carryover งานค้างก่อนช่วงเดือน: ${labels.join(' • ')} — เปิด Plot แล้วระบบจะรวมงานค้างให้อัตโนมัติ`
           : ''
 
+        const startInput=inputs[0]
+        const currentStart=startInput.value
         const slide=document.querySelector<HTMLElement>('.ep-stage .ep-slide:not(.condo-slide)')
-        if(!slide)return
+
+        // Keep the overview on the user's normal reporting period. Only widen the
+        // range while an individual Plot slide is open, and only if the range was
+        // previously auto-managed by this guard.
+        if(!slide){
+          delete filter.dataset.carryoverActive
+          if(currentStart===lastApplied.current&&currentStart!==autoStart){
+            lastApplied.current=autoStart
+            setReactInputValue(startInput,autoStart)
+          }
+          return
+        }
+
         const code=(slide.querySelector<HTMLElement>('.ep-eyebrow')?.textContent||'').split('•')[0].trim()
         const project=projects.find(p=>p.code===code)
         if(!project)return
 
-        const startInput=inputs[0]
-        const currentStart=startInput.value
         const canAutoAdjust=currentStart===autoStart||currentStart===lastApplied.current
-        if(!canAutoAdjust)return
+        if(!canAutoAdjust){
+          delete filter.dataset.carryoverActive
+          return
+        }
 
         const overdue=overdueAll.filter(t=>t.project_id===project.id)
         if(!overdue.length){
+          delete filter.dataset.carryoverActive
           if(currentStart===lastApplied.current&&currentStart!==autoStart){
             lastApplied.current=autoStart
             setReactInputValue(startInput,autoStart)
@@ -88,11 +104,13 @@ export default function ExecutivePresentationCarryoverGuard(){
           .map(t=>t.planned_start||t.planned_end)
           .filter((v):v is string=>Boolean(v))
           .sort()[0]
-        if(!earliest||earliest>=autoStart||currentStart===earliest)return
+        if(!earliest||earliest>=autoStart)return
+
+        filter.dataset.carryoverActive=`${code}: รวม ${overdue.length} งานค้างจากแผนก่อน ${autoStart}`
+        if(currentStart===earliest)return
 
         lastApplied.current=earliest
         setReactInputValue(startInput,earliest)
-        filter.dataset.carryoverActive=`${code}: รวม ${overdue.length} งานค้างจากแผนก่อน ${autoStart}`
       })
     }
 
