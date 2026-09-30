@@ -154,8 +154,10 @@ function buildingCounts(rows:FlowRow[],building:'A'|'B'){
     customerHotelAwaiting:status('มีลูกค้า','ร่วมโรงแรม',GROUP.awaiting),
     customerHotelRoomInspection:status('มีลูกค้า','ร่วมโรงแรม',GROUP.roomInspection),
     customerHotelIncomplete:status('มีลูกค้า','ร่วมโรงแรม',GROUP.incomplete),
+    customerHotelPending:status('มีลูกค้า','ร่วมโรงแรม',GROUP.pending),
     customerNonHandover:status('มีลูกค้า','ไม่ร่วมโรงแรม',GROUP.handover),
     customerNonPending:status('มีลูกค้า','ไม่ร่วมโรงแรม',GROUP.pending),
+    customerNonChecked:status('มีลูกค้า','ไม่ร่วมโรงแรม',GROUP.checked),
     noHotelChecked:status('ไม่มีลูกค้า','ร่วมโรงแรม',GROUP.checked),
     noHotelHandover:status('ไม่มีลูกค้า','ร่วมโรงแรม',GROUP.handover),
     noHotelAwaiting:status('ไม่มีลูกค้า','ร่วมโรงแรม',GROUP.awaiting),
@@ -175,6 +177,7 @@ function BuildingFlow({top,building,data}:{top:number;building:'A'|'B';data:Retu
     {label:'Hotel Checked',lines:['Hotel Engineer','ตรวจแล้ว'],count:data.customerHotelChecked,tone:'good',href:defectHref({filter:'hotel-customer-checked',building})},
     ...(data.customerHotelHandover>0?[{label:'Handover',lines:['ส่งมอบลูกค้าแล้ว'],count:data.customerHotelHandover,tone:'good' as Tone,href:defectHref({filter:'hotel-customer',building,q:'ส่งมอบลูกค้าแล้ว'})}]:[]),
     ...(data.customerHotelRoomInspection>0?[{label:'Awaiting Room',lines:['ยังไม่ตรวจห้อง','ยังไม่มี Defect'],count:data.customerHotelRoomInspection,tone:'warn' as Tone,href:defectHref({filter:'hotel-customer',building,q:'ยังไม่ตรวจห้อง'})}]:[]),
+    ...(data.customerHotelPending>0?[{label:'Pending',lines:['Pending Handover','รอลูกค้าเข้าตรวจรับ'],count:data.customerHotelPending,tone:'warn' as Tone,href:defectHref({filter:'hotel-customer',building,q:'Pending Handover'})}]:[]),
     {label:'Awaiting Hotel',lines:['Defect เสร็จ /','รอ Hotel ตรวจ'],count:data.customerHotelAwaiting,tone:'warn',href:defectHref({filter:'hotel-customer-awaiting',building})},
     {label:'Incomplete',lines:['Defect ยังไม่เสร็จ'],count:data.customerHotelIncomplete,tone:'danger',href:defectHref({filter:'hotel-customer-incomplete',building})},
   ]
@@ -187,6 +190,7 @@ function BuildingFlow({top,building,data}:{top:number;building:'A'|'B';data:Retu
   const nonHotelCustomer:StatusItem[]=[
     {label:'Handover',lines:['ส่งมอบลูกค้าแล้ว'],count:data.customerNonHandover,tone:'good',href:defectHref({filter:'nonhotel-customer-complete',building})},
     {label:'Pending',lines:['Pending Handover','รอลูกค้าเข้าตรวจรับ'],count:data.customerNonPending,tone:'warn',href:defectHref({filter:'nonhotel-customer-pending',building})},
+    ...(data.customerNonChecked>0?[{label:'Hotel Checked',lines:['Hotel Engineer','ตรวจแล้ว (ประวัติเดิม)'],count:data.customerNonChecked,tone:'good' as Tone,href:defectHref({filter:'nonhotel-customer',building,q:'Hotel ตรวจแล้ว'})}]:[]),
   ]
   const nonHotelNoCustomer:StatusItem[]=data.noNonAwaitingSale>0?[
     {label:'Awaiting Sale',lines:['Awaiting Sale','ยังไม่มีลูกค้า'],count:data.noNonAwaitingSale,tone:'neutral',href:defectHref({filter:'nonhotel-nosale',building})},
@@ -210,8 +214,8 @@ function BuildingFlow({top,building,data}:{top:number;building:'A'|'B';data:Retu
     <SvgBranchCard x={356} y={b4} label="ไม่ร่วมโรงแรม" count={data.noNon} kind="nonhotel" href={noNonHref}/>
 
     {[b1,b2,b3,b4].map(y=><Arrow key={`a-${y}`} x1={586} y1={y+30} x2={654} y2={y+30}/>)}
-    <SvgTrackingCard x={658} y={b1} label="ติดตาม Defect ของโรงแรม" count={data.customerHotel} href={customerHotelHref}/>
-    <SvgTrackingCard x={658} y={b2} label="ติดตามการส่งมอบลูกค้า" count={data.customerNon} href={customerNonHref}/>
+    <SvgTrackingCard x={658} y={b1} label="ติดตาม Defect / Handover" count={data.customerHotel} href={customerHotelHref}/>
+    <SvgTrackingCard x={658} y={b2} label="ติดตามส่งมอบ / ประวัติ Defect" count={data.customerNon} href={customerNonHref}/>
     <SvgTrackingCard x={658} y={b3} label="ติดตาม Defect ของโรงแรม" count={data.noHotel} href={noHotelHref}/>
     <SvgTrackingCard x={658} y={b4} label="สถานะการขาย" count={data.noNon} href={noNonHref}/>
 
