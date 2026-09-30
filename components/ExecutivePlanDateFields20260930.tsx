@@ -3,6 +3,7 @@
 import {useEffect,useMemo,useState} from 'react'
 import {getSupabase} from '@/lib/supabase'
 import {dateTH} from '@/lib/format'
+import {sortTasksByNumber} from '@/lib/taskOrder'
 
 type ProjectRow={id:string;code:string}
 type TaskRow={
@@ -18,8 +19,11 @@ type TaskRow={
   source_row:number|null
 }
 
-function normalize(value:string|null|undefined){
-  return (value||'').replace(/\s+/g,' ').trim().toLowerCase()
+function overlaps(task:TaskRow,start:string,end:string){
+  if(!task.planned_start&&!task.planned_end)return false
+  const s=task.planned_start||task.planned_end||''
+  const e=task.planned_end||task.planned_start||''
+  return s<=end&&e>=start
 }
 
 function ensureDateField(grid:HTMLElement,key:'start'|'end',label:string,value:string){
@@ -63,6 +67,10 @@ export default function ExecutivePlanDateFields20260930(){
   },[])
 
   const projectByCode=useMemo(()=>new Map(projects.map(p=>[p.code,p.id])),[projects])
+  const orderedTasks=useMemo(
+    ()=>sortTasksByNumber(tasks.filter(t=>String(t.source_task_no||'').trim()!=='1')),
+    [tasks]
+  )
 
   useEffect(()=>{
     let frame=0
@@ -74,36 +82,39 @@ export default function ExecutivePlanDateFields20260930(){
         if(!slide||!grid)return
 
         const code=(slide.querySelector<HTMLElement>('.ep-eyebrow')?.textContent||'').split('•')[0].trim()
-        const taskName=slide.querySelector<HTMLElement>('h2')?.textContent?.trim()||''
-        const headerLine=slide.querySelector<HTMLElement>('header p')?.textContent?.trim()||''
-        const areaText=headerLine.split(/\s*[•|]\s*Plan\s+/i)[0]?.trim()||''
         const projectId=projectByCode.get(code)||''
 
-        let candidates=tasks.filter(t=>t.project_id===projectId&&normalize(t.task_name)===normalize(taskName))
-        if(candidates.length>1&&areaText){
-          const byArea=candidates.filter(t=>normalize(t.area)===normalize(areaText))
-          if(byArea.length)candidates=byArea
-        }
-        if(candidates.length>1){
-          candidates=candidates.slice().sort((a,b)=>Number(a.source_row||99999)-Number(b.source_row||99999))
-        }
-        const task=candidates[0]||null
+        // Use the exact same date range and task ordering as ExecutivePresentationV41.
+        // This avoids fragile matching by task name/area and binds the visible slide 1:1
+        // to the same Progress row used to build the presentation.
+        const dateInputs=[...document.querySelectorAll<HTMLInputElement>('.ep-filter input[type="date"]')]
+        const startDate=dateInputs[0]?.value||'0000-01-01'
+        const endDate=dateInputs[1]?.value||'9999-12-31'
+        const counter=slide.closest('.ep-stage')?.querySelector<HTMLElement>('.ep-stage-controls span')?.textContent||''
+        const counterMatch=counter.match(/(\d+)\s*\/\s*(\d+)/)
+        const slideIndex=Math.max(0,(Number(counterMatch?.[1]||1)-1))
 
-        // Primary source: planned_start / planned_end synced directly from each Plot's Progress sheet.
-        // Header parsing is only a fallback while data is loading or if a task cannot be matched.
-        const headerMatch=headerLine.match(/(?:•|\|)\s*Plan\s+(.+?)\s*(?:→|->|–)\s*(.+?)\s*$/i)
-        const fallbackStart=headerMatch?.[1]?.trim()||''
-        const fallbackEnd=headerMatch?.[2]?.trim()||''
-        const start=task?.planned_start?dateTH(task.planned_start):(fallbackStart||(!loaded?'กำลังโหลด…':'ไม่พบวันที่'))
-        const end=task?.planned_end?dateTH(task.planned_end):(fallbackEnd||(!loaded?'กำลังโหลด…':'ไม่พบวันที่'))
+        const projectTasks=orderedTasks.filter(t=>t.project_id===projectId&&overlaps(t,startDate,endDate))
+        const task=projectTasks[slideIndex]||null
+
+        const start=task?.planned_start?dateTH(task.planned_start):(!loaded?'กำลังโหลด…':'ไม่พบวันที่ใน Progress')
+        const end=task?.planned_end?dateTH(task.planned_end):(!loaded?'กำลังโหลด…':'ไม่พบวันที่ใน Progress')
 
         const startBox=ensureDateField(grid,'start','เริ่มในแผน',start)
         const endBox=ensureDateField(grid,'end','จบในแผน',end)
 
         if(task){
+          const source=`Progress: ${task.source_file||'-'} • ${task.source_sheet||'-'}${task.source_row?` • Row ${task.source_row}`:''}`
+          startBox.dataset.taskId=task.id
+          endBox.dataset.taskId=task.id
           startBox.dataset.progressSource=task.source_file||''
           endBox.dataset.progressSource=task.source_file||''
-          startBox.title=`Progress: ${task.source_file||'-'} • ${task.source_sheet||'-'}${task.source_row?` • Row ${task.source_row}`:''}`
+          startBox.title=source
+          endBox.title=source
+        }else{
+          delete startBox.dataset.taskId
+          delete endBox.dataset.taskId
+          startBox.title=`ไม่พบ Task สำหรับ ${code} • Slide ${slideIndex+1}`
           endBox.title=startBox.title
         }
 
@@ -115,13 +126,15 @@ export default function ExecutivePlanDateFields20260930(){
     sync()
     const observer=new MutationObserver(sync)
     observer.observe(document.body,{subtree:true,childList:true,characterData:true})
+    document.addEventListener('change',sync,true)
     window.addEventListener('resize',sync)
     return()=>{
       observer.disconnect()
+      document.removeEventListener('change',sync,true)
       window.removeEventListener('resize',sync)
       cancelAnimationFrame(frame)
     }
-  },[tasks,projectByCode,loaded])
+  },[orderedTasks,projectByCode,loaded])
 
   return <style jsx global>{`
     .ep-info-grid>.ep-plan-date-field{
@@ -135,7 +148,8 @@ export default function ExecutivePlanDateFields20260930(){
     }
     .ep-info-grid>.ep-plan-date-field b{
       color:#17243a!important;
-      white-space:nowrap!important;
+      white-space:normal!important;
+      overflow-wrap:anywhere!important;
     }
   `}</style>
 }
