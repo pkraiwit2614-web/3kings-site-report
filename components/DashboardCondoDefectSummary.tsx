@@ -23,7 +23,6 @@ type FinalStatus={
 
 const finalStatuses:FinalStatus[]=[
   {key:'status-handover-complete',label:'ส่งมอบแล้ว',note:'Handover Complete',tone:'good',group:'Non-Hotel - Handover Complete'},
-  {key:'status-awaiting-room',label:'ยังไม่ตรวจห้อง',note:'ยังไม่มี Defect Status',tone:'warn',group:'Hotel - Awaiting Room Inspection',href:'/defects?filter=hotel-customer&q=ยังไม่ตรวจห้อง#room-list'},
   {key:'status-awaiting-hotel',label:'Defect เสร็จ / รอ Hotel ตรวจ',note:'รอ Hotel Engineer',tone:'warn',group:'Hotel - Awaiting Check'},
   {key:'status-incomplete',label:'Defect ยังไม่เสร็จ',note:'ต้องปิดงาน',tone:'danger',group:'Hotel - Incomplete'},
   {key:'status-hotel-checked',label:'Hotel ตรวจแล้ว',note:'ปิดสถานะ Defect',tone:'good',group:'Hotel - Checked Complete'},
