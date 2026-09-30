@@ -26,6 +26,7 @@ import HeaderLayoutFix20260927 from '@/components/HeaderLayoutFix20260927'
 import SitePerformanceSyncLineGuard20260927 from '@/components/SitePerformanceSyncLineGuard20260927'
 import RolePermissionGuard20260927 from '@/components/RolePermissionGuard20260927'
 import CompactFilterStandard20260929 from '@/components/CompactFilterStandard20260929'
+import ProgressSourceAccuracy20260930 from '@/components/ProgressSourceAccuracy20260930'
 import { Noto_Sans_Thai } from 'next/font/google'
 import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
@@ -38,5 +39,5 @@ const notoSansThai = Noto_Sans_Thai({
 export const metadata: Metadata = { title: '3 Kings Site Report', description: 'Daily site reporting and management dashboard' }
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
-  return <html lang="th"><body className={notoSansThai.className}><TaskDropdownOrder /><UiPolish20260927 /><UiRequestedChanges20260927 /><RequestedFixes20260927V2 /><ExecutivePowerPointParity20260927 /><HeaderActionPattern20260927 /><DefectDashboardDeepLinkGuard20260927 /><DefectFlowDashboardButton20260929 /><ExecutiveDownloadLabelGuard20260927 /><HeaderLayoutFix20260927 /><SitePerformanceSyncLineGuard20260927 /><RolePermissionGuard20260927 /><CompactFilterStandard20260929 />{children}</body></html>
+  return <html lang="th"><body className={notoSansThai.className}><TaskDropdownOrder /><UiPolish20260927 /><UiRequestedChanges20260927 /><RequestedFixes20260927V2 /><ExecutivePowerPointParity20260927 /><HeaderActionPattern20260927 /><DefectDashboardDeepLinkGuard20260927 /><DefectFlowDashboardButton20260929 /><ExecutiveDownloadLabelGuard20260927 /><HeaderLayoutFix20260927 /><SitePerformanceSyncLineGuard20260927 /><RolePermissionGuard20260927 /><CompactFilterStandard20260929 /><ProgressSourceAccuracy20260930 />{children}</body></html>
 }
