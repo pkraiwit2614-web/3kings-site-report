@@ -249,7 +249,9 @@ export default function ExecutivePresentationV41(){
 
   const stats=useMemo<ProjectStats[]>(()=>visibleProjects.filter(p=>!isCondoCode(p.code)).map(project=>{
     const list=periodTasks.filter(t=>t.project_id===project.id); const projectPhotos=photosInPeriod.filter(p=>p.project_id===project.id)
-    const plan=list.length?list.reduce((s,t)=>s+(t.current_plan_progress||0),0)/list.length:0; const actual=list.length?list.reduce((s,t)=>s+(t.actual_progress||0),0)/list.length:0
+    const progressWeight=(t:PresentationTask)=>Math.max(1,Number((t as any).planned_duration_days)||1)
+    const totalWeight=list.reduce((s,t)=>s+progressWeight(t),0)
+    const plan=totalWeight?list.reduce((s,t)=>s+progressWeight(t)*(Number((t as any).imported_plan_progress??t.current_plan_progress)||0),0)/totalWeight:0; const actual=totalWeight?list.reduce((s,t)=>s+progressWeight(t)*(Number(t.actual_progress)||0),0)/totalWeight:0
     const latestPhotoDate=latestValue(projectPhotos.map(p=>p.report_date))
     return {project,tasks:list,plan,actual,variance:actual-plan,delayed:list.filter(t=>(t.delay_days||0)>0&&(t.actual_progress||0)<1).length,completed:list.filter(t=>(t.actual_progress||0)>=1).length,latestPhotoDate,photoCount:projectPhotos.length,matchedPhotoCount:projectPhotos.filter(p=>p.matched).length,verifiedPhotoCount:projectPhotos.filter(p=>p.verified).length}
   }),[visibleProjects,periodTasks,photosInPeriod])

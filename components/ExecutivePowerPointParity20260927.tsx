@@ -302,8 +302,9 @@ export default function ExecutivePowerPointParity20260927(){
           const projectTasks=periodTasks.filter((x:any)=>x.project_id===project.id)
           if(!slideView){
             const cover:any=pptx.addSlide();cover.background={color:'F6F2E9'}
-            const actual=projectTasks.length?projectTasks.reduce((sum:number,x:any)=>sum+(Number(x.actual_progress)||0),0)/projectTasks.length:0
-            const plan=projectTasks.length?projectTasks.reduce((sum:number,x:any)=>sum+(Number(x.current_plan_progress)||0),0)/projectTasks.length:0
+            const projectWeight=projectTasks.reduce((sum:number,x:any)=>sum+Math.max(1,Number(x.planned_duration_days)||1),0)
+            const actual=projectWeight?projectTasks.reduce((sum:number,x:any)=>{const w=Math.max(1,Number(x.planned_duration_days)||1);return sum+w*(Number(x.actual_progress)||0)},0)/projectWeight:0
+            const plan=projectWeight?projectTasks.reduce((sum:number,x:any)=>{const w=Math.max(1,Number(x.planned_duration_days)||1);return sum+w*(Number(x.imported_plan_progress??x.current_plan_progress)||0)},0)/projectWeight:0
             cover.addText('3 KINGS CONSTRUCTION',{x:.65,y:.48,w:4.2,h:.3,fontSize:11,bold:true,color:'A97920',charSpacing:1.5,margin:0})
             cover.addText(project.name,{x:.65,y:1.08,w:7.2,h:.68,fontSize:28,bold:true,color:'17243A',margin:0})
             cover.addText(`${dateTH(filters.start)} – ${dateTH(filters.end)}`,{x:.65,y:1.88,w:5,h:.34,fontSize:13,color:'687486',margin:0})
