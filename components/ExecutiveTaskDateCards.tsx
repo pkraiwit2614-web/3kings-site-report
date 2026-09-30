@@ -15,6 +15,8 @@ export default function ExecutiveTaskDateCards(){
   const [projects,setProjects]=useState<Project[]>([])
   const [host,setHost]=useState<HTMLElement|null>(null)
   const [task,setTask]=useState<Row|null>(null)
+  const [planStartText,setPlanStartText]=useState('\u00a0')
+  const [planEndText,setPlanEndText]=useState('\u00a0')
 
   useEffect(()=>{
     let cancelled=false
@@ -35,14 +37,20 @@ export default function ExecutiveTaskDateCards(){
   const projectByCode=useMemo(()=>new Map(projects.map(p=>[p.code,p.id])),[projects])
 
   useEffect(()=>{
-    if(!rows.length||!projects.length)return
     let frame=0
     const sync=()=>{
       cancelAnimationFrame(frame)
       frame=requestAnimationFrame(()=>{
         const slide=document.querySelector<HTMLElement>('.ep-stage .ep-slide:not(.condo-slide)')
         const nextHost=slide?.querySelector<HTMLElement>('.ep-task-info')||null
-        if(!slide||!nextHost){setHost(null);setTask(null);return}
+        if(!slide||!nextHost){
+          setHost(null)
+          setTask(null)
+          setPlanStartText('\u00a0')
+          setPlanEndText('\u00a0')
+          return
+        }
+
         const code=(slide.querySelector<HTMLElement>('.ep-eyebrow')?.textContent||'').split('•')[0].trim()
         const name=slide.querySelector<HTMLElement>('h2')?.textContent?.trim()||''
         const headerLine=slide.querySelector<HTMLElement>('header p')?.textContent||''
@@ -51,8 +59,19 @@ export default function ExecutiveTaskDateCards(){
         let candidates=rows.filter(r=>r.project_id===projectId&&r.task_name.trim()===name)
         if(candidates.length>1)candidates=candidates.filter(r=>(r.area||'-').trim()===area)
         if(candidates.length>1)candidates=candidates.filter(r=>headerLine.includes(dateTH(r.planned_start))&&headerLine.includes(dateTH(r.planned_end)))
+        const matchedTask=candidates[0]||null
+
+        // The presentation header already carries the task's plan dates. Parse those
+        // as the primary display source so the plan cards remain visible even if a
+        // task lookup is temporarily unavailable during a sync or schema refresh.
+        const planMatch=headerLine.match(/•\s*Plan\s+(.+?)\s*→\s*(.+?)\s*$/)
+        const parsedStart=planMatch?.[1]?.trim()||''
+        const parsedEnd=planMatch?.[2]?.trim()||''
+
         setHost(nextHost)
-        setTask(candidates[0]||null)
+        setTask(matchedTask)
+        setPlanStartText(parsedStart||blankDate(matchedTask?.planned_start))
+        setPlanEndText(parsedEnd||blankDate(matchedTask?.planned_end))
       })
     }
     sync()
@@ -61,13 +80,13 @@ export default function ExecutiveTaskDateCards(){
     return()=>{observer.disconnect();cancelAnimationFrame(frame)}
   },[rows,projects,projectByCode])
 
-  if(!host||!task)return null
+  if(!host)return null
   return createPortal(<>
     <div className="ep-date-grid" aria-label="Plan and actual task dates">
-      <div className="plan-date"><span>เริ่มตามแผน</span><b>{blankDate(task.planned_start)}</b></div>
-      <div className="plan-date"><span>จบตามแผน</span><b>{blankDate(task.planned_end)}</b></div>
-      <div className="actual-date"><span>เริ่มจริง</span><b>{blankDate(task.actual_start)}</b></div>
-      <div className="actual-date"><span>จบจริง</span><b>{blankDate(task.actual_end)}</b></div>
+      <div className="plan-date"><span>เริ่มตามแผน</span><b>{planStartText}</b></div>
+      <div className="plan-date"><span>จบตามแผน</span><b>{planEndText}</b></div>
+      <div className="actual-date"><span>เริ่มจริง</span><b>{blankDate(task?.actual_start)}</b></div>
+      <div className="actual-date"><span>จบจริง</span><b>{blankDate(task?.actual_end)}</b></div>
     </div>
     <style jsx global>{`
       .ep-task-info>.ep-progress{order:1}.ep-task-info>.ep-date-grid{order:2}.ep-task-info>.ep-info-grid{order:3}.ep-task-info>.ep-note{order:4}.ep-task-info>.ep-owner{order:5}
