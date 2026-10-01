@@ -170,13 +170,13 @@ function BuildingFlow({top,building,data}:{top:number;building:'A'|'B';data:Retu
     ...(data.customerHotelHandover>0?[{label:'Customer Accepted',lines:['ลูกค้าตรวจรับแล้ว'],count:data.customerHotelHandover,tone:'good' as Tone,href:defectHref({filter:'hotel-customer',building,q:'ลูกค้าตรวจรับแล้ว'})}]:[]),
     ...(data.customerHotelRoomInspection>0?[{label:'Awaiting Room',lines:['ยังไม่ตรวจห้อง','ยังไม่มี Defect'],count:data.customerHotelRoomInspection,tone:'warn' as Tone,href:defectHref({filter:'hotel-customer',building,q:'ยังไม่ตรวจห้อง'})}]:[]),
     {label:'Awaiting Acceptance',lines:['Defect เสร็จแล้ว','รอลูกค้า / Hotel ตรวจรับ'],count:data.customerHotelPending+data.customerHotelAwaiting,tone:'warn',href:defectHref({filter:'hotel-customer-awaiting-receive',building})},
-    {label:'New Defect',lines:['เพิ่งได้รับแจ้ง Defect'],count:data.customerHotelIncomplete,tone:'danger',href:defectHref({filter:'hotel-customer-incomplete',building})},
+    {label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:data.customerHotelIncomplete,tone:'danger',href:defectHref({filter:'hotel-customer-incomplete',building})},
   ]
   const hotelNoCustomer:StatusItem[]=[
     {label:'Hotel Checked',lines:['Hotel Engineer','ตรวจแล้ว'],count:data.noHotelChecked,tone:'good',href:defectHref({filter:'hotel-nocustomer-checked',building})},
     ...(data.noHotelHandover>0?[{label:'Customer Accepted',lines:['ลูกค้าตรวจรับแล้ว'],count:data.noHotelHandover,tone:'good' as Tone,href:defectHref({filter:'hotel-nocustomer',building,q:'ลูกค้าตรวจรับแล้ว'})}]:[]),
     {label:'Awaiting Acceptance',lines:['Defect เสร็จแล้ว','รอลูกค้า / Hotel ตรวจรับ'],count:data.noHotelAwaiting+data.noHotelPending,tone:'warn',href:defectHref({filter:'hotel-nocustomer-awaiting-receive',building})},
-    {label:'New Defect',lines:['เพิ่งได้รับแจ้ง Defect'],count:data.noHotelIncomplete,tone:'danger',href:defectHref({filter:'hotel-nocustomer-incomplete',building})},
+    {label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:data.noHotelIncomplete,tone:'danger',href:defectHref({filter:'hotel-nocustomer-incomplete',building})},
   ]
   const nonHotelCustomer:StatusItem[]=[
     {label:'Customer Accepted',lines:['ลูกค้าตรวจรับแล้ว'],count:data.customerNonHandover,tone:'good',href:defectHref({filter:'nonhotel-customer-complete',building})},
@@ -280,7 +280,7 @@ export default function DefectFlowPage(){
     {label:'Hotel Checked',lines:['Hotel Engineer ตรวจแล้ว'],count:endpoints.checked,tone:'good',href:defectHref({filter:'status-hotel-checked'})},
     {label:'Customer Accepted',lines:['ลูกค้าตรวจรับแล้ว'],count:endpoints.handover,tone:'good',href:defectHref({filter:'status-handover-complete'})},
     {label:'Awaiting Acceptance',lines:['Defect เสร็จแล้ว • รอตรวจรับ'],count:endpoints.awaitingAcceptance,tone:'warn',href:defectHref({filter:'status-awaiting-acceptance'})},
-    {label:'New Defect',lines:['เพิ่งได้รับแจ้ง Defect'],count:endpoints.incomplete,tone:'danger',href:defectHref({filter:'status-incomplete'})},
+    {label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:endpoints.incomplete,tone:'danger',href:defectHref({filter:'status-incomplete'})},
   ]
 
   return <AppShell>
@@ -319,9 +319,9 @@ export default function DefectFlowPage(){
           <text x={44} y={1051} fontSize={12} fontWeight={700} fill={COLORS.muted}>A: {a.customerHotel} + {a.customerNon} + {a.noHotel} + {a.noNon} = {a.total} • B: {b.customerHotel} + {b.customerNon} + {b.noHotel} + {b.noNon} = {b.total}</text>
           <text x={706} y={999} fontSize={17} fontWeight={900} fill={COLORS.navy}>สถานะปลายทางรวมทั้งโครงการ</text>
           {footerItems.map((item,i)=>{
-            const x=706+i*196.2,w=180,c=toneColor(item.tone)
-            const card=<g><rect x={x} y={1009} width={w} height={55} rx={10} fill={c.soft} stroke={c.main} strokeWidth={2}/><text x={x+w/2} y={1034} textAnchor="middle" fontSize={24} fontWeight={900} fill={c.main}>{item.count}</text><text x={x+w/2} y={1053} textAnchor="middle" fontSize={10.5} fontWeight={800} fill={COLORS.text}>{item.lines[0]}</text></g>
-            return <a key={item.label} href={item.href} className="flow-link" aria-label={`เปิดรายละเอียด ${item.lines[0]} ${item.count} ห้อง`}>{card}</a>
+            const x=706+i*196.2,w=180,c=toneColor(item.tone),multiLine=item.lines.length>1
+            const card=<g><rect x={x} y={1009} width={w} height={55} rx={10} fill={c.soft} stroke={c.main} strokeWidth={2}/><text x={x+w/2} y={multiLine?1029:1034} textAnchor="middle" fontSize={24} fontWeight={900} fill={c.main}>{item.count}</text><text x={x+w/2} y={multiLine?1046:1053} textAnchor="middle" fontSize={multiLine?9:10.5} fontWeight={800} fill={COLORS.text}>{item.lines.map((line,lineIndex)=><tspan key={`${item.label}-${lineIndex}`} x={x+w/2} dy={lineIndex===0?0:11}>{line}</tspan>)}</text></g>
+            return <a key={item.label} href={item.href} className="flow-link" aria-label={`เปิดรายละเอียด ${item.lines.join(' ')} ${item.count} ห้อง`}>{card}</a>
           })}
         </g>
       </svg>
