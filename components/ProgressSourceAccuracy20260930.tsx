@@ -3,23 +3,18 @@
 import {useEffect,useRef} from 'react'
 import {usePathname} from 'next/navigation'
 import {getSupabase} from '@/lib/supabase'
-import {dateTH,pct} from '@/lib/format'
+import {pct} from '@/lib/format'
 
 type ProjectRow={id:string;code:string;name:string}
 type TaskRow={
   id:string
   project_id:string
-  source_task_no:string|null
-  category:string|null
-  task_name:string
-  area:string|null
   planned_duration_days:number|null
   planned_start:string|null
   planned_end:string|null
   imported_plan_progress:number|null
   actual_progress:number|null
 }
-
 type Metric={plan:number;actual:number;variance:number;count:number}
 
 function weightOf(task:TaskRow){
@@ -48,15 +43,7 @@ function metric(rows:TaskRow[]):Metric{
 }
 
 function pctInt(value:number){return Math.max(0,Math.min(100,Math.round(value*100)))}
-function overlaps(task:TaskRow,start:string,end:string){
-  if(!task.planned_start&&!task.planned_end)return false
-  const s=task.planned_start||task.planned_end||''
-  const e=task.planned_end||task.planned_start||''
-  return s<=end&&e>=start
-}
-function setText(el:HTMLElement|null,value:string){
-  if(el&&el.textContent!==value)el.textContent=value
-}
+function setText(el:HTMLElement|null,value:string){if(el&&el.textContent!==value)el.textContent=value}
 function setDeltaClass(el:HTMLElement|null,value:number){
   if(!el)return
   el.classList.toggle('danger-text',value<0)
@@ -74,7 +61,9 @@ export default function ProgressSourceAccuracy20260930(){
   const dataRef=useRef<{projects:ProjectRow[];tasks:TaskRow[]}>({projects:[],tasks:[]})
 
   useEffect(()=>{
-    if(path!=='/'&&path!=='/presentation')return
+    // Dashboard only. Presentation now renders one task truth source without any
+    // post-render DOM text mutation to avoid React reconciliation crashes.
+    if(path!=='/')return
     let cancelled=false
     let observer:MutationObserver|null=null
     let frame=0
@@ -114,11 +103,10 @@ export default function ProgressSourceAccuracy20260930(){
         if(actualBar&&actualBar.style.width!==`${actual}%`)actualBar.style.width=`${actual}%`
         if(planMark&&planMark.style.left!==`${plan}%`)planMark.style.left=`${plan}%`
         setText(actualText,`${actual}%`)
-        const planText=meta?.querySelector<HTMLElement>('span')||null
+        setText(meta?.querySelector<HTMLElement>('span')||null,`Plan ${plan}%`)
         const deltaText=meta?.querySelector<HTMLElement>('b')||null
-        setText(planText,`Plan ${plan}%`)
         if(deltaText){setText(deltaText,`${delta>0?'+':''}${delta}%`);setDeltaClass(deltaText,m.variance)}
-        if(row.dataset.progressSource!=='current-file-duration-weighted')row.dataset.progressSource='current-file-duration-weighted'
+        row.dataset.progressSource='current-file-duration-weighted'
       })
 
       const projectStatus=[...projectMetrics.entries()].filter(([,m])=>m.count>0).map(([id,m])=>({id,m,status:m.variance>=-.03?'ontrack':m.variance>=-.10?'atrisk':'delayed'}))
@@ -131,80 +119,15 @@ export default function ProgressSourceAccuracy20260930(){
       }
     }
 
-    const applyPresentation=()=>{
-      const {projects,tasks}=dataRef.current
-      if(!projects.length||!tasks.length)return
-      const dateInputs=[...document.querySelectorAll<HTMLInputElement>('.ep-filter input[type="date"]')]
-      const start=dateInputs[0]?.value||'0000-01-01'
-      const end=dateInputs[1]?.value||'9999-12-31'
-      const period=tasks.filter(t=>String(t.source_task_no||'').trim()!=='1'&&overlaps(t,start,end))
-
-      document.querySelectorAll<HTMLElement>('.ep-overview .ep-card:not(.condo-card)').forEach(card=>{
-        const name=card.querySelector<HTMLElement>('.ep-cover-title b')?.textContent?.trim()||''
-        const project=projects.find(p=>p.name===name)
-        if(!project)return
-        const m=metric(period.filter(t=>t.project_id===project.id))
-        if(!m.count)return
-        const values=[...card.querySelectorAll<HTMLElement>('.ep-kpis > div > b')]
-        setText(values[0]||null,pct(m.actual))
-        setText(values[1]||null,pct(m.plan))
-        if(values[2]){
-          const delta=Math.round(m.variance*100)
-          setText(values[2],`${delta>0?'+':''}${delta}%`)
-          setDeltaClass(values[2],m.variance)
-        }
-        if(card.dataset.progressSource!=='current-file-duration-weighted')card.dataset.progressSource='current-file-duration-weighted'
-      })
-
-      const info=document.querySelector<HTMLElement>('.ep-stage .ep-slide:not(.condo-slide) .ep-task-info')
-      if(!info)return
-      const taskId=info.dataset.planTaskId||''
-      let task=tasks.find(t=>t.id===taskId)
-      if(!task){
-        const slide=info.closest<HTMLElement>('.ep-slide')
-        const code=(slide?.querySelector<HTMLElement>('.ep-eyebrow')?.textContent||'').split('•')[0].trim()
-        const project=projects.find(p=>p.code===code)
-        const taskName=slide?.querySelector<HTMLElement>('h2')?.textContent?.trim()||''
-        task=tasks.find(t=>t.project_id===project?.id&&t.task_name===taskName)
-      }
-      if(!task)return
-
-      const startLabel=dateTH(task.planned_start)
-      const endLabel=dateTH(task.planned_end)
-      if(info.dataset.planStart!==startLabel)info.dataset.planStart=startLabel
-      if(info.dataset.planEnd!==endLabel)info.dataset.planEnd=endLabel
-      if(info.dataset.planTaskId!==task.id)info.dataset.planTaskId=task.id
-      if(info.dataset.planSource!=='Current Progress file')info.dataset.planSource='Current Progress file'
-
-      const cells=[...info.querySelectorAll<HTMLElement>('.ep-info-grid > div')]
-      const planCell=cells.find(cell=>cell.querySelector<HTMLElement>('span')?.textContent?.trim()==='Plan')
-      const varianceCell=cells.find(cell=>cell.querySelector<HTMLElement>('span')?.textContent?.trim()==='Variance')
-      const plan=Number(task.imported_plan_progress)||0
-      const actual=Number(task.actual_progress)||0
-      const variance=actual-plan
-      const planValue=planCell?.querySelector<HTMLElement>('b')||null
-      const varianceValue=varianceCell?.querySelector<HTMLElement>('b')||null
-      setText(planValue,pct(plan))
-      if(varianceValue){
-        const delta=Math.round(variance*100)
-        setText(varianceValue,`${delta>0?'+':''}${delta}%`)
-        setDeltaClass(varianceValue,variance)
-      }
-    }
-
     const apply=()=>{
       cancelAnimationFrame(frame)
       frame=requestAnimationFrame(()=>{
-        if(cancelled)return
-        if(path==='/'){
-          if(dashboardApplied)return
-          applyDashboard()
-          if(document.querySelector('.executive-kpi.hero')){
-            dashboardApplied=true
-            observer?.disconnect()
-          }
+        if(cancelled||dashboardApplied)return
+        applyDashboard()
+        if(document.querySelector('.executive-kpi.hero')){
+          dashboardApplied=true
+          observer?.disconnect()
         }
-        if(path==='/presentation')applyPresentation()
       })
     }
 
@@ -212,26 +135,20 @@ export default function ProgressSourceAccuracy20260930(){
       const s=getSupabase()
       const [p,t]=await Promise.all([
         s.from('projects').select('id,code,name').eq('active',true).order('sort_order'),
-        s.from('v_schedule_tasks').select('id,project_id,source_task_no,category,task_name,area,planned_duration_days,planned_start,planned_end,imported_plan_progress,actual_progress')
+        s.from('v_schedule_tasks').select('id,project_id,planned_duration_days,planned_start,planned_end,imported_plan_progress,actual_progress')
       ])
       if(cancelled)return
       dataRef.current={projects:(p.data||[]) as ProjectRow[],tasks:(t.data||[]) as TaskRow[]}
       apply()
-      if(path==='/'&&dashboardApplied)return
+      if(dashboardApplied)return
       observer=new MutationObserver(apply)
       observer.observe(document.body,{subtree:true,childList:true})
-      if(path==='/presentation'){
-        document.addEventListener('change',apply,true)
-        document.addEventListener('click',apply,true)
-      }
     }
 
     void load()
     return()=>{
       cancelled=true
       observer?.disconnect()
-      document.removeEventListener('change',apply,true)
-      document.removeEventListener('click',apply,true)
       cancelAnimationFrame(frame)
     }
   },[path])
