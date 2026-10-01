@@ -1,15 +1,13 @@
 import ExecutivePresentationV41 from '@/components/ExecutivePresentationV41'
 import ExecutivePhotoLinks from '@/components/ExecutivePhotoLinks'
-import PresentationCondoEnhancer from '@/components/PresentationCondoEnhancer'
-import ExecutiveTaskTruthOverlay20261001 from '@/components/ExecutiveTaskTruthOverlay20261001'
+import ExecutivePlanDateCardsSafe20261001 from '@/components/ExecutivePlanDateCardsSafe20261001'
 import ExecutivePresentationCarryoverGuard from '@/components/ExecutivePresentationCarryoverGuard'
 
 export default function ExecutivePresentationPage(){
   return <>
     <ExecutivePresentationV41 />
-    <ExecutiveTaskTruthOverlay20261001 />
+    <ExecutivePlanDateCardsSafe20261001 />
     <ExecutivePresentationCarryoverGuard />
-    <PresentationCondoEnhancer />
     <ExecutivePhotoLinks />
     <style>{`
       .ep-fallback-note{display:none!important}
