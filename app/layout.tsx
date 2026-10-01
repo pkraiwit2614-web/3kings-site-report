@@ -13,14 +13,9 @@ import './sidebar-scroll.css'
 import './sidebar-compact.css'
 import './compact-filter.css'
 import './wallpaper-taskbar-safe.css'
-import TaskDropdownOrder from '@/components/TaskDropdownOrder'
 import StableLegacyUiRuntime20261001 from '@/components/StableLegacyUiRuntime20261001'
-import RequestedFixes20260927V2 from '@/components/RequestedFixes20260927V2'
 import HeaderActionPattern20260927 from '@/components/HeaderActionPattern20260927'
 import DefectDashboardDeepLinkGuard20260927 from '@/components/DefectDashboardDeepLinkGuard20260927'
-import DefectFlowDashboardButton20260929 from '@/components/DefectFlowDashboardButton20260929'
-import HeaderLayoutFix20260927 from '@/components/HeaderLayoutFix20260927'
-import SitePerformanceSyncLineGuard20260927 from '@/components/SitePerformanceSyncLineGuard20260927'
 import RolePermissionGuard20260927 from '@/components/RolePermissionGuard20260927'
 import CompactFilterStandard20260929 from '@/components/CompactFilterStandard20260929'
 import ProgressSourceAccuracy20260930 from '@/components/ProgressSourceAccuracy20260930'
@@ -36,5 +31,5 @@ const notoSansThai = Noto_Sans_Thai({
 export const metadata: Metadata = { title: '3 Kings Site Report', description: 'Daily site reporting and management dashboard' }
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
-  return <html lang="th"><body className={notoSansThai.className}><TaskDropdownOrder /><StableLegacyUiRuntime20261001 /><RequestedFixes20260927V2 /><HeaderActionPattern20260927 /><DefectDashboardDeepLinkGuard20260927 /><DefectFlowDashboardButton20260929 /><HeaderLayoutFix20260927 /><SitePerformanceSyncLineGuard20260927 /><RolePermissionGuard20260927 /><CompactFilterStandard20260929 /><ProgressSourceAccuracy20260930 />{children}</body></html>
+  return <html lang="th"><body className={notoSansThai.className}><StableLegacyUiRuntime20261001 /><HeaderActionPattern20260927 /><DefectDashboardDeepLinkGuard20260927 /><RolePermissionGuard20260927 /><CompactFilterStandard20260929 /><ProgressSourceAccuracy20260930 />{children}</body></html>
 }
