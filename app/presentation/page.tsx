@@ -2,12 +2,14 @@ import ExecutivePresentationV41 from '@/components/ExecutivePresentationV41'
 import ExecutivePhotoLinks from '@/components/ExecutivePhotoLinks'
 import ExecutivePlanDateCardsSafe20261001 from '@/components/ExecutivePlanDateCardsSafe20261001'
 import ExecutivePresentationCarryoverGuard from '@/components/ExecutivePresentationCarryoverGuard'
+import ExecutivePhotoReviewSafe20261001 from '@/components/ExecutivePhotoReviewSafe20261001'
 
 export default function ExecutivePresentationPage(){
   return <>
     <ExecutivePresentationV41 />
     <ExecutivePlanDateCardsSafe20261001 />
     <ExecutivePresentationCarryoverGuard />
+    <ExecutivePhotoReviewSafe20261001 />
     <ExecutivePhotoLinks />
     <style>{`
       .ep-fallback-note{display:none!important}
