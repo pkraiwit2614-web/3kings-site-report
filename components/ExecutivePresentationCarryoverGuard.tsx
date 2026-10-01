@@ -34,8 +34,8 @@ export default function ExecutivePresentationCarryoverGuard(){
 
   useEffect(()=>{
     let cancelled=false
-    let observer:MutationObserver|null=null
     let frame=0
+    const timers:number[]=[]
     let projects:ProjectRow[]=[]
     let tasks:TaskRow[]=[]
     const autoStart=bangkokMonthStart()
@@ -68,9 +68,6 @@ export default function ExecutivePresentationCarryoverGuard(){
         const currentStart=startInput.value
         const slide=document.querySelector<HTMLElement>('.ep-stage .ep-slide:not(.condo-slide)')
 
-        // Keep the overview on the user's normal reporting period. Only widen the
-        // range while an individual Plot slide is open, and only if the range was
-        // previously auto-managed by this guard.
         if(!slide){
           delete filter.dataset.carryoverActive
           if(currentStart===lastApplied.current&&currentStart!==autoStart){
@@ -114,6 +111,12 @@ export default function ExecutivePresentationCarryoverGuard(){
       })
     }
 
+    const schedule=()=>{
+      apply()
+      timers.push(window.setTimeout(apply,60))
+      timers.push(window.setTimeout(apply,180))
+    }
+
     const load=async()=>{
       const s=getSupabase()
       const [p,t]=await Promise.all([
@@ -123,18 +126,18 @@ export default function ExecutivePresentationCarryoverGuard(){
       if(cancelled)return
       projects=(p.data||[]) as ProjectRow[]
       tasks=(t.data||[]) as TaskRow[]
-      apply()
-      observer=new MutationObserver(apply)
-      observer.observe(document.body,{subtree:true,childList:true,characterData:true})
-      document.addEventListener('click',apply,true)
+      schedule()
+      document.addEventListener('click',schedule,true)
+      document.addEventListener('change',schedule,true)
     }
 
     void load()
     return()=>{
       cancelled=true
-      observer?.disconnect()
-      document.removeEventListener('click',apply,true)
+      document.removeEventListener('click',schedule,true)
+      document.removeEventListener('change',schedule,true)
       cancelAnimationFrame(frame)
+      timers.forEach(id=>window.clearTimeout(id))
     }
   },[])
 
