@@ -1,7 +1,5 @@
 import ExecutivePresentationV41 from '@/components/ExecutivePresentationV41'
 import ExecutivePhotoLinks from '@/components/ExecutivePhotoLinks'
-import ExecutiveAIVisualMatcherV2 from '@/components/ExecutiveAIVisualMatcherV2'
-import ExecutivePresentationPhotoDisplay from '@/components/ExecutivePresentationPhotoDisplay'
 import PresentationCondoEnhancer from '@/components/PresentationCondoEnhancer'
 import ExecutiveTaskTruthOverlay20261001 from '@/components/ExecutiveTaskTruthOverlay20261001'
 import ExecutivePresentationCarryoverGuard from '@/components/ExecutivePresentationCarryoverGuard'
@@ -11,33 +9,17 @@ export default function ExecutivePresentationPage(){
     <ExecutivePresentationV41 />
     <ExecutiveTaskTruthOverlay20261001 />
     <ExecutivePresentationCarryoverGuard />
-    <ExecutiveAIVisualMatcherV2 />
-    <ExecutivePresentationPhotoDisplay />
     <PresentationCondoEnhancer />
     <ExecutivePhotoLinks />
     <style>{`
       .ep-fallback-note{display:none!important}
 
-      /* Presentation evidence must always show the complete source photo. */
+      /* Keep React-owned photo nodes intact. Cropping is handled by CSS only. */
       .ep-stage .ep-photo-grid figure>img,
-      .ep-stage .ep-photo-grid .ep-photo-media>img,
-      .ep-stage:fullscreen .ep-photo-grid figure>img,
-      .ep-stage:fullscreen .ep-photo-grid .ep-photo-media>img{
+      .ep-stage:fullscreen .ep-photo-grid figure>img{
         object-fit:contain!important;
         object-position:center center!important;
-      }
-
-      .ep-stage .ep-photo-media{
-        display:flex!important;
-        align-items:center!important;
-        justify-content:center!important;
-        overflow:hidden!important;
-      }
-      .ep-stage .ep-photo-media>img{
-        width:auto!important;
-        height:auto!important;
-        max-width:100%!important;
-        max-height:100%!important;
+        background:#fff!important;
       }
 
       .ep-stage:not(:fullscreen) .ep-photo-grid figure>img{
@@ -46,19 +28,6 @@ export default function ExecutivePresentationPage(){
       }
       .ep-stage:not(:fullscreen) .ep-photo-grid.count-1 figure>img{
         height:500px!important;
-      }
-
-      .ep-stage[data-photo-fit="white"] .ep-photo-grid figure,
-      .ep-stage[data-photo-fit="white"] .ep-photo-media,
-      .ep-stage:not([data-photo-fit]) .ep-photo-grid figure{
-        background:#fff!important;
-      }
-      .ep-stage[data-photo-fit="white"] .ep-photo-grid img{background:#fff!important}
-      .ep-stage[data-photo-fit="blur"] .ep-photo-grid img{background:transparent!important}
-
-      .ep-stage:fullscreen .ep-photo-media{
-        height:100%!important;
-        min-height:0!important;
       }
       .ep-stage:fullscreen .ep-photo-grid figure>img{
         width:100%!important;
