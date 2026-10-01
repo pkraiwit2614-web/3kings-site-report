@@ -14,8 +14,11 @@ export default function ExecutivePhotoCountGuard20261001(){
       cancelAnimationFrame(frame)
       frame=requestAnimationFrame(()=>{
         if(disposed)return
-        document.querySelectorAll<HTMLElement>('.ep-stage .ep-slide:not(.condo-slide) .ep-photo-grid').forEach(grid=>{
-          const figures=[...grid.querySelectorAll<HTMLElement>('figure')]
+
+        document.querySelectorAll<HTMLElement>('.ep-stage .ep-slide:not(.condo-slide) .ep-photo-section').forEach(section=>{
+          // Count every figure in the whole Task photo section, not per grid.
+          // This also catches stale legacy figures/grids left behind from older decorators.
+          const figures=[...section.querySelectorAll<HTMLElement>('.ep-photo-grid figure')]
           figures.forEach((figure,index)=>{
             if(index<MAX_TASK_PHOTOS){
               if(figure.dataset.photoOverflowGuard==='true'){
@@ -27,7 +30,12 @@ export default function ExecutivePhotoCountGuard20261001(){
             figure.dataset.photoOverflowGuard='true'
             figure.style.setProperty('display','none','important')
           })
-          grid.dataset.visiblePhotoCount=String(Math.min(MAX_TASK_PHOTOS,figures.length))
+
+          section.querySelectorAll<HTMLElement>('.ep-photo-grid').forEach(grid=>{
+            const visible=[...grid.querySelectorAll<HTMLElement>('figure')].filter(x=>x.dataset.photoOverflowGuard!=='true').length
+            grid.dataset.visiblePhotoCount=String(visible)
+            grid.classList.toggle('ep-photo-grid-overflow-empty',visible===0)
+          })
         })
       })
     }
@@ -51,7 +59,10 @@ export default function ExecutivePhotoCountGuard20261001(){
   },[])
 
   return <style jsx global>{`
-    .ep-stage .ep-slide:not(.condo-slide) .ep-photo-grid figure[data-photo-overflow-guard="true"]{
+    .ep-stage .ep-slide:not(.condo-slide) .ep-photo-section .ep-photo-grid figure[data-photo-overflow-guard="true"]{
+      display:none!important;
+    }
+    .ep-stage .ep-slide:not(.condo-slide) .ep-photo-section .ep-photo-grid.ep-photo-grid-overflow-empty{
       display:none!important;
     }
   `}</style>
