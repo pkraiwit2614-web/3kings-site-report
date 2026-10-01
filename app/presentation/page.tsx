@@ -14,6 +14,12 @@ export default function ExecutivePresentationPage(){
     <style>{`
       .ep-fallback-note{display:none!important}
 
+      /* Task presentation invariant: latest-task slides never show more than 4 photos.
+         This is a CSS-only safety net for stale legacy DOM nodes; React remains owner. */
+      .ep-slide:not(.condo-slide) .ep-photo-grid>figure:nth-child(n+5){
+        display:none!important;
+      }
+
       /* Keep React-owned photo nodes intact. Cropping is handled by CSS only. */
       .ep-stage .ep-photo-grid figure>img,
       .ep-stage:fullscreen .ep-photo-grid figure>img{
