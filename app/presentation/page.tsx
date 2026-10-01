@@ -3,6 +3,7 @@ import ExecutivePhotoLinks from '@/components/ExecutivePhotoLinks'
 import ExecutivePlanDateCardsSafe20261001 from '@/components/ExecutivePlanDateCardsSafe20261001'
 import ExecutivePresentationCarryoverGuard from '@/components/ExecutivePresentationCarryoverGuard'
 import ExecutivePhotoReviewSafe20261001 from '@/components/ExecutivePhotoReviewSafe20261001'
+import ExecutivePhotoCountGuard20261001 from '@/components/ExecutivePhotoCountGuard20261001'
 
 export default function ExecutivePresentationPage(){
   return <>
@@ -10,12 +11,13 @@ export default function ExecutivePresentationPage(){
     <ExecutivePlanDateCardsSafe20261001 />
     <ExecutivePresentationCarryoverGuard />
     <ExecutivePhotoReviewSafe20261001 />
+    <ExecutivePhotoCountGuard20261001 />
     <ExecutivePhotoLinks />
     <style>{`
       .ep-fallback-note{display:none!important}
 
       /* Task presentation invariant: latest-task slides never show more than 4 photos.
-         This is a CSS-only safety net for stale legacy DOM nodes; React remains owner. */
+         This is a CSS-only safety net; the runtime guard also enforces the limit. */
       .ep-slide:not(.condo-slide) .ep-photo-grid>figure:nth-child(n+5){
         display:none!important;
       }
