@@ -12,7 +12,7 @@ type TaskRow={
   planned_duration_days:number|null
   planned_start:string|null
   planned_end:string|null
-  imported_plan_progress:number|null
+  current_plan_progress:number|null
   actual_progress:number|null
 }
 type Metric={plan:number;actual:number;variance:number;count:number}
@@ -34,7 +34,7 @@ function metric(rows:TaskRow[]):Metric{
   for(const task of rows){
     const w=weightOf(task)
     totalWeight+=w
-    planSum+=w*(Number(task.imported_plan_progress)||0)
+    planSum+=w*(Number(task.current_plan_progress)||0)
     actualSum+=w*(Number(task.actual_progress)||0)
   }
   const plan=totalWeight?planSum/totalWeight:0
@@ -61,8 +61,7 @@ export default function ProgressSourceAccuracy20260930(){
   const dataRef=useRef<{projects:ProjectRow[];tasks:TaskRow[]}>({projects:[],tasks:[]})
 
   useEffect(()=>{
-    // Dashboard only. Presentation now renders one task truth source without any
-    // post-render DOM text mutation to avoid React reconciliation crashes.
+    // Dashboard only. Presentation renders directly from its current task row.
     if(path!=='/')return
     let cancelled=false
     let observer:MutationObserver|null=null
@@ -106,7 +105,7 @@ export default function ProgressSourceAccuracy20260930(){
         setText(meta?.querySelector<HTMLElement>('span')||null,`Plan ${plan}%`)
         const deltaText=meta?.querySelector<HTMLElement>('b')||null
         if(deltaText){setText(deltaText,`${delta>0?'+':''}${delta}%`);setDeltaClass(deltaText,m.variance)}
-        row.dataset.progressSource='current-file-duration-weighted'
+        row.dataset.progressSource='current-plan-duration-weighted'
       })
 
       const projectStatus=[...projectMetrics.entries()].filter(([,m])=>m.count>0).map(([id,m])=>({id,m,status:m.variance>=-.03?'ontrack':m.variance>=-.10?'atrisk':'delayed'}))
@@ -135,7 +134,7 @@ export default function ProgressSourceAccuracy20260930(){
       const s=getSupabase()
       const [p,t]=await Promise.all([
         s.from('projects').select('id,code,name').eq('active',true).order('sort_order'),
-        s.from('v_schedule_tasks').select('id,project_id,planned_duration_days,planned_start,planned_end,imported_plan_progress,actual_progress')
+        s.from('v_schedule_tasks').select('id,project_id,planned_duration_days,planned_start,planned_end,current_plan_progress,actual_progress')
       ])
       if(cancelled)return
       dataRef.current={projects:(p.data||[]) as ProjectRow[],tasks:(t.data||[]) as TaskRow[]}
