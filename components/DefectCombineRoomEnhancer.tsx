@@ -92,8 +92,17 @@ function applyEnhancement(combineMap:Map<string,CombineMeta>){
     const programCell=row.cells[5]
     const statusCell=row.cells[7]
 
+    const existingCode=roomCell.querySelector<HTMLElement>('.combine-room-code')
     const existingBadge=roomCell.querySelector<HTMLElement>('.combine-room-badge')
     if(combine){
+      if(!existingCode){
+        const code=document.createElement('span')
+        code.className='combine-room-code'
+        code.textContent='c'
+        code.title='ห้อง Combine'
+        roomCell.querySelector('b')?.insertAdjacentElement('afterend',code)
+      }
+
       const text=`Combine: ${combine.rooms.join(' + ')}`
       if(existingBadge){
         if(existingBadge.textContent!==text)existingBadge.textContent=text
@@ -108,8 +117,9 @@ function applyEnhancement(combineMap:Map<string,CombineMeta>){
       if(combine.detail&&detailCell.textContent?.trim()!==combine.detail){
         detailCell.textContent=combine.detail
       }
-    }else if(existingBadge){
-      existingBadge.remove()
+    }else{
+      existingCode?.remove()
+      existingBadge?.remove()
     }
 
     const isHotelHandover=programCell.textContent?.includes('ร่วมโรงแรม')&&statusCell.textContent?.includes('ส่งมอบลูกค้าแล้ว')
@@ -172,8 +182,9 @@ export default function DefectCombineRoomEnhancer(){
   },[])
 
   return <style jsx global>{`
+    .combine-room-code{display:inline-block;margin-left:1px;color:#385d9d;font-size:7px;font-weight:900;line-height:1;vertical-align:super}
     .combine-room-badge{display:inline-flex;margin-top:5px;padding:2px 6px;border-radius:999px;background:#eef3ff;border:1px solid #c9d7f5;color:#385d9d;font-size:7.5px;font-weight:850;line-height:1.25;white-space:nowrap}
     .hotel-handover-note{display:block;max-width:180px;margin:5px auto 0;color:#5c6a78;font-size:7.5px;font-weight:700;line-height:1.3;white-space:normal}
-    @media print{.combine-room-badge{font-size:7px}.hotel-handover-note{font-size:7px}}
+    @media print{.combine-room-code{font-size:6.5px}.combine-room-badge{font-size:7px}.hotel-handover-note{font-size:7px}}
   `}</style>
 }
