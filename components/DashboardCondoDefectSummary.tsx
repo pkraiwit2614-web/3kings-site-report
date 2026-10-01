@@ -107,9 +107,9 @@ export default function DashboardCondoDefectSummary(){
             <div className="donut-hole"><b>{summary.total}</b><span>ห้องทั้งหมด</span></div>
           </div>
           <div className="donut-legend">
-            <span><i className="danger-dot"/>ยังไม่เสร็จ <b>{toneTotals.danger}</b></span>
-            <span><i className="warn-dot"/>รอตรวจ / รอส่งมอบ <b>{toneTotals.warn}</b></span>
-            <span><i className="good-dot"/>ตรวจแล้ว / ส่งมอบแล้ว <b>{toneTotals.good}</b></span>
+            <span><i className="danger-dot"/>ยังไม่เสร็จ <b>{toneTotals.danger} ({(toneTotals.danger/totalForChart*100).toFixed(1)}%)</b></span>
+            <span><i className="warn-dot"/>รอตรวจ / รอส่งมอบ <b>{toneTotals.warn} ({(toneTotals.warn/totalForChart*100).toFixed(1)}%)</b></span>
+            <span><i className="good-dot"/>ตรวจแล้ว / ส่งมอบแล้ว <b>{toneTotals.good} ({(toneTotals.good/totalForChart*100).toFixed(1)}%)</b></span>
           </div>
         </div>
 
