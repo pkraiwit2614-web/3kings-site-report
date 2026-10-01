@@ -3,13 +3,13 @@ import ExecutivePhotoLinks from '@/components/ExecutivePhotoLinks'
 import ExecutiveAIVisualMatcherV2 from '@/components/ExecutiveAIVisualMatcherV2'
 import ExecutivePresentationPhotoDisplay from '@/components/ExecutivePresentationPhotoDisplay'
 import PresentationCondoEnhancer from '@/components/PresentationCondoEnhancer'
-import ExecutivePlanDateFields20260930 from '@/components/ExecutivePlanDateFields20260930'
+import ExecutiveTaskTruthOverlay20261001 from '@/components/ExecutiveTaskTruthOverlay20261001'
 import ExecutivePresentationCarryoverGuard from '@/components/ExecutivePresentationCarryoverGuard'
 
 export default function ExecutivePresentationPage(){
   return <>
     <ExecutivePresentationV41 />
-    <ExecutivePlanDateFields20260930 />
+    <ExecutiveTaskTruthOverlay20261001 />
     <ExecutivePresentationCarryoverGuard />
     <ExecutiveAIVisualMatcherV2 />
     <ExecutivePresentationPhotoDisplay />
