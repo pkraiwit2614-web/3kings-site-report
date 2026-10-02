@@ -103,8 +103,10 @@ export default function DashboardPage() {
   const [loading,setLoading]=useState(true)
 
   useEffect(()=>{
+    let alive=true
+    let refreshTimer:ReturnType<typeof setTimeout>|null=null
+    const s=getSupabase()
     const load=async()=>{
-      const s=getSupabase()
       const [p,t,r,pr,sr,sd]=await Promise.all([
         s.from('projects').select('id,code,name,target_handover,active,sort_order').eq('active',true).order('sort_order'),
         s.from('v_schedule_tasks').select('id,project_id,task_name,category,actual_progress,current_plan_progress,current_variance,delay_days,site_status,blocker,next_action,target_close,planned_start,planned_end,actual_start,actual_end,area,source_task_no,contractor'),
@@ -113,6 +115,7 @@ export default function DashboardPage() {
         s.from('drive_sync_runs').select('sync_type,project_code,created_at').eq('status','success').order('created_at',{ascending:false}).limit(30),
         s.from('v_schedule_snapshot_days').select('snapshot_date').order('snapshot_date',{ascending:false}).limit(60)
       ])
+      if(!alive)return
       if(p.error) throw p.error
       if(t.error) throw t.error
       setProjects((p.data||[]) as Project[])
@@ -123,7 +126,29 @@ export default function DashboardPage() {
       setSnapshotDays(sd.data||[])
       setLoading(false)
     }
-    load().catch(()=>setLoading(false))
+    const queueLoad=()=>{
+      if(refreshTimer)window.clearTimeout(refreshTimer)
+      refreshTimer=window.setTimeout(()=>{void load().catch(()=>{})},350)
+    }
+    void load().catch(()=>{if(alive)setLoading(false)})
+    const channel=s.channel('dashboard-live-refresh')
+      .on('postgres_changes',{event:'*',schema:'public',table:'projects'},queueLoad)
+      .on('postgres_changes',{event:'*',schema:'public',table:'schedule_tasks'},queueLoad)
+      .on('postgres_changes',{event:'*',schema:'public',table:'daily_reports'},queueLoad)
+      .on('postgres_changes',{event:'*',schema:'public',table:'procurement_items'},queueLoad)
+      .on('postgres_changes',{event:'*',schema:'public',table:'drive_sync_runs'},queueLoad)
+      .subscribe()
+    const refresh=()=>queueLoad()
+    const refreshWhenVisible=()=>{if(document.visibilityState==='visible')queueLoad()}
+    window.addEventListener('focus',refresh)
+    document.addEventListener('visibilitychange',refreshWhenVisible)
+    return()=>{
+      alive=false
+      if(refreshTimer)window.clearTimeout(refreshTimer)
+      window.removeEventListener('focus',refresh)
+      document.removeEventListener('visibilitychange',refreshWhenVisible)
+      void s.removeChannel(channel)
+    }
   },[])
 
   useEffect(()=>{
