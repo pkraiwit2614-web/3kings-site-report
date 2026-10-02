@@ -16,14 +16,36 @@ type CombineMeta={
   detail:string|null
 }
 
-function normalizeOwner(value:string|null){
-  return (value||'').trim().replace(/\s+/g,' ').toLowerCase()
-}
-
-function roomNumber(roomNo:string){
-  const match=roomNo.match(/(\d+)$/)
-  return match?Number(match[1]):Number.NaN
-}
+const COMBINE_GROUPS:string[][]=[
+  ['A213','A214'],
+  ['A217','A218'],
+  ['A221','A222'],
+  ['A308','A309'],
+  ['A317','A318'],
+  ['A402','A403'],
+  ['A404','A405'],
+  ['A413','A414'],
+  ['A417','A418'],
+  ['A506','A507'],
+  ['A508','A509'],
+  ['A513','A514'],
+  ['A521','A522'],
+  ['A602','A603'],
+  ['A604','A605'],
+  ['A606','A607'],
+  ['A608','A609'],
+  ['A613','A614'],
+  ['A621','A622'],
+  ['A702','A703'],
+  ['A704','A705'],
+  ['A706','A707'],
+  ['A708','A709'],
+  ['A713','A714'],
+  ['A717','A718'],
+  ['B610','B611'],
+  ['B614','B615'],
+  ['B712','B713'],
+]
 
 function mergedDetail(rows:RoomSource[]){
   const details=[...new Set(rows.map(r=>r.defect_detail?.trim()).filter((x):x is string=>Boolean(x)))]
@@ -38,38 +60,16 @@ function mergedDetail(rows:RoomSource[]){
 }
 
 function buildCombineMap(rows:RoomSource[]){
-  const grouped=new Map<string,RoomSource[]>()
-  rows.forEach(row=>{
-    const owner=normalizeOwner(row.owner_name)
-    if(!owner||row.floor==null)return
-    const key=`${row.building}|${row.floor}|${owner}`
-    grouped.set(key,[...(grouped.get(key)||[]),row])
-  })
-
+  const byRoom=new Map(rows.map(row=>[row.room_no,row]))
   const result=new Map<string,CombineMeta>()
-  grouped.forEach(group=>{
-    const sorted=[...group].sort((a,b)=>roomNumber(a.room_no)-roomNumber(b.room_no))
-    let chain:RoomSource[]=[]
-    const flush=()=>{
-      if(chain.length<2){chain=[];return}
-      const rooms=chain.map(r=>r.room_no)
-      const detail=mergedDetail(chain)
-      chain.forEach(r=>result.set(r.room_no,{rooms,detail}))
-      chain=[]
-    }
 
-    sorted.forEach(row=>{
-      if(!chain.length){chain=[row];return}
-      const prev=chain[chain.length-1]
-      if(roomNumber(row.room_no)===roomNumber(prev.room_no)+1){
-        chain.push(row)
-      }else{
-        flush()
-        chain=[row]
-      }
-    })
-    flush()
+  COMBINE_GROUPS.forEach(rooms=>{
+    const groupRows=rooms.map(room=>byRoom.get(room)).filter((row):row is RoomSource=>Boolean(row))
+    if(!groupRows.length)return
+    const detail=mergedDetail(groupRows)
+    groupRows.forEach(row=>result.set(row.room_no,{rooms,detail}))
   })
+
   return result
 }
 
