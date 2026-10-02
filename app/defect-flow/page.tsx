@@ -167,19 +167,19 @@ function BuildingFlow({top,building,data}:{top:number;building:'A'|'B';data:Retu
   const noNonHref=defectHref({filter:'nonhotel-no-customer',building})
   const hotelCustomer:StatusItem[]=[
     {label:'Hotel Checked',lines:['Hotel Engineer','ตรวจแล้ว'],count:data.customerHotelChecked,tone:'good',href:defectHref({filter:'hotel-customer-checked',building})},
-    ...(data.customerHotelHandover>0?[{label:'Customer Accepted',lines:['ลูกค้าตรวจรับแล้ว'],count:data.customerHotelHandover,tone:'good' as Tone,href:defectHref({filter:'hotel-customer',building,q:'ลูกค้าตรวจรับแล้ว'})}]:[]),
+    ...(data.customerHotelHandover>0?[{label:'Customer Accepted',lines:['ลูกค้าตรวจรับเรียบร้อยแล้ว'],count:data.customerHotelHandover,tone:'good' as Tone,href:defectHref({filter:'hotel-customer',building,q:'ลูกค้าตรวจรับเรียบร้อยแล้ว'})}]:[]),
     ...(data.customerHotelRoomInspection>0?[{label:'Awaiting Room',lines:['ยังไม่ตรวจห้อง','ยังไม่มี Defect'],count:data.customerHotelRoomInspection,tone:'warn' as Tone,href:defectHref({filter:'hotel-customer',building,q:'ยังไม่ตรวจห้อง'})}]:[]),
     {label:'Awaiting Acceptance',lines:['Defect เสร็จแล้ว','รอลูกค้า / Hotel ตรวจรับ'],count:data.customerHotelPending+data.customerHotelAwaiting,tone:'warn',href:defectHref({filter:'hotel-customer-awaiting-receive',building})},
     {label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:data.customerHotelIncomplete,tone:'danger',href:defectHref({filter:'hotel-customer-incomplete',building})},
   ]
   const hotelNoCustomer:StatusItem[]=[
     {label:'Hotel Checked',lines:['Hotel Engineer','ตรวจแล้ว'],count:data.noHotelChecked,tone:'good',href:defectHref({filter:'hotel-nocustomer-checked',building})},
-    ...(data.noHotelHandover>0?[{label:'Customer Accepted',lines:['ลูกค้าตรวจรับแล้ว'],count:data.noHotelHandover,tone:'good' as Tone,href:defectHref({filter:'hotel-nocustomer',building,q:'ลูกค้าตรวจรับแล้ว'})}]:[]),
+    ...(data.noHotelHandover>0?[{label:'Customer Accepted',lines:['ลูกค้าตรวจรับเรียบร้อยแล้ว'],count:data.noHotelHandover,tone:'good' as Tone,href:defectHref({filter:'hotel-nocustomer',building,q:'ลูกค้าตรวจรับเรียบร้อยแล้ว'})}]:[]),
     {label:'Awaiting Acceptance',lines:['Defect เสร็จแล้ว','รอลูกค้า / Hotel ตรวจรับ'],count:data.noHotelAwaiting+data.noHotelPending,tone:'warn',href:defectHref({filter:'hotel-nocustomer-awaiting-receive',building})},
     {label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:data.noHotelIncomplete,tone:'danger',href:defectHref({filter:'hotel-nocustomer-incomplete',building})},
   ]
   const nonHotelCustomer:StatusItem[]=[
-    {label:'Customer Accepted',lines:['ลูกค้าตรวจรับแล้ว'],count:data.customerNonHandover,tone:'good',href:defectHref({filter:'nonhotel-customer-complete',building})},
+    {label:'Customer Accepted',lines:['ลูกค้าตรวจรับเรียบร้อยแล้ว'],count:data.customerNonHandover,tone:'good',href:defectHref({filter:'nonhotel-customer-complete',building})},
     {label:'Awaiting Acceptance',lines:['Defect เสร็จแล้ว','รอลูกค้า / Hotel ตรวจรับ'],count:data.customerNonPending+data.customerNonChecked,tone:'warn',href:defectHref({filter:'nonhotel-customer-awaiting-receive',building})},
   ]
   const nonHotelNoCustomer:StatusItem[]=data.noNonAwaitingSale>0?[
@@ -278,7 +278,7 @@ export default function DefectFlowPage(){
     ...(endpoints.awaitingSale>0?[{label:'Awaiting Sale',lines:['Awaiting Sale'],count:endpoints.awaitingSale,tone:'neutral' as Tone,href:defectHref({filter:'status-awaiting-sale'})}]:[]),
     ...(endpoints.roomInspection>0?[{label:'Awaiting Room',lines:['ยังไม่ตรวจห้อง'],count:endpoints.roomInspection,tone:'warn' as Tone,href:defectHref({filter:'hotel-customer',q:'ยังไม่ตรวจห้อง'})}]:[]),
     {label:'Hotel Checked',lines:['Hotel Engineer ตรวจแล้ว'],count:endpoints.checked,tone:'good',href:defectHref({filter:'status-hotel-checked'})},
-    {label:'Customer Accepted',lines:['ลูกค้าตรวจรับแล้ว'],count:endpoints.handover,tone:'good',href:defectHref({filter:'status-handover-complete'})},
+    {label:'Customer Accepted',lines:['ลูกค้าตรวจรับเรียบร้อยแล้ว'],count:endpoints.handover,tone:'good',href:defectHref({filter:'status-handover-complete'})},
     {label:'Awaiting Acceptance',lines:['Defect เสร็จแล้ว • รอตรวจรับ'],count:endpoints.awaitingAcceptance,tone:'warn',href:defectHref({filter:'status-awaiting-acceptance'})},
     {label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:endpoints.incomplete,tone:'danger',href:defectHref({filter:'status-incomplete'})},
   ]
