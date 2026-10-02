@@ -286,7 +286,7 @@ function parseCondoDefectMasterV13_(sheet) {
       throw new Error(`Duplicate defect room ${roomNo} at source row ${r + 1}.`);
     }
 
-    const building = cleanText_(values[r][headerMap['Building']]).toUpperCase();
+    const building = (cleanText_(values[r][headerMap['Building']]) || '').toUpperCase();
     const floor = Number(cleanText_(values[r][headerMap['Floor']]));
     const hotel = cleanText_(values[r][headerMap['Hotel Participation']]);
     const customer = cleanText_(values[r][headerMap['Customer Status']]);
