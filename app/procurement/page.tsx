@@ -13,7 +13,7 @@ const thaiMonths:Record<string,number>={
   'ก.ค.':6,'ส.ค.':7,'ก.ย.':8,'ต.ค.':9,'พ.ย.':10,'ธ.ค.':11
 }
 
-const completedStatusPattern=/(ส่งมอบเรียบร้อย|รับสินค้าเรียบร้อย|ส่งครบ|ปิดงาน|งานเสร็จ|เสร็จสมบูรณ์|completed|done|closed)/i
+const completedStatusPattern=/(ส่งมอบเรียบร้อย|รับสินค้าเรียบร้อย|รับสินค้าแล้ว|ติดตั้งเรียบร้อย|ส่งครบ|ปิดงาน|ปิดติดตาม|งานเสร็จ|เสร็จสมบูรณ์|completed|done|closed)/i
 
 function needsFollowUp(row:any){
   const current=String(row.current_status||'').trim()
