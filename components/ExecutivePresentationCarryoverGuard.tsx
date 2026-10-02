@@ -142,18 +142,9 @@ export default function ExecutivePresentationCarryoverGuard(){
   },[])
 
   return <style jsx global>{`
+    /* Keep carryover date logic, but do not show the overview carryover banner. */
     .ep-filter[data-carryover-note]:not([data-carryover-note=''])::after{
-      content:attr(data-carryover-note);
-      display:block;
-      margin-top:10px;
-      padding:8px 10px;
-      border-radius:9px;
-      border:1px solid #ead8a4;
-      background:#fff8e7;
-      color:#7a560f;
-      font-size:11px;
-      font-weight:800;
-      line-height:1.35;
+      display:none!important;
     }
     .ep-filter[data-carryover-active]::before{
       content:attr(data-carryover-active);
