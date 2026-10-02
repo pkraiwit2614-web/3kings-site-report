@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
+import DefectCombineRoomEnhancer from '@/components/DefectCombineRoomEnhancer'
 import { getSupabase } from '@/lib/supabase'
 
 type RoomRow={
@@ -188,6 +189,7 @@ export default function DefectDetailPage(){
   const customerScopeLabel=customerFilter==='CUSTOMER'?'มีลูกค้า':customerFilter==='NO_CUSTOMER'?'ไม่มีลูกค้า':'ทุกประเภทลูกค้า'
 
   return <AppShell>
+    <DefectCombineRoomEnhancer />
     <PageHeader
       title="Above Condo — Defect Report"
       subtitle="รายละเอียดย่อย Above Condo A, B"
