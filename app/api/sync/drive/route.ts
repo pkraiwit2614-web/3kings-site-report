@@ -21,6 +21,15 @@ const MATERIAL_SOURCE_FILE = 'ABOVE_MATERIALS_STATUS_Stock_Updated_2026-09-20.xl
 const PROCUREMENT_SHEETS = ['04 Purchasing ค้างส่ง','12 Purchasing ค้างส่ง']
 const TOOL_MACHINE_SHEET = '06-Tools & Machine'
 
+const DEFECT_MASTER_SHEET = 'ข้อมูลจำแนก'
+const DEFECT_EXPECTED_ROOMS = 263
+const DEFECT_EXPECTED_A = 162
+const DEFECT_EXPECTED_B = 101
+const DEFECT_REQUIRED_HEADERS = [
+  'Building', 'Floor', 'Room', 'Hotel Participation', 'Customer Status',
+  'Current Status', 'Status Group', 'Follow-up', 'Priority', 'Next Action',
+]
+
 function text(value: unknown): string | null {
   if (value === null || value === undefined) return null
   const s = String(value).trim()
@@ -110,6 +119,90 @@ function mapProjectsFromLocation(location: unknown): string[] {
   const s = String(location ?? '')
   if (!/plot/i.test(s)) return []
   return Array.from(new Set((s.match(/[6-9]/g) || []).map((n) => `AV-P${n}`)))
+}
+
+function normalizeRoomNo(value: unknown): string | null {
+  const room = String(value ?? '').toUpperCase().replace(/\s+/g, '').trim()
+  return /^[AB]\d{3}$/.test(room) ? room : null
+}
+
+async function parseDefects(buffer: Buffer) {
+  const rows = await readSheet(buffer, DEFECT_MASTER_SHEET)
+  const h = rows.findIndex((r) => {
+    const headers = r as unknown[]
+    return DEFECT_REQUIRED_HEADERS.every((name) => headerIndex(headers, name) >= 0)
+  })
+  if (h < 0) throw new Error(`Defect master headers not found in ${DEFECT_MASTER_SHEET}`)
+
+  const headers = rows[h] as unknown[]
+  const out: Record<string, unknown>[] = []
+  const seen = new Set<string>()
+
+  for (let i = h + 1; i < rows.length; i++) {
+    const r = rows[i] as unknown[]
+    const rawRoom = text(valueByHeader(r, headers, 'Room'))
+    if (!rawRoom) continue
+
+    const roomNo = normalizeRoomNo(rawRoom)
+    if (!roomNo) throw new Error(`Invalid defect room number at row ${i + 1}: ${rawRoom}`)
+    if (seen.has(roomNo)) throw new Error(`Duplicate defect room in source: ${roomNo}`)
+
+    const building = text(valueByHeader(r, headers, 'Building'))
+    const floorValue = num(valueByHeader(r, headers, 'Floor'))
+    const hotelParticipation = text(valueByHeader(r, headers, 'Hotel Participation'))
+    const customerStatus = text(valueByHeader(r, headers, 'Customer Status'))
+    const currentStatus = text(valueByHeader(r, headers, 'Current Status'))
+    const statusGroup = text(valueByHeader(r, headers, 'Status Group'))
+    const followUp = text(valueByHeader(r, headers, 'Follow-up'))
+    const priority = text(valueByHeader(r, headers, 'Priority'))
+    const nextAction = text(valueByHeader(r, headers, 'Next Action'))
+
+    if (building !== roomNo.charAt(0)) {
+      throw new Error(`Building mismatch for ${roomNo}: source=${building || '-'}`)
+    }
+    const expectedFloor = Number(roomNo.charAt(1))
+    if (floorValue === null || Math.trunc(floorValue) !== expectedFloor) {
+      throw new Error(`Floor mismatch for ${roomNo}: source=${floorValue ?? '-'} expected=${expectedFloor}`)
+    }
+    if (!['ร่วมโรงแรม', 'ไม่ร่วมโรงแรม'].includes(hotelParticipation || '')) {
+      throw new Error(`Invalid Hotel Participation for ${roomNo}: ${hotelParticipation || '-'}`)
+    }
+    if (!['มีลูกค้า', 'ไม่มีลูกค้า'].includes(customerStatus || '')) {
+      throw new Error(`Invalid Customer Status for ${roomNo}: ${customerStatus || '-'}`)
+    }
+    if (!currentStatus || !statusGroup || !followUp || !priority || !nextAction) {
+      throw new Error(`Required defect status field is blank for ${roomNo}`)
+    }
+
+    seen.add(roomNo)
+    out.push({
+      room_no: roomNo,
+      building,
+      floor: expectedFloor,
+      hotel_participation: hotelParticipation,
+      customer_status: customerStatus,
+      current_status: currentStatus,
+      status_group: statusGroup,
+      follow_up: followUp,
+      priority,
+      next_action: nextAction,
+      latest_source: text(valueByHeader(r, headers, 'Latest Source')),
+      source_note: text(valueByHeader(r, headers, 'Source Note')),
+      hotel_complete_color: text(valueByHeader(r, headers, 'Hotel Complete Color')),
+      hotel_remarks: text(valueByHeader(r, headers, 'Hotel Remarks')),
+    })
+  }
+
+  const aCount = out.filter((r) => r.building === 'A').length
+  const bCount = out.filter((r) => r.building === 'B').length
+  if (out.length !== DEFECT_EXPECTED_ROOMS || seen.size !== DEFECT_EXPECTED_ROOMS) {
+    throw new Error(`Defect inventory parsed ${out.length} unique rooms; expected ${DEFECT_EXPECTED_ROOMS}`)
+  }
+  if (aCount !== DEFECT_EXPECTED_A || bCount !== DEFECT_EXPECTED_B) {
+    throw new Error(`Defect building count mismatch: A=${aCount} B=${bCount}; expected A=${DEFECT_EXPECTED_A} B=${DEFECT_EXPECTED_B}`)
+  }
+
+  return { rows: out, counts: { total: out.length, A: aCount, B: bCount } }
 }
 
 async function parseSchedule(buffer: Buffer, projectCode: string) {
@@ -289,7 +382,7 @@ async function parseMaterials(buffer: Buffer) {
 }
 
 export async function GET() {
-  return NextResponse.json({ ok: true, service: '3 Kings Drive Sync V3.2.4', route: '/api/sync/drive' })
+  return NextResponse.json({ ok: true, service: '3 Kings Drive Sync V3.3.0', route: '/api/sync/drive', kinds: ['schedule','materials','defects'] })
 }
 
 export async function POST(request: NextRequest) {
@@ -298,10 +391,13 @@ export async function POST(request: NextRequest) {
     const kind = url.searchParams.get('kind')
     const projectCode = url.searchParams.get('project')
     const sourceFile = text(url.searchParams.get('sourceFile'))
+    const sourceFileId = text(url.searchParams.get('sourceFileId'))
+    const sourceModifiedAt = text(url.searchParams.get('sourceModifiedAt'))
+    const dryRun = ['1', 'true', 'yes'].includes(String(url.searchParams.get('dryRun') || '').toLowerCase())
     const syncKey = request.headers.get('x-sync-key') || ''
 
     if (!syncKey) return NextResponse.json({ ok: false, error: 'missing_sync_key' }, { status: 401 })
-    if (kind !== 'schedule' && kind !== 'materials') {
+    if (kind !== 'schedule' && kind !== 'materials' && kind !== 'defects') {
       return NextResponse.json({ ok: false, error: 'invalid_kind' }, { status: 400 })
     }
 
@@ -330,6 +426,25 @@ export async function POST(request: NextRequest) {
       if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
       const result = data as Record<string, unknown> | null
       return NextResponse.json(result ?? { ok: false, error: 'empty_rpc_response' }, { status: result?.ok === false ? 403 : 200 })
+    }
+
+    if (kind === 'defects') {
+      const parsed = await parseDefects(buffer)
+      const actualSourceFile = sourceFile || 'Handover_Defect_Summary.xlsx'
+      const { data, error } = await supabase.rpc('drive_sync_apply_condo_defects', {
+        p_sync_key: syncKey,
+        p_source_file: actualSourceFile,
+        p_source_file_id: sourceFileId,
+        p_source_modified_at: sourceModifiedAt,
+        p_rows: parsed.rows,
+        p_dry_run: dryRun,
+      })
+      if (error) return NextResponse.json({ ok: false, error: error.message, counts: parsed.counts }, { status: 500 })
+      const result = data as Record<string, unknown> | null
+      return NextResponse.json(
+        { ...(result ?? { ok: false, error: 'empty_rpc_response' }), source_validation: parsed.counts },
+        { status: result?.ok === false ? 422 : 200 }
+      )
     }
 
     const parsed = await parseMaterials(buffer)
