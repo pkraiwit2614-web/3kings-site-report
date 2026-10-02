@@ -116,9 +116,62 @@ function mapProjectFromLocation(location: unknown): string | null {
 }
 
 function mapProjectsFromLocation(location: unknown): string[] {
-  const s = String(location ?? '')
-  if (!/plot/i.test(s)) return []
-  return Array.from(new Set((s.match(/[6-9]/g) || []).map((n) => `AV-P${n}`)))
+  const s = String(location ?? '').normalize('NFKC').replace(/\s+/g, ' ').trim()
+  const codes = new Set<string>()
+
+  for (const match of s.matchAll(/Plot\s*([6-9])/gi)) codes.add(`AV-P${match[1]}`)
+  if (/Above\s*Condo\s*A\b|Condo\s*Building\s*A\b/i.test(s)) codes.add('CONDO-A')
+  if (/Above\s*Condo\s*B\b|Condo\s*Building\s*B\b/i.test(s)) codes.add('CONDO-B')
+  if (/\bMirage\b/i.test(s)) codes.add('MIRAGE')
+  if (/Proud\s*Karon/i.test(s)) codes.add('PROUD-KARON')
+  if (/Hennessy|Henessy/i.test(s)) codes.add('HENNESSY')
+  if (/Above\s*Villa.*(?:Common|ส่วนกลาง)|(?:Common|ส่วนกลาง).*Above\s*Villa/i.test(s)) codes.add('AV-COMMON')
+
+  return Array.from(codes)
+}
+
+function isExplicitSharedProcurement(row: Record<string, unknown>): boolean {
+  const marker = [row.item_name, row.condition_note].map((v) => String(v ?? '')).join(' ')
+  return /(?:รวม\s*P\d|Qty\s*รวม|ไม่แยก\s*Qty\s*\/?\s*Plot|ไม่ใช่ต่อ\s*Plot)/i.test(marker)
+}
+
+function mergeSharedProcurementRows(rows: Record<string, unknown>[]): Record<string, unknown>[] {
+  const merged: Record<string, unknown>[] = []
+  const sharedByKey = new Map<string, Record<string, unknown>>()
+
+  for (const row of rows) {
+    if (!isExplicitSharedProcurement(row)) {
+      merged.push(row)
+      continue
+    }
+
+    const key = [
+      row.vendor, row.item_name, row.procurement_status, row.payment_status, row.current_status,
+      row.expected_delivery_text, row.condition_note, row.source_updated_at, row.source_sheet,
+    ].map((v) => normalizeIdentityPart(text(v))).join('|')
+
+    const existing = sharedByKey.get(key)
+    if (!existing) {
+      const copy = { ...row }
+      sharedByKey.set(key, copy)
+      merged.push(copy)
+      continue
+    }
+
+    const existingCodes = Array.isArray(existing.project_codes) ? existing.project_codes.map(String) : []
+    const rowCodes = Array.isArray(row.project_codes) ? row.project_codes.map(String) : []
+    const projectCodes = Array.from(new Set([...existingCodes, ...rowCodes]))
+    existing.project_codes = projectCodes
+    existing.project_code = projectCodes.length === 1 ? projectCodes[0] : null
+
+    const existingSourceRow = Number(existing.source_row)
+    const rowSourceRow = Number(row.source_row)
+    if (Number.isFinite(rowSourceRow) && (!Number.isFinite(existingSourceRow) || rowSourceRow < existingSourceRow)) {
+      existing.source_row = row.source_row
+    }
+  }
+
+  return merged
 }
 
 function normalizeRoomNo(value: unknown): string | null {
@@ -378,11 +431,11 @@ async function parseMaterials(buffer: Buffer) {
     })
   }
 
-  return { materials, procurement, tools }
+  return { materials, procurement: mergeSharedProcurementRows(procurement), tools }
 }
 
 export async function GET() {
-  return NextResponse.json({ ok: true, service: '3 Kings Drive Sync V3.3.0', route: '/api/sync/drive', kinds: ['schedule','materials','defects'] })
+  return NextResponse.json({ ok: true, service: '3 Kings Drive Sync V3.3.1', route: '/api/sync/drive', kinds: ['schedule','materials','defects'] })
 }
 
 export async function POST(request: NextRequest) {
