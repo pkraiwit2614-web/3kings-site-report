@@ -57,7 +57,7 @@ export default function MaterialsPage(){
 
   useEffect(()=>{
     let alive=true
-    let refreshTimer:ReturnType<typeof setTimeout>|null=null
+    let refreshTimer:number|null=null
     const s=getSupabase()
     const load=async()=>{
       const [p,m,pr,prLinks,t,sync]=await Promise.all([
