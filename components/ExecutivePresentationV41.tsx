@@ -216,7 +216,23 @@ export default function ExecutivePresentationV41(){
   },[])
 
   const periodTasks=useMemo(()=>tasks.filter(t=>overlaps(t,startDate,endDate)),[tasks,startDate,endDate])
-  const visibleProjects=useMemo(()=>projects.filter(p=>!projectFilter||p.id===projectFilter),[projects,projectFilter])
+  const visibleProjects=useMemo(()=>{
+    const list=projects.filter(p=>!projectFilter||p.id===projectFilter)
+    if(projectFilter)return list
+
+    const commonIndex=list.findIndex(p=>p.code==='AV-COMMON')
+    if(commonIndex<0)return list
+
+    const common=list[commonIndex]
+    const ordered=list.filter((_,index)=>index!==commonIndex)
+    const condoAIndex=ordered.findIndex(p=>p.code==='CONDO-A')
+    const condoBIndex=ordered.findIndex(p=>p.code==='CONDO-B')
+    const condoAnchor=Math.max(condoAIndex,condoBIndex)
+    if(condoAnchor<0)return list
+
+    ordered.splice(condoAnchor+1,0,common)
+    return ordered
+  },[projects,projectFilter])
   const photosInPeriod=useMemo(()=>photos.filter(p=>p.report_date>=startDate&&p.report_date<=endDate),[photos,startDate,endDate])
   const condoA=useMemo(()=>condoMetrics(condoRooms,'A'),[condoRooms])
   const condoB=useMemo(()=>condoMetrics(condoRooms,'B'),[condoRooms])
