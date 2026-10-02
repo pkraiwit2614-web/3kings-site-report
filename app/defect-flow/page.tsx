@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
 import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
 import { getSupabase } from '@/lib/supabase'
@@ -296,8 +297,9 @@ export default function DefectFlowPage(){
     <div className="flow-page-header">
       <PageHeader title="Live Handover / Defect Flow" subtitle="Above Condo A + B" action={<div className="flow-toolbar">
         <div className="sync-meta"><span>Sync ล่าสุด</span><b>{dateTimeTH(synced)}</b></div>
-        <button type="button" className="button" onClick={exportPng} disabled={loading||!!error}>Export PNG</button>
-        <button type="button" className="button primary" onClick={()=>window.print()} disabled={loading||!!error}>Print PDF</button>
+        <Link href="/?section=defect#dashboard-defect" className="button flow-dashboard-button" data-defect-flow-dashboard="true" aria-label="กลับไปที่ข้อมูล Defect ใน Dashboard">← Dashboard</Link>
+        <button type="button" className="button flow-export-button" onClick={exportPng} disabled={loading||!!error}>Export PNG</button>
+        <button type="button" className="button report-print-button flow-print-button" onClick={()=>window.print()} disabled={loading||!!error}>🖨️ Print</button>
       </div>}/>
     </div>
 
@@ -337,8 +339,10 @@ export default function DefectFlowPage(){
     </section>}
 
     <style jsx>{`
-      .flow-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}.sync-meta{display:flex;flex-direction:column;align-items:flex-end;line-height:1.25;margin-right:3px}.sync-meta span{font-size:8.5px;color:var(--muted);font-weight:700}.sync-meta b{font-size:10px;color:var(--navy);font-weight:800;white-space:nowrap}.flow-stage{padding:10px;overflow:auto;background:#eef2f6}.flow-svg{display:block;width:100%;min-width:1180px;height:auto;background:white;border-radius:10px;box-shadow:0 8px 24px rgba(25,42,63,.08)}.flow-loading,.flow-error{padding:24px}.flow-error{color:#9f312d}
-      @media(max-width:760px){.flow-toolbar{justify-content:flex-start}.sync-meta{width:100%;align-items:flex-start}.flow-stage{padding:6px}.flow-svg{min-width:1050px}}
+      .flow-toolbar{display:grid;grid-template-columns:218px 148px;grid-template-rows:38px 38px;align-items:center;justify-content:end;gap:6px 8px;width:auto}.sync-meta{grid-column:1;grid-row:1;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;justify-self:end;line-height:1.25;margin:0}.sync-meta span{font-size:8.5px;color:var(--muted);font-weight:700}.sync-meta b{font-size:10px;color:var(--navy);font-weight:800;white-space:nowrap}.flow-dashboard-button{grid-column:2;grid-row:1;width:148px;min-width:148px;height:38px;white-space:nowrap}.flow-export-button{grid-column:1;grid-row:2;width:218px;min-width:218px;height:38px}.flow-print-button{grid-column:2;grid-row:2;width:148px!important;min-width:148px!important;height:38px!important;margin:0!important;white-space:nowrap}.flow-stage{padding:10px;overflow:auto;background:#eef2f6}.flow-svg{display:block;width:100%;min-width:1180px;height:auto;background:white;border-radius:10px;box-shadow:0 8px 24px rgba(25,42,63,.08)}.flow-loading,.flow-error{padding:24px}.flow-error{color:#9f312d}
+      @media(max-width:900px){.flow-toolbar{grid-template-columns:218px 148px;justify-content:end;width:100%}}
+      @media(max-width:760px){.flow-stage{padding:6px}.flow-svg{min-width:1050px}}
+      @media(max-width:430px){.flow-toolbar{grid-template-columns:1fr;grid-template-rows:auto;width:100%}.sync-meta,.flow-dashboard-button,.flow-export-button,.flow-print-button{grid-column:1;grid-row:auto;width:100%!important;min-width:0!important}.sync-meta{align-items:flex-start;justify-self:stretch}}
       @media print{
         :global(.sidebar),:global(.mobile-nav),:global(.mobile-more-sheet),:global(.mobile-more-backdrop),.flow-page-header{display:none!important}
         :global(.app-shell){display:block!important;background:#fff!important}

@@ -81,7 +81,7 @@ export default function DashboardCondoDefectSummary(){
   const goodEnd=warnEnd+toneTotals.good/totalForChart*360
   const donutBackground=`conic-gradient(#d84d45 0deg ${dangerEnd}deg,#e2ad32 ${dangerEnd}deg ${warnEnd}deg,#2e9a6a ${warnEnd}deg ${goodEnd}deg,#dfe5eb ${goodEnd}deg 360deg)`
 
-  return <section className="panel dashboard-module condo-summary" style={{marginBottom:18}}>
+  return <section id="dashboard-defect" className="panel dashboard-module condo-summary dashboard-deep-target" style={{marginBottom:18}}>
     <div className="module-title">
       <span>9</span>
       <div><b>ABOVE CONDO — HANDOVER / DEFECT STATUS</b><small>สถานะทั้งโครงการ • กดแต่ละช่องเพื่อเปิดรายชื่อห้องที่เกี่ยวข้อง</small></div>
