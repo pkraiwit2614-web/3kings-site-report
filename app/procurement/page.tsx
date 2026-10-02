@@ -50,6 +50,7 @@ function searchable(values:unknown[],needle:string){
 
 export default function ProcurementPage(){
   const [rows,setRows]=useState<any[]>([])
+  const [procurementLinks,setProcurementLinks]=useState<any[]>([])
   const [projects,setProjects]=useState<Project[]>([])
   const [siteFilter,setSiteFilter]=useState('')
   const [statusFilter,setStatusFilter]=useState('')
@@ -67,20 +68,46 @@ export default function ProcurementPage(){
     const s=getSupabase()
     Promise.all([
       s.from('procurement_items').select('*'),
+      s.from('procurement_item_projects').select('procurement_item_id,project_id'),
       s.from('projects').select('*')
-    ]).then(([r,p])=>{
+    ]).then(([r,links,p])=>{
       setRows(r.data||[])
+      setProcurementLinks(links.data||[])
       setProjects((p.data||[]) as Project[])
     })
   },[])
 
   const projectById=useMemo(()=>new Map(projects.map(p=>[p.id,p])),[projects])
+  const procurementProjectIdsByItem=useMemo(()=>{
+    const map=new Map<string,string[]>()
+    for(const link of procurementLinks){
+      const itemId=String(link.procurement_item_id||'')
+      const projectId=String(link.project_id||'')
+      if(!itemId||!projectId) continue
+      const ids=map.get(itemId)||[]
+      if(!ids.includes(projectId)) ids.push(projectId)
+      map.set(itemId,ids)
+    }
+    for(const item of rows){
+      const itemId=String(item.id||'')
+      const projectId=String(item.project_id||'')
+      if(!itemId||!projectId) continue
+      const ids=map.get(itemId)||[]
+      if(!ids.includes(projectId)) ids.push(projectId)
+      map.set(itemId,ids)
+    }
+    return map
+  },[procurementLinks,rows])
+  const procurementProjectsFor=(item:any)=>(procurementProjectIdsByItem.get(String(item.id))||[])
+    .map(id=>projectById.get(id))
+    .filter(Boolean)
+    .sort((a,b)=>(a?.sort_order??999999)-(b?.sort_order??999999)) as Project[]
   const siteOptions=useMemo(()=>{
-    const usedProjectIds=new Set(rows.map(x=>String(x.project_id||'')).filter(Boolean))
+    const usedProjectIds=new Set(Array.from(procurementProjectIdsByItem.values()).flat())
     return projects
       .filter(p=>usedProjectIds.has(p.id))
       .sort((a,b)=>(a.sort_order??999999)-(b.sort_order??999999)||a.code.localeCompare(b.code,'th'))
-  },[rows,projects])
+  },[projects,procurementProjectIdsByItem])
   const statuses=useMemo(()=>[...new Set(rows.map(x=>String(x.current_status||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th')),[rows])
   const updateDates=useMemo(()=>[...new Set(rows.map(x=>String(x.source_updated_at||'').trim()).filter(Boolean))].sort((a,b)=>b.localeCompare(a)),[rows])
   const latestUpdate=updateDates[0]||''
@@ -89,13 +116,14 @@ export default function ProcurementPage(){
   const filteredRows=useMemo(()=>{
     const today=new Date(); today.setHours(0,0,0,0); const todayTs=today.getTime()
     return rows.filter(x=>{
-      const p=projectById.get(x.project_id)
-      if(siteFilter&&String(x.project_id||'')!==siteFilter) return false
+      const relatedIds=procurementProjectIdsByItem.get(String(x.id))||[]
+      const related=relatedIds.map(id=>projectById.get(id)).filter(Boolean) as Project[]
+      if(siteFilter&&!relatedIds.includes(siteFilter)) return false
       if(statusFilter&&String(x.current_status||'')!==statusFilter) return false
       if(updateFilter&&String(x.source_updated_at||'')!==updateFilter) return false
       if(followUpOnly&&!needsFollowUp(x)) return false
       if(!searchable([
-        p?.code,p?.name,x.vendor,x.item_name,x.procurement_status,x.payment_status,x.current_status,
+        ...related.flatMap(p=>[p.code,p.name]),x.vendor,x.item_name,x.procurement_status,x.payment_status,x.current_status,
         x.pr_no,x.po_no,x.expected_delivery_text,x.condition_note,x.source_updated_at
       ],needle)) return false
       return true
@@ -108,7 +136,7 @@ export default function ProcurementPage(){
       if(aFuture!==bFuture) return aFuture?-1:1
       return aFuture?ad-bd:bd-ad
     })
-  },[rows,siteFilter,statusFilter,updateFilter,followUpOnly,needle,projectById])
+  },[rows,siteFilter,statusFilter,updateFilter,followUpOnly,needle,projectById,procurementProjectIdsByItem])
 
   const compactControlStyle={
     minHeight:34,
@@ -161,8 +189,8 @@ export default function ProcurementPage(){
       <div className="table-wrap" style={{maxHeight:'calc(100vh - 205px)',overflow:'auto'}}>
         <table style={{minWidth:1450}}>
           <thead style={{position:'sticky',top:0,zIndex:12,background:'var(--surface)'}}><tr><th>Site / Plot</th><th>PO / PR</th><th>ผู้ขาย / ผู้รับเหมา</th><th>รายการ</th><th>สถานะ PO / ชำระ</th><th style={{width:180,minWidth:180,maxWidth:180}}>ขั้นตอนปัจจุบัน</th><th>กำหนดส่ง / เข้าหน้างาน</th><th>รายละเอียด / สิ่งที่ต้องตาม</th><th>อัปเดตข้อมูล</th></tr></thead>
-          <tbody>{filteredRows.map(x=><tr key={x.id}>
-            <td><b>{projectById.get(x.project_id)?.code||'-'}</b><small>{projectById.get(x.project_id)?.name||''}</small></td>
+          <tbody>{filteredRows.map(x=>{const linkedProjects=procurementProjectsFor(x);return <tr key={x.id}>
+            <td><b>{linkedProjects.map(p=>p.code).join(' / ')||'-'}</b><small>{linkedProjects.map(p=>p.name).filter(Boolean).join(' / ')}</small></td>
             <td><b>{[x.po_no,x.pr_no].filter(Boolean).join(' / ')||'-'}</b></td>
             <td>{x.vendor||'ยังไม่ระบุ'}</td>
             <td><b>{x.item_name}</b></td>
@@ -171,7 +199,7 @@ export default function ProcurementPage(){
             <td><b>{x.expected_delivery_text||'ยังไม่ระบุ'}</b></td>
             <td>{x.condition_note||'-'}</td>
             <td>{dateTH(x.source_updated_at)}</td>
-          </tr>)}</tbody>
+          </tr>})}</tbody>
         </table>
         {!filteredRows.length&&<p className="muted" style={{padding:16}}>ไม่พบรายการตามคำค้นหรือ Filter ที่เลือก</p>}
       </div>
