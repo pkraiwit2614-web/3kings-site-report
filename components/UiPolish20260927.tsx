@@ -181,7 +181,7 @@ export default function UiPolish20260927(){
       const source=findByText<HTMLElement>('.panel','ข้อมูล Dashboard จาก Schedule / Materials / Daily Report')
       if(source)source.classList.add('ui-hidden-dashboard-source')
       const header=document.querySelector<HTMLElement>('.page-header')
-      if(header){
+      if(header&&!header.querySelector('.management-dashboard-actions')){
         header.classList.add('ui-dashboard-header')
         ensureMeta(header,metaAt,{label:'📷 รูปภาพหน้างาน',href:'/site-photos'})
       }
@@ -192,7 +192,7 @@ export default function UiPolish20260927(){
       const source=findByText<HTMLElement>('.panel','ข้อมูล Schedule จาก Drive Sync')
       if(source)source.classList.add('ui-hidden-schedule-source')
       const host=headerHost()
-      if(host)ensureMeta(host,metaAt,{label:'← Dashboard',href:'/?section=plan-actual'})
+      if(host&&!host.querySelector('.management-printable-actions'))ensureMeta(host,metaAt,{label:'← Dashboard',href:'/?section=plan-actual'})
     }
 
     const polishMaterials=()=>{
@@ -236,7 +236,7 @@ export default function UiPolish20260927(){
     const polishProcurement=()=>{
       if(path!=='/procurement')return
       const host=headerHost()
-      if(host)ensureMeta(host,metaAt,{label:'← Dashboard',href:'/?section=purchasing-followup'})
+      if(host&&!host.querySelector('.management-printable-actions'))ensureMeta(host,metaAt,{label:'← Dashboard',href:'/?section=purchasing-followup'})
       document.querySelectorAll<HTMLElement>('.toolbar .muted.small').forEach(el=>{
         if(el.textContent?.includes('ข้อมูลล่าสุด')){
           const clean=(el.textContent||'').split(' • ข้อมูลล่าสุด')[0]

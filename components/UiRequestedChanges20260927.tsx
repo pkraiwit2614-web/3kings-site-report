@@ -88,6 +88,7 @@ export default function UiRequestedChanges20260927(){
   useEffect(()=>{
     const polishDashboard=()=>{
       if(path!=='/')return
+      if(document.querySelector('.management-dashboard-actions'))return
       const header=document.querySelector<HTMLElement>('.page-header')
       const wrap=header?.querySelector<HTMLElement>(':scope > .ui-polish-header-extra')
       if(!header||!wrap)return
@@ -102,6 +103,7 @@ export default function UiRequestedChanges20260927(){
     }
 
     const polishStandardPrintable=()=>{
+      if(document.querySelector('.management-printable-actions'))return
       const routeMap:Record<string,string>={
         '/schedule':'/?section=plan-actual',
         '/materials':'/?section=materials',

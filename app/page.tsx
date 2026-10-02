@@ -245,7 +245,11 @@ export default function DashboardPage() {
   const followupLinkView=followupView==='delayed'?'delayed':followupView==='blockers'?'blockers':'all'
 
   return <AppShell>
-    <PageHeader title="Management Dashboard" subtitle="Construction supervision overview — เห็นความคืบหน้า ความเสี่ยง ทรัพยากร และรายการต้องติดตามจากหน้าเดียว" action={<Link href="/reports/new" className="button primary">+ รายงานประจำวัน</Link>} />
+    <PageHeader title="Management Dashboard" subtitle="Construction supervision overview — เห็นความคืบหน้า ความเสี่ยง ทรัพยากร และรายการต้องติดตามจากหน้าเดียว" action={<div className="management-action-grid management-dashboard-actions">
+      <div className="management-action-meta"><span>ข้อมูลอัปเดต</span><b>{dateTimeTH(latestDataSyncAt)}</b></div>
+      <Link href="/reports/new" className="button primary management-action-primary">+ รายงานประจำวัน</Link>
+      <Link href="/site-photos" className="button management-action-secondary">📷 รูปภาพหน้างาน</Link>
+    </div>} />
     <div className="panel" style={{padding:'10px 14px',marginBottom:14,display:'flex',justifyContent:'space-between',gap:10,alignItems:'center',flexWrap:'wrap'}}><span className="small muted">ข้อมูล Dashboard จาก Schedule / Materials / Daily Report</span><b className="small">อัปเดตข้อมูลล่าสุด: {dateTimeTH(latestDataSyncAt)}</b></div>
     {loading?<div className="panel">กำลังโหลดข้อมูล…</div>:<>
       <section className="executive-section">

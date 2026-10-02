@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
@@ -81,7 +82,10 @@ export default function SchedulePlanActualV41(){
   }
 
   return <AppShell>
-    <PageHeader title="Schedule / Plan vs Actual" subtitle="เห็นภาพรวมแผนเทียบหน้างานจริงก่อน แล้วค่อยลงรายละเอียดเฉพาะงานที่ต้องติดตาม • ตารางเรียงตามเลขข้องานจากน้อยไปมาก"/>
+    <PageHeader title="Schedule / Plan vs Actual" subtitle="เห็นภาพรวมแผนเทียบหน้างานจริงก่อน แล้วค่อยลงรายละเอียดเฉพาะงานที่ต้องติดตาม • ตารางเรียงตามเลขข้องานจากน้อยไปมาก" action={<div className="management-action-grid management-printable-actions">
+      <div className="management-action-meta"><span>ข้อมูลอัปเดต</span><b>{dateTimeTH(latestSyncAt)}</b></div>
+      <Link href="/?section=plan-actual#dashboard-plan-actual" className="button management-action-dashboard">← Dashboard</Link>
+    </div>}/>
     <div className="panel" style={{padding:'10px 14px',marginBottom:14,display:'flex',justifyContent:'space-between',gap:10,alignItems:'center',flexWrap:'wrap'}}>
       <span className="small muted">ข้อมูล Schedule จาก Drive Sync</span><b className="small">อัปเดตข้อมูลล่าสุด: {dateTimeTH(latestSyncAt)}</b>
     </div>

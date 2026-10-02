@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect,useMemo,useState } from 'react'
+import Link from 'next/link'
 import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
 import StatusBadge from '@/components/StatusBadge'
@@ -171,7 +172,10 @@ export default function ProcurementPage(){
   } as const
 
   return <AppShell>
-    <PageHeader title="การจัดซื้อ/จัดจ้าง" subtitle="ค้นหาจากวัสดุ งาน ผู้ขาย ผู้รับเหมา เลข PO หรือสถานะ เพื่อดูว่าตอนนี้ติดอยู่ขั้นตอนไหนและต้องตามอะไรต่อ"/>
+    <PageHeader title="การจัดซื้อ/จัดจ้าง" subtitle="ค้นหาจากวัสดุ งาน ผู้ขาย ผู้รับเหมา เลข PO หรือสถานะ เพื่อดูว่าตอนนี้ติดอยู่ขั้นตอนไหนและต้องตามอะไรต่อ" action={<div className="management-action-grid management-printable-actions">
+      <div className="management-action-meta"><span>ข้อมูลอัปเดต</span><b>{latestUpdate?dateTH(latestUpdate):'-'}</b></div>
+      <Link href="/?section=purchasing-followup#dashboard-purchasing" className="button management-action-dashboard">← Dashboard</Link>
+    </div>}/>
 
     <section className="panel" style={{marginBottom:10,position:'sticky',top:0,zIndex:18,padding:8,borderRadius:14}}>
       <div className="toolbar" style={{padding:0,background:'var(--surface)',borderRadius:10,marginBottom:0,flexWrap:'wrap',gap:6,alignItems:'center'}}>
