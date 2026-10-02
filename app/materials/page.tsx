@@ -223,7 +223,7 @@ export default function MaterialsPage(){
         <b className="small">พบ {filteredProcurement.length} รายการ</b>
       </div>
       <div className="panel table-wrap" style={{maxHeight:430,overflow:'auto'}}>
-        <table style={{minWidth:1320}}>
+        <table className="procurement-related-table" style={{minWidth:1500}}>
           <thead><tr><th>Plot</th><th>PO / PR</th><th>ผู้ขาย / ผู้รับเหมา</th><th>รายการ</th><th>สถานะ PO / ชำระ</th><th>ขั้นตอนปัจจุบัน</th><th>กำหนดส่ง / เข้าหน้างาน</th><th>รายละเอียด / สิ่งที่ต้องตาม</th><th>อัปเดต</th></tr></thead>
           <tbody>{filteredProcurement.map(x=><tr key={x.id}>
             <td><b>{procurementPlotText(x)}</b></td>
@@ -231,7 +231,7 @@ export default function MaterialsPage(){
             <td>{x.vendor||'ยังไม่ระบุ'}</td>
             <td><b>{x.item_name||'-'}</b></td>
             <td>{x.payment_status||x.procurement_status||'-'}</td>
-            <td><StatusBadge value={x.current_status}/></td>
+            <td><StatusBadge value={x.current_status} multiline/></td>
             <td><b>{x.expected_delivery_text||'ยังไม่ระบุ'}</b></td>
             <td>{x.condition_note||'-'}</td>
             <td>{dateTH(x.source_updated_at)}</td>
@@ -239,6 +239,24 @@ export default function MaterialsPage(){
         </table>
         {!filteredProcurement.length&&<p className="muted" style={{padding:16}}>ไม่พบรายการจัดซื้อ/PO ที่ตรงกับคำค้นนี้</p>}
       </div>
+      <style jsx>{`
+        .procurement-related-table th,
+        .procurement-related-table td{
+          white-space:normal;
+          overflow-wrap:anywhere;
+          word-break:break-word;
+          line-height:1.45;
+        }
+        .procurement-related-table th:nth-child(1){width:90px}
+        .procurement-related-table th:nth-child(2){width:135px}
+        .procurement-related-table th:nth-child(3){width:170px}
+        .procurement-related-table th:nth-child(4){width:210px}
+        .procurement-related-table th:nth-child(5){width:185px}
+        .procurement-related-table th:nth-child(6){width:190px}
+        .procurement-related-table th:nth-child(7){width:185px}
+        .procurement-related-table th:nth-child(8){width:285px}
+        .procurement-related-table th:nth-child(9){width:120px}
+      `}</style>
     </section>}
 
     <section aria-labelledby="tool-machine-title" style={{marginTop:26,paddingTop:4}}>
