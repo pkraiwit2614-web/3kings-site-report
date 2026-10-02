@@ -1,4 +1,3 @@
-import Link from 'next/link'
 import ExecutivePresentationV41 from '@/components/ExecutivePresentationV41'
 import ExecutivePhotoLinks from '@/components/ExecutivePhotoLinks'
 import ExecutivePlanDateCardsSafe20261001 from '@/components/ExecutivePlanDateCardsSafe20261001'
@@ -13,11 +12,6 @@ export default function ExecutivePresentationPage(){
 
     {/* Condo-only presentation enhancement. Kept outside the core Villa presentation logic. */}
     <PresentationCondoEnhancer />
-
-    {/* Explicit entry point to the full September Condo defect photo showcase. */}
-    <Link className="condo-defect-showcase-link" href="/presentation/condo-defect">
-      Condo Defect Photo Showcase · Sep 2026 ↗
-    </Link>
 
     <ExecutivePlanDateCardsSafe20261001 />
     <ExecutivePresentationCarryoverGuard />
@@ -85,36 +79,13 @@ export default function ExecutivePresentationPage(){
         pointer-events:auto!important;
       }
 
-      /* Visible, isolated entry point. No existing presentation DOM is restructured. */
-      .condo-defect-showcase-link{
-        position:fixed;
-        top:82px;
-        right:20px;
-        z-index:140;
-        display:inline-flex;
-        align-items:center;
-        min-height:38px;
-        padding:9px 13px;
-        border:1px solid rgba(36,54,75,.16);
-        border-radius:999px;
-        background:#fffdf9;
-        color:#24364b;
-        box-shadow:0 8px 24px rgba(20,31,48,.12);
-        font-size:11px;
-        font-weight:900;
-        text-decoration:none;
-      }
-      .condo-defect-showcase-link:hover{transform:translateY(-1px)}
-
       @media(max-width:950px){
         .ep-stage:not(:fullscreen) .ep-photo-grid figure>img{height:260px!important}
         .ep-stage:not(:fullscreen) .ep-photo-grid.count-1 figure>img{height:360px!important}
       }
       @media(max-width:620px){
         .ep-stage:fullscreen .ep-stage-controls{inset:auto 8px 10px 8px!important;gap:8px!important}
-        .condo-defect-showcase-link{top:auto;right:10px;bottom:74px;max-width:calc(100vw - 20px)}
       }
-      @media print{.condo-defect-showcase-link{display:none!important}}
     `}</style>
   </>
 }
