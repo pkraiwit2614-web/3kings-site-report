@@ -228,7 +228,16 @@ export default function DefectFlowPage(){
     }
     void load()
     const channel=supabase.channel('live-defect-flow').on('postgres_changes',{event:'*',schema:'public',table:'condo_room_status'},()=>{void load()}).subscribe()
-    return()=>{alive=false;void supabase.removeChannel(channel)}
+    const refresh=()=>{void load()}
+    const refreshWhenVisible=()=>{if(document.visibilityState==='visible')void load()}
+    window.addEventListener('focus',refresh)
+    document.addEventListener('visibilitychange',refreshWhenVisible)
+    return()=>{
+      alive=false
+      window.removeEventListener('focus',refresh)
+      document.removeEventListener('visibilitychange',refreshWhenVisible)
+      void supabase.removeChannel(channel)
+    }
   },[])
 
   const a=useMemo(()=>buildingCounts(rows,'A'),[rows])
