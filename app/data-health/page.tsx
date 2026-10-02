@@ -80,20 +80,23 @@ export default function DataHealthPage(){
   },[])
 
   const today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Bangkok'})
+  const latestAttempt=(type:string,projectCode?:string)=>syncRuns.find(x=>x.sync_type===type&&(!projectCode||x.project_code===projectCode))||null
   const latestSync=(type:string,projectCode?:string)=>syncRuns.find(x=>x.sync_type===type&&x.status==='success'&&(!projectCode||x.project_code===projectCode))||null
 
   const scheduleHealth=useMemo(()=>projects.filter(p=>/^AV-P[6-9]$/.test(p.code)).map(p=>{
     const list=tasks.filter(t=>t.project_id===p.id)
     const sourceDates=list.map(t=>t.source_updated_at).filter(Boolean).sort().reverse()
     const sourceDate=sourceDates[0]||null
+    const attempt=latestAttempt('schedule',p.code)
     const sync=latestSync('schedule',p.code)
     const sourceAge=ageDays(sourceDate)
     const syncAge=ageHours(sync?.created_at)
     let tone:HealthTone='ok', label='พร้อมใช้'
-    if(!sourceDate||!sync){tone='bad';label='ข้อมูลไม่ครบ'}
+    if(attempt?.status==='error'){tone='bad';label='Sync ล่าสุดล้มเหลว'}
+    else if(!sourceDate||!sync){tone='bad';label='ข้อมูลไม่ครบ'}
     else if((sourceAge??99)>2){tone='warn';label='Source เก่า'}
     else if((syncAge??99)>2){tone='warn';label='Sync เก่า'}
-    return {p,sourceDate,sourceFile:list.find(t=>t.source_updated_at===sourceDate)?.source_file||sync?.source_file||'-',sync,tone,label,sourceAge,syncAge}
+    return {p,sourceDate,sourceFile:list.find(t=>t.source_updated_at===sourceDate)?.source_file||attempt?.source_file||sync?.source_file||'-',attempt,sync,tone,label,sourceAge,syncAge}
   }),[projects,tasks,syncRuns])
 
   const photoHealth=useMemo(()=>{
@@ -105,13 +108,16 @@ export default function DataHealthPage(){
     return {total:list.length,matched,unmatched:list.length-matched,manual,ratio:list.length?matched/list.length:0,latest}
   },[photos,projects,syncRuns])
 
+  const materialsAttempt=latestAttempt('materials')
   const materialsSync=latestSync('materials')
   const toolSource=useMemo(()=>tools.map(x=>x.source_updated_at).filter(Boolean).sort().reverse()[0]||null,[tools])
   const condoLatest=useMemo(()=>condo.map(x=>x.source_modified_at).filter(Boolean).sort().reverse()[0]||null,[condo])
   const condoDbSync=useMemo(()=>condo.map(x=>x.synced_at).filter(Boolean).sort().reverse()[0]||null,[condo])
-  const condoAutoSync=latestSync('defects')
-  const condoHealth:HealthTone=!condoLatest?'bad':condoAutoSync?'ok':'warn'
-  const condoHealthLabel=!condoLatest?'ไม่พบข้อมูล':condoAutoSync?'Auto Sync ทำงาน':'ยังไม่มี Auto Sync'
+  const condoAutoAttempt=latestAttempt('defects')||latestAttempt('condo_defect')
+  const condoAutoSync=latestSync('defects')||latestSync('condo_defect')
+  const condoAttemptAge=ageHours(condoAutoAttempt?.created_at)
+  const condoHealth:HealthTone=!condoLatest?'bad':condoAutoAttempt?.status==='error'?'bad':!condoAutoSync?'warn':(condoAttemptAge??99)>.6?'warn':'ok'
+  const condoHealthLabel=!condoLatest?'ไม่พบข้อมูล':condoAutoAttempt?.status==='error'?'Sync ล่าสุดล้มเหลว':!condoAutoSync?'ยังไม่มี Auto Sync':(condoAttemptAge??99)>.6?'Sync เกิน 36 นาที':'Auto Sync ทำงาน'
   const reportsToday=reports.filter(x=>x.report_date===today&&x.status==='submitted')
   const reportedProjectIds=new Set(reportsToday.map(x=>x.project_id))
   const villaProjects=projects.filter(p=>/^AV-P[6-9]$/.test(p.code))
@@ -140,7 +146,8 @@ export default function DataHealthPage(){
           <Link className="button" href="/presentation">ตรวจผลใน Executive Presentation</Link>
         </div>
 
-        <div className="panel"><div className="panel-head"><div><h2>Materials / Tools</h2><span className="muted small">ความสดของ master data จาก Drive</span></div><HealthBadge tone={materialsSync?'ok':'bad'} label={materialsSync?'Sync ทำงาน':'ไม่พบ Sync'}/></div>
+        <div className="panel"><div className="panel-head"><div><h2>Materials / Tools</h2><span className="muted small">ความสดของ master data จาก Drive</span></div><HealthBadge tone={materialsAttempt?.status==='error'?'bad':materialsSync?'ok':'bad'} label={materialsAttempt?.status==='error'?'Sync ล่าสุดล้มเหลว':materialsSync?'Sync ทำงาน':'ไม่พบ Sync'}/></div>
+          <p><b>Latest attempt:</b> {dateTimeTH(materialsAttempt?.created_at)} {materialsAttempt?.status?'• '+materialsAttempt.status:''}</p>
           <p><b>Materials sync:</b> {dateTimeTH(materialsSync?.created_at)}</p>
           <p><b>Source file:</b> {materialsSync?.source_file||'-'}</p>
           <p><b>Tool source updated:</b> {dateTH(toolSource)}</p>
@@ -152,9 +159,11 @@ export default function DataHealthPage(){
         <div className="panel"><div className="panel-head"><div><h2>Above Condo Status</h2><span className="muted small">ตรวจ Source timestamp, DB sync และ Auto Sync แยกกัน</span></div><HealthBadge tone={condoHealth} label={condoHealthLabel}/></div>
           <p><b>Source updated:</b> {dateTimeTH(condoLatest)}</p>
           <p><b>DB synced:</b> {dateTimeTH(condoDbSync)}</p>
-          <p><b>Auto-sync check:</b> {dateTimeTH(condoAutoSync?.created_at)}</p>
+          <p><b>Latest attempt:</b> {dateTimeTH(condoAutoAttempt?.created_at)} {condoAutoAttempt?.status?'• '+condoAutoAttempt.status:''}</p>
+          <p><b>Last successful sync:</b> {dateTimeTH(condoAutoSync?.created_at)}</p>
+          {condoAutoAttempt?.status==='error'&&<p className="small" style={{color:'#ad3832'}}><b>Sync error:</b> {condoAutoAttempt.message||'ไม่ทราบสาเหตุ'}</p>}
           <p><b>Rows:</b> {condo.length} ห้อง</p>
-          {!condoAutoSync&&<p className="small muted">ปัจจุบันหน้า Defect มี client freshness check แล้ว แต่ Drive → Supabase ยังต้องมี defect sync job แยกจาก Schedule/Materials</p>}
+          {!condoAutoSync&&<p className="small muted">ยังไม่มี successful Defect Auto Sync ในประวัติที่โหลดมา</p>}
           <Link className="button" href="/defects">เปิด Defect Report</Link>
         </div>
 
