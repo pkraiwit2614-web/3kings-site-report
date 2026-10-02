@@ -172,7 +172,7 @@ export default function MaterialsPage(){
           <tbody>{filtered.map(x=>{
             const detail=[x.status_detail,x.notes].filter(Boolean).filter((v:string,i:number,a:string[])=>a.indexOf(v)===i)
             return <tr key={x.id}>
-              <td><b>{procurementPlotText(x)}</b></td>
+              <td><b>{projectById.get(x.project_id)?.code||'-'}</b></td>
               <td>{x.category||'-'}</td>
               <td><b>{x.item_name}</b><small>{x.quantity_unit||'ยังไม่ระบุปริมาณ/หน่วย'}</small></td>
               <td>{[x.brand,x.model_spec].filter(Boolean).join(' / ')||'-'}</td>
@@ -198,7 +198,7 @@ export default function MaterialsPage(){
         <table style={{minWidth:1320}}>
           <thead><tr><th>Plot</th><th>PO / PR</th><th>ผู้ขาย / ผู้รับเหมา</th><th>รายการ</th><th>สถานะ PO / ชำระ</th><th>ขั้นตอนปัจจุบัน</th><th>กำหนดส่ง / เข้าหน้างาน</th><th>รายละเอียด / สิ่งที่ต้องตาม</th><th>อัปเดต</th></tr></thead>
           <tbody>{filteredProcurement.map(x=><tr key={x.id}>
-            <td><b>{projectById.get(x.project_id)?.code||'-'}</b></td>
+            <td><b>{procurementPlotText(x)}</b></td>
             <td><b>{[x.po_no,x.pr_no].filter(Boolean).join(' / ')||'-'}</b></td>
             <td>{x.vendor||'ยังไม่ระบุ'}</td>
             <td><b>{x.item_name||'-'}</b></td>
