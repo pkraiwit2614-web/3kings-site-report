@@ -130,6 +130,27 @@ function mapProjectsFromLocation(location: unknown): string[] {
   return Array.from(codes)
 }
 
+function applyConfirmedProcurementFacts(row: Record<string, unknown>): Record<string, unknown> {
+  const itemName = String(row.item_name ?? '')
+  const vendor = String(row.vendor ?? '')
+
+  if (/สะดืออ่างล้างหน้า/i.test(itemName) && /บ้านสุขภัณฑ์/i.test(vendor)) {
+    return {
+      ...row,
+      project_code: null,
+      project_codes: ['CONDO-A','CONDO-B'],
+      procurement_status: 'รับสินค้าแล้ว / ติดตั้งเรียบร้อย',
+      current_status: 'รับสินค้าแล้ว / ติดตั้งเรียบร้อย / ปิดติดตาม',
+      expected_delivery_text: 'ของมาครบและติดตั้งเรียบร้อยแล้ว',
+      expected_delivery: null,
+      condition_note: 'สำหรับ Above Condo A และ Above Condo B • ยืนยัน 02/10/2569: ของมาครบทั้งหมดและติดตั้งเรียบร้อยแล้ว',
+      source_updated_at: '2026-10-02',
+    }
+  }
+
+  return row
+}
+
 function isExplicitSharedProcurement(row: Record<string, unknown>): boolean {
   const marker = [row.item_name, row.condition_note].map((v) => String(v ?? '')).join(' ')
   return /(?:รวม\s*P\d|Qty\s*รวม|ไม่แยก\s*Qty\s*\/?\s*Plot|ไม่ใช่ต่อ\s*Plot)/i.test(marker)
@@ -431,11 +452,11 @@ async function parseMaterials(buffer: Buffer) {
     })
   }
 
-  return { materials, procurement: mergeSharedProcurementRows(procurement), tools }
+  return { materials, procurement: mergeSharedProcurementRows(procurement.map(applyConfirmedProcurementFacts)), tools }
 }
 
 export async function GET() {
-  return NextResponse.json({ ok: true, service: '3 Kings Drive Sync V3.3.1', route: '/api/sync/drive', kinds: ['schedule','materials','defects'] })
+  return NextResponse.json({ ok: true, service: '3 Kings Drive Sync V3.3.2', route: '/api/sync/drive', kinds: ['schedule','materials','defects'] })
 }
 
 export async function POST(request: NextRequest) {
