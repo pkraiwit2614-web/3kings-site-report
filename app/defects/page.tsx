@@ -211,7 +211,7 @@ export default function DefectDetailPage(){
       action={<div className="header-actions">
         <div className="update-meta"><span>ข้อมูลอัปเดต</span><b>{dateTimeTH(sourceDate)}</b></div>
         <a className="button drive-button" href={DEFECT_DONE_FOLDER} target="_blank" rel="noreferrer">📷 Picture - Defect Done</a>
-        <Link href="/" className="button">← Dashboard</Link>
+        <Link href="/?section=defect#dashboard-defect" className="button">← Dashboard</Link>
       </div>}
     />
 

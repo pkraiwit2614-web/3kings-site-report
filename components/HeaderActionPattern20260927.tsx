@@ -4,7 +4,7 @@ export default function HeaderActionPattern20260927(){
   return <style jsx global>{`
     .ui-request-vertical{
       display:grid!important;
-      grid-template-columns:auto 148px!important;
+      grid-template-columns:218px 148px!important;
       grid-auto-rows:38px!important;
       align-items:center!important;
       justify-content:end!important;
@@ -15,14 +15,28 @@ export default function HeaderActionPattern20260927(){
       grid-column:1!important;
       grid-row:1!important;
       align-items:flex-end!important;
+      justify-self:end!important;
       margin:0!important;
       width:auto!important;
     }
-    .ui-request-vertical>:nth-child(2){grid-column:2!important;grid-row:1!important}
-    .ui-request-vertical>:nth-child(3){grid-column:2!important;grid-row:2!important}
-    .ui-request-vertical>.button{
+    .ui-request-vertical>:nth-child(2){
+      grid-column:2!important;
+      grid-row:1!important;
       width:148px!important;
       min-width:148px!important;
+    }
+    .ui-request-vertical>:nth-child(3){grid-row:2!important}
+    .ui-request-vertical>:nth-child(3).report-print-button{
+      grid-column:2!important;
+      width:148px!important;
+      min-width:148px!important;
+    }
+    .ui-request-vertical>:nth-child(3):not(.report-print-button){
+      grid-column:1!important;
+      width:218px!important;
+      min-width:218px!important;
+    }
+    .ui-request-vertical>.button{
       height:38px!important;
       display:inline-flex!important;
       align-items:center!important;
@@ -75,7 +89,7 @@ export default function HeaderActionPattern20260927(){
       }
     }
 
-    @media(max-width:340px){
+    @media(max-width:430px){
       .ui-request-vertical,
       body.ui-executive-page .ui-request-exec-ready{
         grid-template-columns:1fr!important;

@@ -65,10 +65,12 @@ export default function HeaderLayoutFix20260927(){
       display:none!important;
     }
 
-    /* Plot detail: update + weekly + site photo on the first row, Print directly below site photo. */
+    /* Plot detail: same two-row action grammar as Defect Detail.
+       Row 1 = update metadata | Weekly Report
+       Row 2 = site photos | Print */
     body.ui-project-header-fix .page-header > .ui-project-header-actions{
       display:grid!important;
-      grid-template-columns:auto auto 148px!important;
+      grid-template-columns:218px 190px!important;
       grid-template-rows:38px 38px!important;
       align-items:center!important;
       justify-content:end!important;
@@ -87,18 +89,20 @@ export default function HeaderLayoutFix20260927(){
     body.ui-project-header-fix .ui-project-header-actions > .ui-project-weekly-action{
       grid-column:2!important;
       grid-row:1!important;
+      width:190px!important;
       min-width:190px!important;
       height:38px!important;
       display:inline-flex!important;
       align-items:center!important;
       justify-content:center!important;
+      text-align:center!important;
       white-space:nowrap!important;
     }
     body.ui-project-header-fix .ui-project-header-actions > .ui-project-photo-action{
-      grid-column:3!important;
-      grid-row:1!important;
-      width:148px!important;
-      min-width:148px!important;
+      grid-column:1!important;
+      grid-row:2!important;
+      width:218px!important;
+      min-width:218px!important;
       height:38px!important;
       display:inline-flex!important;
       align-items:center!important;
@@ -107,10 +111,10 @@ export default function HeaderLayoutFix20260927(){
       white-space:nowrap!important;
     }
     body.ui-project-header-fix .ui-project-header-actions > .ui-project-print-action{
-      grid-column:3!important;
+      grid-column:2!important;
       grid-row:2!important;
-      width:148px!important;
-      min-width:148px!important;
+      width:190px!important;
+      min-width:190px!important;
       height:38px!important;
       margin:0!important;
       display:inline-flex!important;
@@ -182,14 +186,11 @@ export default function HeaderLayoutFix20260927(){
 
     @media(max-width:900px){
       body.ui-project-header-fix .page-header > .ui-project-header-actions{
-        grid-template-columns:minmax(0,1fr) 148px!important;
+        grid-template-columns:218px 190px!important;
         grid-template-rows:38px 38px!important;
+        justify-content:end!important;
         width:100%!important;
       }
-      body.ui-project-header-fix .ui-project-header-actions > .ui-request-project-meta{grid-column:1!important;grid-row:1!important}
-      body.ui-project-header-fix .ui-project-header-actions > .ui-project-weekly-action{grid-column:1!important;grid-row:2!important;width:100%!important;min-width:0!important}
-      body.ui-project-header-fix .ui-project-header-actions > .ui-project-photo-action{grid-column:2!important;grid-row:1!important}
-      body.ui-project-header-fix .ui-project-header-actions > .ui-project-print-action{grid-column:2!important;grid-row:2!important}
 
       body.ui-defect-header-fix .page-header-print-actions{
         grid-template-columns:218px 148px!important;
