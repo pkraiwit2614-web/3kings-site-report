@@ -34,6 +34,7 @@ export default function MaterialsPage(){
   const [projects,setProjects]=useState<Project[]>([])
   const [rows,setRows]=useState<any[]>([])
   const [procurement,setProcurement]=useState<any[]>([])
+  const [procurementLinks,setProcurementLinks]=useState<any[]>([])
   const [tools,setTools]=useState<any[]>([])
   const [project,setProject]=useState('')
   const [orderStatus,setOrderStatus]=useState('')
@@ -60,18 +61,44 @@ export default function MaterialsPage(){
       s.from('projects').select('*').eq('active',true).order('sort_order'),
       s.from('materials').select('*').order('project_id').order('source_row'),
       s.from('procurement_items').select('*').order('source_updated_at',{ascending:false}).order('source_row'),
+      s.from('procurement_item_projects').select('procurement_item_id,project_id'),
       s.from('tool_machine').select('*').order('item_no'),
       s.from('drive_sync_runs').select('created_at').eq('status','success').eq('sync_type','materials').order('created_at',{ascending:false}).limit(1).maybeSingle()
-    ]).then(([p,m,pr,t,sync])=>{
+    ]).then(([p,m,pr,prLinks,t,sync])=>{
       setProjects((p.data||[]) as Project[])
       setRows(m.data||[])
       setProcurement(pr.data||[])
+      setProcurementLinks(prLinks.data||[])
       setTools(t.data||[])
       setLatestSyncAt(sync.data?.created_at||null)
     })
   },[])
 
   const projectById=useMemo(()=>new Map(projects.map(p=>[p.id,p])),[projects])
+  const procurementProjectIdsByItem=useMemo(()=>{
+    const map=new Map<string,string[]>()
+    for(const link of procurementLinks){
+      const itemId=String(link.procurement_item_id||'')
+      const projectId=String(link.project_id||'')
+      if(!itemId||!projectId) continue
+      const ids=map.get(itemId)||[]
+      if(!ids.includes(projectId)) ids.push(projectId)
+      map.set(itemId,ids)
+    }
+    for(const item of procurement){
+      const itemId=String(item.id||'')
+      const projectId=String(item.project_id||'')
+      if(!itemId||!projectId) continue
+      const ids=map.get(itemId)||[]
+      if(!ids.includes(projectId)) ids.push(projectId)
+      map.set(itemId,ids)
+    }
+    return map
+  },[procurementLinks,procurement])
+  const procurementPlotText=(item:any)=>{
+    const ids=procurementProjectIdsByItem.get(String(item.id))||[]
+    return ids.map(id=>projectById.get(id)?.code).filter(Boolean).join(' / ')||'-'
+  }
   const needle=q.trim().toLowerCase()
 
   const filtered=useMemo(()=>rows.filter(x=>{
@@ -87,13 +114,14 @@ export default function MaterialsPage(){
   const filteredProcurement=useMemo(()=>{
     if(!needle&&!project) return []
     return procurement.filter(x=>{
-      const p=projectById.get(x.project_id)
-      return (!project||x.project_id===project)&&textSearch([
-        p?.code,p?.name,x.vendor,x.item_name,x.procurement_status,x.payment_status,x.current_status,
+      const relatedIds=procurementProjectIdsByItem.get(String(x.id))||[]
+      const related=relatedIds.map(id=>projectById.get(id)).filter(Boolean) as Project[]
+      return (!project||relatedIds.includes(project))&&textSearch([
+        ...related.flatMap(p=>[p.code,p.name]),x.vendor,x.item_name,x.procurement_status,x.payment_status,x.current_status,
         x.pr_no,x.po_no,x.expected_delivery_text,x.condition_note,x.source_updated_at
       ],needle)
     })
-  },[procurement,project,needle,projectById])
+  },[procurement,project,needle,projectById,procurementProjectIdsByItem])
 
   const toolStatuses=useMemo(()=>uniqueText(tools,'status'),[tools])
   const toolCategories=useMemo(()=>uniqueText(tools,'category'),[tools])
@@ -144,7 +172,7 @@ export default function MaterialsPage(){
           <tbody>{filtered.map(x=>{
             const detail=[x.status_detail,x.notes].filter(Boolean).filter((v:string,i:number,a:string[])=>a.indexOf(v)===i)
             return <tr key={x.id}>
-              <td><b>{projectById.get(x.project_id)?.code||'-'}</b></td>
+              <td><b>{procurementPlotText(x)}</b></td>
               <td>{x.category||'-'}</td>
               <td><b>{x.item_name}</b><small>{x.quantity_unit||'ยังไม่ระบุปริมาณ/หน่วย'}</small></td>
               <td>{[x.brand,x.model_spec].filter(Boolean).join(' / ')||'-'}</td>
