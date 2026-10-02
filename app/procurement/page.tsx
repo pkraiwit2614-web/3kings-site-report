@@ -9,6 +9,13 @@ import { getSupabase } from '@/lib/supabase'
 import { dateTH } from '@/lib/format'
 import type { Project } from '@/lib/types'
 
+function dateTimeTH(value:string|null|undefined){
+  if(!value)return '-'
+  const d=new Date(value)
+  if(Number.isNaN(d.getTime()))return '-'
+  return new Intl.DateTimeFormat('th-TH',{timeZone:'Asia/Bangkok',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(d)+' น.'
+}
+
 const thaiMonths:Record<string,number>={
   'ม.ค.':0,'ก.พ.':1,'มี.ค.':2,'เม.ย.':3,'พ.ค.':4,'มิ.ย.':5,
   'ก.ค.':6,'ส.ค.':7,'ก.ย.':8,'ต.ค.':9,'พ.ย.':10,'ธ.ค.':11
@@ -58,6 +65,7 @@ export default function ProcurementPage(){
   const [updateFilter,setUpdateFilter]=useState('')
   const [followUpOnly,setFollowUpOnly]=useState(false)
   const [q,setQ]=useState('')
+  const [latestSyncAt,setLatestSyncAt]=useState<string|null>(null)
 
   useEffect(()=>{
     const params=new URLSearchParams(window.location.search)
@@ -70,15 +78,17 @@ export default function ProcurementPage(){
     let refreshTimer:number|null=null
     const s=getSupabase()
     const load=async()=>{
-      const [r,links,p]=await Promise.all([
+      const [r,links,p,sync]=await Promise.all([
         s.from('procurement_items').select('*'),
         s.from('procurement_item_projects').select('procurement_item_id,project_id'),
-        s.from('projects').select('*')
+        s.from('projects').select('*'),
+        s.from('drive_sync_runs').select('created_at').eq('status','success').eq('sync_type','materials').order('created_at',{ascending:false}).limit(1).maybeSingle()
       ])
       if(!alive)return
       setRows(r.data||[])
       setProcurementLinks(links.data||[])
       setProjects((p.data||[]) as Project[])
+      setLatestSyncAt(sync.data?.created_at||null)
     }
     const queueLoad=()=>{
       if(refreshTimer)window.clearTimeout(refreshTimer)
@@ -89,6 +99,7 @@ export default function ProcurementPage(){
       .on('postgres_changes',{event:'*',schema:'public',table:'procurement_items'},queueLoad)
       .on('postgres_changes',{event:'*',schema:'public',table:'procurement_item_projects'},queueLoad)
       .on('postgres_changes',{event:'*',schema:'public',table:'projects'},queueLoad)
+      .on('postgres_changes',{event:'*',schema:'public',table:'drive_sync_runs'},queueLoad)
       .subscribe()
     const refresh=()=>queueLoad()
     const refreshWhenVisible=()=>{if(document.visibilityState==='visible')queueLoad()}
@@ -173,7 +184,7 @@ export default function ProcurementPage(){
 
   return <AppShell>
     <PageHeader title="การจัดซื้อ/จัดจ้าง" subtitle="ค้นหาจากวัสดุ งาน ผู้ขาย ผู้รับเหมา เลข PO หรือสถานะ เพื่อดูว่าตอนนี้ติดอยู่ขั้นตอนไหนและต้องตามอะไรต่อ" action={<div className="management-action-grid management-printable-actions">
-      <div className="management-action-meta"><span>ข้อมูลอัปเดต</span><b>{latestUpdate?dateTH(latestUpdate):'-'}</b></div>
+      <div className="management-action-meta"><span>ข้อมูลอัปเดต</span><b>{dateTimeTH(latestSyncAt)}</b></div>
       <Link href="/?section=purchasing-followup#dashboard-purchasing" className="button management-action-dashboard">← Dashboard</Link>
     </div>}/>
 

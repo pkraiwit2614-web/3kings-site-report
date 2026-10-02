@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
+import PrintButton from '@/components/PrintButton'
 import StatusBadge from '@/components/StatusBadge'
 import DashboardMaterialsStatus from '@/components/DashboardMaterialsStatus'
 import { getSupabase } from '@/lib/supabase'
@@ -18,10 +19,10 @@ type ProjectStat = { p:Project; avgActual:number; avgPlan:number; delayed:number
 function clampPct(v:number){ return Math.max(0,Math.min(100,Math.round(v*100))) }
 
 function dateTimeTH(value:string|null|undefined){
-  if(!value) return '-'
+  if(!value)return '-'
   const d=new Date(value)
-  if(Number.isNaN(d.getTime())) return '-'
-  return new Intl.DateTimeFormat('th-TH',{timeZone:'Asia/Bangkok',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(d)
+  if(Number.isNaN(d.getTime()))return '-'
+  return new Intl.DateTimeFormat('th-TH',{timeZone:'Asia/Bangkok',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(d)+' น.'
 }
 
 function CompletionCurve({data,large=false,onOpen}:{data:CurvePoint[];large?:boolean;onOpen?:()=>void}){
@@ -249,6 +250,7 @@ export default function DashboardPage() {
       <div className="management-action-meta"><span>ข้อมูลอัปเดต</span><b>{dateTimeTH(latestDataSyncAt)}</b></div>
       <Link href="/reports/new" className="button primary management-action-primary">+ รายงานประจำวัน</Link>
       <Link href="/site-photos" className="button management-action-secondary">📷 รูปภาพหน้างาน</Link>
+      <PrintButton reportTitle="Management Dashboard"/>
     </div>} />
     <div className="panel" style={{padding:'10px 14px',marginBottom:14,display:'flex',justifyContent:'space-between',gap:10,alignItems:'center',flexWrap:'wrap'}}><span className="small muted">ข้อมูล Dashboard จาก Schedule / Materials / Daily Report</span><b className="small">อัปเดตข้อมูลล่าสุด: {dateTimeTH(latestDataSyncAt)}</b></div>
     {loading?<div className="panel">กำลังโหลดข้อมูล…</div>:<>

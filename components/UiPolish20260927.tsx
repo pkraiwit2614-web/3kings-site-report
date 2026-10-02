@@ -198,7 +198,7 @@ export default function UiPolish20260927(){
     const polishMaterials=()=>{
       if(path!=='/materials')return
       const host=headerHost()
-      if(host)ensureMeta(host,metaAt,{label:'← Dashboard',href:'/?section=materials'})
+      if(host&&!host.querySelector('.management-printable-actions'))ensureMeta(host,metaAt,{label:'← Dashboard',href:'/?section=materials'})
 
       const materials=document.querySelector<HTMLElement>('section[aria-labelledby="materials-status-title"]')
       const tools=document.querySelector<HTMLElement>('section[aria-labelledby="tool-machine-title"]')

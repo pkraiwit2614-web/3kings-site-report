@@ -3,8 +3,8 @@
 import { useEffect, useLayoutEffect } from 'react'
 import { usePathname } from 'next/navigation'
 
-const STANDARD_PRINTABLE_PATHS=new Set(['/materials'])
-const NATIVE_PRINTABLE_PATHS=new Set(['/schedule','/procurement'])
+const STANDARD_PRINTABLE_PATHS=new Set<string>()
+const NATIVE_PRINTABLE_PATHS=new Set(['/schedule','/materials','/procurement'])
 
 export default function HeaderLayoutFix20260927(){
   const path=usePathname()
@@ -110,6 +110,17 @@ export default function HeaderLayoutFix20260927(){
       width:218px!important;
       min-width:218px!important;
       height:38px!important;
+      padding:8px 12px!important;
+      white-space:nowrap!important;
+    }
+
+    .management-dashboard-actions > .report-print-button{
+      grid-column:2!important;
+      grid-row:2!important;
+      width:148px!important;
+      min-width:148px!important;
+      height:38px!important;
+      margin:0!important;
       padding:8px 12px!important;
       white-space:nowrap!important;
     }
@@ -312,6 +323,7 @@ export default function HeaderLayoutFix20260927(){
       body.ui-native-dashboard-header-fix .management-action-meta,
       body.ui-native-dashboard-header-fix .management-action-primary,
       body.ui-native-dashboard-header-fix .management-action-secondary,
+      body.ui-native-dashboard-header-fix .report-print-button,
       body.ui-native-printable-header-fix .management-action-meta,
       body.ui-native-printable-header-fix .management-action-dashboard,
       body.ui-native-printable-header-fix .page-header-print-actions > .report-print-button,

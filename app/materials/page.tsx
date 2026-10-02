@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect,useMemo,useState } from 'react'
+import Link from 'next/link'
 import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
 import StatusBadge from '@/components/StatusBadge'
@@ -8,10 +9,10 @@ import { getSupabase } from '@/lib/supabase'
 import type { Project } from '@/lib/types'
 
 function dateTimeTH(value:string|null|undefined){
-  if(!value) return '-'
+  if(!value)return '-'
   const d=new Date(value)
-  if(Number.isNaN(d.getTime())) return '-'
-  return new Intl.DateTimeFormat('th-TH',{timeZone:'Asia/Bangkok',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(d)
+  if(Number.isNaN(d.getTime()))return '-'
+  return new Intl.DateTimeFormat('th-TH',{timeZone:'Asia/Bangkok',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(d)+' น.'
 }
 
 function dateTH(value:string|null|undefined){
@@ -162,7 +163,10 @@ export default function MaterialsPage(){
   ),[tools,toolStatus,toolCategory,toolLocation,toolQ])
 
   return <AppShell>
-    <PageHeader title="วัสดุ เครื่องมือและผู้รับเหมา" subtitle={`ค้นหาวัสดุ งาน ผู้ขาย ผู้รับเหมา หรือเลข PO ได้จากหน้าเดียว • วัสดุ/งาน ${rows.length} รายการ • จัดซื้อ/จัดจ้าง ${procurement.length} รายการ • เครื่องมือ ${tools.length} รายการ`}/>
+    <PageHeader title="วัสดุ เครื่องมือและผู้รับเหมา" subtitle={`ค้นหาวัสดุ งาน ผู้ขาย ผู้รับเหมา หรือเลข PO ได้จากหน้าเดียว • วัสดุ/งาน ${rows.length} รายการ • จัดซื้อ/จัดจ้าง ${procurement.length} รายการ • เครื่องมือ ${tools.length} รายการ`} action={<div className="management-action-grid management-printable-actions">
+      <div className="management-action-meta"><span>ข้อมูลอัปเดต</span><b>{dateTimeTH(latestSyncAt)}</b></div>
+      <Link href="/?section=materials#dashboard-materials" className="button management-action-dashboard">← Dashboard</Link>
+    </div>}/>
 
     <section aria-labelledby="materials-status-title">
       <div style={{display:'flex',justifyContent:'space-between',gap:12,alignItems:'end',flexWrap:'wrap',marginBottom:8}}>

@@ -14,10 +14,10 @@ import type { Project, ScheduleTask } from '@/lib/types'
 type StatusFilter = 'all' | 'delayed' | 'blockers' | 'in_progress' | 'completed'
 
 function dateTimeTH(value:string|null|undefined){
-  if(!value) return '-'
+  if(!value)return '-'
   const d=new Date(value)
-  if(Number.isNaN(d.getTime())) return '-'
-  return new Intl.DateTimeFormat('th-TH',{timeZone:'Asia/Bangkok',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(d)
+  if(Number.isNaN(d.getTime()))return '-'
+  return new Intl.DateTimeFormat('th-TH',{timeZone:'Asia/Bangkok',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(d)+' น.'
 }
 
 export default function SchedulePlanActualV41(){
