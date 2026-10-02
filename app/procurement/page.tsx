@@ -66,7 +66,7 @@ export default function ProcurementPage(){
 
   useEffect(()=>{
     let alive=true
-    let refreshTimer:ReturnType<typeof setTimeout>|null=null
+    let refreshTimer:number|null=null
     const s=getSupabase()
     const load=async()=>{
       const [r,links,p]=await Promise.all([
