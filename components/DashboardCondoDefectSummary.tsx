@@ -24,7 +24,7 @@ type FinalStatus={
 const finalStatuses:FinalStatus[]=[
   {key:'status-handover-complete',label:'ส่งมอบแล้ว',note:'Handover Complete',tone:'good',group:'Non-Hotel - Handover Complete'},
   {key:'status-awaiting-hotel',label:'Defect เสร็จ / รอ Hotel ตรวจ',note:'รอ Hotel Engineer',tone:'warn',group:'Hotel - Awaiting Check'},
-  {key:'status-incomplete',label:'Defect ยังไม่เสร็จ',note:'ต้องปิดงาน',tone:'danger',group:'Hotel - Incomplete'},
+  {key:'status-incomplete',label:'เพิ่งได้รับแจ้ง Defect และกำลังดำเนินการ',note:'ต้องปิดงาน',tone:'danger',group:'Hotel - Incomplete'},
   {key:'status-hotel-checked',label:'Hotel ตรวจแล้ว',note:'ปิดสถานะ Defect',tone:'good',group:'Hotel - Checked Complete'},
   {key:'status-pending-handover',label:'Pending Handover',note:'รอลูกค้าเข้าตรวจรับ',tone:'warn',group:'Non-Hotel - Pending Handover'},
 ]
