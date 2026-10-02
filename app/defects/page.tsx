@@ -53,7 +53,7 @@ const categories:Category[]=[
   {id:'status-awaiting-acceptance',label:'Defect เสร็จแล้ว • รอลูกค้า / Hotel ตรวจรับ',tone:'warn',predicate:isAwaitingAcceptance},
   {id:'status-hotel-checked',label:'Hotel Engineer ตรวจแล้ว',tone:'good',predicate:r=>r.status_group==='Hotel - Checked Complete'&&r.hotel_participation==='ร่วมโรงแรม'},
   {id:'status-pending-handover',label:'Defect เสร็จแล้ว • รอลูกค้า / Hotel ตรวจรับ',tone:'warn',predicate:r=>r.status_group==='Non-Hotel - Pending Handover'},
-  {id:'status-handover-complete',label:'ลูกค้าตรวจรับแล้ว',tone:'good',predicate:r=>r.status_group==='Non-Hotel - Handover Complete'},
+  {id:'status-handover-complete',label:'ลูกค้าตรวจรับเรียบร้อยแล้ว',tone:'good',predicate:r=>r.status_group==='Non-Hotel - Handover Complete'},
   {id:'status-awaiting-sale',label:'Awaiting Sale / ยังไม่มีลูกค้า',tone:'neutral',predicate:r=>r.status_group==='Non-Hotel - Awaiting Sale'},
   {id:'hotel-customer-incomplete',label:'มีลูกค้า • ร่วมโรงแรม • เพิ่งได้รับแจ้ง Defect',tone:'danger',predicate:r=>r.customer_status==='มีลูกค้า'&&r.hotel_participation==='ร่วมโรงแรม'&&r.status_group==='Hotel - Incomplete'},
   {id:'hotel-customer-awaiting',label:'มีลูกค้า • ร่วมโรงแรม • Defect เสร็จแล้ว รอตรวจรับ',tone:'warn',predicate:r=>r.customer_status==='มีลูกค้า'&&r.hotel_participation==='ร่วมโรงแรม'&&r.status_group==='Hotel - Awaiting Check'},
@@ -63,7 +63,7 @@ const categories:Category[]=[
   {id:'hotel-nocustomer-awaiting',label:'ไม่มีลูกค้า • ร่วมโรงแรม • Defect เสร็จแล้ว รอตรวจรับ',tone:'warn',predicate:r=>r.customer_status==='ไม่มีลูกค้า'&&r.hotel_participation==='ร่วมโรงแรม'&&r.status_group==='Hotel - Awaiting Check'},
   {id:'hotel-nocustomer-awaiting-receive',label:'ไม่มีลูกค้า • ร่วมโรงแรม • Defect เสร็จแล้ว รอลูกค้า / Hotel ตรวจรับ',tone:'warn',predicate:r=>r.customer_status==='ไม่มีลูกค้า'&&r.hotel_participation==='ร่วมโรงแรม'&&(r.status_group==='Hotel - Awaiting Check'||r.status_group==='Non-Hotel - Pending Handover')},
   {id:'hotel-nocustomer-checked',label:'ไม่มีลูกค้า • ร่วมโรงแรม • Hotel Engineer ตรวจแล้ว',tone:'good',predicate:r=>r.customer_status==='ไม่มีลูกค้า'&&r.hotel_participation==='ร่วมโรงแรม'&&r.status_group==='Hotel - Checked Complete'},
-  {id:'nonhotel-customer-complete',label:'มีลูกค้า • ไม่ร่วมโรงแรม • ลูกค้าตรวจรับแล้ว',tone:'good',predicate:r=>r.customer_status==='มีลูกค้า'&&r.hotel_participation==='ไม่ร่วมโรงแรม'&&r.status_group==='Non-Hotel - Handover Complete'},
+  {id:'nonhotel-customer-complete',label:'มีลูกค้า • ไม่ร่วมโรงแรม • ลูกค้าตรวจรับเรียบร้อยแล้ว',tone:'good',predicate:r=>r.customer_status==='มีลูกค้า'&&r.hotel_participation==='ไม่ร่วมโรงแรม'&&r.status_group==='Non-Hotel - Handover Complete'},
   {id:'nonhotel-customer-pending',label:'มีลูกค้า • ไม่ร่วมโรงแรม • Defect เสร็จแล้ว รอตรวจรับ',tone:'warn',predicate:r=>r.customer_status==='มีลูกค้า'&&r.hotel_participation==='ไม่ร่วมโรงแรม'&&r.status_group==='Non-Hotel - Pending Handover'},
   {id:'nonhotel-customer-awaiting-receive',label:'มีลูกค้า • ไม่ร่วมโรงแรม • Defect เสร็จแล้ว รอลูกค้า / Hotel ตรวจรับ',tone:'warn',predicate:r=>r.customer_status==='มีลูกค้า'&&r.hotel_participation==='ไม่ร่วมโรงแรม'&&(r.status_group==='Non-Hotel - Pending Handover'||r.status_group==='Hotel - Checked Complete')},
   {id:'nonhotel-nosale',label:'ไม่มีลูกค้า • ไม่ร่วมโรงแรม • Awaiting Sale',tone:'neutral',predicate:r=>r.customer_status==='ไม่มีลูกค้า'&&r.hotel_participation==='ไม่ร่วมโรงแรม'&&r.status_group==='Non-Hotel - Awaiting Sale'},
@@ -128,7 +128,7 @@ function statusLabel(r:RoomRow){
   if(r.status_group==='Hotel - Awaiting Check')return 'Defect เสร็จแล้ว • รอลูกค้า / Hotel ตรวจรับ'
   if(r.status_group==='Hotel - Checked Complete')return r.hotel_participation==='ไม่ร่วมโรงแรม'?'Defect เสร็จแล้ว • รอลูกค้า / Hotel ตรวจรับ':'Hotel Engineer ตรวจแล้ว'
   if(r.status_group==='Non-Hotel - Pending Handover')return 'Defect เสร็จแล้ว • รอลูกค้า / Hotel ตรวจรับ'
-  if(r.status_group==='Non-Hotel - Handover Complete')return 'ลูกค้าตรวจรับแล้ว'
+  if(r.status_group==='Non-Hotel - Handover Complete')return 'ลูกค้าตรวจรับเรียบร้อยแล้ว'
   if(r.status_group==='Non-Hotel - Awaiting Sale')return 'Awaiting Sale'
   return r.current_status
 }
@@ -149,16 +149,31 @@ export default function DefectDetailPage(){
     if(categories.some(c=>c.id===initial))setFilter(initial)
     if(['ALL','A','B'].includes(initialBuilding))setBuilding(initialBuilding)
     if(initialQuery)setQ(initialQuery)
+
     let alive=true
-    ;(async()=>{
+    const supabase=getSupabase()
+    const load=async()=>{
       try{
-        const {data,error}=await getSupabase().from('condo_room_status').select('room_no,building,floor,owner_name,hotel_participation,customer_status,current_status,status_group,follow_up,priority,next_action,defect_detail,latest_source,source_note,source_modified_at').order('building').order('floor').order('room_no')
+        const {data,error}=await supabase.from('condo_room_status').select('room_no,building,floor,owner_name,hotel_participation,customer_status,current_status,status_group,follow_up,priority,next_action,defect_detail,latest_source,source_note,source_modified_at').order('building').order('floor').order('room_no')
         if(alive&&!error)setRows((data||[]) as RoomRow[])
       }finally{
         if(alive)setLoading(false)
       }
-    })()
-    return()=>{alive=false}
+    }
+
+    void load()
+    const channel=supabase.channel('defect-report-status').on('postgres_changes',{event:'*',schema:'public',table:'condo_room_status'},()=>{void load()}).subscribe()
+    const refresh=()=>{void load()}
+    const refreshWhenVisible=()=>{if(document.visibilityState==='visible')void load()}
+    window.addEventListener('focus',refresh)
+    document.addEventListener('visibilitychange',refreshWhenVisible)
+
+    return()=>{
+      alive=false
+      window.removeEventListener('focus',refresh)
+      document.removeEventListener('visibilitychange',refreshWhenVisible)
+      void supabase.removeChannel(channel)
+    }
   },[])
 
   useEffect(()=>{
