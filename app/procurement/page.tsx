@@ -65,16 +65,41 @@ export default function ProcurementPage(){
   },[])
 
   useEffect(()=>{
+    let alive=true
+    let refreshTimer:ReturnType<typeof setTimeout>|null=null
     const s=getSupabase()
-    Promise.all([
-      s.from('procurement_items').select('*'),
-      s.from('procurement_item_projects').select('procurement_item_id,project_id'),
-      s.from('projects').select('*')
-    ]).then(([r,links,p])=>{
+    const load=async()=>{
+      const [r,links,p]=await Promise.all([
+        s.from('procurement_items').select('*'),
+        s.from('procurement_item_projects').select('procurement_item_id,project_id'),
+        s.from('projects').select('*')
+      ])
+      if(!alive)return
       setRows(r.data||[])
       setProcurementLinks(links.data||[])
       setProjects((p.data||[]) as Project[])
-    })
+    }
+    const queueLoad=()=>{
+      if(refreshTimer)window.clearTimeout(refreshTimer)
+      refreshTimer=window.setTimeout(()=>{void load()},350)
+    }
+    void load()
+    const channel=s.channel('procurement-live-refresh')
+      .on('postgres_changes',{event:'*',schema:'public',table:'procurement_items'},queueLoad)
+      .on('postgres_changes',{event:'*',schema:'public',table:'procurement_item_projects'},queueLoad)
+      .on('postgres_changes',{event:'*',schema:'public',table:'projects'},queueLoad)
+      .subscribe()
+    const refresh=()=>queueLoad()
+    const refreshWhenVisible=()=>{if(document.visibilityState==='visible')queueLoad()}
+    window.addEventListener('focus',refresh)
+    document.addEventListener('visibilitychange',refreshWhenVisible)
+    return()=>{
+      alive=false
+      if(refreshTimer)window.clearTimeout(refreshTimer)
+      window.removeEventListener('focus',refresh)
+      document.removeEventListener('visibilitychange',refreshWhenVisible)
+      void s.removeChannel(channel)
+    }
   },[])
 
   const projectById=useMemo(()=>new Map(projects.map(p=>[p.id,p])),[projects])
