@@ -190,7 +190,7 @@ export default function ProcurementPage(){
         <table style={{minWidth:1450}}>
           <thead style={{position:'sticky',top:0,zIndex:12,background:'var(--surface)'}}><tr><th>Site / Plot</th><th>PO / PR</th><th>ผู้ขาย / ผู้รับเหมา</th><th>รายการ</th><th>สถานะ PO / ชำระ</th><th style={{width:180,minWidth:180,maxWidth:180}}>ขั้นตอนปัจจุบัน</th><th>กำหนดส่ง / เข้าหน้างาน</th><th>รายละเอียด / สิ่งที่ต้องตาม</th><th>อัปเดตข้อมูล</th></tr></thead>
           <tbody>{filteredRows.map(x=>{const linkedProjects=procurementProjectsFor(x);return <tr key={x.id}>
-            <td><b>{linkedProjects.map(p=>p.code).join(' / ')||'-'}</b><small>{linkedProjects.map(p=>p.name).filter(Boolean).join(' / ')}</small></td>
+            <td><b>{linkedProjects.map(p=>p.code).join(' / ')||'ไม่ระบุ Plot'}</b><small>{linkedProjects.map(p=>p.name).filter(Boolean).join(' / ')}</small></td>
             <td><b>{[x.po_no,x.pr_no].filter(Boolean).join(' / ')||'-'}</b></td>
             <td>{x.vendor||'ยังไม่ระบุ'}</td>
             <td><b>{x.item_name}</b></td>
