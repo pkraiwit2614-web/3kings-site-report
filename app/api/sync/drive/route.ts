@@ -106,6 +106,12 @@ function mapProjectFromLocation(location: unknown): string | null {
   return null
 }
 
+function mapProjectsFromLocation(location: unknown): string[] {
+  const s = String(location ?? '')
+  if (!/plot/i.test(s)) return []
+  return Array.from(new Set((s.match(/[6-9]/g) || []).map((n) => `AV-P${n}`)))
+}
+
 async function parseSchedule(buffer: Buffer, projectCode: string) {
   const config = PROJECT_SHEETS[projectCode]
   if (!config) throw new Error(`Unsupported project: ${projectCode}`)
@@ -229,8 +235,10 @@ async function parseMaterials(buffer: Buffer) {
       const itemName = text(valueByHeader(r, pHeaders, 'รายการ'))
       if (!itemName) continue
       const deliveryText = text(valueByHeader(r, pHeaders, 'กำหนดส่ง/เข้าหน้างาน'))
+      const projectCodes = mapProjectsFromLocation(valueByHeader(r, pHeaders, 'หน้างาน'))
       procurement.push({
-        project_code: mapProjectFromLocation(valueByHeader(r, pHeaders, 'หน้างาน')),
+        project_code: projectCodes.length === 1 ? projectCodes[0] : null,
+        project_codes: projectCodes,
         vendor: text(valueByHeader(r, pHeaders, 'ผู้ขาย/ผู้รับเหมา')),
         item_name: itemName,
         procurement_status: text(valueByHeader(r, pHeaders, 'สถานะชำระ/จัดซื้อ')),
