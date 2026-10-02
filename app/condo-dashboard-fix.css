@@ -94,16 +94,16 @@
 }
 
 /* Status layout order — identical sequence on desktop, tablet and phone:
-   gray → green → green → yellow → yellow → red.
+   awaiting sale → handover complete → hotel checked → newly reported/in progress → awaiting hotel check → pending handover.
    Current DOM source order is:
-   1 handover(green), 2 awaiting hotel(yellow), 3 incomplete(red),
+   1 handover(green), 2 awaiting hotel(yellow), 3 incomplete/newly reported(red),
    4 hotel checked(green), 5 pending handover(yellow), 6 awaiting sale(gray). */
 .condo-summary .status-grid > .status-card:nth-child(6){order:1;}
 .condo-summary .status-grid > .status-card:nth-child(1){order:2;}
 .condo-summary .status-grid > .status-card:nth-child(4){order:3;}
-.condo-summary .status-grid > .status-card:nth-child(5){order:4;}
+.condo-summary .status-grid > .status-card:nth-child(3){order:4;}
 .condo-summary .status-grid > .status-card:nth-child(2){order:5;}
-.condo-summary .status-grid > .status-card:nth-child(3){order:6;}
+.condo-summary .status-grid > .status-card:nth-child(5){order:6;}
 
 @media(max-width:620px){
   .condo-summary .summary-chip{min-height:62px;}
