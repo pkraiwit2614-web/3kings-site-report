@@ -56,22 +56,50 @@ export default function MaterialsPage(){
   },[])
 
   useEffect(()=>{
+    let alive=true
+    let refreshTimer:ReturnType<typeof setTimeout>|null=null
     const s=getSupabase()
-    Promise.all([
-      s.from('projects').select('*').eq('active',true).order('sort_order'),
-      s.from('materials').select('*').order('project_id').order('source_row'),
-      s.from('procurement_items').select('*').order('source_updated_at',{ascending:false}).order('source_row'),
-      s.from('procurement_item_projects').select('procurement_item_id,project_id'),
-      s.from('tool_machine').select('*').order('item_no'),
-      s.from('drive_sync_runs').select('created_at').eq('status','success').eq('sync_type','materials').order('created_at',{ascending:false}).limit(1).maybeSingle()
-    ]).then(([p,m,pr,prLinks,t,sync])=>{
+    const load=async()=>{
+      const [p,m,pr,prLinks,t,sync]=await Promise.all([
+        s.from('projects').select('*').eq('active',true).order('sort_order'),
+        s.from('materials').select('*').order('project_id').order('source_row'),
+        s.from('procurement_items').select('*').order('source_updated_at',{ascending:false}).order('source_row'),
+        s.from('procurement_item_projects').select('procurement_item_id,project_id'),
+        s.from('tool_machine').select('*').order('item_no'),
+        s.from('drive_sync_runs').select('created_at').eq('status','success').eq('sync_type','materials').order('created_at',{ascending:false}).limit(1).maybeSingle()
+      ])
+      if(!alive)return
       setProjects((p.data||[]) as Project[])
       setRows(m.data||[])
       setProcurement(pr.data||[])
       setProcurementLinks(prLinks.data||[])
       setTools(t.data||[])
       setLatestSyncAt(sync.data?.created_at||null)
-    })
+    }
+    const queueLoad=()=>{
+      if(refreshTimer)window.clearTimeout(refreshTimer)
+      refreshTimer=window.setTimeout(()=>{void load()},400)
+    }
+    void load()
+    const channel=s.channel('materials-live-refresh')
+      .on('postgres_changes',{event:'*',schema:'public',table:'projects'},queueLoad)
+      .on('postgres_changes',{event:'*',schema:'public',table:'materials'},queueLoad)
+      .on('postgres_changes',{event:'*',schema:'public',table:'procurement_items'},queueLoad)
+      .on('postgres_changes',{event:'*',schema:'public',table:'procurement_item_projects'},queueLoad)
+      .on('postgres_changes',{event:'*',schema:'public',table:'tool_machine'},queueLoad)
+      .on('postgres_changes',{event:'*',schema:'public',table:'drive_sync_runs'},queueLoad)
+      .subscribe()
+    const refresh=()=>queueLoad()
+    const refreshWhenVisible=()=>{if(document.visibilityState==='visible')queueLoad()}
+    window.addEventListener('focus',refresh)
+    document.addEventListener('visibilitychange',refreshWhenVisible)
+    return()=>{
+      alive=false
+      if(refreshTimer)window.clearTimeout(refreshTimer)
+      window.removeEventListener('focus',refresh)
+      document.removeEventListener('visibilitychange',refreshWhenVisible)
+      void s.removeChannel(channel)
+    }
   },[])
 
   const projectById=useMemo(()=>new Map(projects.map(p=>[p.id,p])),[projects])
