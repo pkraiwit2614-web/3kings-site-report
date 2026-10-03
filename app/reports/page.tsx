@@ -44,6 +44,15 @@ function dateTimeTH(value:string|null|undefined){
   return new Intl.DateTimeFormat('th-TH',{timeZone:'Asia/Bangkok',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(d)+' น.'
 }
 function pct(v:number|null|undefined){return v===null||v===undefined?'-':Math.round(Number(v)*100)+'%'}
+function bangkokToday(){
+  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date())
+  const get=(type:string)=>parts.find(x=>x.type===type)?.value||''
+  return get('year')+'-'+get('month')+'-'+get('day')
+}
+function latestUsableDate(rows:SiteEntry[]){
+  const today=bangkokToday()
+  return rows.map(x=>x.work_date).filter(x=>x<=today).sort((a,b)=>b.localeCompare(a))[0]||rows[0]?.work_date||''
+}
 function isOpenProcurement(row:ProcurementRow){return !closedProcurementPattern.test([row.current_status,row.procurement_status,row.payment_status].filter(Boolean).join(' '))}
 
 export default function SiteOperationsPage(){
@@ -84,7 +93,7 @@ export default function SiteOperationsPage(){
         setProjects((p.data||[]) as Project[]);setTasks((t.data||[]) as ScheduleTask[])
         setProcurement((pr.data||[]) as ProcurementRow[]);setProcurementLinks((pl.data||[]) as ProcurementLink[])
         setWorkers((w.data||[]) as LabourWorker[]);setBatches((b.data||[]) as LabourBatch[])
-        setSelectedDate(v=>v||(nextEntries[0]?.work_date||''))
+        setSelectedDate(v=>v||latestUsableDate(nextEntries))
       },
       onError:()=>{if(alive)setLoadError(true)},
       onSettled:()=>{if(alive)setLoading(false)}
