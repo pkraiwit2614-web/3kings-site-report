@@ -142,6 +142,8 @@ export default function SiteOperationsPage(){
   },[procurement,procurementProjectIds])
 
   const availableDates=useMemo(()=>Array.from(new Set(entries.map(x=>x.work_date))).sort((a,b)=>b.localeCompare(a)),[entries])
+  const mappedProjectIds=useMemo(()=>new Set(entryProjects.map(x=>x.project_id)),[entryProjects])
+  const projectFilterOptions=useMemo(()=>projects.filter(p=>p.active||mappedProjectIds.has(p.id)),[projects,mappedProjectIds])
   const filtered=useMemo(()=>{
     const needle=normalizeText(q)
     return entries.filter(entry=>{
@@ -189,7 +191,7 @@ export default function SiteOperationsPage(){
 
     <section className="panel siteops-filter">
       <label>วันที่<select value={selectedDate} onChange={e=>setSelectedDate(e.target.value)}><option value="">ทุกวันที่</option>{availableDates.map(d=><option key={d} value={d}>{dateTH(d)}</option>)}</select></label>
-      <label>Site / Plot<select value={selectedProject} onChange={e=>setSelectedProject(e.target.value)}><option value="">ทุกหน้างาน</option>{projects.filter(p=>p.active).map(p=><option key={p.id} value={p.id}>{p.code} — {p.name}</option>)}</select></label>
+      <label>Site / Plot<select value={selectedProject} onChange={e=>setSelectedProject(e.target.value)}><option value="">ทุกหน้างาน</option>{projectFilterOptions.map(p=><option key={p.id} value={p.id}>{p.code} — {p.name}{p.active?'':' (inactive)'}</option>)}</select></label>
       <label className="siteops-search">ค้นหา<input value={q} onChange={e=>setQ(e.target.value)} placeholder="งาน / หัวหน้าทีม / พื้นที่ / blocker / next plan"/></label>
       {(selectedDate||selectedProject||q)&&<button type="button" className="button" onClick={()=>{setSelectedDate('');setSelectedProject('');setQ('')}}>ล้าง Filter</button>}
     </section>
