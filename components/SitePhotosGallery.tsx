@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import { dateTH } from '@/lib/format'
+import { createLiveLoader, requireSuccessfulReads } from '@/lib/liveLoader'
 
 type SiteLink={name:string;code?:string;url:string;dataUpdatedAt?:string;note?:string}
 type SiteGroup={title:string;subtitle:string;sites:SiteLink[]}
@@ -43,21 +44,23 @@ const groups:SiteGroup[] = [
 export default function SitePhotosGallery(){
   const [latestByCode,setLatestByCode]=useState<Record<string,PreviewPhoto>>({})
   const [loaded,setLoaded]=useState(false)
+  const [loadError,setLoadError]=useState(false)
+  const [loadAttempt,setLoadAttempt]=useState(0)
 
   useEffect(()=>{
     let cancelled=false
-    const load=async()=>{
+    setLoadError(false)
+    const loader=createLiveLoader({load:async signal=>{
       const s=getSupabase()
       const [p,d]=await Promise.all([
-        s.from('projects').select('id,code').eq('active',true),
-        s.from('drive_photo_index')
+        s.from('projects').select('id,code').eq('active',true).abortSignal(signal),
+        s.from('v_latest_site_photos')
           .select('project_id,drive_file_id,drive_folder_id,drive_folder_name,photo_date,file_name')
-          .eq('is_active',true)
-          .order('photo_date',{ascending:false})
-          .order('indexed_at',{ascending:false})
-          .limit(180)
+          .abortSignal(signal)
       ])
       if(cancelled) return
+      if(signal.aborted) throw new Error('Photo preview request timed out')
+      requireSuccessfulReads([p,d])
       const codeByProject=new Map(((p.data||[]) as ProjectRow[]).map(x=>[x.id,x.code]))
       const next:Record<string,PreviewPhoto>={}
       for(const photo of (d.data||[]) as PreviewPhoto[]){
@@ -66,14 +69,15 @@ export default function SitePhotosGallery(){
       }
       setLatestByCode(next)
       setLoaded(true)
-    }
-    load().catch(()=>setLoaded(true))
-    return()=>{cancelled=true}
-  },[])
+    },onError:()=>{if(!cancelled)setLoadError(true)},onSettled:()=>{if(!cancelled)setLoaded(true)}})
+    void loader.refresh()
+    return()=>{cancelled=true;loader.dispose()}
+  },[loadAttempt])
 
   const indexedCount=useMemo(()=>Object.keys(latestByCode).length,[latestByCode])
 
   return <>
+    {loadError&&<div role="alert" className="panel">โหลดรูปตัวอย่างไม่สำเร็จ <button type="button" onClick={()=>setLoadAttempt(v=>v+1)}>ลองใหม่</button></div>}
     <div className="site-photo-summary">
       <span>Preview ล่าสุดจาก Photo Index: <b>{indexedCount}</b> หน้างาน</span>
     </div>
@@ -103,7 +107,7 @@ export default function SitePhotosGallery(){
                 <span className="site-photo-open">เปิดรูปชุดล่าสุด ↗</span>
               </a>:<div className="site-photo-preview empty">
                 <span>📷</span>
-                <small>{loaded?'ยังไม่มี Preview ใน Photo Index':'กำลังโหลด Preview…'}</small>
+                <small>{loadError?'โหลด Preview ไม่สำเร็จ':loaded?'ยังไม่มี Preview ใน Photo Index':'กำลังโหลด Preview…'}</small>
               </div>}
               <div className="site-photo-body">
                 <div className="site-photo-title-row"><div><b>{site.name}</b>{site.note&&<small>{site.note}</small>}</div><span>↗</span></div>

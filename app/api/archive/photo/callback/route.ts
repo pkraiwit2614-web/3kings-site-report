@@ -15,6 +15,7 @@ function secretMatches(actual: string, expected: string) {
 }
 
 export async function POST(request: Request) {
+  try {
   const archiveKey = process.env.N8N_PHOTO_ARCHIVE_KEY || ''
   const suppliedKey = request.headers.get('x-archive-key') || ''
   if (!archiveKey || !suppliedKey || !secretMatches(suppliedKey, archiveKey)) {
@@ -23,6 +24,8 @@ export async function POST(request: Request) {
 
   let body: any
   try { body = await request.json() } catch { body = {} }
+
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return NextResponse.json({ok:false,error:'Invalid payload'},{status:400})
 
   const photoId = String(body.photo_id || body.photoId || '')
   const status = String(body.status || '')
@@ -80,4 +83,7 @@ export async function POST(request: Request) {
     result: data,
     cleanupWarning,
   })
+  } catch {
+    return NextResponse.json({ok:false,error:'Archive service temporarily unavailable'},{status:503})
+  }
 }

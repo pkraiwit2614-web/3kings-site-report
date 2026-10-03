@@ -79,6 +79,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [userName, setUserName] = useState('')
   const [role, setRole] = useState('')
   const [ready, setReady] = useState(false)
+  const [accessError, setAccessError] = useState(false)
+  const [accessAttempt, setAccessAttempt] = useState(0)
   const [mobileMore, setMobileMore] = useState(false)
   const nav = useMemo<NavItem[]>(() => {
     if(role==='viewer') return viewerNav
@@ -92,13 +94,33 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const supabase = getSupabase()
-    supabase.auth.getUser().then(async ({ data }) => {
-      if (!data.user) { router.replace('/login'); return }
-      const { data: profile } = await supabase.from('profiles').select('full_name,role,active').eq('user_id', data.user.id).maybeSingle()
-      if (!profile?.active) { await supabase.auth.signOut(); router.replace('/login'); return }
-      setUserName(profile.full_name || data.user.email || 'User'); setRole(profile.role || 'viewer'); setReady(true)
-    })
-  }, [router])
+    const controller = new AbortController()
+    let alive = true
+    setAccessError(false)
+    const timer = window.setTimeout(() => {
+      controller.abort()
+      if (alive) setAccessError(true)
+    }, 15000)
+    const checkAccess = async () => {
+      try {
+        const { data, error } = await supabase.auth.getUser()
+        if (!alive || controller.signal.aborted) return
+        if (error && error.status !== 401 && error.status !== 403 && error.name !== 'AuthSessionMissingError') throw error
+        if (!data.user) { router.replace('/login'); return }
+        const { data: profile, error: profileError } = await supabase.from('profiles').select('full_name,role,active').eq('user_id', data.user.id).abortSignal(controller.signal).maybeSingle()
+        if (!alive || controller.signal.aborted) return
+        if (profileError) throw profileError
+        if (!profile?.active) { await supabase.auth.signOut(); if (alive && !controller.signal.aborted) router.replace('/login'); return }
+        setUserName(profile.full_name || data.user.email || 'User'); setRole(profile.role || 'viewer'); setReady(true)
+      } catch {
+        if (alive) setAccessError(true)
+      } finally {
+        window.clearTimeout(timer)
+      }
+    }
+    void checkAccess()
+    return () => { alive = false; controller.abort(); window.clearTimeout(timer) }
+  }, [router, accessAttempt])
 
   useEffect(() => { setMobileMore(false) }, [path])
 
@@ -175,7 +197,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   const displayRole = roleLabel(role,userName)
 
-  if (!ready) return <div className="loading-screen">กำลังโหลดระบบ…</div>
+  if (!ready) return <div className="loading-screen">{accessError ? <div role="alert"><p>ตรวจสอบสิทธิ์ไม่สำเร็จ กรุณาตรวจการเชื่อมต่อแล้วลองใหม่</p><button type="button" onClick={() => setAccessAttempt(v => v + 1)}>ลองใหม่</button></div> : 'กำลังโหลดระบบ…'}</div>
 
   const extraActive = extraNav.some(([href]) => navIsActive(path,href))
   const isDefectSection = path==='/defect-flow'||path==='/defects'

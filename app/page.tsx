@@ -98,6 +98,8 @@ export default function DashboardPage() {
   const [snapshotRows,setSnapshotRows]=useState<any[]>([])
   const [snapshotDate,setSnapshotDate]=useState('')
   const [snapshotLoading,setSnapshotLoading]=useState(false)
+  const [snapshotError,setSnapshotError]=useState(false)
+  const [snapshotAttempt,setSnapshotAttempt]=useState(0)
   const [disciplineProject,setDisciplineProject]=useState('')
   const [siteStatusFilter,setSiteStatusFilter]=useState<SiteStatusFilter>('all')
   const [followupProject,setFollowupProject]=useState('')
@@ -160,13 +162,25 @@ export default function DashboardPage() {
   },[])
 
   useEffect(()=>{
-    if(!snapshotDate){setSnapshotRows([]);setSnapshotLoading(false);return}
+    setSnapshotError(false)
+    setSnapshotRows([])
+    if(!snapshotDate){setSnapshotLoading(false);return}
+    let alive=true
     setSnapshotLoading(true)
-    getSupabase().from('schedule_task_daily_snapshots').select('snapshot_date,synced_at,project_id,source_identity,source_task_no,category,task_name,area,planned_start,planned_end,actual_progress,current_plan_progress,current_variance,delay_days,site_status,blocker,next_action,source_file').eq('snapshot_date',snapshotDate).then(({data})=>{
-      setSnapshotRows(data||[])
-      setSnapshotLoading(false)
+    const loader=createLiveLoader({
+      load:async signal=>{
+        const result=await getSupabase().from('schedule_task_daily_snapshots').select('snapshot_date,synced_at,project_id,source_identity,source_task_no,category,task_name,area,planned_start,planned_end,actual_progress,current_plan_progress,current_variance,delay_days,site_status,blocker,next_action,source_file').eq('snapshot_date',snapshotDate).abortSignal(signal)
+        if(!alive)return
+        if(signal.aborted)throw new Error('Snapshot request timed out')
+        requireSuccessfulReads([result])
+        setSnapshotRows(result.data||[])
+      },
+      onError:()=>{if(alive)setSnapshotError(true)},
+      onSettled:()=>{if(alive)setSnapshotLoading(false)}
     })
-  },[snapshotDate])
+    void loader.refresh()
+    return()=>{alive=false;loader.dispose()}
+  },[snapshotDate,snapshotAttempt])
 
   useEffect(()=>{
     if(!curveOpen) return
@@ -289,7 +303,7 @@ export default function DashboardPage() {
       <section className="panel dashboard-module" id="site-performance" style={{marginBottom:18}}>
         <div className="module-title"><span>5</span><div><b>SITE PERFORMANCE — DELAYED / BLOCKER</b><small>วงนอก = Delayed ต่อจำนวนงาน • วงใน = Blocker ต่อจำนวนงาน</small></div></div>
         <div style={{padding:'12px 14px',display:'flex',gap:10,alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',borderBottom:'1px solid var(--line)'}}><div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><label className="small" style={{fontWeight:800}}>ข้อมูล ณ วันที่</label><select value={snapshotDate} onChange={e=>setSnapshotDate(e.target.value)} style={{padding:'8px 10px',border:'1px solid var(--line)',borderRadius:9,background:'var(--surface)'}}><option value="">ข้อมูลล่าสุด</option>{snapshotDays.map(d=><option key={d.snapshot_date} value={d.snapshot_date}>{dateTH(d.snapshot_date)}</option>)}</select><select value={siteStatusFilter} onChange={e=>setSiteStatusFilter(e.target.value as SiteStatusFilter)} style={{padding:'8px 10px',border:'1px solid var(--line)',borderRadius:9,background:'var(--surface)'}}><option value="all">ทุกสถานะ Site</option><option value="ontrack">On Track</option><option value="atrisk">At Risk</option><option value="delayed">Delayed</option></select>{siteStatusFilter!=='all'&&<button type="button" className="button" style={{padding:'7px 10px',fontSize:11}} onClick={()=>setSiteStatusFilter('all')}>แสดงทุก Site</button>}</div><div className="small" style={{color:'var(--muted)',textAlign:'right'}}><b style={{color:'var(--text)'}}>Sync ล่าสุด:</b> {dateTimeTH(latestScheduleSyncAt)}{earliestSnapshotDate&&<><br/>ประวัติเลือกดูรายวันเริ่มเก็บ: {dateTH(earliestSnapshotDate)}</>}</div></div>
-        {snapshotLoading?<p className="muted" style={{padding:'14px'}}>กำลังโหลดข้อมูล ณ วันที่เลือก…</p>:<div style={{padding:14,display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(245px,1fr))',gap:10}}>{sitePerformanceFiltered.map(x=><Link href={`/projects/${x.p.id}`} key={x.p.id} style={{border:'1px solid var(--line)',borderRadius:13,padding:12,display:'grid',gridTemplateColumns:'92px 1fr',gap:12,alignItems:'center',background:'var(--surface-2)'}}><SiteAlertRings delayed={x.delayed} blockers={x.blockers} total={x.taskCount}/><div><div className="row between"><div><b style={{color:'var(--navy-2)'}}>{x.p.code}</b><small style={{display:'block',color:'var(--muted)',marginTop:2}}>{x.p.name}</small></div><StatusBadge value={siteStatusOf(x)==='ontrack'?'On Track':siteStatusOf(x)==='atrisk'?'At Risk':'Delayed'}/></div><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6,marginTop:10}}><div style={{background:'var(--amber-soft)',borderRadius:8,padding:'7px 8px'}}><small>Delayed</small><b style={{display:'block'}}>{x.delayed} งาน</b></div><div style={{background:'var(--red-soft)',borderRadius:8,padding:'7px 8px'}}><small>Blocker</small><b style={{display:'block'}}>{x.blockers} งาน</b></div></div><small style={{display:'block',marginTop:7,color:'var(--muted)'}}>ข้อมูล Sync: {dateTimeTH(x.syncedAt||latestScheduleSyncAt)}</small></div></Link>)}{!sitePerformanceFiltered.length&&<p className="muted">ไม่มี Site / Plot ในสถานะที่เลือกสำหรับวันที่นี้</p>}</div>}
+        {snapshotError?<div role="alert" style={{padding:14}}>โหลดข้อมูลวันที่เลือกไม่สำเร็จ <button type="button" onClick={()=>setSnapshotAttempt(v=>v+1)}>ลองใหม่</button></div>:snapshotLoading?<p className="muted" style={{padding:'14px'}}>กำลังโหลดข้อมูล ณ วันที่เลือก…</p>:<div style={{padding:14,display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(245px,1fr))',gap:10}}>{sitePerformanceFiltered.map(x=><Link href={`/projects/${x.p.id}`} key={x.p.id} style={{border:'1px solid var(--line)',borderRadius:13,padding:12,display:'grid',gridTemplateColumns:'92px 1fr',gap:12,alignItems:'center',background:'var(--surface-2)'}}><SiteAlertRings delayed={x.delayed} blockers={x.blockers} total={x.taskCount}/><div><div className="row between"><div><b style={{color:'var(--navy-2)'}}>{x.p.code}</b><small style={{display:'block',color:'var(--muted)',marginTop:2}}>{x.p.name}</small></div><StatusBadge value={siteStatusOf(x)==='ontrack'?'On Track':siteStatusOf(x)==='atrisk'?'At Risk':'Delayed'}/></div><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6,marginTop:10}}><div style={{background:'var(--amber-soft)',borderRadius:8,padding:'7px 8px'}}><small>Delayed</small><b style={{display:'block'}}>{x.delayed} งาน</b></div><div style={{background:'var(--red-soft)',borderRadius:8,padding:'7px 8px'}}><small>Blocker</small><b style={{display:'block'}}>{x.blockers} งาน</b></div></div><small style={{display:'block',marginTop:7,color:'var(--muted)'}}>ข้อมูล Sync: {dateTimeTH(x.syncedAt||latestScheduleSyncAt)}</small></div></Link>)}{!sitePerformanceFiltered.length&&<p className="muted">ไม่มี Site / Plot ในสถานะที่เลือกสำหรับวันที่นี้</p>}</div>}
       </section>
 
       <div className="dashboard-grid two-main">

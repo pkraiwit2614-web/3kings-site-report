@@ -15,7 +15,7 @@ function loadTs(file, mocks = {}, extra = '') {
     compilerOptions: {module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022},
   }).outputText
   const context = {module, exports: module.exports, require: id => id in mocks ? mocks[id] : realRequire(id),
-    process, Buffer, URL, Request, Response, AbortController, AbortSignal, setTimeout, clearTimeout, console, fetch: mocks.fetch || global.fetch}
+    process, Buffer, URL, Request, Response, AbortController, AbortSignal: mocks.AbortSignal || AbortSignal, setTimeout, clearTimeout, console, fetch: mocks.fetch || global.fetch}
   vm.runInNewContext(code, context, {filename})
   return module.exports
 }
@@ -158,4 +158,118 @@ test('valid authorized archive keeps the 202 response and original worker payloa
     assert.equal(result.status,202);assert.equal((await result.json()).photoId,photoId)
     assert.equal(forwarded.signed_url,basePayload.signed_url);assert.equal(forwarded.report_id,reportId)
   } finally {delete process.env.N8N_PHOTO_ARCHIVE_WEBHOOK_URL;delete process.env.N8N_PHOTO_ARCHIVE_KEY}
+})
+
+// Execute the actual effect bodies, with controllable network promises and state.
+function loadEffect(file, marker, scope) {
+  const source = ts.createSourceFile(file, fs.readFileSync(file,'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  let effect
+  function visit(node) {
+    if(ts.isCallExpression(node) && node.expression.getText(source)==='useEffect' && node.arguments[0].getText(source).includes(marker)) effect=node.arguments[0]
+    ts.forEachChild(node,visit)
+  }
+  visit(source); assert.ok(effect, `missing effect ${marker}`)
+  const code=ts.transpileModule(`(${effect.getText(source)})`,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText
+  return vm.runInNewContext(code,{AbortController,window:{setTimeout,clearTimeout},...scope})
+}
+function accessFixture(profileResult, authPromise) {
+  const state={errors:[],ready:[],redirects:[],signouts:0}
+  const query={select(){return this},eq(){return this},abortSignal(){return this},maybeSingle:async()=>profileResult}
+  const supabase={auth:{getUser:()=>authPromise||Promise.resolve({data:{user:{id:'user',email:'test'}},error:null}),signOut:async()=>{state.signouts++}},from:()=>query}
+  const effect=loadEffect('components/AppShell.tsx','const checkAccess',{
+    getSupabase:()=>supabase,router:{replace:p=>state.redirects.push(p)},
+    setAccessError:v=>state.errors.push(v),setUserName:()=>{},setRole:()=>{},setReady:v=>state.ready.push(v)
+  })
+  return {state,effect}
+}
+test('profile DB outage fails closed, offers retry, and does not sign out a valid session',async()=>{
+  const {state,effect}=accessFixture({data:null,error:{message:'database offline'}})
+  const dispose=effect();await tick();dispose()
+  assert.deepEqual(state.errors,[false,true]);assert.deepEqual(state.ready,[])
+  assert.equal(state.signouts,0);assert.deepEqual(state.redirects,[])
+})
+test('active profile opens shell; genuinely inactive profile remains denied',async()=>{
+  for(const active of [true,false]) {
+    const {state,effect}=accessFixture({data:{active,role:'viewer'},error:null})
+    const dispose=effect();await tick();dispose()
+    assert.deepEqual(state.ready,active?[true]:[])
+    assert.equal(state.signouts,active?0:1)
+    assert.deepEqual(state.redirects,active?[]:['/login'])
+  }
+})
+test('unmounted access check cannot set state or redirect after auth completes',async()=>{
+  let resolve
+  const {state,effect}=accessFixture({data:{active:true},error:null},new Promise(r=>resolve=r))
+  const dispose=effect();dispose();resolve({data:{user:{id:'user'}},error:null});await tick()
+  assert.deepEqual(state.ready,[]);assert.deepEqual(state.redirects,[])
+})
+test('old dashboard date response cannot overwrite the newly selected date',async()=>{
+  const pending=[];let rows=[];let error=false
+  const query={select(){return this},eq(){return this},abortSignal(){return new Promise(r=>pending.push(r))}}
+  const scope={getSupabase:()=>({from:()=>query}),createLiveLoader,requireSuccessfulReads,
+    setSnapshotRows:v=>rows=v,setSnapshotError:v=>error=v,setSnapshotLoading:()=>{}}
+  const first=loadEffect('app/page.tsx','if(!snapshotDate)',{...scope,snapshotDate:'2026-10-01'})()
+  first()
+  const second=loadEffect('app/page.tsx','if(!snapshotDate)',{...scope,snapshotDate:'2026-10-02'})()
+  pending[1]({data:[{date:'new'}],error:null});await tick()
+  pending[0]({data:[{date:'old'}],error:null});await tick();second()
+  assert.equal(rows[0].date,'new');assert.equal(error,false)
+})
+test('dashboard history failure is an error, never an empty successful snapshot',async()=>{
+  let error=false;let loading=true
+  const query={select(){return this},eq(){return this},abortSignal:async()=>({data:null,error:{message:'offline'}})}
+  const dispose=loadEffect('app/page.tsx','if(!snapshotDate)',{snapshotDate:'2026-10-01',
+    getSupabase:()=>({from:()=>query}),createLiveLoader,requireSuccessfulReads,
+    setSnapshotRows:()=>{},setSnapshotError:v=>error=v,setSnapshotLoading:v=>loading=v})()
+  await tick();dispose();assert.equal(error,true);assert.equal(loading,false)
+})
+
+test('gallery consumes all per-project previews in one batch, including older projects',async()=>{
+  let result;const calls=[]
+  const rows=[{project_id:'villa',drive_file_id:'new'},{project_id:'condo',drive_file_id:'older'}]
+  const fixture={projects:[{id:'villa',code:'AV-P6'},{id:'condo',code:'CONDO-A'}],v_latest_site_photos:rows}
+  const query=table=>({select(){return this},eq(){return this},abortSignal:async()=>({data:fixture[table],error:null})})
+  const dispose=loadEffect('components/SitePhotosGallery.tsx','const loader=createLiveLoader',{
+    getSupabase:()=>({from:table=>{calls.push(table);return query(table)}}),createLiveLoader,requireSuccessfulReads,
+    setLoadError:()=>{},setLoaded:()=>{},setLatestByCode:v=>result=v})()
+  await tick();dispose()
+  assert.equal(result['CONDO-A'].drive_file_id,'older');assert.equal(result['AV-P6'].drive_file_id,'new')
+  assert.deepEqual(calls,['projects','v_latest_site_photos'])
+})
+test('gallery outage preserves previous previews and surfaces error',async()=>{
+  let result='previous';let failed=false
+  const q={select(){return this},eq(){return this},abortSignal:async()=>({data:null,error:{message:'offline'}})}
+  const dispose=loadEffect('components/SitePhotosGallery.tsx','const loader=createLiveLoader',{
+    getSupabase:()=>({from:()=>q}),createLiveLoader,requireSuccessfulReads,
+    setLoadError:v=>failed=v,setLoaded:()=>{},setLatestByCode:v=>result=v})()
+  await tick();dispose();assert.equal(failed,true);assert.equal(result,'previous')
+})
+test('photo proxy stops retries when total deadline expires and returns placeholder',async()=>{
+  const deadline=new AbortController();let attempts=0;const timeouts=[]
+  const next={NextResponse:class extends Response {static json(v,o){return new Response(JSON.stringify(v),o)}}}
+  const module=loadTs('app/api/drive-photo/route.ts',{
+    'next/server':next,
+    AbortSignal:{timeout:ms=>{timeouts.push(ms);return ms===11000?deadline.signal:new AbortController().signal},any:signals=>AbortSignal.any(signals)},
+    fetch:async(_url,options)=>{attempts++;deadline.abort();assert.equal(options.signal.aborted,true);throw Error('timeout')}
+  })
+  const response=await module.GET({nextUrl:new URL('https://example.test/api/drive-photo?fileId=valid_file_id_123')})
+  assert.equal(response.status,200);assert.equal(response.headers.get('x-photo-fallback'),'unavailable')
+  assert.equal(attempts,1);assert.deepEqual(timeouts,[11000,3500])
+})
+
+test('archive callback/retry reject null JSON and return controlled errors on network rejection',async()=>{
+  const next={NextResponse:{json:(body,options)=>new Response(JSON.stringify(body),options)}}
+  const saved=process.env.N8N_PHOTO_ARCHIVE_KEY;process.env.N8N_PHOTO_ARCHIVE_KEY='fixture-callback-key'
+  try {
+    for(const route of ['callback','retry']) {
+      let unavailable=false
+      const client={auth:{getUser:async()=>{if(unavailable)throw Error('offline');return {data:{user:{id:'fixture'}},error:null}}},rpc:async()=>{throw Error('offline')}}
+      const mod=loadTs(`app/api/archive/photo/${route}/route.ts`,{'next/server':next,'@supabase/supabase-js':{createClient:()=>client}})
+      const request=payload=>new Request(`https://example.test/api/archive/photo/${route}`,{method:'POST',headers:{authorization:'Bearer fixture','x-archive-key':'fixture-callback-key','content-type':'application/json'},body:JSON.stringify(payload)})
+      assert.equal((await mod.POST(request(null))).status,400)
+      unavailable=true
+      const failure=await mod.POST(request({photo_id:'fixture',status:'failed'}))
+      assert.equal(failure.status,503);assert.equal((await failure.json()).ok,false)
+    }
+  } finally {if(saved===undefined)delete process.env.N8N_PHOTO_ARCHIVE_KEY;else process.env.N8N_PHOTO_ARCHIVE_KEY=saved}
 })

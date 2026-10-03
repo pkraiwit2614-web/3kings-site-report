@@ -23,9 +23,11 @@ export async function GET(request:NextRequest){
     `https://drive.usercontent.google.com/download?id=${encoded}&export=view&confirm=t`,
   ]
 
+  const deadline=AbortSignal.timeout(11000)
   for(const source of sources){
+    if(deadline.aborted)break
     try{
-      const response=await fetch(source,{redirect:'follow',cache:'force-cache',headers:{'user-agent':'3KingsConstruction/1.0'},signal:AbortSignal.timeout(9000)})
+      const response=await fetch(source,{redirect:'follow',cache:'force-cache',headers:{'user-agent':'3KingsConstruction/1.0'},signal:AbortSignal.any([deadline,AbortSignal.timeout(3500)])})
       const contentType=(response.headers.get('content-type')||'').split(';')[0].trim().toLowerCase()
       if(!response.ok||!contentType.startsWith('image/'))continue
       const bytes=await response.arrayBuffer()

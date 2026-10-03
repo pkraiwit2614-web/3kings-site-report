@@ -8,6 +8,7 @@ const SUPABASE_URL=process.env.NEXT_PUBLIC_SUPABASE_URL||'https://wtqubwdduzedmc
 const SUPABASE_KEY=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||'sb_publishable_Ruyka15H3QApZKY9q2U-Vg_CjmEuMRX'
 
 export async function POST(request:Request){
+  try {
   const authHeader=request.headers.get('authorization')||''
   const token=authHeader.startsWith('Bearer ')?authHeader.slice(7).trim():''
   if(!token) return NextResponse.json({ok:false,error:'Missing user token'},{status:401})
@@ -21,6 +22,8 @@ export async function POST(request:Request){
 
   let body:any={}
   try{body=await request.json()}catch{}
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return NextResponse.json({ok:false,error:'Invalid payload'},{status:400})
+
   const photoId=String(body.photo_id||'')
   if(!photoId) return NextResponse.json({ok:false,error:'photo_id is required'},{status:400})
 
@@ -77,4 +80,7 @@ export async function POST(request:Request){
   try{result=await queueResponse.json()}catch{result={}}
   if(!queueResponse.ok) return NextResponse.json({ok:false,error:result?.error||'Retry queue failed'},{status:queueResponse.status})
   return NextResponse.json({ok:true,status:'processing',retry_count:(Number(photo.archive_retry_count)||0)+1},{status:202})
+  } catch {
+    return NextResponse.json({ok:false,error:'Archive service temporarily unavailable'},{status:503})
+  }
 }
