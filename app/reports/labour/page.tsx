@@ -66,6 +66,14 @@ export default function LabourVerificationPage(){
   const [focusEntry,setFocusEntry]=useState('')
 
   useEffect(()=>{
+    const onFocus=()=>setRefreshTick(v=>v+1)
+    const onVisible=()=>{if(document.visibilityState==='visible')setRefreshTick(v=>v+1)}
+    window.addEventListener('focus',onFocus)
+    document.addEventListener('visibilitychange',onVisible)
+    return()=>{window.removeEventListener('focus',onFocus);document.removeEventListener('visibilitychange',onVisible)}
+  },[])
+
+  useEffect(()=>{
     const params=new URLSearchParams(window.location.search)
     const d=params.get('date')||''
     const entry=params.get('entry')||''
@@ -293,7 +301,7 @@ export default function LabourVerificationPage(){
                 const worker=workerById.get(row.worker_id)
                 return <div className="labour-person" key={row.worker_id+'-'+index}>
                   <div className="labour-person-name"><b>{worker?.display_label||worker?.full_name||row.worker_id}</b><small>{row.worker_id} • Home: {worker?.default_team||'-'}</small></div>
-                  <label>ทำงานที่<select value={row.project_id} onChange={e=>updateDraft(batch.id,index,{project_id:e.target.value})}><option value="">ยังไม่ระบุ Project</option>{projects.filter(p=>p.active).map(p=><option key={p.id} value={p.id}>{p.code} — {p.name}</option>)}</select></label>
+                  <label>ทำงานที่<select value={row.project_id} onChange={e=>updateDraft(batch.id,index,{project_id:e.target.value})}><option value="">ยังไม่ระบุ Project</option>{projects.map(p=><option key={p.id} value={p.id}>{p.code} — {p.name}{p.active?'':' (inactive)'}</option>)}</select></label>
                   <label>ทีมที่ทำงานจริง<select value={row.working_team} onChange={e=>{const next=e.target.value;updateDraft(batch.id,index,{working_team:next,movement_status:next&&next!==worker?.default_team?'borrowed':'same_team'})}}><option value="">ไม่ระบุ</option>{teamOptions.map(t=><option key={t} value={t}>{t}</option>)}</select></label>
                   <label>การย้ายทีม<select value={row.movement_status} onChange={e=>updateDraft(batch.id,index,{movement_status:e.target.value})}><option value="same_team">ทีมเดิม</option><option value="borrowed">ย้าย/ถูกยืม</option><option value="returned">กลับทีมเดิม</option><option value="other">อื่น ๆ</option></select></label>
                   <label>ชม.จัดสรร<input type="number" min="0" max="24" step="0.5" value={row.allocation_hours} onChange={e=>updateDraft(batch.id,index,{allocation_hours:e.target.value})} placeholder="ถ้ามี"/></label>
