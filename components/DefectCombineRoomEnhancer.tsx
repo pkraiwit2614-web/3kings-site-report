@@ -146,7 +146,8 @@ function applyEnhancement(combineMap:Map<string,CombineMeta>){
 export default function DefectCombineRoomEnhancer(){
   useEffect(()=>{
     let cancelled=false
-    let observer:MutationObserver|null=null
+    let tableObserver:MutationObserver|null=null
+    let discoveryObserver:MutationObserver|null=null
     let queued=false
 
     const run=async()=>{
@@ -169,18 +170,29 @@ export default function DefectCombineRoomEnhancer(){
         })
       }
 
-      decorate()
-      const root=document.querySelector('.defect-table')
-      if(root){
-        observer=new MutationObserver(decorate)
-        observer.observe(root,{childList:true,subtree:true,characterData:true})
+      const attachToTable=()=>{
+        if(cancelled||tableObserver)return Boolean(tableObserver)
+        const root=document.querySelector('.defect-table')
+        if(!root)return false
+        decorate()
+        tableObserver=new MutationObserver(decorate)
+        tableObserver.observe(root,{childList:true,subtree:true,characterData:true})
+        discoveryObserver?.disconnect()
+        discoveryObserver=null
+        return true
+      }
+
+      if(!attachToTable()){
+        discoveryObserver=new MutationObserver(()=>{ void attachToTable() })
+        discoveryObserver.observe(document.body,{childList:true,subtree:true})
       }
     }
 
     void run()
     return()=>{
       cancelled=true
-      observer?.disconnect()
+      tableObserver?.disconnect()
+      discoveryObserver?.disconnect()
     }
   },[])
 
