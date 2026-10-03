@@ -16,10 +16,19 @@ type Assignment={id:string;batch_id:string;worker_id:string;work_date:string;pro
 type DraftAssignment={worker_id:string;project_id:string;working_team:string;movement_status:string;allocation_hours:string;notes:string}
 
 function addDays(value:string,days:number){
-  const d=new Date(value+'T00:00:00+07:00')
+  const d=new Date(value+'T12:00:00Z')
   if(Number.isNaN(d.getTime()))return value
-  d.setDate(d.getDate()+days)
+  d.setUTCDate(d.getUTCDate()+days)
   return d.toISOString().slice(0,10)
+}
+function bangkokToday(){
+  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date())
+  const get=(type:string)=>parts.find(x=>x.type===type)?.value||''
+  return get('year')+'-'+get('month')+'-'+get('day')
+}
+function latestUsableDate(rows:SiteEntry[]){
+  const today=bangkokToday()
+  return rows.map(x=>x.work_date).filter(x=>x<=today).sort((a,b)=>b.localeCompare(a))[0]||rows[0]?.work_date||''
 }
 function movementLabel(value:string){
   const map:Record<string,string>={same_team:'ทีมเดิม',borrowed:'ย้าย/ถูกยืมไปช่วยทีมอื่น',returned:'กลับทีมเดิม',other:'อื่น ๆ'}
@@ -85,7 +94,7 @@ export default function LabourVerificationPage(){
       setEntries(nextEntries);setBatches((b.data||[]) as Batch[]);setWorkers((w.data||[]) as Worker[])
       setProjects((p.data||[]) as Project[]);setEntryProjects((ep.data||[]) as EntryProject[]);setAssignments((a.data||[]) as Assignment[])
       setRole(String(profile.data?.role||'viewer'))
-      const latest=nextEntries[0]?.work_date||''
+      const latest=latestUsableDate(nextEntries)
       setSelectedDate(v=>v||latest)
       setDateTo(v=>v||latest)
       setDateFrom(v=>v||(latest?addDays(latest,-6):''))
