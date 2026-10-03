@@ -190,14 +190,15 @@ export default function DefectDetailPage(){
   const totalCount=baseRows.length
 
   const filtered=useMemo(()=>{
-    const needle=q.trim().toLowerCase()
+    const needles=Array.from(new Set(q.split(/[,，]+/).map(x=>x.trim().toLowerCase()).filter(Boolean)))
     return rows.filter(r=>{
       if(building!=='ALL'&&r.building!==building)return false
       if(customerFilter==='CUSTOMER'&&r.customer_status!=='มีลูกค้า')return false
       if(customerFilter==='NO_CUSTOMER'&&r.customer_status!=='ไม่มีลูกค้า')return false
       if(active&&!active.predicate(r))return false
-      if(!needle)return true
-      return [r.room_no,r.owner_name,r.customer_status,r.hotel_participation,r.defect_detail,statusLabel(r),r.next_action,r.follow_up].filter(Boolean).join(' ').toLowerCase().includes(needle)
+      if(!needles.length)return true
+      const searchable=[r.room_no,r.owner_name,r.customer_status,r.hotel_participation,r.defect_detail,statusLabel(r),r.next_action,r.follow_up].filter(Boolean).join(' ').toLowerCase()
+      return needles.some(needle=>searchable.includes(needle))
     })
   },[rows,building,customerFilter,active,q])
 
@@ -233,7 +234,7 @@ export default function DefectDetailPage(){
 
       <section className="panel filter-panel">
         <div className="toolbar detail-toolbar">
-          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="ค้นหาเลขห้อง ชื่อเจ้าของ หรือรายละเอียดงาน" aria-label="ค้นหาเลขห้อง ชื่อเจ้าของ หรือรายละเอียดงาน"/>
+          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="ค้นหาหลายรายการได้ เช่น A521, A522, รอตรวจรับ" aria-label="ค้นหาเลขห้อง ชื่อเจ้าของ สถานะ หรือรายละเอียดงาน หลายคำคั่นด้วย comma"/>
           <select value={building} onChange={e=>setBuilding(e.target.value)} aria-label="กรองอาคาร"><option value="ALL">ตึก A + B</option><option value="A">ตึก A</option><option value="B">ตึก B</option></select>
           <select value={filter} onChange={e=>setFilter(e.target.value)} aria-label="กรองสถานะ"><option value="">ทุกสถานะ</option>{categories.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</select>
           {(q||building!=='ALL'||filter||customerFilter!=='ALL')&&<button type="button" className="button" onClick={()=>{setQ('');setBuilding('ALL');setFilter('');setCustomerFilter('ALL')}}>ล้างตัวกรอง</button>}
