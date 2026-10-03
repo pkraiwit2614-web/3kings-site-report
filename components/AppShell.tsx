@@ -199,6 +199,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   const extraActive = extraNav.some(([href]) => navIsActive(path,href))
   const isDefectSection = path==='/defect-flow'||path==='/defects'
+  const isSiteOperationsSection = path==='/reports'||path==='/reports/labour'
 
   return <div className="app-shell">
     <aside className="sidebar">
@@ -211,6 +212,10 @@ export default function AppShell({ children }: { children: ReactNode }) {
       {isDefectSection&&<nav className="defect-section-tabs" aria-label="Defect navigation">
         <Link href="/defect-flow" className={path==='/defect-flow'?'active':''}>Live Handover / Defect Flow</Link>
         <Link href="/defects" className={path==='/defects'?'active':''}>Defect Report</Link>
+      </nav>}
+      {isSiteOperationsSection&&<nav className="defect-section-tabs" aria-label="Site Operations navigation">
+        <Link href="/reports" className={path==='/reports'?'active':''}>Site Operations</Link>
+        <Link href="/reports/labour" className={path==='/reports/labour'?'active':''}>Labour Verification</Link>
       </nav>}
       {children}
     </main>

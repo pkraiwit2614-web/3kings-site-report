@@ -10,127 +10,65 @@ import { createLiveLoader, requireSuccessfulReads } from '@/lib/liveLoader'
 import { dateTH } from '@/lib/format'
 import type { Project, ScheduleTask } from '@/lib/types'
 
-type ReportItem = {
-  id:string
-  schedule_task_id:string|null
-  work_category:string|null
-  work_item:string
-  actual_progress:number|null
-  manpower:number|null
-  contractor:string|null
-  status:string
-  blocker:string|null
-  next_action:string|null
-  target_date:string|null
-  remarks:string|null
-  created_at:string
-}
+type SiteEntry={id:string;source_row:number;source_timestamp:string|null;work_date:string;project_name_raw:string|null;area_raw:string|null;supervisor_raw:string|null;male_count:number|null;female_count:number|null;total_manpower:number|null;work_detail:string|null;status_text:string|null;next_plan:string|null;afternoon_detail:string|null;specific_area:string|null;supervisor_worker_id:string|null;mapping_status:string;synced_at:string}
+type EntryProject={entry_id:string;project_id:string;mapping_method:string}
+type LabourBatch={id:string;site_operations_entry_id:string;verification_status:string;verified_at:string|null}
+type LabourWorker={worker_id:string;full_name:string;display_label:string|null;default_team:string|null}
+type ProcurementRow={id:string;project_id:string|null;vendor:string|null;item_name:string|null;current_status:string|null;procurement_status:string|null;payment_status:string|null;expected_delivery_text:string|null;condition_note:string|null;po_no:string|null;pr_no:string|null}
+type ProcurementLink={procurement_item_id:string;project_id:string}
 
-type DailyReport = {
-  id:string
-  project_id:string
-  report_date:string
-  weather:string|null
-  overall_progress:number|null
-  total_manpower:number|null
-  summary:string|null
-  status:string
-  created_at:string
-  updated_at:string
-  report_items:ReportItem[]
-}
-
-type ProcurementRow = {
-  id:string
-  project_id:string|null
-  vendor:string|null
-  item_name:string|null
-  current_status:string|null
-  procurement_status:string|null
-  payment_status:string|null
-  expected_delivery_text:string|null
-  expected_delivery:string|null
-  condition_note:string|null
-  pr_no:string|null
-  po_no:string|null
-  source_updated_at:string|null
-}
-
-const materialBlockerPattern=/(รอวัสดุ|วัสดุ|รอของ|ของไม่เข้า|ของยังไม่เข้า|สั่งของ|จัดซื้อ|สินค้า|อุปกรณ์|material|procurement|delivery|supplier)/i
+const materialPattern=/(รอวัสดุ|วัสดุ|รอของ|ของไม่เข้า|ของยังไม่เข้า|สั่งของ|จัดซื้อ|สินค้า|อุปกรณ์|รอpo|รอ po|material|procurement|delivery|supplier)/i
 const closedProcurementPattern=/(ส่งมอบเรียบร้อย|รับสินค้าเรียบร้อย|รับสินค้าแล้ว|ติดตั้งเรียบร้อย|ส่งครบ|ปิดงาน|ปิดติดตาม|งานเสร็จ|เสร็จสมบูรณ์|completed|done|closed)/i
 
-function dateTimeTH(value:string|null|undefined){
-  if(!value)return '-'
-  const d=new Date(value)
-  if(Number.isNaN(d.getTime()))return '-'
-  return new Intl.DateTimeFormat('th-TH',{
-    timeZone:'Asia/Bangkok',day:'2-digit',month:'short',year:'numeric',
-    hour:'2-digit',minute:'2-digit',hour12:false
-  }).format(d)+' น.'
-}
-
-function pctText(value:number|null|undefined){
-  if(value===null||value===undefined||Number.isNaN(Number(value)))return '-'
-  return Math.round(Number(value)*100)+'%'
-}
-
 function normalizeText(value:unknown){
-  return String(value??'')
-    .toLowerCase()
-    .replace(/[\n\r\t]+/g,' ')
+  return String(value??'').toLowerCase().replace(/[\n\r\t]+/g,' ')
     .replace(/[.,/#!$%^&*;:{}=_~()\[\]<>?'"|+-]+/g,' ')
-    .replace(/\s+/g,' ')
-    .trim()
+    .replace(/\s+/g,' ').trim()
 }
-
-function tokens(value:unknown){
-  return new Set(normalizeText(value).split(' ').filter(x=>x.length>=3))
-}
-
+function wordSet(value:unknown){return new Set(normalizeText(value).split(' ').filter(x=>x.length>=2))}
 function textScore(a:unknown,b:unknown){
-  const aa=normalizeText(a), bb=normalizeText(b)
+  const aa=normalizeText(a),bb=normalizeText(b)
   if(!aa||!bb)return 0
   if(aa===bb)return 1
   if(aa.length>=5&&bb.length>=5&&(aa.includes(bb)||bb.includes(aa)))return .82
-  const at=tokens(aa), bt=tokens(bb)
+  const at=wordSet(aa),bt=wordSet(bb)
   if(!at.size||!bt.size)return 0
   let hit=0
   at.forEach(x=>{if(bt.has(x))hit++})
   return hit/Math.max(at.size,bt.size)
 }
-
-function isOpenProcurement(row:ProcurementRow){
-  const status=[row.current_status,row.procurement_status,row.payment_status].filter(Boolean).join(' ')
-  return !closedProcurementPattern.test(status)
+function dateTimeTH(value:string|null|undefined){
+  if(!value)return '-'
+  const d=new Date(value)
+  if(Number.isNaN(d.getTime()))return '-'
+  return new Intl.DateTimeFormat('th-TH',{timeZone:'Asia/Bangkok',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(d)+' น.'
 }
-
-function statusLabel(value:string|null|undefined){
-  const map:Record<string,string>={
-    not_started:'ยังไม่เริ่ม',
-    in_progress:'กำลังดำเนินการ',
-    awaiting_inspection:'รอตรวจ',
-    blocked:'ติดปัญหา',
-    delayed:'ล่าช้า',
-    completed:'เสร็จแล้ว',
-    on_hold:'พักงาน',
-    submitted:'ส่งแล้ว',
-    reviewed:'ตรวจแล้ว'
-  }
-  return map[String(value||'')]||String(value||'-')
+function pct(v:number|null|undefined){return v===null||v===undefined?'-':Math.round(Number(v)*100)+'%'}
+function bangkokToday(){
+  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date())
+  const get=(type:string)=>parts.find(x=>x.type===type)?.value||''
+  return get('year')+'-'+get('month')+'-'+get('day')
 }
+function latestUsableDate(rows:SiteEntry[]){
+  const today=bangkokToday()
+  return rows.map(x=>x.work_date).filter(x=>x<=today).sort((a,b)=>b.localeCompare(a))[0]||rows[0]?.work_date||''
+}
+function isOpenProcurement(row:ProcurementRow){return !closedProcurementPattern.test([row.current_status,row.procurement_status,row.payment_status].filter(Boolean).join(' '))}
 
 export default function SiteOperationsPage(){
-  const [loadError,setLoadError]=useState(false)
   const [loading,setLoading]=useState(true)
-  const [reports,setReports]=useState<DailyReport[]>([])
+  const [loadError,setLoadError]=useState(false)
+  const [entries,setEntries]=useState<SiteEntry[]>([])
+  const [entryProjects,setEntryProjects]=useState<EntryProject[]>([])
   const [projects,setProjects]=useState<Project[]>([])
   const [tasks,setTasks]=useState<ScheduleTask[]>([])
   const [procurement,setProcurement]=useState<ProcurementRow[]>([])
-  const [procurementLinks,setProcurementLinks]=useState<any[]>([])
+  const [procurementLinks,setProcurementLinks]=useState<ProcurementLink[]>([])
+  const [workers,setWorkers]=useState<LabourWorker[]>([])
+  const [batches,setBatches]=useState<LabourBatch[]>([])
   const [selectedDate,setSelectedDate]=useState('')
   const [selectedProject,setSelectedProject]=useState('')
   const [q,setQ]=useState('')
-  const [latestUpdate,setLatestUpdate]=useState<string|null>(null)
 
   useEffect(()=>{
     let alive=true
@@ -138,435 +76,175 @@ export default function SiteOperationsPage(){
     const s=getSupabase()
     const loader=createLiveLoader({
       load:async(signal)=>{
-        const [r,p,t,pr,links]=await Promise.all([
-          s.from('daily_reports')
-            .select('id,project_id,report_date,weather,overall_progress,total_manpower,summary,status,created_at,updated_at,report_items(id,schedule_task_id,work_category,work_item,actual_progress,manpower,contractor,status,blocker,next_action,target_date,remarks,created_at)')
-            .order('report_date',{ascending:false})
-            .order('updated_at',{ascending:false})
-            .limit(500)
-            .abortSignal(signal),
-          s.from('projects').select('id,code,name,active,sort_order').eq('active',true).order('sort_order').abortSignal(signal),
-          s.from('v_schedule_tasks')
-            .select('id,project_id,source_task_no,task_name,category,area,actual_progress,current_plan_progress,current_variance,delay_days,site_status,blocker,next_action,target_close,planned_start,planned_end,contractor')
-            .abortSignal(signal),
-          s.from('procurement_items')
-            .select('id,project_id,vendor,item_name,current_status,procurement_status,payment_status,expected_delivery_text,expected_delivery,condition_note,pr_no,po_no,source_updated_at')
-            .abortSignal(signal),
-          s.from('procurement_item_projects').select('procurement_item_id,project_id').abortSignal(signal)
+        const [e,ep,p,t,pr,pl,w,b]=await Promise.all([
+          s.from('site_operations_entries').select('*').order('work_date',{ascending:false}).order('source_row',{ascending:false}).limit(1200).abortSignal(signal),
+          s.from('site_operations_entry_projects').select('entry_id,project_id,mapping_method').abortSignal(signal),
+          s.from('projects').select('id,code,name,site_group,target_handover,active,sort_order').order('sort_order').abortSignal(signal),
+          s.from('v_schedule_tasks').select('id,project_id,source_task_no,category,task_name,area,planned_start,planned_end,current_plan_progress,actual_progress,current_variance,delay_days,site_status,blocker,next_action,target_close,contractor').abortSignal(signal),
+          s.from('procurement_items').select('id,project_id,vendor,item_name,current_status,procurement_status,payment_status,expected_delivery_text,condition_note,po_no,pr_no').abortSignal(signal),
+          s.from('procurement_item_projects').select('procurement_item_id,project_id').abortSignal(signal),
+          s.from('labour_workers').select('worker_id,full_name,display_label,default_team').abortSignal(signal),
+          s.from('labour_verification_batches').select('id,site_operations_entry_id,verification_status,verified_at').abortSignal(signal)
         ])
-        requireSuccessfulReads([r,p,t,pr,links])
+        requireSuccessfulReads([e,ep,p,t,pr,pl,w,b])
         if(!alive||signal.aborted)return
-        const nextReports=(r.data||[]) as DailyReport[]
-        setLoadError(false)
-        setReports(nextReports)
-        setProjects((p.data||[]) as Project[])
-        setTasks((t.data||[]) as ScheduleTask[])
-        setProcurement((pr.data||[]) as ProcurementRow[])
-        setProcurementLinks(links.data||[])
-        const newest=nextReports.map(x=>x.updated_at||x.created_at).filter(Boolean).sort().at(-1)||null
-        setLatestUpdate(newest)
-        setSelectedDate(v=>v||(nextReports[0]?.report_date||''))
+        const nextEntries=(e.data||[]) as SiteEntry[]
+        setLoadError(false);setEntries(nextEntries);setEntryProjects((ep.data||[]) as EntryProject[])
+        setProjects((p.data||[]) as Project[]);setTasks((t.data||[]) as ScheduleTask[])
+        setProcurement((pr.data||[]) as ProcurementRow[]);setProcurementLinks((pl.data||[]) as ProcurementLink[])
+        setWorkers((w.data||[]) as LabourWorker[]);setBatches((b.data||[]) as LabourBatch[])
+        setSelectedDate(v=>v||latestUsableDate(nextEntries))
       },
       onError:()=>{if(alive)setLoadError(true)},
       onSettled:()=>{if(alive)setLoading(false)}
     })
-
     const queueLoad=()=>{
       if(refreshTimer)window.clearTimeout(refreshTimer)
       refreshTimer=window.setTimeout(()=>{void loader.refresh().catch(()=>{})},350)
     }
-
     void loader.refresh().catch(()=>{})
-    const channel=s.channel('site-operations-live-refresh')
-      .on('postgres_changes',{event:'*',schema:'public',table:'daily_reports'},queueLoad)
-      .on('postgres_changes',{event:'*',schema:'public',table:'report_items'},queueLoad)
-      .on('postgres_changes',{event:'*',schema:'public',table:'schedule_tasks'},queueLoad)
+    const channel=s.channel('site-operations-source-live')
+      .on('postgres_changes',{event:'*',schema:'public',table:'site_operations_entries'},queueLoad)
+      .on('postgres_changes',{event:'*',schema:'public',table:'site_operations_entry_projects'},queueLoad)
+      .on('postgres_changes',{event:'*',schema:'public',table:'labour_verification_batches'},queueLoad)
       .on('postgres_changes',{event:'*',schema:'public',table:'procurement_items'},queueLoad)
-      .on('postgres_changes',{event:'*',schema:'public',table:'procurement_item_projects'},queueLoad)
+      .on('postgres_changes',{event:'*',schema:'public',table:'schedule_tasks'},queueLoad)
       .subscribe()
-
     const onFocus=()=>queueLoad()
     const onVisible=()=>{if(document.visibilityState==='visible')queueLoad()}
-    window.addEventListener('focus',onFocus)
-    document.addEventListener('visibilitychange',onVisible)
-    return()=>{
-      alive=false
-      loader.dispose()
-      if(refreshTimer)window.clearTimeout(refreshTimer)
-      window.removeEventListener('focus',onFocus)
-      document.removeEventListener('visibilitychange',onVisible)
-      void s.removeChannel(channel)
-    }
+    window.addEventListener('focus',onFocus);document.addEventListener('visibilitychange',onVisible)
+    return()=>{alive=false;loader.dispose();if(refreshTimer)window.clearTimeout(refreshTimer);window.removeEventListener('focus',onFocus);document.removeEventListener('visibilitychange',onVisible);void s.removeChannel(channel)}
   },[])
 
   const projectById=useMemo(()=>new Map(projects.map(x=>[x.id,x])),[projects])
-  const taskById=useMemo(()=>new Map(tasks.map(x=>[x.id,x])),[tasks])
+  const workerById=useMemo(()=>new Map(workers.map(x=>[x.worker_id,x])),[workers])
+  const batchByEntry=useMemo(()=>new Map(batches.map(x=>[x.site_operations_entry_id,x])),[batches])
+  const projectIdsByEntry=useMemo(()=>{
+    const map=new Map<string,string[]>()
+    for(const link of entryProjects){const list=map.get(link.entry_id)||[];if(!list.includes(link.project_id))list.push(link.project_id);map.set(link.entry_id,list)}
+    return map
+  },[entryProjects])
   const tasksByProject=useMemo(()=>{
     const map=new Map<string,ScheduleTask[]>()
-    for(const task of tasks){
-      const rows=map.get(task.project_id)||[]
-      rows.push(task)
-      map.set(task.project_id,rows)
-    }
+    for(const task of tasks){const list=map.get(task.project_id)||[];list.push(task);map.set(task.project_id,list)}
     return map
   },[tasks])
-
   const procurementProjectIds=useMemo(()=>{
     const map=new Map<string,string[]>()
-    for(const link of procurementLinks){
-      const itemId=String(link.procurement_item_id||'')
-      const projectId=String(link.project_id||'')
-      if(!itemId||!projectId)continue
-      const ids=map.get(itemId)||[]
-      if(!ids.includes(projectId))ids.push(projectId)
-      map.set(itemId,ids)
-    }
-    for(const item of procurement){
-      if(!item.project_id)continue
-      const ids=map.get(item.id)||[]
-      if(!ids.includes(item.project_id))ids.push(item.project_id)
-      map.set(item.id,ids)
-    }
+    for(const link of procurementLinks){const list=map.get(link.procurement_item_id)||[];if(!list.includes(link.project_id))list.push(link.project_id);map.set(link.procurement_item_id,list)}
+    for(const row of procurement){if(!row.project_id)continue;const list=map.get(row.id)||[];if(!list.includes(row.project_id))list.push(row.project_id);map.set(row.id,list)}
     return map
   },[procurement,procurementLinks])
-
   const procurementByProject=useMemo(()=>{
     const map=new Map<string,ProcurementRow[]>()
-    for(const item of procurement){
-      const ids=procurementProjectIds.get(item.id)||[]
-      for(const projectId of ids){
-        const rows=map.get(projectId)||[]
-        rows.push(item)
-        map.set(projectId,rows)
-      }
-    }
+    for(const row of procurement){for(const projectId of procurementProjectIds.get(row.id)||[]){const list=map.get(projectId)||[];list.push(row);map.set(projectId,list)}}
     return map
   },[procurement,procurementProjectIds])
 
-  const availableDates=useMemo(
-    ()=>Array.from(new Set(reports.map(x=>x.report_date))).sort((a,b)=>b.localeCompare(a)),
-    [reports]
-  )
+  const availableDates=useMemo(()=>Array.from(new Set(entries.map(x=>x.work_date))).sort((a,b)=>b.localeCompare(a)),[entries])
+  const mappedProjectIds=useMemo(()=>new Set(entryProjects.map(x=>x.project_id)),[entryProjects])
+  const projectFilterOptions=useMemo(()=>projects.filter(p=>p.active||mappedProjectIds.has(p.id)),[projects,mappedProjectIds])
+  const filtered=useMemo(()=>{
+    const needle=normalizeText(q)
+    return entries.filter(entry=>{
+      if(selectedDate&&entry.work_date!==selectedDate)return false
+      const pids=projectIdsByEntry.get(entry.id)||[]
+      if(selectedProject&&!pids.includes(selectedProject))return false
+      if(!needle)return true
+      const projectText=pids.flatMap(id=>[projectById.get(id)?.code,projectById.get(id)?.name])
+      return normalizeText([entry.supervisor_raw,entry.project_name_raw,entry.area_raw,entry.work_detail,entry.status_text,entry.next_plan,entry.afternoon_detail,entry.specific_area,...projectText].join(' ')).includes(needle)
+    })
+  },[entries,selectedDate,selectedProject,q,projectIdsByEntry,projectById])
 
-  const latestPerProjectDate=useMemo(()=>{
-    const map=new Map<string,DailyReport>()
-    for(const report of reports){
-      const key=report.project_id+'|'+report.report_date
-      const current=map.get(key)
-      if(!current||String(report.updated_at||report.created_at)>String(current.updated_at||current.created_at)){
-        map.set(key,report)
+  const scheduleCandidate=(entry:SiteEntry)=>{
+    const source=[entry.work_detail,entry.afternoon_detail,entry.specific_area,entry.area_raw].filter(Boolean).join(' ')
+    let best:ScheduleTask|null=null,score=0
+    for(const projectId of projectIdsByEntry.get(entry.id)||[]){
+      for(const task of tasksByProject.get(projectId)||[]){
+        if(task.source_task_no==='1')continue
+        const s=textScore(source,[task.task_name,task.area,task.category].filter(Boolean).join(' '))
+        if(s>score){score=s;best=task}
       }
     }
-    return Array.from(map.values())
-  },[reports])
-
-  const filteredReports=useMemo(()=>{
-    const needle=normalizeText(q)
-    return latestPerProjectDate
-      .filter(report=>{
-        if(selectedDate&&report.report_date!==selectedDate)return false
-        if(selectedProject&&report.project_id!==selectedProject)return false
-        if(!needle)return true
-        const project=projectById.get(report.project_id)
-        const hay=normalizeText([
-          project?.code,project?.name,report.summary,report.weather,
-          ...(report.report_items||[]).flatMap(x=>[x.work_item,x.contractor,x.blocker,x.next_action])
-        ].join(' '))
-        return hay.includes(needle)
-      })
-      .sort((a,b)=>b.report_date.localeCompare(a.report_date)||(projectById.get(a.project_id)?.sort_order??999)-(projectById.get(b.project_id)?.sort_order??999))
-  },[latestPerProjectDate,selectedDate,selectedProject,q,projectById])
-
-  const findScheduleCandidate=(projectId:string,workItem:string)=>{
-    let best:ScheduleTask|null=null
-    let bestScore=0
-    for(const task of tasksByProject.get(projectId)||[]){
-      if(task.source_task_no==='1')continue
-      const score=textScore(workItem,task.task_name)
-      if(score>bestScore){best=task;bestScore=score}
-    }
-    return bestScore>=.7?{task:best,score:bestScore}:null
+    return best&&score>=.35?{task:best,score}:null
+  }
+  const procurementCheck=(entry:SiteEntry)=>{
+    const source=[entry.work_detail,entry.next_plan,entry.afternoon_detail].filter(Boolean).join(' ')
+    const signal=materialPattern.test(source)
+    const rows=new Map<string,ProcurementRow>()
+    for(const id of projectIdsByEntry.get(entry.id)||[])for(const row of procurementByProject.get(id)||[])if(isOpenProcurement(row))rows.set(row.id,row)
+    const ranked=Array.from(rows.values()).map(row=>({row,score:textScore(source,[row.item_name,row.condition_note,row.vendor,row.po_no,row.pr_no].filter(Boolean).join(' '))})).filter(x=>x.score>=.28).sort((a,b)=>b.score-a.score)
+    return {signal,openCount:rows.size,rows:ranked.slice(0,2).map(x=>x.row)}
   }
 
-  const relatedProcurement=(report:DailyReport,item:ReportItem)=>{
-    const rows=(procurementByProject.get(report.project_id)||[]).filter(isOpenProcurement)
-    const signalText=[item.work_item,item.blocker,item.next_action].filter(Boolean).join(' ')
-    const materialSignal=materialBlockerPattern.test(signalText)
-    const ranked=rows
-      .map(row=>({row,score:textScore(signalText,[row.item_name,row.condition_note,row.vendor].filter(Boolean).join(' '))}))
-      .filter(x=>materialSignal?true:x.score>=.45)
-      .sort((a,b)=>b.score-a.score)
-    return {materialSignal,rows:ranked.slice(0,3).map(x=>x.row)}
-  }
-
-  const flatItems=useMemo(
-    ()=>filteredReports.flatMap(report=>(report.report_items||[]).map(item=>({report,item}))),
-    [filteredReports]
-  )
-
-  const linkedCount=flatItems.filter(({item})=>item.schedule_task_id&&taskById.has(item.schedule_task_id)).length
-  const procurementFlagCount=flatItems.filter(({report,item})=>relatedProcurement(report,item).materialSignal).length
-  const progressVarianceCount=flatItems.filter(({item})=>{
-    if(!item.schedule_task_id)return false
-    const task=taskById.get(item.schedule_task_id)
-    if(!task||item.actual_progress===null||item.actual_progress===undefined||task.actual_progress===null||task.actual_progress===undefined)return false
-    return Math.abs(Number(item.actual_progress)-Number(task.actual_progress))>=.1
-  }).length
-  const labourMismatchCount=filteredReports.filter(report=>{
-    const itemTotal=(report.report_items||[]).reduce((sum,x)=>sum+Number(x.manpower||0),0)
-    const reportTotal=Number(report.total_manpower||0)
-    return itemTotal>0&&reportTotal>0&&itemTotal!==reportTotal
-  }).length
-  const activeProjects=new Set(filteredReports.map(x=>x.project_id)).size
-  const manpowerTotal=filteredReports.reduce((sum,x)=>sum+Number(x.total_manpower||0),0)
+  const scheduleReadyCount=filtered.filter(x=>scheduleCandidate(x)?.task).length
+  const materialSignalCount=filtered.filter(x=>procurementCheck(x).signal).length
+  const verifiedCount=filtered.filter(x=>batchByEntry.get(x.id)?.verification_status==='verified').length
+  const needsReviewCount=filtered.filter(x=>batchByEntry.get(x.id)?.verification_status==='needs_review'||x.mapping_status==='needs_review').length
+  const manpowerTotal=filtered.reduce((sum,x)=>sum+Number(x.total_manpower||0),0)
+  const linkedProjectIds=new Set(filtered.flatMap(x=>projectIdsByEntry.get(x.id)||[]))
+  const latestSynced=entries.map(x=>x.synced_at).filter(Boolean).sort().at(-1)||null
 
   return <AppShell>
-    {loadError&&<div className="panel" role="alert" style={{marginBottom:10}}>
-      โหลดข้อมูล Site Operations ไม่สำเร็จบางส่วน ข้อมูลที่เห็นอาจเป็น snapshot เดิม
-      <button type="button" className="button" style={{marginLeft:8}} onClick={()=>window.dispatchEvent(new Event('focus'))}>ลองใหม่</button>
-    </div>}
-
-    <PageHeader
-      title="Site Operations"
-      subtitle="Daily Report เป็นหลักฐานหน้างานแบบ Read-only • เช็คต่อกับ Schedule, Procurement, Progress และ Labour โดยไม่เขียนทับ Source of Truth"
-      action={<div className="siteops-header-actions">
-        <span><small>ข้อมูล Daily Report ล่าสุด</small><b>{dateTimeTH(latestUpdate)}</b></span>
-        <Link href="/schedule" className="button">เปิด Schedule</Link>
-      </div>}
-    />
+    {loadError&&<div className="panel" role="alert" style={{marginBottom:10}}>โหลดข้อมูล Site Operations ไม่สำเร็จบางส่วน • ระบบคงข้อมูลเดิมไว้ก่อน <button type="button" className="button" style={{marginLeft:8}} onClick={()=>window.dispatchEvent(new Event('focus'))}>ลองใหม่</button></div>}
+    <PageHeader title="Site Operations" subtitle="ข้อมูลจาก Google Form / Daily Site Report แบบ Read-only • ใช้ข้อมูลที่หน้างานรายงานแล้วต่อยอดทันทีโดยไม่กรอกซ้ำ" action={<div className="siteops-actions"><span><small>Source Sync ล่าสุด</small><b>{dateTimeTH(latestSynced)}</b></span><Link href="/reports/labour" className="button">Labour Verification</Link></div>}/>
 
     <section className="panel siteops-filter">
-      <label>วันที่
-        <select value={selectedDate} onChange={e=>setSelectedDate(e.target.value)}>
-          <option value="">ทุกวันที่</option>
-          {availableDates.map(d=><option key={d} value={d}>{dateTH(d)}</option>)}
-        </select>
-      </label>
-      <label>Site / Plot
-        <select value={selectedProject} onChange={e=>setSelectedProject(e.target.value)}>
-          <option value="">ทุกหน้างาน</option>
-          {projects.map(p=><option key={p.id} value={p.id}>{p.code} — {p.name}</option>)}
-        </select>
-      </label>
-      <label className="siteops-search">ค้นหา
-        <input value={q} onChange={e=>setQ(e.target.value)} placeholder="งาน / ผู้รับเหมา / blocker / next action"/>
-      </label>
+      <label>วันที่<select value={selectedDate} onChange={e=>setSelectedDate(e.target.value)}><option value="">ทุกวันที่</option>{availableDates.map(d=><option key={d} value={d}>{dateTH(d)}</option>)}</select></label>
+      <label>Site / Plot<select value={selectedProject} onChange={e=>setSelectedProject(e.target.value)}><option value="">ทุกหน้างาน</option>{projectFilterOptions.map(p=><option key={p.id} value={p.id}>{p.code} — {p.name}{p.active?'':' (inactive)'}</option>)}</select></label>
+      <label className="siteops-search">ค้นหา<input value={q} onChange={e=>setQ(e.target.value)} placeholder="งาน / หัวหน้าทีม / พื้นที่ / blocker / next plan"/></label>
       {(selectedDate||selectedProject||q)&&<button type="button" className="button" onClick={()=>{setSelectedDate('');setSelectedProject('');setQ('')}}>ล้าง Filter</button>}
     </section>
 
-    <section className="siteops-kpis" aria-label="Site Operations summary">
-      <div><span>รายงาน</span><b>{filteredReports.length}</b><small>project-day ล่าสุด</small></div>
-      <div><span>หน้างาน Active</span><b>{activeProjects}</b><small>ตาม Filter ปัจจุบัน</small></div>
-      <div><span>กำลังคนรายงาน</span><b>{manpowerTotal}</b><small>คน • จาก Daily Report</small></div>
-      <div><span>รายการงาน</span><b>{flatItems.length}</b><small>รายการที่บันทึก</small></div>
+    <section className="siteops-kpis">
+      <div><span>Daily Entries</span><b>{filtered.length}</b><small>รายการจาก Form</small></div>
+      <div><span>หน้างาน</span><b>{linkedProjectIds.size}</b><small>Project ที่ map แบบ explicit</small></div>
+      <div><span>กำลังคน</span><b>{manpowerTotal}</b><small>คนตามรายงานต้นทาง</small></div>
+      <div><span>Labour Verified</span><b>{verifiedCount}</b><small>ยืนยันทีมแล้ว</small></div>
     </section>
 
-    <section className="siteops-cross-grid" aria-label="Daily Report cross checks">
-      <article className="panel siteops-cross-card">
-        <div className="siteops-cross-head"><span>S</span><div><b>Daily Report × Schedule</b><small>เชื่อมเฉพาะ Task ID ที่ยืนยันแล้ว</small></div></div>
-        <strong>{linkedCount} / {flatItems.length}</strong>
-        <p>รายการผูก Schedule โดยตรง • รายการที่ชื่อใกล้เคียงจะแสดงเป็น “แนะนำให้ตรวจ” แต่ไม่ถือว่าเชื่อมแล้ว</p>
-        <Link href="/schedule">ตรวจ Schedule →</Link>
-      </article>
-
-      <article className="panel siteops-cross-card">
-        <div className="siteops-cross-head"><span>P</span><div><b>Daily Report × Procurement</b><small>จับสัญญาณรอวัสดุ/รอของจากรายงาน</small></div></div>
-        <strong>{procurementFlagCount}</strong>
-        <p>รายการงานที่มีข้อความเข้าข่าย Material / Procurement blocker และจะแสดงรายการจัดซื้อเปิดของ Plot เดียวกันเพื่อไล่ตามต่อ</p>
-        <Link href="/procurement">เปิด Procurement →</Link>
-      </article>
-
-      <article className="panel siteops-cross-card">
-        <div className="siteops-cross-head"><span>%</span><div><b>Daily Report × Progress</b><small>Evidence เท่านั้น ไม่เขียนทับ Schedule %</small></div></div>
-        <strong>{progressVarianceCount}</strong>
-        <p>รายการที่ % ใน Daily Report ต่างจาก Schedule ล่าสุดตั้งแต่ 10 จุดเปอร์เซ็นต์ขึ้นไป เพื่อให้ตรวจหลักฐานก่อนยืนยัน Actual</p>
-        <Link href="/schedule">ตรวจ Plan vs Actual →</Link>
-      </article>
-
-      <article className="panel siteops-cross-card">
-        <div className="siteops-cross-head"><span>L</span><div><b>Daily Report × Labour</b><small>ตรวจยอดคนในรายงานก่อนเชื่อม Labour Cost</small></div></div>
-        <strong>{labourMismatchCount}</strong>
-        <p>รายงานที่ยอดกำลังคนรวมต่างจากผลรวมกำลังคนระดับรายการงาน • Labour Cost database ยังไม่เชื่อมเข้าหน้านี้ จึงยังไม่สรุปค่าแรง</p>
-        <span className="muted small">สถานะ: Read-only verification</span>
-      </article>
+    <section className="siteops-cross-grid">
+      <article className="panel siteops-cross"><b>Daily Report × Schedule</b><strong>{scheduleReadyCount}</strong><p>Schedule candidate จาก Project + รายละเอียดงาน ใช้ช่วยตรวจเท่านั้น ไม่เขียน Task ID หรือ Actual อัตโนมัติ</p><Link href="/schedule">เปิด Schedule →</Link></article>
+      <article className="panel siteops-cross"><b>Daily Report × Procurement</b><strong>{materialSignalCount}</strong><p>จับคำรอของ / รอวัสดุ / PO แล้วเทียบ Procurement ที่ยังเปิดอยู่ของ Project เดียวกัน</p><Link href="/procurement">เปิด Procurement →</Link></article>
+      <article className="panel siteops-cross"><b>Daily Report × Progress</b><strong>{scheduleReadyCount}</strong><p>Daily Report เป็น evidence ของกิจกรรม/สถานะ/Next plan ส่วน % Actual ยังยึด Schedule Source of Truth</p><Link href="/schedule">ตรวจ Plan vs Actual →</Link></article>
+      <article className="panel siteops-cross"><b>Daily Report × Labour</b><strong>{needsReviewCount}</strong><p>รายการที่ยังต้องตรวจ identity หรือทีมคนงานก่อนใช้เป็น Labour Cost • ยืนยันแล้ว {verifiedCount}</p><Link href="/reports/labour">ยืนยันทีมคนงาน →</Link></article>
     </section>
 
-    <div className="siteops-source-note">
-      <b>หลักการข้อมูล:</b> Daily Report ใช้เป็นหลักฐานกิจกรรมหน้างาน • Schedule/Progress ยังคงใช้ข้อมูลแผนและ Actual ที่ยืนยันแล้ว • Procurement ใช้รายการจัดซื้อจริงของ Plot • Labour Cost จะแยกเชื่อมภายหลัง
-    </div>
+    <div className="siteops-source-note"><b>Data lineage:</b> Google Form → Daily Site Report → Site Operations Raw Dataset → Cross-check • Labour Cost อ่านเฉพาะข้อมูลที่ผ่าน Labour Verification แล้ว</div>
 
-    {loading?<div className="panel">กำลังโหลด Site Operations…</div>:
-    filteredReports.length===0?<div className="panel siteops-empty">
-      <b>ยังไม่มี Daily Report ตาม Filter นี้</b>
-      <span>หลังยกเลิกการกรอกผ่าน Web App ข้อมูลใหม่ต้องถูก Sync จาก Google Form / Daily Site Report เข้าชุดข้อมูล Site Operations ก่อนจึงจะแสดงที่นี่</span>
-    </div>:
-    <div className="siteops-report-stack">
-      {filteredReports.map(report=>{
-        const project=projectById.get(report.project_id)
-        const itemManpower=(report.report_items||[]).reduce((sum,x)=>sum+Number(x.manpower||0),0)
-        const labourMismatch=itemManpower>0&&Number(report.total_manpower||0)>0&&itemManpower!==Number(report.total_manpower||0)
-        return <section className="panel siteops-report" key={report.id}>
-          <header className="siteops-report-head">
-            <div>
-              <div className="siteops-report-title"><b>{project?.code||'-'}</b><span>{project?.name||''}</span></div>
-              <small>{dateTH(report.report_date)}{report.weather?' • '+report.weather:''} • Daily Report Evidence</small>
-            </div>
-            <div className="siteops-report-meta">
-              <StatusBadge value={report.status}/>
-              <span>กำลังคน <b>{Number(report.total_manpower||0)}</b> คน</span>
-              <span>งาน <b>{report.report_items?.length||0}</b> รายการ</span>
-            </div>
-          </header>
-
-          {report.summary&&<div className="siteops-summary"><b>สรุปหน้างาน</b><span>{report.summary}</span></div>}
-
-          <div className="siteops-labour-line">
-            <span>Labour check:</span>
-            {itemManpower>0
-              ? <b className={labourMismatch?'warn':''}>รายงานรวม {Number(report.total_manpower||0)} คน • รวมระดับงาน {itemManpower} คน {labourMismatch?'• ต้องตรวจ':'• ตรงกัน'}</b>
-              : <b>รายงานรวม {Number(report.total_manpower||0)} คน • ยังไม่มีจำนวนคนระดับรายการงานสำหรับเทียบ</b>}
+    {loading?<div className="panel">กำลังโหลด Site Operations…</div>:!filtered.length?<div className="panel siteops-empty"><b>ไม่พบรายงานตาม Filter</b><span>ข้อมูลใหม่จะเข้าหน้านี้จากระบบ Sync โดยไม่ต้องกรอกใน Web App ซ้ำ</span></div>:<div className="siteops-list">
+      {filtered.map(entry=>{
+        const pids=projectIdsByEntry.get(entry.id)||[]
+        const projectList=pids.map(id=>projectById.get(id)).filter(Boolean) as Project[]
+        const worker=entry.supervisor_worker_id?workerById.get(entry.supervisor_worker_id):null
+        const batch=batchByEntry.get(entry.id)
+        const schedule=scheduleCandidate(entry)
+        const proc=procurementCheck(entry)
+        return <article className="panel siteops-entry" key={entry.id}>
+          <header><div><div className="siteops-title"><b>{entry.supervisor_raw||'ไม่ระบุผู้ควบคุมงาน'}</b>{worker&&<span>→ {worker.display_label||worker.full_name}</span>}</div><small>{dateTH(entry.work_date)} • Form row {entry.source_row} • {entry.area_raw||entry.project_name_raw||'ไม่ระบุพื้นที่'}</small></div><div className="siteops-entry-meta"><StatusBadge value={entry.status_text||'pending'} multiline/><span>{entry.total_manpower??0} คน</span><span className={batch?.verification_status==='verified'?'verified':batch?.verification_status==='needs_review'?'review':''}>Labour: {batch?.verification_status==='verified'?'Verified':batch?.verification_status==='needs_review'?'Needs review':'Pending'}</span></div></header>
+          <div className="siteops-projects"><span>Project</span>{projectList.length?projectList.map(p=><b key={p.id}>{p.code}</b>):<b className="warn">ยังไม่ map Project</b>}<small>Source: {entry.project_name_raw||'-'} • {entry.area_raw||'-'}</small></div>
+          <div className="siteops-work"><div><span>งานที่รายงาน</span><b>{entry.work_detail||'ไม่ระบุรายละเอียดงาน'}</b></div>{entry.afternoon_detail&&<div><span>ช่วงบ่าย</span><b>{entry.afternoon_detail}</b></div>}{entry.next_plan&&<div><span>Next plan</span><b>{entry.next_plan}</b></div>}{entry.specific_area&&<div><span>Specific area</span><b>{entry.specific_area}</b></div>}</div>
+          <div className="siteops-checks">
+            <div><span>Schedule</span>{schedule?<><b>Candidate: {schedule.task.task_name}</b><small>{projectById.get(schedule.task.project_id)?.code||'-'} • Plan {pct(schedule.task.current_plan_progress)} • Actual {pct(schedule.task.actual_progress)}</small><small>Candidate only — ไม่เขียนกลับ Schedule</small></>:<><b className="muted">ยังไม่มี candidate ชัดเจน</b><small>คง Daily Report เป็น evidence โดยไม่เดา Task</small></>}</div>
+            <div><span>Procurement</span>{proc.signal?<><b className="warn">พบข้อความที่เกี่ยวกับวัสดุ/ของ/PO</b>{proc.rows.length?proc.rows.map(r=><small key={r.id}>{r.item_name||'-'} • {r.current_status||r.procurement_status||'ต้องติดตาม'}{r.expected_delivery_text?' • '+r.expected_delivery_text:''}</small>):<small>มี Procurement เปิด {proc.openCount} รายการใน Project แต่ยังจับคู่รายการไม่ได้ชัดเจน</small>}</>:<><b>ไม่พบ Material blocker จากรายงาน</b><small>รายการจัดซื้อเปิดใน Project: {proc.openCount}</small></>}</div>
+            <div><span>Progress evidence</span><b>{entry.status_text||'ไม่ระบุสถานะ'}</b><small>ใช้รายละเอียดงาน + สถานะ + Next plan เป็น evidence</small><small>% Actual ยังคงมาจาก Schedule เท่านั้น</small></div>
+            <div><span>Labour</span><b>{entry.total_manpower??0} คน • ชาย {entry.male_count??0} / หญิง {entry.female_count??0}</b><small>{worker?'Home team: '+(worker.default_team||'ยังไม่ระบุ'):'Supervisor identity ยังไม่ยืนยัน'}</small><Link href={'/reports/labour?date='+entry.work_date+'&entry='+entry.id}>เปิด Labour Verification →</Link></div>
           </div>
-
-          <div className="siteops-items">
-            {(report.report_items||[]).map((item,index)=>{
-              const linkedTask=item.schedule_task_id?taskById.get(item.schedule_task_id)||null:null
-              const candidate=!linkedTask?findScheduleCandidate(report.project_id,item.work_item):null
-              const procurementCheck=relatedProcurement(report,item)
-              const reportProgress=item.actual_progress
-              const scheduleProgress=linkedTask?.actual_progress
-              const hasProgressPair=reportProgress!==null&&reportProgress!==undefined&&scheduleProgress!==null&&scheduleProgress!==undefined
-              const delta=hasProgressPair?Math.round((Number(reportProgress)-Number(scheduleProgress))*100):null
-              const varianceAlert=delta!==null&&Math.abs(delta)>=10
-
-              return <article className="siteops-item" key={item.id}>
-                <div className="siteops-item-main">
-                  <div className="siteops-index">{index+1}</div>
-                  <div>
-                    <b>{item.work_item}</b>
-                    <small>{[item.work_category,item.contractor].filter(Boolean).join(' • ')||'ยังไม่ระบุหมวด/ผู้รับเหมา'}</small>
-                  </div>
-                  <StatusBadge value={item.status}/>
-                </div>
-
-                <div className="siteops-item-grid">
-                  <div>
-                    <span className="siteops-label">Schedule</span>
-                    {linkedTask?<><b>✓ Linked</b><small>{linkedTask.source_task_no?linkedTask.source_task_no+'. ':''}{linkedTask.task_name}</small><small>{linkedTask.area||''}</small></>:
-                    candidate?.task?<><b className="warn">แนะนำให้ตรวจ</b><small>ชื่อใกล้เคียง: {candidate.task.task_name}</small><small>ยังไม่ถือว่าเชื่อม Task</small></>:
-                    <><b className="muted">ยังไม่ผูก</b><small>ต้อง Mapping กับ Schedule ก่อนใช้เทียบ Actual</small></>}
-                  </div>
-
-                  <div>
-                    <span className="siteops-label">Procurement</span>
-                    {procurementCheck.materialSignal
-                      ? procurementCheck.rows.length
-                        ? <><b className="warn">พบ Material blocker</b>{procurementCheck.rows.slice(0,2).map(row=><small key={row.id}>{row.item_name||'-'} • {row.current_status||row.procurement_status||'ต้องติดตาม'}{row.expected_delivery_text?' • '+row.expected_delivery_text:''}</small>)}</>
-                        : <><b className="warn">พบ Material blocker</b><small>แต่ยังไม่พบรายการจัดซื้อเปิดที่ผูกกับ Plot นี้</small></>
-                      : procurementCheck.rows.length
-                        ? <><b>มีรายการที่อาจเกี่ยวข้อง</b>{procurementCheck.rows.slice(0,2).map(row=><small key={row.id}>{row.item_name||'-'} • {row.current_status||row.procurement_status||'-'}</small>)}</>
-                        : <><b className="muted">ไม่พบสัญญาณ</b><small>ไม่มี blocker จัดซื้อจากข้อความใน Daily Report</small></>}
-                  </div>
-
-                  <div>
-                    <span className="siteops-label">Progress evidence</span>
-                    {linkedTask&&hasProgressPair?<>
-                      <b className={varianceAlert?'warn':''}>Report {pctText(reportProgress)} • Schedule {pctText(scheduleProgress)}</b>
-                      <small>{delta===0?'ตัวเลขตรงกัน':delta!==null?'Δ '+(delta>0?'+':'')+delta+' จุดเปอร์เซ็นต์':'-'}</small>
-                      <small>Evidence only — ไม่อัปเดต Schedule อัตโนมัติ</small>
-                    </>:<>
-                      <b className="muted">ยังเทียบไม่ได้</b>
-                      <small>{linkedTask?'Daily Report ไม่มี % สำหรับรายการนี้':'ยังไม่มี Schedule link ที่ยืนยันแล้ว'}</small>
-                    </>}
-                  </div>
-
-                  <div>
-                    <span className="siteops-label">Labour / Next action</span>
-                    <b>{Number(item.manpower||0)>0?Number(item.manpower||0)+' คน':'ไม่ระบุคนระดับงาน'}</b>
-                    {item.blocker&&<small className="warn">Blocker: {item.blocker}</small>}
-                    {item.next_action&&<small>Next: {item.next_action}</small>}
-                    {item.target_date&&<small>Target: {dateTH(item.target_date)}</small>}
-                  </div>
-                </div>
-              </article>
-            })}
-          </div>
-        </section>
+        </article>
       })}
     </div>}
 
     <style jsx>{`
-      .siteops-header-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
-      .siteops-header-actions>span{display:flex;flex-direction:column;align-items:flex-end;line-height:1.25}
-      .siteops-header-actions small{font-size:10px;color:var(--muted)}
-      .siteops-header-actions b{font-size:11px}
-      .siteops-filter{display:grid;grid-template-columns:180px minmax(210px,270px) minmax(260px,1fr) auto;gap:8px;align-items:end;padding:10px;margin-bottom:10px;position:sticky;top:0;z-index:16}
-      .siteops-filter label{display:grid;gap:4px;font-size:10px;font-weight:800;color:var(--muted)}
-      .siteops-filter select,.siteops-filter input{min-height:36px;border:1px solid var(--line);border-radius:9px;background:#fff;padding:7px 9px;color:var(--text);font:inherit;font-size:12px}
-      .siteops-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}
-      .siteops-kpis>div{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px;box-shadow:0 4px 14px rgba(23,42,67,.04)}
-      .siteops-kpis span{display:block;font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
-      .siteops-kpis b{display:block;margin:5px 0 1px;font-size:23px;color:var(--navy)}
-      .siteops-kpis small{font-size:10px;color:var(--muted)}
-      .siteops-cross-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}
-      .siteops-cross-card{padding:12px;min-height:178px;display:flex;flex-direction:column}
-      .siteops-cross-head{display:grid;grid-template-columns:30px minmax(0,1fr);gap:8px;align-items:center}
-      .siteops-cross-head>span{width:30px;height:30px;border-radius:9px;background:#172a43;color:#f2cc79;display:grid;place-items:center;font-size:11px;font-weight:900}
-      .siteops-cross-head b{display:block;font-size:11px}
-      .siteops-cross-head small{display:block;font-size:9.5px;color:var(--muted);margin-top:2px}
-      .siteops-cross-card>strong{font-size:28px;color:var(--navy);margin:12px 0 4px}
-      .siteops-cross-card>p{font-size:10.5px;line-height:1.5;color:var(--muted);margin:0 0 8px}
-      .siteops-cross-card>a{margin-top:auto;font-size:10.5px;font-weight:800}
-      .siteops-source-note{padding:8px 10px;margin:0 0 10px;border-radius:10px;background:#f5f7fa;border:1px solid var(--line);font-size:10.5px;line-height:1.5;color:var(--muted)}
-      .siteops-source-note b{color:var(--text)}
-      .siteops-report-stack{display:grid;gap:10px}
-      .siteops-report{padding:0;overflow:hidden}
-      .siteops-report-head{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 14px;background:linear-gradient(135deg,#172a43,#213d5e);color:#fff}
-      .siteops-report-title{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
-      .siteops-report-title b{font-size:16px}
-      .siteops-report-title span{font-size:11px;color:#c7d2df}
-      .siteops-report-head small{display:block;margin-top:3px;color:#c7d2df;font-size:9.5px}
-      .siteops-report-meta{display:flex;gap:6px;align-items:center;justify-content:flex-end;flex-wrap:wrap}
-      .siteops-report-meta>span{padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,.18);font-size:9.5px;color:#dfe7ef}
-      .siteops-report-meta>span b{color:#fff}
-      .siteops-summary{display:grid;grid-template-columns:110px minmax(0,1fr);gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);font-size:10.5px;line-height:1.5}
-      .siteops-summary b{color:var(--navy)}
-      .siteops-labour-line{display:flex;gap:7px;align-items:center;flex-wrap:wrap;padding:8px 14px;background:#fafbfc;border-bottom:1px solid var(--line);font-size:10px}
-      .siteops-labour-line>span{color:var(--muted);font-weight:800}
-      .siteops-items{display:grid}
-      .siteops-item{padding:11px 14px;border-bottom:1px solid var(--line)}
-      .siteops-item:last-child{border-bottom:0}
-      .siteops-item-main{display:grid;grid-template-columns:26px minmax(0,1fr) auto;gap:8px;align-items:center;margin-bottom:9px}
-      .siteops-index{width:24px;height:24px;border-radius:8px;background:#eef2f6;color:var(--navy);display:grid;place-items:center;font-size:10px;font-weight:900}
-      .siteops-item-main b{display:block;font-size:11.5px;line-height:1.35}
-      .siteops-item-main small{display:block;margin-top:2px;color:var(--muted);font-size:9.5px}
-      .siteops-item-grid{display:grid;grid-template-columns:1.05fr 1.15fr 1fr 1fr;gap:7px;margin-left:34px}
-      .siteops-item-grid>div{min-width:0;padding:8px;border:1px solid var(--line);border-radius:10px;background:#fbfcfd}
-      .siteops-item-grid b{display:block;font-size:10.5px;line-height:1.35;color:var(--text)}
-      .siteops-item-grid small{display:block;font-size:9.5px;line-height:1.4;color:var(--muted);margin-top:3px;overflow-wrap:anywhere}
-      .siteops-label{display:block;margin-bottom:4px;font-size:8.5px;font-weight:900;text-transform:uppercase;letter-spacing:.05em;color:#718096}
-      .warn{color:#9b5f00!important}
-      .siteops-empty{display:grid;gap:5px;text-align:center;padding:28px}
-      .siteops-empty span{font-size:11px;color:var(--muted);line-height:1.5}
-      @media(max-width:1100px){
-        .siteops-cross-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-        .siteops-item-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-      }
-      @media(max-width:760px){
-        .siteops-header-actions{justify-content:flex-start}
-        .siteops-header-actions>span{align-items:flex-start}
-        .siteops-filter{position:static;grid-template-columns:1fr 1fr}
-        .siteops-search{grid-column:1/-1}
-        .siteops-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
-        .siteops-cross-grid{grid-template-columns:1fr}
-        .siteops-report-head{align-items:flex-start;flex-direction:column}
-        .siteops-report-meta{justify-content:flex-start}
-        .siteops-summary{grid-template-columns:1fr}
-        .siteops-item-grid{grid-template-columns:1fr;margin-left:0}
-      }
-      @media print{
-        .siteops-filter,.siteops-header-actions .button{display:none!important}
-        .siteops-cross-card,.siteops-report{break-inside:avoid}
-      }
+      .siteops-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}.siteops-actions>span{display:grid;text-align:right}.siteops-actions small{font-size:9.5px;color:var(--muted)}.siteops-actions b{font-size:11px}
+      .siteops-filter{display:grid;grid-template-columns:170px minmax(220px,280px) minmax(260px,1fr) auto;gap:8px;align-items:end;padding:10px;margin-bottom:10px;position:sticky;top:0;z-index:16}.siteops-filter label{display:grid;gap:4px;font-size:10px;font-weight:800;color:var(--muted)}.siteops-filter select,.siteops-filter input{min-height:36px;border:1px solid var(--line);border-radius:9px;background:#fff;padding:7px 9px;color:var(--text);font:inherit;font-size:12px}
+      .siteops-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}.siteops-kpis>div{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}.siteops-kpis span{display:block;font-size:9px;font-weight:900;color:var(--muted);letter-spacing:.05em;text-transform:uppercase}.siteops-kpis b{display:block;margin:4px 0 1px;font-size:23px;color:var(--navy)}.siteops-kpis small{font-size:9.5px;color:var(--muted)}
+      .siteops-cross-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}.siteops-cross{padding:12px;display:flex;flex-direction:column;min-height:158px}.siteops-cross>b{font-size:11px;color:var(--navy)}.siteops-cross>strong{font-size:28px;margin:10px 0 2px;color:var(--navy)}.siteops-cross p{font-size:10px;line-height:1.5;color:var(--muted);margin:0 0 8px}.siteops-cross a{margin-top:auto;font-size:10px;font-weight:800}
+      .siteops-source-note{padding:8px 10px;margin-bottom:10px;border:1px solid var(--line);border-radius:10px;background:#f5f7fa;font-size:10px;line-height:1.5;color:var(--muted)}.siteops-source-note b{color:var(--text)}
+      .siteops-list{display:grid;gap:10px}.siteops-entry{padding:0;overflow:hidden}.siteops-entry>header{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:11px 13px;background:linear-gradient(135deg,#172a43,#213d5e);color:#fff}.siteops-title{display:flex;gap:7px;align-items:baseline;flex-wrap:wrap}.siteops-title>b{font-size:14px}.siteops-title span{font-size:10px;color:#c9d5e1}.siteops-entry header small{display:block;margin-top:3px;font-size:9px;color:#c9d5e1}.siteops-entry-meta{display:flex;gap:5px;align-items:center;justify-content:flex-end;flex-wrap:wrap}.siteops-entry-meta>span{padding:5px 7px;border:1px solid rgba(255,255,255,.18);border-radius:8px;font-size:9px}.siteops-entry-meta>span.verified{background:rgba(64,170,104,.18);color:#d8f5e3}.siteops-entry-meta>span.review{background:rgba(226,164,50,.18);color:#ffe7b3}
+      .siteops-projects{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:8px 13px;background:#f8fafc;border-bottom:1px solid var(--line);font-size:9.5px}.siteops-projects>span{font-weight:900;color:var(--muted)}.siteops-projects>b{padding:3px 7px;border-radius:999px;background:#e9eef4;color:var(--navy)}.siteops-projects>small{margin-left:auto;color:var(--muted)}
+      .siteops-work{display:grid;gap:7px;padding:10px 13px;border-bottom:1px solid var(--line)}.siteops-work>div{display:grid;grid-template-columns:85px minmax(0,1fr);gap:8px}.siteops-work span{font-size:9px;font-weight:900;color:var(--muted);text-transform:uppercase}.siteops-work b{font-size:10.5px;line-height:1.55;font-weight:650}
+      .siteops-checks{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;padding:10px 13px}.siteops-checks>div{min-width:0;padding:8px;border:1px solid var(--line);border-radius:10px;background:#fbfcfd}.siteops-checks>div>span{display:block;margin-bottom:4px;font-size:8.5px;font-weight:900;color:#708095;text-transform:uppercase;letter-spacing:.04em}.siteops-checks b{display:block;font-size:10px;line-height:1.4}.siteops-checks small{display:block;font-size:9px;line-height:1.4;color:var(--muted);margin-top:3px;overflow-wrap:anywhere}.siteops-checks a{display:inline-block;margin-top:5px;font-size:9px;font-weight:800}.warn{color:#9b5f00!important}.siteops-empty{display:grid;gap:5px;text-align:center;padding:28px}.siteops-empty span{font-size:10px;color:var(--muted)}
+      @media(max-width:1100px){.siteops-cross-grid,.siteops-checks{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:760px){.siteops-actions{justify-content:flex-start}.siteops-actions>span{text-align:left}.siteops-filter{position:static;grid-template-columns:1fr 1fr}.siteops-search{grid-column:1/-1}.siteops-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.siteops-cross-grid,.siteops-checks{grid-template-columns:1fr}.siteops-entry>header{align-items:flex-start;flex-direction:column}.siteops-entry-meta{justify-content:flex-start}.siteops-projects>small{width:100%;margin-left:0}.siteops-work>div{grid-template-columns:1fr}}@media print{.siteops-filter,.siteops-actions .button{display:none!important}.siteops-entry,.siteops-cross{break-inside:avoid}}
     `}</style>
   </AppShell>
 }
