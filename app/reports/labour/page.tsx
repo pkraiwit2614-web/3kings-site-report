@@ -59,6 +59,7 @@ export default function LabourVerificationPage(){
   const [drafts,setDrafts]=useState<Record<string,DraftAssignment[]>>({})
   const [notes,setNotes]=useState<Record<string,string>>({})
   const [addWorker,setAddWorker]=useState<Record<string,string>>({})
+  const [supervisorPick,setSupervisorPick]=useState<Record<string,string>>({})
   const [saving,setSaving]=useState<Record<string,boolean>>({})
   const [message,setMessage]=useState('')
   const [refreshTick,setRefreshTick]=useState(0)
@@ -171,6 +172,19 @@ export default function LabourVerificationPage(){
   }
   const removeDraft=(batchId:string,index:number)=>setDrafts(prev=>({...prev,[batchId]:(prev[batchId]||[]).filter((_,i)=>i!==index)}))
 
+  const confirmSupervisor=async(batch:Batch)=>{
+    const workerId=supervisorPick[batch.id]||''
+    if(!canVerify||!workerId||saving[batch.id])return
+    setSaving(prev=>({...prev,[batch.id]:true}));setMessage('')
+    try{
+      const {error}=await getSupabase().rpc('labour_confirm_supervisor_mapping',{p_batch_id:batch.id,p_worker_id:workerId})
+      if(error)throw error
+      setMessage('ยืนยันหัวหน้าทีมและบันทึก alias แล้ว • ชื่อนี้จะใช้ mapping เดิมในรอบถัดไป')
+      setRefreshTick(v=>v+1)
+    }catch(err:any){setMessage(String(err?.message||'ยืนยันหัวหน้าทีมไม่สำเร็จ'))}
+    finally{setSaving(prev=>({...prev,[batch.id]:false}))}
+  }
+
   const saveBatch=async(batch:Batch)=>{
     if(!canVerify||saving[batch.id])return
     const rows=draftFor(batch)
@@ -257,6 +271,15 @@ export default function LabourVerificationPage(){
               <div><span>Home team</span><b>{batch.home_team||'ยังไม่ยืนยัน identity ของหัวหน้าทีม'}</b></div>
             </div>
 
+            {!batch.supervisor_worker_id&&<div className="supervisor-resolve">
+              <b>ยืนยันหัวหน้าทีมก่อนเพื่อเรียก roster เดิม</b>
+              <select value={supervisorPick[batch.id]||''} onChange={e=>setSupervisorPick(prev=>({...prev,[batch.id]:e.target.value}))} disabled={!canVerify}>
+                <option value="">เลือกจาก Worker Master</option>
+                {activeWorkers.map(w=><option key={w.worker_id} value={w.worker_id}>{w.worker_id} — {w.display_label||w.full_name} — {w.default_team||'ไม่ระบุทีม'}</option>)}
+              </select>
+              <button type="button" className="button" disabled={!canVerify||!supervisorPick[batch.id]||saving[batch.id]} onClick={()=>confirmSupervisor(batch)}>ยืนยันหัวหน้าทีม</button>
+            </div>}
+
             <div className="labour-tools">
               <button type="button" className="button" disabled={!canVerify||!batch.home_team} onClick={()=>useHomeTeam(batch)}>ใช้ทีมเดิมทั้งหมด ({homeCandidates.length})</button>
               {existing.length>0&&<button type="button" className="button" disabled={!canVerify} onClick={()=>loadExisting(batch)}>โหลดชุดที่ยืนยันไว้ ({existing.length})</button>}
@@ -313,12 +336,13 @@ export default function LabourVerificationPage(){
       .labour-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}.labour-kpis>div{padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}.labour-kpis span{display:block;font-size:9px;font-weight:850;color:var(--muted)}.labour-kpis b{display:block;margin-top:3px;font-size:21px;color:var(--navy)}
       .labour-readonly,.labour-empty{padding:16px;text-align:center;color:var(--muted);font-size:10.5px;margin-bottom:10px}.labour-stack,.worker-report-stack{display:grid;gap:10px}.labour-card{padding:0;overflow:hidden}.labour-card>header,.worker-report>header{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:11px 13px;background:linear-gradient(135deg,#172a43,#213d5e);color:#fff}.labour-card header b,.worker-report header b{font-size:13px}.labour-card header small,.worker-report header small{display:block;margin-top:3px;font-size:9px;color:#c9d5e1}.labour-card header>div:last-child{display:flex;align-items:center;gap:7px}.labour-card header strong,.worker-report header strong{font-size:15px}.verify-status{padding:5px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.2);font-size:9px;font-weight:850}.verify-status.verified{background:rgba(69,170,103,.22)}.verify-status.needs_review{background:rgba(218,154,38,.25)}
       .labour-source{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;border-bottom:1px solid var(--line)}.labour-source>div{display:grid;grid-template-columns:90px minmax(0,1fr);gap:7px;padding:8px 12px;border-bottom:1px solid #edf0f3}.labour-source span{font-size:8.5px;font-weight:900;color:var(--muted);text-transform:uppercase}.labour-source b{font-size:10px;line-height:1.45}
+      .supervisor-resolve{display:grid;grid-template-columns:minmax(180px,.8fr) minmax(280px,1.5fr) auto;gap:7px;align-items:center;padding:9px 12px;background:#fff8e8;border-bottom:1px solid #ead29a}.supervisor-resolve>b{font-size:9.5px;color:#7a5600}.supervisor-resolve select{min-height:34px;border:1px solid #d7c48e;border-radius:8px;background:#fff;padding:6px 8px;font-size:10px}
       .labour-tools{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:9px 12px;background:#f8fafc;border-bottom:1px solid var(--line)}.labour-tools select{flex:1 1 300px;min-height:34px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:6px 8px;font-size:10px}
       .labour-draft{padding:10px 12px}.labour-draft-head{display:flex;justify-content:space-between;gap:8px;margin-bottom:7px;font-size:10px}.labour-draft-head span{color:var(--muted)}.bad-text{color:var(--red)!important;font-weight:850}
       .labour-person{display:grid;grid-template-columns:minmax(160px,1.2fr) minmax(145px,.9fr) minmax(145px,.9fr) minmax(145px,.9fr) 90px auto;gap:6px;align-items:end;padding:7px 0;border-top:1px solid #edf0f3}.labour-person-name{align-self:center}.labour-person-name b{display:block;font-size:10.5px}.labour-person-name small{display:block;margin-top:2px;font-size:8.5px;color:var(--muted)}.labour-person label{display:grid;gap:3px;font-size:8px;font-weight:850;color:var(--muted)}.labour-person select,.labour-person input{min-height:31px;border:1px solid var(--line);border-radius:7px;background:#fff;padding:5px 6px;font-size:9px;min-width:0}.labour-no-draft{padding:13px;color:var(--muted);font-size:10px;text-align:center}
       .labour-confirm{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end;padding:10px 12px;border-top:1px solid var(--line);background:#fbfcfd}.labour-confirm label{display:grid;gap:4px;font-size:9px;font-weight:850;color:var(--muted)}.labour-confirm input{min-height:35px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:10px}.labour-confirm .primary{min-height:35px}.labour-verified-line{padding:7px 12px;border-top:1px solid var(--line);font-size:8.5px;color:var(--muted);text-align:right}
       .report-summary{padding:7px 9px;margin:-2px 0 10px;font-size:9.5px;color:var(--muted);text-align:right}.worker-report{padding:0;overflow:hidden}.worker-table{overflow:auto}.worker-table table{width:100%;min-width:900px}.worker-table th,.worker-table td{font-size:9.5px;white-space:normal;vertical-align:top}.worker-table td small{display:block;margin-top:3px;color:var(--muted)}
-      @media(max-width:1150px){.labour-person{grid-template-columns:1fr 1fr 1fr}.labour-person-name{grid-column:1/-1}.labour-person .link-danger{justify-self:start}}@media(max-width:760px){.labour-filter,.report-filter{grid-template-columns:1fr 1fr}.labour-search{grid-column:1/-1}.labour-kpis{grid-template-columns:1fr 1fr}.labour-card>header,.worker-report>header{align-items:flex-start}.labour-source{grid-template-columns:1fr}.labour-person{grid-template-columns:1fr 1fr}.labour-person-name{grid-column:1/-1}.labour-confirm{grid-template-columns:1fr}}@media print{.labour-mode,.labour-filter,.report-filter,.labour-kpis,.labour-readonly,.labour-tools,.labour-confirm,.notice{display:none!important}.worker-report{break-inside:avoid}}
+      @media(max-width:1150px){.supervisor-resolve{grid-template-columns:1fr 1fr}.supervisor-resolve>b{grid-column:1/-1}.labour-person{grid-template-columns:1fr 1fr 1fr}.labour-person-name{grid-column:1/-1}.labour-person .link-danger{justify-self:start}}@media(max-width:760px){.supervisor-resolve{grid-template-columns:1fr}.supervisor-resolve>b{grid-column:auto}.labour-filter,.report-filter{grid-template-columns:1fr 1fr}.labour-search{grid-column:1/-1}.labour-kpis{grid-template-columns:1fr 1fr}.labour-card>header,.worker-report>header{align-items:flex-start}.labour-source{grid-template-columns:1fr}.labour-person{grid-template-columns:1fr 1fr}.labour-person-name{grid-column:1/-1}.labour-confirm{grid-template-columns:1fr}}@media print{.labour-mode,.labour-filter,.report-filter,.labour-kpis,.labour-readonly,.labour-tools,.labour-confirm,.notice{display:none!important}.worker-report{break-inside:avoid}}
     `}</style>
   </AppShell>
 }
