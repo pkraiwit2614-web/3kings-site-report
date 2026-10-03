@@ -6,6 +6,7 @@ import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
 import StatusBadge from '@/components/StatusBadge'
 import { getSupabase } from '@/lib/supabase'
+import { createLiveLoader, requireSuccessfulReads } from '@/lib/liveLoader'
 import type { Project } from '@/lib/types'
 
 function dateTimeTH(value:string|null|undefined){
@@ -32,6 +33,7 @@ function textSearch(values:unknown[],needle:string){
 }
 
 export default function MaterialsPage(){
+  const [loadError,setLoadError]=useState(false)
   const [projects,setProjects]=useState<Project[]>([])
   const [rows,setRows]=useState<any[]>([])
   const [procurement,setProcurement]=useState<any[]>([])
@@ -60,23 +62,29 @@ export default function MaterialsPage(){
     let alive=true
     let refreshTimer:number|null=null
     const s=getSupabase()
-    const load=async()=>{
-      const [p,m,pr,prLinks,t,sync]=await Promise.all([
-        s.from('projects').select('*').eq('active',true).order('sort_order'),
-        s.from('materials').select('*').order('project_id').order('source_row'),
-        s.from('procurement_items').select('*').order('source_updated_at',{ascending:false}).order('source_row'),
-        s.from('procurement_item_projects').select('procurement_item_id,project_id'),
-        s.from('tool_machine').select('*').order('item_no'),
-        s.from('drive_sync_runs').select('created_at').eq('status','success').eq('sync_type','materials').order('created_at',{ascending:false}).limit(1).maybeSingle()
-      ])
-      if(!alive)return
-      setProjects((p.data||[]) as Project[])
-      setRows(m.data||[])
-      setProcurement(pr.data||[])
-      setProcurementLinks(prLinks.data||[])
-      setTools(t.data||[])
-      setLatestSyncAt(sync.data?.created_at||null)
-    }
+    const loader=createLiveLoader({
+      load:async(signal)=>{
+        const [p,m,pr,prLinks,t,sync]=await Promise.all([
+          s.from('projects').select('*').eq('active',true).order('sort_order').abortSignal(signal),
+          s.from('materials').select('*').order('project_id').order('source_row').abortSignal(signal),
+          s.from('procurement_items').select('*').order('source_updated_at',{ascending:false}).order('source_row').abortSignal(signal),
+          s.from('procurement_item_projects').select('procurement_item_id,project_id').abortSignal(signal),
+          s.from('tool_machine').select('*').order('item_no').abortSignal(signal),
+          s.from('drive_sync_runs').select('created_at').eq('status','success').eq('sync_type','materials').order('created_at',{ascending:false}).limit(1).abortSignal(signal).maybeSingle()
+        ])
+        requireSuccessfulReads([p,m,pr,prLinks,t,sync])
+        if(!alive||signal.aborted)return
+        setLoadError(false)
+        setProjects((p.data||[]) as Project[])
+        setRows(m.data||[])
+        setProcurement(pr.data||[])
+        setProcurementLinks(prLinks.data||[])
+        setTools(t.data||[])
+        setLatestSyncAt(sync.data?.created_at||null)
+      },
+      onError:()=>{if(alive)setLoadError(true)},
+    })
+    const load=loader.refresh
     const queueLoad=()=>{
       if(refreshTimer)window.clearTimeout(refreshTimer)
       refreshTimer=window.setTimeout(()=>{void load()},400)
@@ -96,6 +104,7 @@ export default function MaterialsPage(){
     document.addEventListener('visibilitychange',refreshWhenVisible)
     return()=>{
       alive=false
+      loader.dispose()
       if(refreshTimer)window.clearTimeout(refreshTimer)
       window.removeEventListener('focus',refresh)
       document.removeEventListener('visibilitychange',refreshWhenVisible)
@@ -163,6 +172,7 @@ export default function MaterialsPage(){
   ),[tools,toolStatus,toolCategory,toolLocation,toolQ])
 
   return <AppShell>
+    {loadError&&<div className="panel" role="alert">โหลดข้อมูลไม่สำเร็จ ข้อมูลที่แสดงอาจเป็นข้อมูลเดิม กรุณาลองใหม่ <button type="button" className="button" onClick={()=>window.dispatchEvent(new Event('focus'))}>ลองใหม่</button></div>}
     <PageHeader title="วัสดุ เครื่องมือและผู้รับเหมา" subtitle={`ค้นหาวัสดุ งาน ผู้ขาย ผู้รับเหมา หรือเลข PO ได้จากหน้าเดียว • วัสดุ/งาน ${rows.length} รายการ • จัดซื้อ/จัดจ้าง ${procurement.length} รายการ • เครื่องมือ ${tools.length} รายการ`} action={<div className="management-action-grid management-printable-actions">
       <div className="management-action-meta"><span>ข้อมูลอัปเดต</span><b>{dateTimeTH(latestSyncAt)}</b></div>
       <Link href="/?section=materials#dashboard-materials" className="button management-action-dashboard">← Dashboard</Link>

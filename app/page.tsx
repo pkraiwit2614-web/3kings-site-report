@@ -8,6 +8,7 @@ import PrintButton from '@/components/PrintButton'
 import StatusBadge from '@/components/StatusBadge'
 import DashboardMaterialsStatus from '@/components/DashboardMaterialsStatus'
 import { getSupabase } from '@/lib/supabase'
+import { createLiveLoader, requireSuccessfulReads } from '@/lib/liveLoader'
 import { pct, dateTH } from '@/lib/format'
 import type { Project, ScheduleTask } from '@/lib/types'
 
@@ -87,6 +88,7 @@ function siteStatusOf(x:{variance:number}){
 }
 
 export default function DashboardPage() {
+  const [loadError,setLoadError]=useState(false)
   const [projects,setProjects]=useState<Project[]>([])
   const [tasks,setTasks]=useState<ScheduleTask[]>([])
   const [reports,setReports]=useState<any[]>([])
@@ -107,26 +109,30 @@ export default function DashboardPage() {
     let alive=true
     let refreshTimer:number|null=null
     const s=getSupabase()
-    const load=async()=>{
-      const [p,t,r,pr,sr,sd]=await Promise.all([
-        s.from('projects').select('id,code,name,target_handover,active,sort_order').eq('active',true).order('sort_order'),
-        s.from('v_schedule_tasks').select('id,project_id,task_name,category,actual_progress,current_plan_progress,current_variance,delay_days,site_status,blocker,next_action,target_close,planned_start,planned_end,actual_start,actual_end,area,source_task_no,contractor'),
-        s.from('daily_reports').select('id,project_id,report_date,total_manpower,summary,status,created_at').order('report_date',{ascending:false}).order('created_at',{ascending:false}).limit(100),
-        s.from('procurement_items').select('id,project_id,vendor,item_name,current_status,expected_delivery_text,expected_delivery').order('created_at',{ascending:false}),
-        s.from('drive_sync_runs').select('sync_type,project_code,created_at').eq('status','success').order('created_at',{ascending:false}).limit(30),
-        s.from('v_schedule_snapshot_days').select('snapshot_date').order('snapshot_date',{ascending:false}).limit(60)
-      ])
-      if(!alive)return
-      if(p.error) throw p.error
-      if(t.error) throw t.error
-      setProjects((p.data||[]) as Project[])
-      setTasks((t.data||[]) as ScheduleTask[])
-      setReports(r.data||[])
-      setProc(pr.data||[])
-      setSyncRuns(sr.data||[])
-      setSnapshotDays(sd.data||[])
-      setLoading(false)
-    }
+    const loader=createLiveLoader({
+      load:async(signal)=>{
+        const [p,t,r,pr,sr,sd]=await Promise.all([
+          s.from('projects').select('id,code,name,target_handover,active,sort_order').eq('active',true).order('sort_order').abortSignal(signal),
+          s.from('v_schedule_tasks').select('id,project_id,task_name,category,actual_progress,current_plan_progress,current_variance,delay_days,site_status,blocker,next_action,target_close,planned_start,planned_end,actual_start,actual_end,area,source_task_no,contractor').abortSignal(signal),
+          s.from('daily_reports').select('id,project_id,report_date,total_manpower,summary,status,created_at').order('report_date',{ascending:false}).order('created_at',{ascending:false}).limit(100).abortSignal(signal),
+          s.from('procurement_items').select('id,project_id,vendor,item_name,current_status,expected_delivery_text,expected_delivery').order('created_at',{ascending:false}).abortSignal(signal),
+          s.from('drive_sync_runs').select('sync_type,project_code,created_at').eq('status','success').order('created_at',{ascending:false}).limit(30).abortSignal(signal),
+          s.from('v_schedule_snapshot_days').select('snapshot_date').order('snapshot_date',{ascending:false}).limit(60).abortSignal(signal)
+        ])
+        requireSuccessfulReads([p,t,r,pr,sr,sd])
+        if(!alive||signal.aborted)return
+        setLoadError(false)
+        setProjects((p.data||[]) as Project[])
+        setTasks((t.data||[]) as ScheduleTask[])
+        setReports(r.data||[])
+        setProc(pr.data||[])
+        setSyncRuns(sr.data||[])
+        setSnapshotDays(sd.data||[])
+      },
+      onError:()=>{if(alive)setLoadError(true)},
+      onSettled:()=>{if(alive)setLoading(false)},
+    })
+    const load=loader.refresh
     const queueLoad=()=>{
       if(refreshTimer)window.clearTimeout(refreshTimer)
       refreshTimer=window.setTimeout(()=>{void load().catch(()=>{})},350)
@@ -145,6 +151,7 @@ export default function DashboardPage() {
     document.addEventListener('visibilitychange',refreshWhenVisible)
     return()=>{
       alive=false
+      loader.dispose()
       if(refreshTimer)window.clearTimeout(refreshTimer)
       window.removeEventListener('focus',refresh)
       document.removeEventListener('visibilitychange',refreshWhenVisible)
@@ -246,6 +253,7 @@ export default function DashboardPage() {
   const followupLinkView=followupView==='delayed'?'delayed':followupView==='blockers'?'blockers':'all'
 
   return <AppShell>
+    {loadError&&<div className="panel" role="alert">โหลดข้อมูลไม่สำเร็จ ข้อมูลที่แสดงอาจเป็นข้อมูลเดิม กรุณาลองใหม่ <button type="button" className="button" onClick={()=>window.dispatchEvent(new Event('focus'))}>ลองใหม่</button></div>}
     <PageHeader title="Management Dashboard" subtitle="Construction supervision overview — เห็นความคืบหน้า ความเสี่ยง ทรัพยากร และรายการต้องติดตามจากหน้าเดียว" action={<div className="management-action-grid management-dashboard-actions">
       <div className="management-action-meta"><span>ข้อมูลอัปเดต</span><b>{dateTimeTH(latestDataSyncAt)}</b></div>
       <Link href="/reports/new" className="button primary management-action-primary">+ รายงานประจำวัน</Link>

@@ -6,6 +6,7 @@ export const maxDuration = 15
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://wtqubwdduzedmcvyhbgs.supabase.co'
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_Ruyka15H3QApZKY9q2U-Vg_CjmEuMRX'
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 function safePart(value: string, fallback = 'unknown') {
   const clean = value
@@ -18,6 +19,7 @@ function safePart(value: string, fallback = 'unknown') {
 }
 
 export async function POST(request: Request) {
+  try {
   const authHeader = request.headers.get('authorization') || ''
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : ''
   if (!token) return NextResponse.json({ ok: false, error: 'Missing user token' }, { status: 401 })
@@ -34,6 +36,9 @@ export async function POST(request: Request) {
 
   let body: any
   try { body = await request.json() } catch { body = {} }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return NextResponse.json({ ok: false, error: 'Invalid archive payload' }, { status: 400 })
+  }
 
   const photoId = String(body.photo_id || '')
   const reportId = String(body.report_id || '')
@@ -47,11 +52,22 @@ export async function POST(request: Request) {
   const signedUrl = String(body.signed_url || '')
 
   const expectedSignedPrefix = `${SUPABASE_URL}/storage/v1/object/sign/photo-archive-staging/`
-  if (!photoId || !reportId || !projectId || !projectCode || !reportDate || !stagingPath || !signedUrl.startsWith(expectedSignedPrefix)) {
+  if (![photoId, reportId, projectId].every(id => UUID_RE.test(id)) || !projectCode || !reportDate || !stagingPath || !signedUrl.startsWith(expectedSignedPrefix)) {
     return NextResponse.json({ ok: false, error: 'Invalid archive payload' }, { status: 400 })
   }
   if (!stagingPath.startsWith(`${userData.user.id}/`)) {
     return NextResponse.json({ ok: false, error: 'Invalid staging owner' }, { status: 403 })
+  }
+  // Bind the URL sent to the archive worker to this user's exact staging object.
+  // A valid host prefix alone does not establish ownership of the signed object.
+  try {
+    const url = new URL(signedUrl)
+    const expectedPath = `/storage/v1/object/sign/photo-archive-staging/${stagingPath}`
+    if (decodeURIComponent(url.pathname) !== expectedPath || stagingPath.split('/').some(part => part === '.' || part === '..')) {
+      return NextResponse.json({ ok: false, error: 'Invalid staging URL' }, { status: 400 })
+    }
+  } catch {
+    return NextResponse.json({ ok: false, error: 'Invalid staging URL' }, { status: 400 })
   }
 
   const markFailed = async (message: string) => {
@@ -85,7 +101,7 @@ export async function POST(request: Request) {
     safePart(originalFileName.replace(/\.[^.]+$/, ''), 'photo'),
   ].join('_') + extension
 
-  const { error: processingError } = await supabase
+  const { data: processingPhoto, error: processingError } = await supabase
     .from('report_photos')
     .update({
       archive_status: 'processing',
@@ -97,9 +113,15 @@ export async function POST(request: Request) {
     })
     .eq('id', photoId)
     .eq('uploaded_by', userData.user.id)
+    .eq('daily_report_id', reportId)
+    .select('id')
+    .maybeSingle()
 
   if (processingError) {
     return NextResponse.json({ ok: false, error: `Unable to queue archive: ${processingError.message}` }, { status: 500 })
+  }
+  if (!processingPhoto) {
+    return NextResponse.json({ ok: false, error: 'Photo not found or not permitted' }, { status: 404 })
   }
 
   try {
@@ -155,5 +177,8 @@ export async function POST(request: Request) {
       : (error?.message || 'Photo archive queue request failed')
     await markFailed(message)
     return NextResponse.json({ ok: false, error: message }, { status: 502 })
+  }
+  } catch {
+    return NextResponse.json({ ok: false, error: 'Photo archive temporarily unavailable' }, { status: 503, headers: { 'cache-control': 'no-store' } })
   }
 }

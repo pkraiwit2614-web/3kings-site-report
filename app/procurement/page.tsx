@@ -6,6 +6,7 @@ import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
 import StatusBadge from '@/components/StatusBadge'
 import { getSupabase } from '@/lib/supabase'
+import { createLiveLoader, requireSuccessfulReads } from '@/lib/liveLoader'
 import { dateTH } from '@/lib/format'
 import type { Project } from '@/lib/types'
 
@@ -57,6 +58,7 @@ function searchable(values:unknown[],needle:string){
 }
 
 export default function ProcurementPage(){
+  const [loadError,setLoadError]=useState(false)
   const [rows,setRows]=useState<any[]>([])
   const [procurementLinks,setProcurementLinks]=useState<any[]>([])
   const [projects,setProjects]=useState<Project[]>([])
@@ -77,19 +79,25 @@ export default function ProcurementPage(){
     let alive=true
     let refreshTimer:number|null=null
     const s=getSupabase()
-    const load=async()=>{
-      const [r,links,p,sync]=await Promise.all([
-        s.from('procurement_items').select('*'),
-        s.from('procurement_item_projects').select('procurement_item_id,project_id'),
-        s.from('projects').select('*'),
-        s.from('drive_sync_runs').select('created_at').eq('status','success').eq('sync_type','materials').order('created_at',{ascending:false}).limit(1).maybeSingle()
-      ])
-      if(!alive)return
-      setRows(r.data||[])
-      setProcurementLinks(links.data||[])
-      setProjects((p.data||[]) as Project[])
-      setLatestSyncAt(sync.data?.created_at||null)
-    }
+    const loader=createLiveLoader({
+      load:async(signal)=>{
+        const [r,links,p,sync]=await Promise.all([
+          s.from('procurement_items').select('*').abortSignal(signal),
+          s.from('procurement_item_projects').select('procurement_item_id,project_id').abortSignal(signal),
+          s.from('projects').select('*').abortSignal(signal),
+          s.from('drive_sync_runs').select('created_at').eq('status','success').eq('sync_type','materials').order('created_at',{ascending:false}).limit(1).abortSignal(signal).maybeSingle()
+        ])
+        requireSuccessfulReads([r,links,p,sync])
+        if(!alive||signal.aborted)return
+        setLoadError(false)
+        setRows(r.data||[])
+        setProcurementLinks(links.data||[])
+        setProjects((p.data||[]) as Project[])
+        setLatestSyncAt(sync.data?.created_at||null)
+      },
+      onError:()=>{if(alive)setLoadError(true)},
+    })
+    const load=loader.refresh
     const queueLoad=()=>{
       if(refreshTimer)window.clearTimeout(refreshTimer)
       refreshTimer=window.setTimeout(()=>{void load()},350)
@@ -107,6 +115,7 @@ export default function ProcurementPage(){
     document.addEventListener('visibilitychange',refreshWhenVisible)
     return()=>{
       alive=false
+      loader.dispose()
       if(refreshTimer)window.clearTimeout(refreshTimer)
       window.removeEventListener('focus',refresh)
       document.removeEventListener('visibilitychange',refreshWhenVisible)
@@ -183,6 +192,7 @@ export default function ProcurementPage(){
   } as const
 
   return <AppShell>
+    {loadError&&<div className="panel" role="alert">โหลดข้อมูลไม่สำเร็จ ข้อมูลที่แสดงอาจเป็นข้อมูลเดิม กรุณาลองใหม่ <button type="button" className="button" onClick={()=>window.dispatchEvent(new Event('focus'))}>ลองใหม่</button></div>}
     <PageHeader title="การจัดซื้อ/จัดจ้าง" subtitle="ค้นหาจากวัสดุ งาน ผู้ขาย ผู้รับเหมา เลข PO หรือสถานะ เพื่อดูว่าตอนนี้ติดอยู่ขั้นตอนไหนและต้องตามอะไรต่อ" action={<div className="management-action-grid management-printable-actions">
       <div className="management-action-meta"><span>ข้อมูลอัปเดต</span><b>{dateTimeTH(latestSyncAt)}</b></div>
       <Link href="/?section=purchasing-followup#dashboard-purchasing" className="button management-action-dashboard">← Dashboard</Link>

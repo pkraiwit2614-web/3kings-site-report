@@ -353,6 +353,7 @@ async function parseMaterials(buffer: Buffer) {
   const h = rows.findIndex((r) => r.some((v) => normalizeHeader(v) === 'รายการวัสดุ/งาน'))
   if (h < 0) throw new Error(`Header row not found in ${MATERIAL_MASTER_SHEET}`)
   const headers = rows[h] as unknown[]
+  if (headerIndex(headers, 'สถานที่/หลัง') < 0) throw new Error('Materials location header not found')
 
   for (let i = h + 1; i < rows.length; i++) {
     const r = rows[i] as unknown[]
@@ -395,6 +396,9 @@ async function parseMaterials(buffer: Buffer) {
   if (!pRows || !procurementSheet) throw new Error('Purchasing sheet not found')
 
   const ph = pRows.findIndex((r: unknown[]) => r.some((v) => normalizeHeader(v) === 'ผู้ขาย/ผู้รับเหมา'))
+  if (ph < 0 || headerIndex(pRows[ph], 'รายการ') < 0) {
+    throw new Error(`Purchasing headers not found in ${procurementSheet}`)
+  }
   if (ph >= 0) {
     const pHeaders = pRows[ph] as unknown[]
     for (let i = ph + 1; i < pRows.length; i++) {
@@ -522,6 +526,10 @@ export async function POST(request: NextRequest) {
     }
 
     const parsed = await parseMaterials(buffer)
+    // A truncated/header-only workbook must never reach the replacement RPC.
+    if (!parsed.materials.length || !parsed.procurement.length || !parsed.tools.length) {
+      return NextResponse.json({ ok: false, error: 'incomplete_materials_workbook' }, { status: 422 })
+    }
     const actualSourceFile = sourceFile || MATERIAL_SOURCE_FILE
     const { data, error } = await supabase.rpc('drive_sync_replace_materials_tools', {
       p_sync_key: syncKey,

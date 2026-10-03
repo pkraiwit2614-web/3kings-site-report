@@ -6,6 +6,7 @@ import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
 import DefectCombineRoomEnhancer from '@/components/DefectCombineRoomEnhancer'
 import { getSupabase } from '@/lib/supabase'
+import { createLiveLoader, requireSuccessfulReads } from '@/lib/liveLoader'
 
 type RoomRow={
   room_no:string
@@ -134,6 +135,7 @@ function statusLabel(r:RoomRow){
 }
 
 export default function DefectDetailPage(){
+  const [loadError,setLoadError]=useState(false)
   const [rows,setRows]=useState<RoomRow[]>([])
   const [loading,setLoading]=useState(true)
   const [filter,setFilter]=useState('')
@@ -152,14 +154,18 @@ export default function DefectDetailPage(){
 
     let alive=true
     const supabase=getSupabase()
-    const load=async()=>{
-      try{
-        const {data,error}=await supabase.from('condo_room_status').select('room_no,building,floor,owner_name,hotel_participation,customer_status,current_status,status_group,follow_up,priority,next_action,defect_detail,latest_source,source_note,source_modified_at').order('building').order('floor').order('room_no')
-        if(alive&&!error)setRows((data||[]) as RoomRow[])
-      }finally{
-        if(alive)setLoading(false)
-      }
-    }
+    const loader=createLiveLoader({
+      load:async(signal)=>{
+        const {data,error}=await supabase.from('condo_room_status').select('room_no,building,floor,owner_name,hotel_participation,customer_status,current_status,status_group,follow_up,priority,next_action,defect_detail,latest_source,source_note,source_modified_at').order('building').order('floor').order('room_no').abortSignal(signal)
+        requireSuccessfulReads([{error}])
+        if(!alive||signal.aborted)return
+        setRows((data||[]) as RoomRow[])
+        setLoadError(false)
+      },
+      onError:()=>{if(alive)setLoadError(true)},
+      onSettled:()=>{if(alive)setLoading(false)},
+    })
+    const load=loader.refresh
 
     void load()
     const channel=supabase.channel('defect-report-status').on('postgres_changes',{event:'*',schema:'public',table:'condo_room_status'},()=>{void load()}).subscribe()
@@ -170,6 +176,7 @@ export default function DefectDetailPage(){
 
     return()=>{
       alive=false
+      loader.dispose()
       window.removeEventListener('focus',refresh)
       document.removeEventListener('visibilitychange',refreshWhenVisible)
       void supabase.removeChannel(channel)
@@ -205,6 +212,7 @@ export default function DefectDetailPage(){
   const customerScopeLabel=customerFilter==='CUSTOMER'?'มีลูกค้า':customerFilter==='NO_CUSTOMER'?'ไม่มีลูกค้า':'ทุกประเภทลูกค้า'
 
   return <AppShell>
+    {loadError&&<div className="panel" role="alert">โหลดข้อมูลไม่สำเร็จ ข้อมูลที่แสดงอาจเป็นข้อมูลเดิม กรุณาลองใหม่ <button type="button" className="button" onClick={()=>window.dispatchEvent(new Event('focus'))}>ลองใหม่</button></div>}
     <DefectCombineRoomEnhancer />
     <PageHeader
       title="Above Condo — Defect Report"
