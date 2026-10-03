@@ -14,21 +14,19 @@ const managementNav: NavItem[] = [
   ['/schedule', 'แผนงานที่กำหนด'],
   ['/materials', 'วัสดุ เครื่องมือและผู้รับเหมา'],
   ['/defect-flow', 'Defect Report'],
-  ['/reports/quick', 'รายงานการทำงานประจำวัน'],
+  ['/reports', 'Site Operations'],
   ['/site-photos', 'รูปภาพหน้างาน'],
   ['/procurement', 'การจัดซื้อ/จัดจ้าง'],
-  ['/reports', 'ประวัติรายงานการทำงานประจำวัน'],
   ['/weekly', 'รายงานการทำงานประจำสัปดาห์']
 ]
 
 const reportUserNav: NavItem[] = [
   ['/', 'Dashboard'],
-  ['/reports/quick', 'รายงานวันนี้'],
+  ['/reports', 'Site Operations'],
   ['/schedule', 'แผนงานที่กำหนด'],
   ['/site-photos', 'รูปภาพหน้างาน'],
   ['/defect-flow', 'Defect Report'],
   ['/materials', 'วัสดุ เครื่องมือและผู้รับเหมา'],
-  ['/reports', 'ประวัติรายงานการทำงานประจำวัน'],
   ['/procurement', 'การจัดซื้อ/จัดจ้าง'],
   ['/weekly', 'รายงานการทำงานประจำสัปดาห์'],
   ['/presentation', 'Executive Presentation']
@@ -40,7 +38,7 @@ const viewerNav: NavItem[] = [
   ['/site-photos', 'รูปภาพหน้างาน'],
   ['/defect-flow', 'Defect Report'],
   ['/materials', 'วัสดุ เครื่องมือและผู้รับเหมา'],
-  ['/reports', 'ประวัติรายงานการทำงานประจำวัน'],
+  ['/reports', 'Site Operations'],
   ['/procurement', 'การจัดซื้อ/จัดจ้าง'],
   ['/weekly', 'รายงานการทำงานประจำสัปดาห์'],
   ['/presentation', 'Executive Presentation']
@@ -53,9 +51,8 @@ const mobileLabel: Record<string,string> = {
   '/schedule': 'แผนงาน',
   '/materials': 'วัสดุ',
   '/defect-flow': 'Defect',
-  '/reports/quick': 'รายงานวันนี้',
   '/site-photos': 'รูปหน้างาน',
-  '/reports': 'ประวัติรายงาน'
+  '/reports': 'Site Ops'
 }
 
 const DRIVE_WATCH_PATHS = new Set(['/', '/presentation', '/schedule', '/materials', '/site-photos', '/procurement', '/photo-mapping', '/data-health'])
@@ -64,13 +61,14 @@ function roleLabel(role:string,userName:string){
   if(userName.trim().toLowerCase()==='golf') return 'Site Supervisor'
   if(role==='manager') return 'Admin'
   if(role==='engineer') return 'Engineer'
-  if(role==='foreman') return 'Report User · กรอกรายงาน'
+  if(role==='foreman') return 'Site User · ดูข้อมูล'
   if(role==='viewer') return 'Viewer · ดูข้อมูล'
   return 'User'
 }
 
 function navIsActive(path:string,href:string){
   if(href==='/defect-flow') return path==='/defect-flow'||path==='/defects'
+  if(href==='/reports') return path==='/reports'||path.startsWith('/reports/')
   return path===href
 }
 
