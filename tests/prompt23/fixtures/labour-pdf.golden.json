@@ -1,0 +1,27 @@
+{
+  "page_count": 2,
+  "pages": [
+    {
+      "work_date": "2026-09-16",
+      "page_size_mm": {"width": 297, "height": 210},
+      "orientation": "landscape",
+      "worker_count": 3,
+      "projects": ["A", "B"],
+      "source_statuses": ["pending", "verified"],
+      "overlap": false,
+      "fits": true,
+      "detail": {"font_pt": 9, "lines": 2, "height": 16.4}
+    },
+    {
+      "work_date": "2026-09-17",
+      "page_size_mm": {"width": 297, "height": 210},
+      "orientation": "landscape",
+      "worker_count": 1,
+      "projects": ["A"],
+      "source_statuses": ["pending"],
+      "overlap": false,
+      "fits": true,
+      "detail": {"font_pt": 9, "lines": 1, "height": 12.2}
+    }
+  ]
+}

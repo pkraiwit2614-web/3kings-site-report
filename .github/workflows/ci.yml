@@ -27,3 +27,6 @@ jobs:
 
       - name: Stability regression tests
         run: node tests/stability.test.cjs
+
+      - name: Prompt 23 labour/payroll QA
+        run: node --test tests/prompt23/labour-payroll.test.cjs
