@@ -294,7 +294,7 @@ export default function LabourVerificationPage(){
     setPayrollDrafts(prev=>({...prev,[batchId]:(prev[batchId]||[]).map((x,i)=>i===index?{...x,...patch}:x)}))
   }
   const applyAttendance=(batchId:string,index:number,value:string)=>{
-    const patch:Partial<PayrollDraftItem>={attendance_status:value}
+    const patch:Partial<PayrollDraftItem>={attendance_status:value,timecard_match:false}
     if(value==='absent'||value==='leave'){patch.work_units='0';patch.ot_hours='0'}
     else if(value==='half_day')patch.work_units='0.5'
     else if(value==='present'){const current=(payrollDrafts[batchId]||[])[index];if(!current||Number(current.work_units)===0)patch.work_units='1'}
@@ -304,7 +304,7 @@ export default function LabourVerificationPage(){
     setPayrollDrafts(prev=>({...prev,[batch.id]:(prev[batch.id]||[]).map(x=>({...x,timecard_match:matched}))}))
   }
   const clearAllOt=(batch:Batch)=>{
-    setPayrollDrafts(prev=>({...prev,[batch.id]:(prev[batch.id]||[]).map(x=>({...x,ot_hours:'0'}))}))
+    setPayrollDrafts(prev=>({...prev,[batch.id]:(prev[batch.id]||[]).map(x=>Number(x.ot_hours||0)===0?x:{...x,ot_hours:'0',timecard_match:false})}))
   }
   const savePayrollWeb=async(batch:Batch,status:'draft'|'timecard_checked')=>{
     if(!canPayroll||saving['payroll-'+batch.id])return
