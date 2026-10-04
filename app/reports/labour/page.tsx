@@ -108,8 +108,8 @@ export default function LabourVerificationPage(){
       if(!nextAccessRole)throw new Error('ROLE_NOT_ALLOWED')
       const payrollAllowed=canViewPayroll(nextAccessRole)
 
-      const emptyPayrollRecord={label:'payroll_verification_records',data:[] as PayrollRecord[],count:0,loaded:0,truncated:false}
-      const emptyPayrollItem={label:'payroll_verification_items',data:[] as PayrollItem[],count:0,loaded:0,truncated:false}
+      const emptyPayrollRecord={label:'payroll_verification_records',data:[] as PayrollRecord[],count:0,loaded:0,truncated:false,pages:0}
+      const emptyPayrollItem={label:'payroll_verification_items',data:[] as PayrollItem[],count:0,loaded:0,truncated:false,pages:0}
 
       const [e,b,w,p,ep,a,pr,pi]=await Promise.all([
         readAllPages<SiteEntry>({label:'site_operations_entries',keyOf:x=>x.id,fetchPage:(from,to)=>
