@@ -3,7 +3,9 @@
 
   .mobile-nav{
     display:grid!important;
-    grid-template-columns:repeat(7,minmax(0,1fr))!important;
+    grid-template-columns:none!important;
+    grid-auto-flow:column;
+    grid-auto-columns:minmax(0,1fr);
     position:fixed;
     left:0;
     right:0;
@@ -57,11 +59,19 @@
     max-height:min(70vh,560px);
     overflow:auto;
     padding:10px 14px 16px;
-    background:#fffdf9;
-    color:var(--text);
-    border:1px solid var(--line);
+    background:linear-gradient(145deg,#102038,#1a3352);
+    color:#fff;
+    border:1px solid rgba(255,255,255,.12);
     border-radius:22px;
-    box-shadow:0 24px 60px rgba(8,21,38,.28)
+    box-shadow:0 24px 60px rgba(8,21,38,.34);
+    transform-origin:bottom center;
+    animation:mobileMoreIn .16s ease-out;
+    overscroll-behavior:contain
+  }
+
+  @keyframes mobileMoreIn{
+    from{opacity:0;transform:translateY(10px) scale(.985)}
+    to{opacity:1;transform:translateY(0) scale(1)}
   }
 
   .mobile-more-handle{
@@ -69,7 +79,7 @@
     height:5px;
     margin:1px auto 12px;
     border-radius:999px;
-    background:#d5d0c7
+    background:rgba(255,255,255,.34)
   }
 
   .mobile-more-user{
@@ -78,37 +88,44 @@
     justify-content:space-between;
     gap:12px;
     padding:5px 3px 13px;
-    border-bottom:1px solid #ebe5db
+    border-bottom:1px solid rgba(255,255,255,.12)
   }
 
-  .mobile-more-user b{display:block;font-size:16px;color:#17243a}
-  .mobile-more-user span{display:block;margin-top:3px;color:#8a6a2b;font-size:12px;text-transform:capitalize}
-  .mobile-more-user button{border:0;background:#f1eee7;color:#596575;border-radius:10px;padding:7px 10px;font-size:12px}
+  .mobile-more-user b{display:block;font-size:16px;color:#fff}
+  .mobile-more-user span{display:block;margin-top:3px;color:#f1cf84;font-size:12px;text-transform:capitalize}
+  .mobile-more-user button{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.08);color:#dbe4ee;border-radius:10px;padding:7px 10px;font-size:12px}
 
-  .mobile-more-links{display:grid;padding:8px 0}
+  .mobile-more-links{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:8px;
+    padding:10px 0
+  }
   .mobile-more-links a{
     display:flex;
     align-items:center;
     justify-content:space-between;
-    min-height:50px;
-    padding:11px 10px;
-    border-bottom:1px solid #f0ebe2;
-    border-radius:10px;
-    color:#26364c;
-    font-size:14px;
+    min-width:0;
+    min-height:58px;
+    padding:10px 11px;
+    border:1px solid rgba(255,255,255,.1);
+    border-radius:12px;
+    background:rgba(255,255,255,.065);
+    color:#e5ebf3;
+    font-size:12px;
+    line-height:1.25;
     font-weight:700
   }
-  .mobile-more-links a:last-child{border-bottom:0}
-  .mobile-more-links a.active{background:var(--gold-soft);color:#735313}
-  .mobile-more-links a span{font-size:22px;color:#9aa3ae;font-weight:400}
+  .mobile-more-links a.active{border-color:rgba(242,204,121,.48);background:rgba(229,189,104,.14);color:#f2cc79}
+  .mobile-more-links a span{flex:0 0 auto;margin-left:7px;font-size:20px;color:#96a8bc;font-weight:400}
 
   .mobile-logout{
     width:100%;
     min-height:46px;
-    border:1px solid #efc8c5;
+    border:1px solid rgba(239,200,197,.32);
     border-radius:12px;
-    background:var(--red-soft);
-    color:#9e312d;
+    background:rgba(158,49,45,.18);
+    color:#ffd4d1;
     font-weight:800
   }
 }
