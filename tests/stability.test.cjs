@@ -22,6 +22,22 @@ function loadTs(file, mocks = {}, extra = '') {
 const {createLiveLoader, requireSuccessfulReads} = loadTs('lib/liveLoader.ts')
 const tick = () => new Promise(resolve => setImmediate(resolve))
 
+const workDateIntegrity = loadTs('lib/workDateIntegrity.ts')
+test('Work Date integrity uses Bangkok midnight and excludes future/review dates',()=>{
+  assert.equal(workDateIntegrity.bangkokToday(new Date('2026-10-03T16:59:59.999Z')),'2026-10-03')
+  assert.equal(workDateIntegrity.bangkokToday(new Date('2026-10-03T17:00:00.000Z')),'2026-10-04')
+  const rows=[
+    {work_date:'2026-12-09',work_date_validation_status:'future_review'},
+    {work_date:'2026-09-30',work_date_validation_status:'valid'},
+    {work_date:'2026-09-16',work_date_validation_status:'valid'}
+  ]
+  assert.equal(workDateIntegrity.latestUsableDate(rows,'2026-10-04'),'2026-09-30')
+  assert.equal(workDateIntegrity.latestUsableDate([rows[0]],'2026-10-04'),'')
+  assert.equal(workDateIntegrity.isUsableActualWorkDate(rows[0],'2026-10-04'),false)
+  assert.equal(workDateIntegrity.isBatchWorkDateUsable({work_date:'2026-12-09',site_operations_entry_id:'row91'},rows[0],'2026-10-04'),false)
+})
+
+
 test('overlapping refresh events coalesce; old results cannot finish after new ones', async () => {
   const release = []; const commits = []; let active = 0; let max = 0
   const loader = createLiveLoader({load: async () => {
