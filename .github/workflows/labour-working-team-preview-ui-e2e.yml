@@ -96,7 +96,8 @@ jobs:
             return {access_token:fakeJwt(id),token_type:'bearer',expires_in:3600,expires_at:4102444800,refresh_token:'stub-refresh',user}
           }
           function json(route, body, status=200, extra={}) {
-            const contentRange=Array.isArray(body)?(body.length?`0-${body.length-1}/${body.length}`:'*/0'):'0-0/1'\n            return route.fulfill({status,contentType:'application/json',body:JSON.stringify(body),headers:{'content-range':contentRange,...extra}})
+            const contentRange=Array.isArray(body)?(body.length?`0-${body.length-1}/${body.length}`:'*/0'):'0-0/1'
+            return route.fulfill({status,contentType:'application/json',body:JSON.stringify(body),headers:{'content-range':contentRange,...extra}})
           }
           async function installMocks(context, appRole) {
             const uid=appRole==='viewer'?viewerId:engineerId
