@@ -75,11 +75,13 @@ export default function LabourVerificationPage(){
   const [readSignals,setReadSignals]=useState<Array<{label:string;loaded:number;count:number;truncated:boolean}>>([])
 
   useEffect(()=>{
-    const onFocus=()=>setRefreshTick(v=>v+1)
-    const onVisible=()=>{if(document.visibilityState==='visible')setRefreshTick(v=>v+1)}
+    const queueRefresh=()=>setRefreshTick(v=>v+1)
+    const onFocus=()=>queueRefresh()
+    const onVisible=()=>{if(document.visibilityState==='visible')queueRefresh()}
+    const pollTimer=window.setInterval(()=>{if(document.visibilityState==='visible')queueRefresh()},60000)
     window.addEventListener('focus',onFocus)
     document.addEventListener('visibilitychange',onVisible)
-    return()=>{window.removeEventListener('focus',onFocus);document.removeEventListener('visibilitychange',onVisible)}
+    return()=>{window.clearInterval(pollTimer);window.removeEventListener('focus',onFocus);document.removeEventListener('visibilitychange',onVisible)}
   },[])
 
   useEffect(()=>{
@@ -131,7 +133,7 @@ export default function LabourVerificationPage(){
       setDateFrom(v=>v||(latest?addDays(latest,-6):''))
       setLoadError(false)
     }
-    setLoading(true)
+    if(refreshTick===0)setLoading(true)
     load().catch(()=>{if(alive)setLoadError(true)}).finally(()=>{if(alive)setLoading(false)})
     return()=>{alive=false}
   },[refreshTick])

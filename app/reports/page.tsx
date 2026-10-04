@@ -116,8 +116,9 @@ export default function SiteOperationsPage(){
       .subscribe()
     const onFocus=()=>queueLoad()
     const onVisible=()=>{if(document.visibilityState==='visible')queueLoad()}
+    const pollTimer=window.setInterval(()=>{if(document.visibilityState==='visible')queueLoad()},60000)
     window.addEventListener('focus',onFocus);document.addEventListener('visibilitychange',onVisible)
-    return()=>{alive=false;loader.dispose();if(refreshTimer)window.clearTimeout(refreshTimer);window.removeEventListener('focus',onFocus);document.removeEventListener('visibilitychange',onVisible);void s.removeChannel(channel)}
+    return()=>{alive=false;loader.dispose();if(refreshTimer)window.clearTimeout(refreshTimer);window.clearInterval(pollTimer);window.removeEventListener('focus',onFocus);document.removeEventListener('visibilitychange',onVisible);void s.removeChannel(channel)}
   },[])
 
   const projectById=useMemo(()=>new Map(projects.map(x=>[x.id,x])),[projects])
