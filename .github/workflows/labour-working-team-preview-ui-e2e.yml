@@ -97,7 +97,7 @@ jobs:
           }
           function json(route, body, status=200, extra={}) {
             const contentRange=Array.isArray(body)?(body.length?`0-${body.length-1}/${body.length}`:'*/0'):'0-0/1'
-            return route.fulfill({status,contentType:'application/json',body:JSON.stringify(body),headers:{'content-range':contentRange,...extra}})
+            return route.fulfill({status,contentType:'application/json',body:JSON.stringify(body),headers:{'content-range':contentRange,'access-control-expose-headers':'Content-Range','access-control-allow-origin':'*',...extra}})
           }
           async function installMocks(context, appRole) {
             const uid=appRole==='viewer'?viewerId:engineerId
