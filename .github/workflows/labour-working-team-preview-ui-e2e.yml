@@ -1,0 +1,289 @@
+name: Labour Working Team Preview UI E2E
+
+on:
+  push:
+    branches:
+      - fix/labour-working-team-default-e2e
+    paths:
+      - '.github/workflows/labour-working-team-preview-ui-e2e.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  browser-ui-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PREVIEW_URL: https://3kings-site-report-git-fix-labour-42ded3-kraiwit-p-golfiiz-sqr.vercel.app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify preview is reachable
+        shell: bash
+        run: |
+          set -euo pipefail
+          status=$(curl -sS -L -o /tmp/preview.html -w '%{http_code}' "$PREVIEW_URL/reports/labour")
+          final_url=$(curl -sS -L -o /dev/null -w '%{url_effective}' "$PREVIEW_URL/reports/labour")
+          echo "HTTP=$status"
+          echo "FINAL_URL=$final_url"
+          test "$status" = "200"
+          if echo "$final_url" | grep -q 'vercel.com/login'; then
+            echo "Preview still protected"
+            exit 41
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Playwright
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Run browser UI E2E against real Preview
+        shell: bash
+        run: |
+          cat > labour-preview-ui-e2e.mjs <<'EOF'
+          import { chromium } from 'playwright'
+          import fs from 'node:fs'
+
+          const base = process.env.PREVIEW_URL
+          const supabaseOrigin = 'https://woqbxlhikzhhoaiinwqf.supabase.co'
+          const projectId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+          const engineerId = '33333333-3333-4333-8333-333333333333'
+          const viewerId = '44444444-4444-4444-8444-444444444444'
+          const storageKey = 'sb-woqbxlhikzhhoaiinwqf-auth-token'
+          const results = []
+          const rpcCalls = []
+
+          const workers = [
+            {worker_id:'W027',full_name:'Synthetic Worker W027',nickname:'W027',default_team:'ช่างตุ๊ก',status:'Active',display_label:'W027 Synthetic'},
+            {worker_id:'W034',full_name:'Synthetic Worker W034',nickname:'W034',default_team:'ทีมช่างปาล์มคุมกะรน',status:'Active',display_label:'W034 Synthetic'},
+          ]
+          const entries = [
+            {id:'a0000000-0000-4000-8000-000000000027',work_date:'2026-10-04',source_row:27,project_name_raw:'PTEST',area_raw:'Case W027',supervisor_raw:'Synthetic Supervisor',male_count:1,female_count:0,total_manpower:1,work_detail:'Borrow W027 to ช่างต้อย',status_text:'TEST',next_plan:null,afternoon_detail:null,specific_area:null,supervisor_worker_id:null},
+            {id:'a0000000-0000-4000-8000-000000000034',work_date:'2026-10-04',source_row:34,project_name_raw:'PTEST',area_raw:'Case W034',supervisor_raw:'Synthetic Supervisor',male_count:1,female_count:0,total_manpower:1,work_detail:'Borrow W034 to ช่างพร',status_text:'TEST',next_plan:null,afternoon_detail:null,specific_area:null,supervisor_worker_id:null},
+            {id:'a0000000-0000-4000-8000-000000000127',work_date:'2026-10-04',source_row:127,project_name_raw:'PTEST',area_raw:'Same Team',supervisor_raw:'Synthetic Supervisor',male_count:1,female_count:0,total_manpower:1,work_detail:'W027 same home team',status_text:'TEST',next_plan:null,afternoon_detail:null,specific_area:null,supervisor_worker_id:null},
+            {id:'a0000000-0000-4000-8000-000000000227',work_date:'2026-10-04',source_row:227,project_name_raw:'PTEST',area_raw:'Returned',supervisor_raw:'Synthetic Supervisor',male_count:1,female_count:0,total_manpower:1,work_detail:'W027 returned home',status_text:'TEST',next_plan:null,afternoon_detail:null,specific_area:null,supervisor_worker_id:null},
+            {id:'a0000000-0000-4000-8000-000000000999',work_date:'2026-10-04',source_row:999,project_name_raw:'PTEST',area_raw:'Unknown Team',supervisor_raw:'Synthetic Supervisor',male_count:1,female_count:0,total_manpower:1,work_detail:'Unknown working team block case',status_text:'TEST',next_plan:null,afternoon_detail:null,specific_area:null,supervisor_worker_id:null},
+          ]
+          const batches = [
+            {id:'b0000000-0000-4000-8000-000000000027',site_operations_entry_id:entries[0].id,work_date:'2026-10-04',expected_headcount:1,supervisor_worker_id:null,supervisor_raw:'Synthetic Supervisor',home_team:'ช่างต้อย',verification_status:'pending',verified_by:null,verified_at:null,note:null},
+            {id:'b0000000-0000-4000-8000-000000000034',site_operations_entry_id:entries[1].id,work_date:'2026-10-04',expected_headcount:1,supervisor_worker_id:null,supervisor_raw:'Synthetic Supervisor',home_team:'ช่างพร',verification_status:'pending',verified_by:null,verified_at:null,note:null},
+            {id:'b0000000-0000-4000-8000-000000000127',site_operations_entry_id:entries[2].id,work_date:'2026-10-04',expected_headcount:1,supervisor_worker_id:null,supervisor_raw:'Synthetic Supervisor',home_team:'ช่างตุ๊ก',verification_status:'pending',verified_by:null,verified_at:null,note:null},
+            {id:'b0000000-0000-4000-8000-000000000227',site_operations_entry_id:entries[3].id,work_date:'2026-10-04',expected_headcount:1,supervisor_worker_id:null,supervisor_raw:'Synthetic Supervisor',home_team:'ช่างตุ๊ก',verification_status:'pending',verified_by:null,verified_at:null,note:null},
+            {id:'b0000000-0000-4000-8000-000000000999',site_operations_entry_id:entries[4].id,work_date:'2026-10-04',expected_headcount:1,supervisor_worker_id:null,supervisor_raw:'Synthetic Supervisor',home_team:null,verification_status:'pending',verified_by:null,verified_at:null,note:null},
+          ]
+          const project = {id:projectId,code:'PTEST',name:'Synthetic Labour E2E',site_group:'TEST',target_handover:null,active:true,sort_order:1}
+          const entryProjects = entries.map(e=>({entry_id:e.id,project_id:projectId}))
+          const assignments = []
+
+          function assert(cond, message) {
+            if (!cond) throw new Error(message)
+          }
+          function fakeJwt(sub) {
+            const b64 = obj => Buffer.from(JSON.stringify(obj)).toString('base64url')
+            return b64({alg:'HS256',typ:'JWT'})+'.'+b64({sub,role:'authenticated',exp:4102444800})+'.stub'
+          }
+          function authUser(id, email) {
+            const now='2026-10-04T00:00:00.000Z'
+            return {id,aud:'authenticated',role:'authenticated',email,email_confirmed_at:now,confirmed_at:now,last_sign_in_at:now,app_metadata:{provider:'email',providers:['email']},user_metadata:{},identities:[],created_at:now,updated_at:now,is_anonymous:false}
+          }
+          function session(id,email){
+            const user=authUser(id,email)
+            return {access_token:fakeJwt(id),token_type:'bearer',expires_in:3600,expires_at:4102444800,refresh_token:'stub-refresh',user}
+          }
+          function json(route, body, status=200, extra={}) {
+            return route.fulfill({status,contentType:'application/json',body:JSON.stringify(body),headers:{'content-range':'0-999/*',...extra}})
+          }
+          async function installMocks(context, appRole) {
+            const uid=appRole==='viewer'?viewerId:engineerId
+            const email=appRole==='viewer'?'viewer-ui-e2e@example.invalid':'engineer-ui-e2e@example.invalid'
+            await context.addInitScript(({storageKey,value})=>localStorage.setItem(storageKey,value),{storageKey,value:JSON.stringify(session(uid,email))})
+            await context.route(supabaseOrigin+'/**', async route => {
+              const req=route.request()
+              const u=new URL(req.url())
+              const path=u.pathname
+
+              if(path==='/auth/v1/user'){
+                return json(route,authUser(uid,email))
+              }
+              if(path==='/auth/v1/logout'){
+                return json(route,{})
+              }
+
+              if(path==='/rest/v1/profiles'){
+                return json(route,{full_name:appRole==='viewer'?'Synthetic Viewer':'Synthetic Engineer',role:appRole,active:true})
+              }
+              if(path==='/rest/v1/site_operations_entries') return json(route,entries)
+              if(path==='/rest/v1/labour_verification_batches') return json(route,batches)
+              if(path==='/rest/v1/labour_workers') return json(route,workers)
+              if(path==='/rest/v1/projects') return json(route,[project])
+              if(path==='/rest/v1/site_operations_entry_projects') return json(route,entryProjects)
+              if(path==='/rest/v1/labour_daily_assignments') return json(route,assignments)
+              if(path==='/rest/v1/payroll_verification_records') return json(route,[])
+              if(path==='/rest/v1/payroll_verification_items') return json(route,[])
+
+              if(path==='/rest/v1/rpc/labour_verify_batch'){
+                const body=req.postDataJSON()
+                rpcCalls.push(body)
+                const batch=batches.find(x=>x.id===body.p_batch_id)
+                assert(batch,'RPC referenced unknown batch '+body.p_batch_id)
+                batch.verification_status='verified'
+                batch.verified_by=uid
+                batch.verified_at='2026-10-04T03:00:00.000Z'
+                batch.note=body.p_note||null
+                for(let i=assignments.length-1;i>=0;i--) if(assignments[i].batch_id===batch.id) assignments.splice(i,1)
+                for(const a of body.p_assignments||[]){
+                  const worker=workers.find(w=>w.worker_id===a.worker_id)
+                  assignments.push({
+                    id:'assign-'+batch.id+'-'+a.worker_id,
+                    batch_id:batch.id,
+                    worker_id:a.worker_id,
+                    work_date:batch.work_date,
+                    project_id:a.project_id||null,
+                    home_team:worker?.default_team||null,
+                    working_team:a.working_team||worker?.default_team||null,
+                    movement_status:a.movement_status||'same_team',
+                    allocation_hours:a.allocation_hours??null,
+                    allocation_share:null,
+                    work_detail:entries.find(e=>e.id===batch.site_operations_entry_id)?.work_detail||null,
+                    notes:a.notes||null,
+                    verified_at:batch.verified_at,
+                  })
+                }
+                return json(route,body.p_assignments?.length||0)
+              }
+
+              console.log('UNHANDLED_SUPABASE_REQUEST',req.method(),req.url())
+              return json(route,{message:'unhandled test route'},500)
+            })
+          }
+
+          async function card(page, marker) {
+            const c=page.locator('article.labour-card').filter({hasText:marker})
+            await c.waitFor({state:'visible',timeout:15000})
+            return c
+          }
+          async function addWorker(c, workerId) {
+            await c.locator('.labour-tools select').selectOption(workerId)
+            await c.getByRole('button',{name:'เพิ่มคน'}).click()
+          }
+          async function field(c,label) {
+            return c.locator('label').filter({hasText:label}).locator('select').inputValue()
+          }
+          async function save(c) {
+            await c.getByRole('button',{name:/ยืนยันทีมคนงาน|ยืนยันการแก้ไข/}).click()
+            await c.getByText('ยืนยันทีมแล้ว').waitFor({state:'visible',timeout:15000})
+          }
+
+          const browser=await chromium.launch()
+          try{
+            const ctx=await browser.newContext({viewport:{width:1440,height:1100}})
+            await installMocks(ctx,'engineer')
+            const page=await ctx.newPage()
+            const browserErrors=[]
+            page.on('console',m=>{if(m.type()==='error') browserErrors.push(m.text())})
+            await page.goto(base+'/reports/labour?date=2026-10-04',{waitUntil:'networkidle'})
+            await page.getByText('Labour & Payroll Verification').waitFor({state:'visible',timeout:15000})
+            await page.getByText('กำลังโหลดข้อมูล…').waitFor({state:'detached',timeout:15000}).catch(()=>{})
+
+            {
+              const c=await card(page,'Case W027')
+              await addWorker(c,'W027')
+              const working=await field(c,'ทีมที่ทำงานจริง')
+              const movement=await field(c,'การย้ายทีม')
+              assert(working==='ช่างต้อย','W027 working team expected ช่างต้อย got '+working)
+              assert(movement==='borrowed','W027 movement expected borrowed got '+movement)
+              assert((await c.locator('.labour-person-name').innerText()).includes('Home: ช่างตุ๊ก'),'W027 home team changed in UI')
+              await save(c)
+              const call=rpcCalls.find(x=>x.p_batch_id==='b0000000-0000-4000-8000-000000000027')
+              assert(call?.p_assignments?.[0]?.working_team==='ช่างต้อย','W027 RPC payload working_team wrong')
+              assert(call?.p_assignments?.[0]?.movement_status==='borrowed','W027 RPC payload movement wrong')
+              results.push({case:'W027 borrowed',working,movement,payload:call.p_assignments[0],status:'PASS'})
+            }
+
+            {
+              const c=await card(page,'Case W034')
+              await addWorker(c,'W034')
+              const working=await field(c,'ทีมที่ทำงานจริง')
+              const movement=await field(c,'การย้ายทีม')
+              assert(working==='ช่างพร','W034 working team expected ช่างพร got '+working)
+              assert(movement==='borrowed','W034 movement expected borrowed got '+movement)
+              assert((await c.locator('.labour-person-name').innerText()).includes('Home: ทีมช่างปาล์มคุมกะรน'),'W034 home team changed in UI')
+              await save(c)
+              results.push({case:'W034 borrowed',working,movement,status:'PASS'})
+            }
+
+            {
+              const c=await card(page,'Same Team')
+              await addWorker(c,'W027')
+              const working=await field(c,'ทีมที่ทำงานจริง')
+              const movement=await field(c,'การย้ายทีม')
+              assert(working==='ช่างตุ๊ก','same-team working team wrong')
+              assert(movement==='same_team','same-team movement wrong')
+              await save(c)
+              results.push({case:'same team',working,movement,status:'PASS'})
+            }
+
+            {
+              const c=await card(page,'Returned')
+              await addWorker(c,'W027')
+              const initial=await field(c,'การย้ายทีม')
+              assert(initial==='same_team','returned must not be inferred automatically')
+              await c.locator('label').filter({hasText:'การย้ายทีม'}).locator('select').selectOption('returned')
+              await save(c)
+              await page.reload({waitUntil:'networkidle'})
+              const reloaded=await card(page,'Returned')
+              await reloaded.getByRole('button',{name:/โหลดชุดที่ยืนยันไว้/}).click()
+              const persisted=await field(reloaded,'การย้ายทีม')
+              assert(persisted==='returned','manual returned did not persist after reload')
+              results.push({case:'manual returned preserved',initial,persisted,status:'PASS'})
+            }
+
+            {
+              const c=await card(page,'Unknown Team')
+              await addWorker(c,'W027')
+              await page.getByText('ยังไม่ทราบทีมที่ทำงานจริงของชุดนี้ • กรุณาตรวจ/ยืนยันทีมก่อนเพิ่มคน').waitFor({state:'visible'})
+              assert(await c.locator('.labour-person').count()===0,'unknown working team created a draft instead of blocking')
+              results.push({case:'unknown team blocks guessing',status:'PASS'})
+            }
+
+            assert(browserErrors.length===0,'browser console errors: '+browserErrors.join(' | '))
+            await page.screenshot({path:'labour-preview-ui-pass.png',fullPage:true})
+            await ctx.close()
+
+            const viewerCtx=await browser.newContext({viewport:{width:1280,height:900}})
+            await installMocks(viewerCtx,'viewer')
+            const viewer=await viewerCtx.newPage()
+            await viewer.goto(base+'/reports/labour?date=2026-10-04',{waitUntil:'networkidle'})
+            await viewer.getByText('บัญชีนี้ดูข้อมูลได้ แต่การยืนยัน/แก้ทีมคนงานสงวนไว้สำหรับ Manager, Engineer หรือ Payroll').waitFor({state:'visible',timeout:15000})
+            const addButtons=viewer.getByRole('button',{name:'เพิ่มคน'})
+            const count=await addButtons.count()
+            for(let i=0;i<count;i++) assert(await addButtons.nth(i).isDisabled(),'viewer has enabled add worker button')
+            results.push({case:'viewer read-only',status:'PASS'})
+            await viewerCtx.close()
+
+            fs.writeFileSync('labour-preview-ui-results.json',JSON.stringify({status:'PASS',results,rpcCalls},null,2))
+            console.log(JSON.stringify({status:'PASS',results,rpcCalls},null,2))
+          }catch(err){
+            fs.writeFileSync('labour-preview-ui-results.json',JSON.stringify({status:'FAIL',error:String(err?.stack||err),results,rpcCalls},null,2))
+            console.error(err)
+            throw err
+          }finally{
+            await browser.close()
+          }
+          EOF
+          node labour-preview-ui-e2e.mjs
+
+      - name: Upload UI E2E evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: labour-working-team-preview-ui-e2e
+          path: |
+            labour-preview-ui-results.json
+            labour-preview-ui-pass.png
+          if-no-files-found: ignore
