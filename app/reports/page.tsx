@@ -6,7 +6,8 @@ import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
 import StatusBadge from '@/components/StatusBadge'
 import { getSupabase } from '@/lib/supabase'
-import { createLiveLoader, requireSuccessfulReads } from '@/lib/liveLoader'
+import { createLiveLoader } from '@/lib/liveLoader'
+import { readAllPages, requireCompletePagedReads } from '@/lib/pagedRead'
 import { dateTH } from '@/lib/format'
 import type { Project, ScheduleTask } from '@/lib/types'
 
@@ -69,6 +70,7 @@ export default function SiteOperationsPage(){
   const [selectedDate,setSelectedDate]=useState('')
   const [selectedProject,setSelectedProject]=useState('')
   const [q,setQ]=useState('')
+  const [readSignals,setReadSignals]=useState<Array<{label:string;loaded:number;count:number;truncated:boolean}>>([])
 
   useEffect(()=>{
     let alive=true
@@ -77,22 +79,32 @@ export default function SiteOperationsPage(){
     const loader=createLiveLoader({
       load:async(signal)=>{
         const [e,ep,p,t,pr,pl,w,b]=await Promise.all([
-          s.from('site_operations_entries').select('*').order('work_date',{ascending:false}).order('source_row',{ascending:false}).limit(1200).abortSignal(signal),
-          s.from('site_operations_entry_projects').select('entry_id,project_id,mapping_method').abortSignal(signal),
-          s.from('projects').select('id,code,name,site_group,target_handover,active,sort_order').order('sort_order').abortSignal(signal),
-          s.from('v_schedule_tasks').select('id,project_id,source_task_no,category,task_name,area,planned_start,planned_end,current_plan_progress,actual_progress,current_variance,delay_days,site_status,blocker,next_action,target_close,contractor').abortSignal(signal),
-          s.from('procurement_items').select('id,project_id,vendor,item_name,current_status,procurement_status,payment_status,expected_delivery_text,condition_note,po_no,pr_no').abortSignal(signal),
-          s.from('procurement_item_projects').select('procurement_item_id,project_id').abortSignal(signal),
-          s.from('labour_workers').select('worker_id,full_name,display_label,default_team').abortSignal(signal),
-          s.from('labour_verification_batches').select('id,site_operations_entry_id,verification_status,verified_at').abortSignal(signal)
+          readAllPages<SiteEntry>({label:'site_operations_entries',signal,keyOf:x=>x.id,fetchPage:(from,to)=>
+            s.from('site_operations_entries').select('*',{count:'exact'}).order('work_date',{ascending:false}).order('source_row',{ascending:false}).order('id',{ascending:false}).range(from,to).abortSignal(signal)}),
+          readAllPages<EntryProject>({label:'site_operations_entry_projects',signal,keyOf:x=>x.entry_id+':'+x.project_id,fetchPage:(from,to)=>
+            s.from('site_operations_entry_projects').select('entry_id,project_id,mapping_method',{count:'exact'}).order('entry_id').order('project_id').range(from,to).abortSignal(signal)}),
+          readAllPages<Project>({label:'projects',signal,keyOf:x=>x.id,fetchPage:(from,to)=>
+            s.from('projects').select('id,code,name,site_group,target_handover,active,sort_order',{count:'exact'}).order('sort_order').order('id').range(from,to).abortSignal(signal)}),
+          readAllPages<ScheduleTask>({label:'v_schedule_tasks',signal,keyOf:x=>x.id,fetchPage:(from,to)=>
+            s.from('v_schedule_tasks').select('id,project_id,source_task_no,category,task_name,area,planned_start,planned_end,current_plan_progress,actual_progress,current_variance,delay_days,site_status,blocker,next_action,target_close,contractor',{count:'exact'}).order('id').range(from,to).abortSignal(signal)}),
+          readAllPages<ProcurementRow>({label:'procurement_items',signal,keyOf:x=>x.id,fetchPage:(from,to)=>
+            s.from('procurement_items').select('id,project_id,vendor,item_name,current_status,procurement_status,payment_status,expected_delivery_text,condition_note,po_no,pr_no',{count:'exact'}).order('id').range(from,to).abortSignal(signal)}),
+          readAllPages<ProcurementLink>({label:'procurement_item_projects',signal,keyOf:x=>x.procurement_item_id+':'+x.project_id,fetchPage:(from,to)=>
+            s.from('procurement_item_projects').select('procurement_item_id,project_id',{count:'exact'}).order('procurement_item_id').order('project_id').range(from,to).abortSignal(signal)}),
+          readAllPages<LabourWorker>({label:'labour_workers',signal,keyOf:x=>x.worker_id,fetchPage:(from,to)=>
+            s.from('labour_workers').select('worker_id,full_name,display_label,default_team',{count:'exact'}).order('worker_id').range(from,to).abortSignal(signal)}),
+          readAllPages<LabourBatch>({label:'labour_verification_batches',signal,keyOf:x=>x.id,fetchPage:(from,to)=>
+            s.from('labour_verification_batches').select('id,site_operations_entry_id,verification_status,verified_at',{count:'exact'}).order('id').range(from,to).abortSignal(signal)})
         ])
-        requireSuccessfulReads([e,ep,p,t,pr,pl,w,b])
+        const paged=[e,ep,p,t,pr,pl,w,b]
+        setReadSignals(paged.map(({label,loaded,count,truncated})=>({label,loaded,count,truncated})))
+        requireCompletePagedReads(paged)
         if(!alive||signal.aborted)return
-        const nextEntries=(e.data||[]) as SiteEntry[]
-        setLoadError(false);setEntries(nextEntries);setEntryProjects((ep.data||[]) as EntryProject[])
-        setProjects((p.data||[]) as Project[]);setTasks((t.data||[]) as ScheduleTask[])
-        setProcurement((pr.data||[]) as ProcurementRow[]);setProcurementLinks((pl.data||[]) as ProcurementLink[])
-        setWorkers((w.data||[]) as LabourWorker[]);setBatches((b.data||[]) as LabourBatch[])
+        const nextEntries=e.data
+        setLoadError(false);setEntries(nextEntries);setEntryProjects(ep.data)
+        setProjects(p.data);setTasks(t.data)
+        setProcurement(pr.data);setProcurementLinks(pl.data)
+        setWorkers(w.data);setBatches(b.data)
         setSelectedDate(v=>v||latestUsableDate(nextEntries))
       },
       onError:()=>{if(alive)setLoadError(true)},
@@ -186,6 +198,7 @@ export default function SiteOperationsPage(){
   const latestSynced=entries.map(x=>x.synced_at).filter(Boolean).sort().at(-1)||null
 
   return <AppShell>
+    {readSignals.some(x=>x.truncated)&&<div className="panel" role="alert" style={{marginBottom:10}}>โหลดข้อมูลไม่ครบ • {readSignals.filter(x=>x.truncated).map(x=>x.label+' '+x.loaded+'/'+x.count).join(' • ')}</div>}
     {loadError&&<div className="panel" role="alert" style={{marginBottom:10}}>โหลดข้อมูล Site Operations ไม่สำเร็จบางส่วน • ระบบคงข้อมูลเดิมไว้ก่อน <button type="button" className="button" style={{marginLeft:8}} onClick={()=>window.dispatchEvent(new Event('focus'))}>ลองใหม่</button></div>}
     <PageHeader title="Site Operations" subtitle="ข้อมูลจาก Google Form / Daily Site Report แบบ Read-only • ใช้ข้อมูลที่หน้างานรายงานแล้วต่อยอดทันทีโดยไม่กรอกซ้ำ" action={<div className="siteops-actions"><span><small>Source Sync ล่าสุด</small><b>{dateTimeTH(latestSynced)}</b></span><Link href="/reports/labour" className="button">Labour Verification</Link></div>}/>
 
