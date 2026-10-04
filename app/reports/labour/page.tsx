@@ -362,7 +362,6 @@ export default function LabourVerificationPage(){
     <PageHeader title="Labour & Payroll Verification" subtitle="Labour PDF รันอัตโนมัติเหมือนเดิม • หน้านี้ใช้ยืนยันทีมรายวันและตรวจบัตรตอกเพื่อสร้าง Payroll Verification Record" action={<div className="labour-mode"><button type="button" className={mode==='verify'?'active':''} onClick={()=>setMode('verify')}>ยืนยันทีมรายวัน</button>{canPayroll&&<button type="button" className={mode==='payroll'?'active':''} onClick={()=>setMode('payroll')}>Payroll Verification Record</button>}</div>}/>
 
     {message&&<div className="notice" style={{marginBottom:10}}>{message}</div>}
-}
 
     {mode==='verify'?<>
       <section className="panel labour-filter">
