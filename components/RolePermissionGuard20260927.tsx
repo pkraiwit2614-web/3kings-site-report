@@ -10,6 +10,7 @@ const WRITE_REPORT_PATHS=[
   /^\/reports\/[^/]+\/edit\/?$/,
 ]
 const OWNER_ONLY_PATHS=new Set(['/data-health','/users'])
+const PAYROLL_ALLOWED_PATHS=[/^\/$/,/^\/reports\/?$/, /^\/reports\/labour\/?$/]
 
 export default function RolePermissionGuard20260927(){
   const path=usePathname()
@@ -29,6 +30,10 @@ export default function RolePermissionGuard20260927(){
       body.classList.add(`role-${role==='foreman'?'report-user':role}`)
       if((role==='viewer'||role==='payroll')&&WRITE_REPORT_PATHS.some(rx=>rx.test(path))){
         router.replace(role==='payroll'?'/reports/labour':'/reports')
+        return
+      }
+      if(role==='payroll'&&!PAYROLL_ALLOWED_PATHS.some(rx=>rx.test(path))){
+        router.replace('/reports/labour')
         return
       }
       if(role!=='manager'&&OWNER_ONLY_PATHS.has(path)){
