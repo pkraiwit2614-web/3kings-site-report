@@ -1,0 +1,86 @@
+{
+  "fixture_version": 1,
+  "purpose": "Synthetic Labour PDF contract fixture only; never a financial authority.",
+  "rows": [
+    {
+      "source_row_id": "tone-1609-a-1",
+      "work_date": "2026-09-16",
+      "supervisor_key": "TONE",
+      "project": "A",
+      "verification_status": "pending",
+      "entity_type": "worker",
+      "worker_key": "TONE-W1",
+      "work_detail": "งานทดสอบภาษาไทยบริเวณอาคาร A ตรวจแนว ติดตั้ง เก็บรายละเอียด และบันทึกผลหน้างานให้ครบถ้วนโดยข้อความนี้ตั้งใจให้ยาวเพื่อทดสอบการตัดบรรทัดโดยไม่ชนส่วนอื่นของหน้า"
+    },
+    {
+      "source_row_id": "tone-1609-a-2",
+      "work_date": "2026-09-16",
+      "supervisor_key": "TONE",
+      "project": "A",
+      "verification_status": "pending",
+      "entity_type": "worker",
+      "worker_key": "TONE-W2",
+      "work_detail": "งานทดสอบภาษาไทยบริเวณอาคาร A ตรวจแนว ติดตั้ง เก็บรายละเอียด และบันทึกผลหน้างานให้ครบถ้วนโดยข้อความนี้ตั้งใจให้ยาวเพื่อทดสอบการตัดบรรทัดโดยไม่ชนส่วนอื่นของหน้า"
+    },
+    {
+      "source_row_id": "tone-1609-b-1",
+      "work_date": "2026-09-16",
+      "supervisor_key": "TONE",
+      "project": "B",
+      "verification_status": "verified",
+      "entity_type": "worker",
+      "worker_key": "TONE-W2",
+      "work_detail": "ช่วงบ่ายย้ายไปอาคาร B และทำงานต่อเนื่องในวันเดียวกัน ต้องรวมเป็น canonical วันเดียว ไม่สร้างหน้าซ้ำ"
+    },
+    {
+      "source_row_id": "tone-1609-b-2",
+      "work_date": "2026-09-16",
+      "supervisor_key": "TONE",
+      "project": "B",
+      "verification_status": "verified",
+      "entity_type": "worker",
+      "worker_key": "TONE-W3",
+      "work_detail": "ช่วงบ่ายย้ายไปอาคาร B และทำงานต่อเนื่องในวันเดียวกัน ต้องรวมเป็น canonical วันเดียว ไม่สร้างหน้าซ้ำ"
+    },
+    {
+      "source_row_id": "tone-1609-duplicate-import",
+      "work_date": "2026-09-16",
+      "supervisor_key": "TONE",
+      "project": "A",
+      "verification_status": "pending",
+      "entity_type": "worker",
+      "worker_key": "TONE-W1",
+      "work_detail": "งานทดสอบภาษาไทยบริเวณอาคาร A ตรวจแนว ติดตั้ง เก็บรายละเอียด และบันทึกผลหน้างานให้ครบถ้วนโดยข้อความนี้ตั้งใจให้ยาวเพื่อทดสอบการตัดบรรทัดโดยไม่ชนส่วนอื่นของหน้า"
+    },
+    {
+      "source_row_id": "contractor-excluded",
+      "work_date": "2026-09-16",
+      "supervisor_key": "TONE",
+      "project": "B",
+      "verification_status": "pending",
+      "entity_type": "contractor",
+      "worker_key": "CONTRACTOR-ROW",
+      "work_detail": "ผู้รับเหมาภายนอกไม่ใช่ worker payroll person"
+    },
+    {
+      "source_row_id": "non-person-excluded",
+      "work_date": "2026-09-16",
+      "supervisor_key": "TONE",
+      "project": "B",
+      "verification_status": "pending",
+      "entity_type": "non_person",
+      "worker_key": "NOTE-ROW",
+      "work_detail": "หมายเหตุหรือแถวที่ไม่ใช่บุคคลต้องไม่ถูกนับเป็นคนงาน"
+    },
+    {
+      "source_row_id": "next-date-worker",
+      "work_date": "2026-09-17",
+      "supervisor_key": "OTHER",
+      "project": "A",
+      "verification_status": "pending",
+      "entity_type": "worker",
+      "worker_key": "OTHER-W1",
+      "work_detail": "งานอีกวันหนึ่งเพื่อยืนยันว่า 1 work date ต้องได้ 1 page แยกจากวันที่ 16/09"
+    }
+  ]
+}

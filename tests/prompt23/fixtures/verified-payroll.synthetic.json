@@ -1,0 +1,32 @@
+{
+  "fixture_version": 1,
+  "purpose": "Authority-gate fixture. Contains no invented Rate/OT/financial totals.",
+  "records": [
+    {
+      "record_id": "web-timecard-only",
+      "status": "timecard_checked",
+      "verification_method": "web",
+      "external_reference": null,
+      "items": [
+        {
+          "worker_key": "TONE-W1",
+          "timecard_match": true,
+          "calculation_status": "rate_pending",
+          "regular_rate": null,
+          "ot_rate": null,
+          "regular_pay": null,
+          "ot_pay": null,
+          "total_pay": null
+        }
+      ]
+    },
+    {
+      "record_id": "draft-only",
+      "status": "draft",
+      "verification_method": "web",
+      "external_reference": null,
+      "items": []
+    }
+  ],
+  "authoritative_verified_export": null
+}
