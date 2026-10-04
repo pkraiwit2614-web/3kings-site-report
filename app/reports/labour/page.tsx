@@ -133,7 +133,7 @@ export default function LabourVerificationPage(){
       setDateFrom(v=>v||(latest?addDays(latest,-6):''))
       setLoadError(false)
     }
-    setLoading(true)
+    if(refreshTick===0)setLoading(true)
     load().catch(()=>{if(alive)setLoadError(true)}).finally(()=>{if(alive)setLoading(false)})
     return()=>{alive=false}
   },[refreshTick])
