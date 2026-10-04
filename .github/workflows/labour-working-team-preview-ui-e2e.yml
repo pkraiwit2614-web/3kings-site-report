@@ -107,6 +107,7 @@ jobs:
               const req=route.request()
               const u=new URL(req.url())
               const path=u.pathname
+              console.log('SUPABASE_REQUEST',req.method(),path,'range='+String(req.headers()['range']||''),'prefer='+String(req.headers()['prefer']||''),u.search)
 
               if(path==='/auth/v1/user'){
                 return json(route,authUser(uid,email))
@@ -190,6 +191,7 @@ jobs:
             await page.goto(base+'/reports/labour?date=2026-10-04',{waitUntil:'networkidle'})
             await page.getByText('Labour & Payroll Verification').waitFor({state:'visible',timeout:15000})
             await page.getByText('กำลังโหลดข้อมูล…').waitFor({state:'detached',timeout:15000}).catch(()=>{})
+            console.log('BODY_BEFORE_CARD', (await page.locator('body').innerText()).slice(0,12000))
 
             {
               const c=await card(page,'Case W027')
@@ -270,6 +272,7 @@ jobs:
             fs.writeFileSync('labour-preview-ui-results.json',JSON.stringify({status:'PASS',results,rpcCalls},null,2))
             console.log(JSON.stringify({status:'PASS',results,rpcCalls},null,2))
           }catch(err){
+            try{console.log('BODY_ON_FAILURE',(await (await browser.contexts()[0]?.pages()[0])?.locator('body').innerText())?.slice(0,12000))}catch{}
             fs.writeFileSync('labour-preview-ui-results.json',JSON.stringify({status:'FAIL',error:String(err?.stack||err),results,rpcCalls},null,2))
             console.error(err)
             throw err
