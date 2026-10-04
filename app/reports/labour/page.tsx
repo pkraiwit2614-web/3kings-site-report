@@ -14,6 +14,9 @@ type Worker={worker_id:string;full_name:string;nickname:string|null;default_team
 type EntryProject={entry_id:string;project_id:string}
 type Assignment={id:string;batch_id:string;worker_id:string;work_date:string;project_id:string|null;home_team:string|null;working_team:string|null;movement_status:string;allocation_hours:number|null;allocation_share:number|null;work_detail:string|null;notes:string|null;verified_at:string|null}
 type DraftAssignment={worker_id:string;project_id:string;working_team:string;movement_status:string;allocation_hours:string;notes:string}
+type PayrollRecord={id:string;labour_batch_id:string;verification_method:'web'|'legacy_excel';status:'draft'|'timecard_checked'|'verified'|'external_verified'|'needs_review';source_labour_verified_at:string|null;external_reference:string|null;note:string|null;timecard_checked_at:string|null;verified_at:string|null;updated_at:string}
+type PayrollItem={id:string;record_id:string;labour_assignment_id:string|null;worker_id:string;attendance_status:string;clock_in:string|null;clock_out:string|null;work_units:number;ot_hours:number;timecard_match:boolean;regular_rate:number|null;ot_rate:number|null;regular_pay:number|null;ot_pay:number|null;adjustment:number;total_pay:number|null;calculation_status:string;note:string|null}
+type PayrollDraftItem={labour_assignment_id:string;worker_id:string;attendance_status:string;clock_in:string;clock_out:string;work_units:string;ot_hours:string;timecard_match:boolean;regular_rate:number|null;ot_rate:number|null;regular_pay:number|null;ot_pay:number|null;adjustment:number;total_pay:number|null;calculation_status:string;note:string}
 
 function addDays(value:string,days:number){
   const d=new Date(value+'T12:00:00Z')
@@ -35,7 +38,15 @@ function movementLabel(value:string){
   return map[value]||value
 }
 function statusLabel(value:string){
-  const map:Record<string,string>={pending:'รอยืนยัน',verified:'ยืนยันแล้ว',needs_review:'ต้องตรวจข้อมูล'}
+  const map:Record<string,string>={pending:'รอยืนยันทีม',verified:'ยืนยันทีมแล้ว',needs_review:'ต้องตรวจข้อมูล'}
+  return map[value]||value
+}
+function payrollStatusLabel(value:string){
+  const map:Record<string,string>={pending:'รอตรวจบัตรตอก',draft:'กำลังตรวจ',timecard_checked:'ตรวจบัตรตอกแล้ว',verified:'Verified Payroll',external_verified:'Verified via Excel',needs_review:'ต้องตรวจซ้ำ'}
+  return map[value]||value
+}
+function attendanceLabel(value:string){
+  const map:Record<string,string>={present:'มาทำงาน',absent:'ขาด',leave:'ลา',half_day:'ครึ่งวัน',other:'อื่น ๆ'}
   return map[value]||value
 }
 
@@ -49,14 +60,19 @@ export default function LabourVerificationPage(){
   const [projects,setProjects]=useState<Project[]>([])
   const [entryProjects,setEntryProjects]=useState<EntryProject[]>([])
   const [assignments,setAssignments]=useState<Assignment[]>([])
+  const [payrollRecords,setPayrollRecords]=useState<PayrollRecord[]>([])
+  const [payrollItems,setPayrollItems]=useState<PayrollItem[]>([])
   const [selectedDate,setSelectedDate]=useState('')
   const [statusFilter,setStatusFilter]=useState('')
   const [q,setQ]=useState('')
-  const [mode,setMode]=useState<'verify'|'report'>('verify')
+  const [mode,setMode]=useState<'verify'|'payroll'>('verify')
   const [dateFrom,setDateFrom]=useState('')
   const [dateTo,setDateTo]=useState('')
-  const [workerFilter,setWorkerFilter]=useState('')
+  const [payrollStatusFilter,setPayrollStatusFilter]=useState('')
   const [drafts,setDrafts]=useState<Record<string,DraftAssignment[]>>({})
+  const [payrollDrafts,setPayrollDrafts]=useState<Record<string,PayrollDraftItem[]>>({})
+  const [payrollNotes,setPayrollNotes]=useState<Record<string,string>>({})
+  const [externalRefs,setExternalRefs]=useState<Record<string,string>>({})
   const [notes,setNotes]=useState<Record<string,string>>({})
   const [addWorker,setAddWorker]=useState<Record<string,string>>({})
   const [supervisorPick,setSupervisorPick]=useState<Record<string,string>>({})
@@ -87,21 +103,24 @@ export default function LabourVerificationPage(){
       const s=getSupabase()
       const userResult=await s.auth.getUser()
       const user=userResult.data.user
-      const [e,b,w,p,ep,a,profile]=await Promise.all([
+      const [e,b,w,p,ep,a,pr,pi,profile]=await Promise.all([
         s.from('site_operations_entries').select('id,work_date,source_row,project_name_raw,area_raw,supervisor_raw,male_count,female_count,total_manpower,work_detail,status_text,next_plan,afternoon_detail,specific_area,supervisor_worker_id').order('work_date',{ascending:false}).order('source_row',{ascending:false}).limit(1500),
         s.from('labour_verification_batches').select('*').order('work_date',{ascending:false}),
         s.from('labour_workers').select('worker_id,full_name,nickname,default_team,status,display_label').order('worker_id'),
         s.from('projects').select('id,code,name,site_group,target_handover,active,sort_order').order('sort_order'),
         s.from('site_operations_entry_projects').select('entry_id,project_id'),
         s.from('labour_daily_assignments').select('*').order('work_date',{ascending:false}),
+        s.from('payroll_verification_records').select('*').order('updated_at',{ascending:false}),
+        s.from('payroll_verification_items').select('*').order('updated_at',{ascending:false}),
         user?s.from('profiles').select('role,active').eq('user_id',user.id).maybeSingle():Promise.resolve({data:null,error:null})
       ])
-      requireSuccessfulReads([e,b,w,p,ep,a])
+      requireSuccessfulReads([e,b,w,p,ep,a,pr,pi])
       if(profile.error)throw profile.error
       if(!alive)return
       const nextEntries=(e.data||[]) as SiteEntry[]
       setEntries(nextEntries);setBatches((b.data||[]) as Batch[]);setWorkers((w.data||[]) as Worker[])
       setProjects((p.data||[]) as Project[]);setEntryProjects((ep.data||[]) as EntryProject[]);setAssignments((a.data||[]) as Assignment[])
+      setPayrollRecords((pr.data||[]) as PayrollRecord[]);setPayrollItems((pi.data||[]) as PayrollItem[])
       setRole(String(profile.data?.role||'viewer'))
       const latest=latestUsableDate(nextEntries)
       setSelectedDate(v=>v||latest)
@@ -114,7 +133,8 @@ export default function LabourVerificationPage(){
     return()=>{alive=false}
   },[refreshTick])
 
-  const canVerify=role==='manager'||role==='engineer'
+  const canVerify=role==='manager'||role==='engineer'||role==='payroll'
+  const canPayroll=canVerify
   const entryById=useMemo(()=>new Map(entries.map(x=>[x.id,x])),[entries])
   const workerById=useMemo(()=>new Map(workers.map(x=>[x.worker_id,x])),[workers])
   const projectById=useMemo(()=>new Map(projects.map(x=>[x.id,x])),[projects])
@@ -149,7 +169,7 @@ export default function LabourVerificationPage(){
     setDrafts(prev=>({...prev,[batchId]:(prev[batchId]||[]).map((x,i)=>i===index?{...x,...patch}:x)}))
   }
   const loadExisting=(batch:Batch)=>{
-    const rows=assignmentsByBatch.get(batch.id)||[]
+    const rows=(assignmentsByBatch.get(batch.id)||[]).filter(x=>x.worker_id!==batch.supervisor_worker_id)
     setDrafts(prev=>({...prev,[batch.id]:rows.map(x=>({
       worker_id:x.worker_id,project_id:x.project_id||'',working_team:x.working_team||x.home_team||'',
       movement_status:x.movement_status||'same_team',allocation_hours:x.allocation_hours===null?'':String(x.allocation_hours),notes:x.notes||''
@@ -157,7 +177,7 @@ export default function LabourVerificationPage(){
     setNotes(prev=>({...prev,[batch.id]:batch.note||''}))
   }
   const useHomeTeam=(batch:Batch)=>{
-    const candidates=activeWorkers.filter(w=>batch.home_team&&w.default_team===batch.home_team)
+    const candidates=activeWorkers.filter(w=>batch.home_team&&w.default_team===batch.home_team&&w.worker_id!==batch.supervisor_worker_id)
     const pids=projectIdsByEntry.get(batch.site_operations_entry_id)||[]
     const defaultProject=pids.length===1?pids[0]:''
     setDrafts(prev=>({...prev,[batch.id]:candidates.map(w=>({
@@ -170,6 +190,7 @@ export default function LabourVerificationPage(){
     if(!workerId)return
     const worker=workerById.get(workerId)
     const existing=draftFor(batch)
+    if(workerId===batch.supervisor_worker_id){setMessage('หัวหน้าทีมถูกแยกจากรายการคนงานและไม่รวมใน Worker Payroll');return}
     if(existing.some(x=>x.worker_id===workerId)){setMessage('คนงานคนนี้อยู่ในรายการแล้ว');return}
     const pids=projectIdsByEntry.get(batch.site_operations_entry_id)||[]
     setDrafts(prev=>({...prev,[batch.id]:[...existing,{
@@ -221,18 +242,117 @@ export default function LabourVerificationPage(){
     }finally{setSaving(prev=>({...prev,[batch.id]:false}))}
   }
 
-  const reportRows=useMemo(()=>assignments.filter(row=>
-    (!dateFrom||row.work_date>=dateFrom)&&(!dateTo||row.work_date<=dateTo)&&(!workerFilter||row.worker_id===workerFilter)
-  ),[assignments,dateFrom,dateTo,workerFilter])
-  const reportByWorker=useMemo(()=>{
-    const map=new Map<string,Assignment[]>()
-    for(const row of reportRows){const list=map.get(row.worker_id)||[];list.push(row);map.set(row.worker_id,list)}
-    return Array.from(map.entries()).sort((a,b)=>(workerById.get(a[0])?.display_label||a[0]).localeCompare(workerById.get(b[0])?.display_label||b[0],'th'))
-  },[reportRows,workerById])
+  const payrollRecordByBatch=useMemo(()=>new Map(payrollRecords.map(x=>[x.labour_batch_id,x])),[payrollRecords])
+  const payrollItemsByRecord=useMemo(()=>{
+    const map=new Map<string,PayrollItem[]>()
+    for(const row of payrollItems){const list=map.get(row.record_id)||[];list.push(row);map.set(row.record_id,list)}
+    return map
+  },[payrollItems])
+  const payrollStatusFor=(batch:Batch)=>{
+    const record=payrollRecordByBatch.get(batch.id)
+    if(!record)return 'pending'
+    if(batch.verification_status!=='verified'&&record.status!=='draft')return 'needs_review'
+    if(record.source_labour_verified_at&&batch.verified_at&&new Date(record.source_labour_verified_at).getTime()!==new Date(batch.verified_at).getTime())return 'needs_review'
+    return record.status
+  }
+  const payrollBatches=useMemo(()=>{
+    const needle=q.trim().toLowerCase()
+    return batches.filter(batch=>{
+      if(dateFrom&&batch.work_date<dateFrom)return false
+      if(dateTo&&batch.work_date>dateTo)return false
+      const effective=payrollStatusFor(batch)
+      if(payrollStatusFilter&&effective!==payrollStatusFilter)return false
+      if(!needle)return true
+      const entry=entryById.get(batch.site_operations_entry_id)
+      return [batch.supervisor_raw,batch.home_team,entry?.area_raw,entry?.project_name_raw,entry?.work_detail].join(' ').toLowerCase().includes(needle)
+    })
+  },[batches,dateFrom,dateTo,payrollStatusFilter,q,entryById,payrollRecordByBatch])
+  const payrollDraftFor=(batch:Batch)=>payrollDrafts[batch.id]||[]
+  const startPayrollReview=(batch:Batch)=>{
+    const record=payrollRecordByBatch.get(batch.id)
+    const saved=record?payrollItemsByRecord.get(record.id)||[]:[]
+    const savedByWorker=new Map(saved.map(x=>[x.worker_id,x]))
+    const rows=(assignmentsByBatch.get(batch.id)||[]).filter(x=>x.worker_id!==batch.supervisor_worker_id)
+    setPayrollDrafts(prev=>({...prev,[batch.id]:rows.map(a=>{
+      const old=savedByWorker.get(a.worker_id)
+      return {
+        labour_assignment_id:a.id,worker_id:a.worker_id,
+        attendance_status:old?.attendance_status||'present',
+        clock_in:old?.clock_in?.slice(0,5)||'',clock_out:old?.clock_out?.slice(0,5)||'',
+        work_units:old?String(old.work_units):'1',ot_hours:old?String(old.ot_hours):'0',
+        timecard_match:Boolean(old?.timecard_match),
+        regular_rate:old?.regular_rate??null,ot_rate:old?.ot_rate??null,
+        regular_pay:old?.regular_pay??null,ot_pay:old?.ot_pay??null,
+        adjustment:old?.adjustment??0,total_pay:old?.total_pay??null,
+        calculation_status:old?.calculation_status||'rate_pending',note:old?.note||''
+      }
+    })}))
+    setPayrollNotes(prev=>({...prev,[batch.id]:record?.note||''}))
+    setExternalRefs(prev=>({...prev,[batch.id]:record?.external_reference||''}))
+  }
+  const updatePayrollDraft=(batchId:string,index:number,patch:Partial<PayrollDraftItem>)=>{
+    setPayrollDrafts(prev=>({...prev,[batchId]:(prev[batchId]||[]).map((x,i)=>i===index?{...x,...patch}:x)}))
+  }
+  const applyAttendance=(batchId:string,index:number,value:string)=>{
+    const patch:Partial<PayrollDraftItem>={attendance_status:value}
+    if(value==='absent'||value==='leave'){patch.work_units='0';patch.ot_hours='0'}
+    else if(value==='half_day')patch.work_units='0.5'
+    else if(value==='present'){const current=(payrollDrafts[batchId]||[])[index];if(!current||Number(current.work_units)===0)patch.work_units='1'}
+    updatePayrollDraft(batchId,index,patch)
+  }
+  const markAllTimecards=(batch:Batch,matched:boolean)=>{
+    setPayrollDrafts(prev=>({...prev,[batch.id]:(prev[batch.id]||[]).map(x=>({...x,timecard_match:matched}))}))
+  }
+  const clearAllOt=(batch:Batch)=>{
+    setPayrollDrafts(prev=>({...prev,[batch.id]:(prev[batch.id]||[]).map(x=>({...x,ot_hours:'0'}))}))
+  }
+  const savePayrollWeb=async(batch:Batch,status:'draft'|'timecard_checked')=>{
+    if(!canPayroll||saving['payroll-'+batch.id])return
+    const rows=payrollDraftFor(batch)
+    if(!rows.length){setMessage('ยังไม่มีรายชื่อคนงานสำหรับตรวจบัตรตอก กรุณายืนยันทีมรายวันก่อน');return}
+    if(status==='timecard_checked'&&rows.some(x=>!x.timecard_match)){setMessage('ยังมีคนงานที่ไม่ได้ติ๊ก “ตรงกับบัตรตอก”');return}
+    setSaving(prev=>({...prev,['payroll-'+batch.id]:true}));setMessage('')
+    try{
+      const payload=rows.map(x=>({
+        labour_assignment_id:x.labour_assignment_id,worker_id:x.worker_id,attendance_status:x.attendance_status,
+        clock_in:x.clock_in||null,clock_out:x.clock_out||null,
+        work_units:Number(x.work_units||0),ot_hours:Number(x.ot_hours||0),timecard_match:x.timecard_match,
+        regular_rate:x.regular_rate,ot_rate:x.ot_rate,regular_pay:x.regular_pay,ot_pay:x.ot_pay,
+        adjustment:Number(x.adjustment||0),total_pay:x.total_pay,
+        calculation_status:x.calculation_status||'rate_pending',note:x.note||null
+      }))
+      const {error}=await getSupabase().rpc('payroll_save_verification',{
+        p_labour_batch_id:batch.id,p_method:'web',p_status:status,p_note:payrollNotes[batch.id]||'',
+        p_external_reference:null,p_items:payload
+      })
+      if(error)throw error
+      setMessage(status==='timecard_checked'
+        ?'ตรวจบัตรตอกครบแล้ว • บันทึก Payroll Verification Record • ยอดเงินรอ Rate Master'
+        :'บันทึกฉบับร่าง Payroll Verification Record แล้ว')
+      setRefreshTick(v=>v+1)
+    }catch(err:any){setMessage(String(err?.message||'บันทึก Payroll Verification ไม่สำเร็จ'))}
+    finally{setSaving(prev=>({...prev,['payroll-'+batch.id]:false}))}
+  }
+  const saveLegacyPayroll=async(batch:Batch)=>{
+    if(!canPayroll||saving['payroll-'+batch.id])return
+    const ref=(externalRefs[batch.id]||payrollRecordByBatch.get(batch.id)?.external_reference||'').trim()
+    if(!ref){setMessage('กรุณาระบุชื่อไฟล์ Excel / เลขอ้างอิงที่ใช้ตรวจค่าแรง');return}
+    setSaving(prev=>({...prev,['payroll-'+batch.id]:true}));setMessage('')
+    try{
+      const {error}=await getSupabase().rpc('payroll_save_verification',{
+        p_labour_batch_id:batch.id,p_method:'legacy_excel',p_status:'external_verified',
+        p_note:payrollNotes[batch.id]||'',p_external_reference:ref,p_items:[]
+      })
+      if(error)throw error
+      setMessage('บันทึก Verified Payroll จาก Excel เดิมแล้ว • เก็บ Reference ไว้ตรวจสอบย้อนหลัง')
+      setRefreshTick(v=>v+1)
+    }catch(err:any){setMessage(String(err?.message||'บันทึกการยืนยันจาก Excel ไม่สำเร็จ'))}
+    finally{setSaving(prev=>({...prev,['payroll-'+batch.id]:false}))}
+  }
 
   return <AppShell>
     {loadError&&<div className="panel" role="alert" style={{marginBottom:10}}>โหลด Labour Verification ไม่สำเร็จ กรุณาลองใหม่ <button type="button" className="button" onClick={()=>setRefreshTick(v=>v+1)}>ลองใหม่</button></div>}
-    <PageHeader title="Labour Verification" subtitle="ยืนยันรายชื่อคนงานและการย้ายทีมจาก Daily Report ก่อนบันทึกเป็น Verified Labour Dataset • ไม่ต้องกรอกงานซ้ำ" action={<div className="labour-mode"><button type="button" className={mode==='verify'?'active':''} onClick={()=>setMode('verify')}>ยืนยันรายวัน</button><button type="button" className={mode==='report'?'active':''} onClick={()=>setMode('report')}>รายงานรายคน</button></div>}/>
+    <PageHeader title="Labour & Payroll Verification" subtitle="Labour PDF รันอัตโนมัติเหมือนเดิม • หน้านี้ใช้ยืนยันทีมรายวันและตรวจบัตรตอกเพื่อสร้าง Payroll Verification Record" action={<div className="labour-mode"><button type="button" className={mode==='verify'?'active':''} onClick={()=>setMode('verify')}>ยืนยันทีมรายวัน</button>{canPayroll&&<button type="button" className={mode==='payroll'?'active':''} onClick={()=>setMode('payroll')}>Payroll Verification Record</button>}</div>}/>
 
     {message&&<div className="notice" style={{marginBottom:10}}>{message}</div>}
 
@@ -259,9 +379,9 @@ export default function LabourVerificationPage(){
           if(!entry)return null
           const pids=projectIdsByEntry.get(entry.id)||[]
           const linkedProjects=pids.map(id=>projectById.get(id)).filter(Boolean) as Project[]
-          const existing=assignmentsByBatch.get(batch.id)||[]
+          const existing=(assignmentsByBatch.get(batch.id)||[]).filter(x=>x.worker_id!==batch.supervisor_worker_id)
           const draft=draftFor(batch)
-          const homeCandidates=activeWorkers.filter(w=>batch.home_team&&w.default_team===batch.home_team)
+          const homeCandidates=activeWorkers.filter(w=>batch.home_team&&w.default_team===batch.home_team&&w.worker_id!==batch.supervisor_worker_id)
           const headcount=Number(batch.expected_headcount||0)
           const countMismatch=draft.length>0&&headcount!==draft.length
           return <article className="panel labour-card" key={batch.id}>
@@ -274,7 +394,7 @@ export default function LabourVerificationPage(){
               <div><span>Daily Report</span><b>{entry.work_detail||'-'}</b></div>
               {entry.afternoon_detail&&<div><span>ช่วงบ่าย</span><b>{entry.afternoon_detail}</b></div>}
               {entry.next_plan&&<div><span>Next plan</span><b>{entry.next_plan}</b></div>}
-              <div><span>Source headcount</span><b>ชาย {entry.male_count??0} • หญิง {entry.female_count??0} • รวม {entry.total_manpower??0}</b></div>
+              <div><span>Source headcount</span><b>คนงาน {entry.total_manpower??0} • หัวหน้าทีมแยกต่างหาก</b></div>
               <div><span>Project</span><b>{linkedProjects.map(p=>p.code).join(' / ')||'ยังไม่ map Project'}</b></div>
               <div><span>Home team</span><b>{batch.home_team||'ยังไม่ยืนยัน identity ของหัวหน้าทีม'}</b></div>
             </div>
@@ -319,23 +439,95 @@ export default function LabourVerificationPage(){
         })}
       </div>}
     </>:<>
-      <section className="panel report-filter">
-        <label>จากวันที่<input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></label>
-        <label>ถึงวันที่<input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}/></label>
-        <label>คนงาน<select value={workerFilter} onChange={e=>setWorkerFilter(e.target.value)}><option value="">ทุกคน</option>{activeWorkers.map(w=><option key={w.worker_id} value={w.worker_id}>{w.worker_id} — {w.display_label||w.full_name}</option>)}</select></label>
-        <button type="button" className="button" onClick={()=>window.print()}>พิมพ์ / PDF</button>
-      </section>
+      {!canPayroll?<div className="panel labour-empty">บัญชีนี้ไม่มีสิทธิ์ดูข้อมูลทางการเงิน Payroll</div>:<>
+        <section className="panel payroll-intro">
+          <div><b>Payroll Verification Record</b><span>เทียบรายชื่อทีมกับบัตรตอก → ใส่เวลาจริง/OT → ยืนยันความตรงกัน → ระบบเก็บ Audit Record ให้ทันที</span></div>
+          <div className="payroll-rule"><b>หัวหน้าทีม</b><span>แยกจาก Worker Payroll • รูปแบบการจ่ายของหัวหน้าทีมไม่ถูกนำมาคำนวณรวม</span></div>
+          <div className="payroll-rate"><b>Rate Master</b><span>ยังไม่ตั้งอัตราในระบบ จึงไม่คำนวณยอดเงินเองจนกว่าจะนำ Excel สูตรค่าแรงเข้ามา</span></div>
+        </section>
+        <section className="panel report-filter payroll-filter">
+          <label>จากวันที่<input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></label>
+          <label>ถึงวันที่<input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}/></label>
+          <label>สถานะ<select value={payrollStatusFilter} onChange={e=>setPayrollStatusFilter(e.target.value)}><option value="">ทุกสถานะ</option><option value="pending">รอตรวจบัตรตอก</option><option value="draft">กำลังตรวจ</option><option value="timecard_checked">ตรวจบัตรตอกแล้ว</option><option value="external_verified">Verified via Excel</option><option value="verified">Verified Payroll</option><option value="needs_review">ต้องตรวจซ้ำ</option></select></label>
+          <label className="labour-search">ค้นหา<input value={q} onChange={e=>setQ(e.target.value)} placeholder="หัวหน้าทีม / พื้นที่ / งาน"/></label>
+          <button type="button" className="button" onClick={()=>window.print()}>พิมพ์รายการ</button>
+        </section>
 
-      <div className="report-summary">ช่วง {dateFrom?dateTH(dateFrom):'-'} – {dateTo?dateTH(dateTo):'-'} • {reportByWorker.length} คน • {reportRows.length} worker-days/allocations จากข้อมูลที่ยืนยันแล้วเท่านั้น</div>
-      {!reportByWorker.length?<div className="panel labour-empty">ยังไม่มี Verified Labour Dataset ในช่วงวันที่เลือก</div>:<div className="worker-report-stack">
-        {reportByWorker.map(([workerId,rows])=>{
-          const worker=workerById.get(workerId)
-          return <section className="panel worker-report" key={workerId}>
-            <header><div><b>{worker?.display_label||worker?.full_name||workerId}</b><small>{workerId} • Home team: {worker?.default_team||'-'}</small></div><strong>{new Set(rows.map(x=>x.work_date)).size} วัน</strong></header>
-            <div className="worker-table"><table><thead><tr><th>วันที่</th><th>Project</th><th>ทีมที่ทำจริง</th><th>สถานะทีม</th><th>ชม.</th><th>รายละเอียดงานจาก Daily Report</th></tr></thead><tbody>{rows.sort((a,b)=>a.work_date.localeCompare(b.work_date)).map(row=><tr key={row.id}><td>{dateTH(row.work_date)}</td><td><b>{row.project_id?projectById.get(row.project_id)?.code||'-':'-'}</b></td><td>{row.working_team||row.home_team||'-'}</td><td>{movementLabel(row.movement_status)}</td><td>{row.allocation_hours??'-'}</td><td>{row.work_detail||'-'}{row.notes&&<small>{row.notes}</small>}</td></tr>)}</tbody></table></div>
-          </section>
-        })}
-      </div>}
+        <section className="labour-kpis payroll-kpis">
+          <div><span>Team-days</span><b>{payrollBatches.length}</b></div>
+          <div><span>รอตรวจบัตรตอก</span><b>{payrollBatches.filter(x=>payrollStatusFor(x)==='pending').length}</b></div>
+          <div><span>ตรวจบัตรตอกแล้ว</span><b>{payrollBatches.filter(x=>payrollStatusFor(x)==='timecard_checked').length}</b></div>
+          <div><span>Verified</span><b>{payrollBatches.filter(x=>['verified','external_verified'].includes(payrollStatusFor(x))).length}</b></div>
+        </section>
+
+        {!payrollBatches.length?<div className="panel labour-empty">ไม่พบ Payroll Verification Record ตามช่วงวันที่และ Filter</div>:<div className="payroll-stack">
+          {payrollBatches.map(batch=>{
+            const entry=entryById.get(batch.site_operations_entry_id)
+            if(!entry)return null
+            const record=payrollRecordByBatch.get(batch.id)
+            const effectiveStatus=payrollStatusFor(batch)
+            const rows=(assignmentsByBatch.get(batch.id)||[]).filter(x=>x.worker_id!==batch.supervisor_worker_id)
+            const draft=payrollDraftFor(batch)
+            const leader=batch.supervisor_worker_id?workerById.get(batch.supervisor_worker_id):null
+            const linkedProjects=(projectIdsByEntry.get(entry.id)||[]).map(id=>projectById.get(id)).filter(Boolean) as Project[]
+            const countMismatch=Number(batch.expected_headcount||0)>0&&rows.length>0&&rows.length!==Number(batch.expected_headcount||0)
+            const allMatched=draft.length>0&&draft.every(x=>x.timecard_match)
+            const payrollSaving=Boolean(saving['payroll-'+batch.id])
+            return <article className="panel payroll-card" key={batch.id}>
+              <header>
+                <div><b>{batch.home_team||batch.supervisor_raw||'ไม่ระบุทีม'}</b><small>{dateTH(batch.work_date)} • {entry.area_raw||entry.project_name_raw||'-'} • {linkedProjects.map(p=>p.code).join(' / ')||'ยังไม่ map Project'}</small></div>
+                <div><span className={'payroll-status '+effectiveStatus}>{payrollStatusLabel(effectiveStatus)}</span><strong>{rows.length} คนงาน</strong></div>
+              </header>
+
+              <div className="payroll-summary-grid">
+                <div><span>หัวหน้าทีม</span><b>{leader?.nickname||leader?.display_label||batch.supervisor_raw||'-'}</b><small>แยกการจ่าย • ไม่รวมใน Worker Payroll</small></div>
+                <div><span>รายละเอียดงาน</span><b>{entry.work_detail||'-'}</b>{entry.afternoon_detail&&<small>บ่าย: {entry.afternoon_detail}</small>}</div>
+                <div><span>Daily Report</span><b>{batch.expected_headcount??0} คนงาน</b><small className={countMismatch?'bad-text':''}>{rows.length} รายชื่อที่ยืนยันแล้ว{countMismatch?' • จำนวนไม่ตรง Source':''}</small></div>
+                <div><span>วิธียืนยัน Payroll</span><b>{record?.verification_method==='legacy_excel'?'Legacy Excel':'Web Verification'}</b><small>{record?.external_reference||'Audit trail ในระบบ'}</small></div>
+              </div>
+
+              {batch.verification_status!=='verified'&&<div className="payroll-warning">ทีมรายวันนี้ยังไม่ผ่านการยืนยันรายชื่อ • ใช้ Excel เดิมได้ แต่การตรวจบัตรตอกผ่าน Web ต้องยืนยันทีมก่อน</div>}
+              {effectiveStatus==='needs_review'&&<div className="payroll-warning">ข้อมูลทีมรายวันมีการเปลี่ยนหลังการตรวจ Payroll • ต้องเปิดตรวจบัตรตอกซ้ำก่อนใช้ยอด</div>}
+
+              <div className="payroll-actions">
+                <button type="button" className="button primary" disabled={!canPayroll||!rows.length||batch.verification_status!=='verified'} onClick={()=>startPayrollReview(batch)}>{draft.length?'โหลดข้อมูลจากระบบใหม่':'เริ่มตรวจบัตรตอก'}</button>
+                {draft.length>0&&<><button type="button" className="button" onClick={()=>markAllTimecards(batch,true)}>✓ ตรงทุกคน</button><button type="button" className="button" onClick={()=>clearAllOt(batch)}>OT = 0 ทั้งทีม</button></>}
+                {record?.timecard_checked_at&&<span className="payroll-audit">ตรวจบัตรล่าสุด {new Date(record.timecard_checked_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}</span>}
+              </div>
+
+              {draft.length>0&&<div className="payroll-worker-table"><table>
+                <thead><tr><th>คนงาน</th><th>สถานะ</th><th>เข้า</th><th>ออก</th><th>วันทำงาน</th><th>OT ชม.</th><th>บัตรตอก</th><th>ค่าแรง</th><th>หมายเหตุ</th></tr></thead>
+                <tbody>{draft.map((row,index)=>{
+                  const worker=workerById.get(row.worker_id)
+                  return <tr key={row.worker_id}>
+                    <td><b>{worker?.nickname||worker?.display_label||worker?.full_name||row.worker_id}</b><small>{row.worker_id} • {worker?.default_team||'-'}</small></td>
+                    <td><select value={row.attendance_status} onChange={e=>applyAttendance(batch.id,index,e.target.value)}><option value="present">มาทำงาน</option><option value="half_day">ครึ่งวัน</option><option value="leave">ลา</option><option value="absent">ขาด</option><option value="other">อื่น ๆ</option></select></td>
+                    <td><input type="time" value={row.clock_in} onChange={e=>updatePayrollDraft(batch.id,index,{clock_in:e.target.value,timecard_match:false})}/></td>
+                    <td><input type="time" value={row.clock_out} onChange={e=>updatePayrollDraft(batch.id,index,{clock_out:e.target.value,timecard_match:false})}/></td>
+                    <td><input type="number" min="0" max="1" step="0.5" value={row.work_units} onChange={e=>updatePayrollDraft(batch.id,index,{work_units:e.target.value,timecard_match:false})}/></td>
+                    <td><input type="number" min="0" max="24" step="0.5" value={row.ot_hours} onChange={e=>updatePayrollDraft(batch.id,index,{ot_hours:e.target.value,timecard_match:false})}/></td>
+                    <td><label className={'match-toggle '+(row.timecard_match?'matched':'')}><input type="checkbox" checked={row.timecard_match} onChange={e=>updatePayrollDraft(batch.id,index,{timecard_match:e.target.checked})}/><span>{row.timecard_match?'ตรงแล้ว':'รอตรวจ'}</span></label></td>
+                    <td><span className={'rate-state '+row.calculation_status}>{row.calculation_status==='rate_pending'?'รอ Rate Master':row.total_pay===null?row.calculation_status:'฿'+Number(row.total_pay).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></td>
+                    <td><input value={row.note} onChange={e=>updatePayrollDraft(batch.id,index,{note:e.target.value})} placeholder="ถ้ามี"/></td>
+                  </tr>
+                })}</tbody>
+              </table></div>}
+
+              {draft.length>0&&<div className="payroll-confirm">
+                <label>หมายเหตุ Payroll<input value={payrollNotes[batch.id]??record?.note??''} onChange={e=>setPayrollNotes(prev=>({...prev,[batch.id]:e.target.value}))} placeholder="เช่น OT ตามบัตรตอก / ลา / ย้ายทีม"/></label>
+                <div><span className={allMatched?'match-ready':'match-wait'}>{draft.filter(x=>x.timecard_match).length}/{draft.length} คนตรงกับบัตรตอก</span><button type="button" className="button" disabled={payrollSaving} onClick={()=>savePayrollWeb(batch,'draft')}>บันทึกร่าง</button><button type="button" className="primary" disabled={payrollSaving||!allMatched} onClick={()=>savePayrollWeb(batch,'timecard_checked')}>{payrollSaving?'กำลังบันทึก…':'ยืนยันตรวจบัตรตอก'}</button></div>
+              </div>}
+
+              <details className="legacy-payroll">
+                <summary>ยังใช้ Excel แบบเดิมอยู่? บันทึก Verified Payroll จาก Excel ได้</summary>
+                <div><label>ชื่อไฟล์ / Reference<input value={externalRefs[batch.id]??record?.external_reference??''} onChange={e=>setExternalRefs(prev=>({...prev,[batch.id]:e.target.value}))} placeholder="เช่น Labour Cost Week 40.xlsx"/></label><label>หมายเหตุ<input value={payrollNotes[batch.id]??record?.note??''} onChange={e=>setPayrollNotes(prev=>({...prev,[batch.id]:e.target.value}))} placeholder="ถ้ามี"/></label><button type="button" className="button" disabled={payrollSaving} onClick={()=>saveLegacyPayroll(batch)}>ยืนยันจาก Excel เดิม</button></div>
+              </details>
+
+              {record?.verified_at&&<div className="labour-verified-line">Verified ล่าสุด {new Date(record.verified_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})} • {payrollStatusLabel(effectiveStatus)}</div>}
+            </article>
+          })}
+        </div>}
+      </>}}
     </>}
 
     <style jsx>{`
@@ -349,8 +541,8 @@ export default function LabourVerificationPage(){
       .labour-draft{padding:10px 12px}.labour-draft-head{display:flex;justify-content:space-between;gap:8px;margin-bottom:7px;font-size:10px}.labour-draft-head span{color:var(--muted)}.bad-text{color:var(--red)!important;font-weight:850}
       .labour-person{display:grid;grid-template-columns:minmax(160px,1.2fr) minmax(145px,.9fr) minmax(145px,.9fr) minmax(145px,.9fr) 90px auto;gap:6px;align-items:end;padding:7px 0;border-top:1px solid #edf0f3}.labour-person-name{align-self:center}.labour-person-name b{display:block;font-size:10.5px}.labour-person-name small{display:block;margin-top:2px;font-size:8.5px;color:var(--muted)}.labour-person label{display:grid;gap:3px;font-size:8px;font-weight:850;color:var(--muted)}.labour-person select,.labour-person input{min-height:31px;border:1px solid var(--line);border-radius:7px;background:#fff;padding:5px 6px;font-size:9px;min-width:0}.labour-no-draft{padding:13px;color:var(--muted);font-size:10px;text-align:center}
       .labour-confirm{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end;padding:10px 12px;border-top:1px solid var(--line);background:#fbfcfd}.labour-confirm label{display:grid;gap:4px;font-size:9px;font-weight:850;color:var(--muted)}.labour-confirm input{min-height:35px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:10px}.labour-confirm .primary{min-height:35px}.labour-verified-line{padding:7px 12px;border-top:1px solid var(--line);font-size:8.5px;color:var(--muted);text-align:right}
-      .report-summary{padding:7px 9px;margin:-2px 0 10px;font-size:9.5px;color:var(--muted);text-align:right}.worker-report{padding:0;overflow:hidden}.worker-table{overflow:auto}.worker-table table{width:100%;min-width:900px}.worker-table th,.worker-table td{font-size:9.5px;white-space:normal;vertical-align:top}.worker-table td small{display:block;margin-top:3px;color:var(--muted)}
-      @media(max-width:1150px){.supervisor-resolve{grid-template-columns:1fr 1fr}.supervisor-resolve>b{grid-column:1/-1}.labour-person{grid-template-columns:1fr 1fr 1fr}.labour-person-name{grid-column:1/-1}.labour-person .link-danger{justify-self:start}}@media(max-width:760px){.supervisor-resolve{grid-template-columns:1fr}.supervisor-resolve>b{grid-column:auto}.labour-filter,.report-filter{grid-template-columns:1fr 1fr}.labour-search{grid-column:1/-1}.labour-kpis{grid-template-columns:1fr 1fr}.labour-card>header,.worker-report>header{align-items:flex-start}.labour-source{grid-template-columns:1fr}.labour-person{grid-template-columns:1fr 1fr}.labour-person-name{grid-column:1/-1}.labour-confirm{grid-template-columns:1fr}}@media print{.labour-mode,.labour-filter,.report-filter,.labour-kpis,.labour-readonly,.labour-tools,.labour-confirm,.notice{display:none!important}.worker-report{break-inside:avoid}}
+      .payroll-intro{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:0;padding:0;margin-bottom:10px;overflow:hidden}.payroll-intro>div{padding:12px 14px;border-right:1px solid var(--line)}.payroll-intro>div:last-child{border-right:0}.payroll-intro b{display:block;font-size:11px;color:var(--navy)}.payroll-intro span{display:block;margin-top:4px;font-size:9px;line-height:1.5;color:var(--muted)}.payroll-rule{background:#f8fafc}.payroll-rate{background:#fff9ec}.payroll-filter{grid-template-columns:145px 145px 180px minmax(220px,1fr) auto}.payroll-stack{display:grid;gap:10px}.payroll-card{padding:0;overflow:hidden}.payroll-card>header{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:11px 13px;background:linear-gradient(135deg,#172a43,#213d5e);color:#fff}.payroll-card header b{font-size:13px}.payroll-card header small{display:block;margin-top:3px;font-size:9px;color:#c9d5e1}.payroll-card header>div:last-child{display:flex;align-items:center;gap:7px}.payroll-card header strong{font-size:12px}.payroll-status{padding:5px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.22);font-size:8.5px;font-weight:850}.payroll-status.timecard_checked,.payroll-status.verified,.payroll-status.external_verified{background:rgba(69,170,103,.22)}.payroll-status.needs_review{background:rgba(218,154,38,.28)}.payroll-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-bottom:1px solid var(--line)}.payroll-summary-grid>div{padding:9px 11px;border-right:1px solid #edf0f3}.payroll-summary-grid>div:last-child{border-right:0}.payroll-summary-grid span{display:block;font-size:8px;font-weight:900;color:var(--muted);text-transform:uppercase}.payroll-summary-grid b{display:block;margin-top:3px;font-size:10px;line-height:1.4}.payroll-summary-grid small{display:block;margin-top:3px;font-size:8.5px;color:var(--muted);line-height:1.4}.payroll-warning{padding:8px 12px;background:#fff6df;border-bottom:1px solid #ead29a;color:#765300;font-size:9.5px;font-weight:700}.payroll-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:9px 12px;background:#f8fafc;border-bottom:1px solid var(--line)}.payroll-audit{margin-left:auto;font-size:8.5px;color:var(--muted)}.payroll-worker-table{overflow:auto;padding:0 10px}.payroll-worker-table table{width:100%;min-width:1100px}.payroll-worker-table th,.payroll-worker-table td{font-size:9px;vertical-align:middle;white-space:normal}.payroll-worker-table td:first-child{min-width:150px}.payroll-worker-table td small{display:block;margin-top:2px;color:var(--muted)}.payroll-worker-table select,.payroll-worker-table input{width:100%;min-height:31px;border:1px solid var(--line);border-radius:7px;background:#fff;padding:5px 6px;font-size:9px}.payroll-worker-table input[type=time]{min-width:88px}.payroll-worker-table input[type=number]{min-width:72px}.match-toggle{display:flex;align-items:center;gap:5px;padding:6px 7px;border:1px solid #d9e0e7;border-radius:8px;background:#f8fafc;font-weight:800;color:var(--muted);white-space:nowrap}.match-toggle input{width:auto!important;min-height:auto!important}.match-toggle.matched{background:#edf8f1;border-color:#b9ddc5;color:#287643}.rate-state{display:inline-flex;padding:5px 7px;border-radius:999px;background:#fff4da;color:#7a5600;font-size:8px;font-weight:850;white-space:nowrap}.payroll-confirm{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px;align-items:end;padding:10px 12px;border-top:1px solid var(--line);background:#fbfcfd}.payroll-confirm>label{display:grid;gap:4px;font-size:9px;font-weight:850;color:var(--muted)}.payroll-confirm>label input{min-height:34px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:9.5px}.payroll-confirm>div{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.match-ready,.match-wait{font-size:8.5px;font-weight:850}.match-ready{color:#287643}.match-wait{color:#a16a00}.legacy-payroll{border-top:1px solid var(--line);background:#fff}.legacy-payroll summary{padding:9px 12px;cursor:pointer;font-size:9px;font-weight:800;color:var(--muted)}.legacy-payroll>div{display:grid;grid-template-columns:1fr 1fr auto;gap:7px;align-items:end;padding:0 12px 11px}.legacy-payroll label{display:grid;gap:4px;font-size:8.5px;font-weight:800;color:var(--muted)}.legacy-payroll input{min-height:33px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:9px}
+      @media(max-width:1150px){.supervisor-resolve{grid-template-columns:1fr 1fr}.supervisor-resolve>b{grid-column:1/-1}.labour-person{grid-template-columns:1fr 1fr 1fr}.labour-person-name{grid-column:1/-1}.labour-person .link-danger{justify-self:start}.payroll-summary-grid{grid-template-columns:1fr 1fr}.payroll-summary-grid>div:nth-child(2){border-right:0}.payroll-intro{grid-template-columns:1fr}.payroll-intro>div{border-right:0;border-bottom:1px solid var(--line)}}@media(max-width:760px){.supervisor-resolve{grid-template-columns:1fr}.supervisor-resolve>b{grid-column:auto}.labour-filter,.report-filter,.payroll-filter{grid-template-columns:1fr 1fr}.labour-search{grid-column:1/-1}.labour-kpis{grid-template-columns:1fr 1fr}.labour-card>header,.payroll-card>header{align-items:flex-start}.labour-source,.payroll-summary-grid{grid-template-columns:1fr}.payroll-summary-grid>div{border-right:0;border-bottom:1px solid #edf0f3}.labour-person{grid-template-columns:1fr 1fr}.labour-person-name{grid-column:1/-1}.labour-confirm,.payroll-confirm{grid-template-columns:1fr}.legacy-payroll>div{grid-template-columns:1fr}}@media print{.labour-mode,.labour-filter,.report-filter,.labour-kpis,.labour-readonly,.labour-tools,.labour-confirm,.payroll-actions,.payroll-confirm,.legacy-payroll,.notice{display:none!important}.payroll-card{break-inside:avoid}}
     `}</style>
   </AppShell>
 }
