@@ -22,10 +22,10 @@ const managementNav: NavItem[] = [
 
 const reportUserNav: NavItem[] = [
   ['/', 'Dashboard'],
-  ['/reports', 'Site Operations'],
   ['/schedule', 'แผนงานที่กำหนด'],
   ['/site-photos', 'รูปภาพหน้างาน'],
   ['/defect-flow', 'Defect Report'],
+  ['/reports', 'Site Operations'],
   ['/materials', 'วัสดุ เครื่องมือและผู้รับเหมา'],
   ['/procurement', 'การจัดซื้อ/จัดจ้าง'],
   ['/weekly', 'รายงานการทำงานประจำสัปดาห์'],
@@ -37,8 +37,8 @@ const viewerNav: NavItem[] = [
   ['/schedule', 'แผนงานที่กำหนด'],
   ['/site-photos', 'รูปภาพหน้างาน'],
   ['/defect-flow', 'Defect Report'],
-  ['/materials', 'วัสดุ เครื่องมือและผู้รับเหมา'],
   ['/reports', 'Site Operations'],
+  ['/materials', 'วัสดุ เครื่องมือและผู้รับเหมา'],
   ['/procurement', 'การจัดซื้อ/จัดจ้าง'],
   ['/weekly', 'รายงานการทำงานประจำสัปดาห์'],
   ['/presentation', 'Executive Presentation']
@@ -50,7 +50,8 @@ const payrollNav: NavItem[] = [
   ['/', 'Dashboard']
 ]
 
-const MOBILE_PRIMARY_COUNT = 5
+const MOBILE_PRIMARY_COUNT = 4
+const MOBILE_PRIORITY_PATHS = ['/', '/defect-flow', '/reports', '/schedule']
 const mobileLabel: Record<string,string> = {
   '/': 'Dashboard',
   '/presentation': 'Executive',
@@ -96,8 +97,17 @@ export default function AppShell({ children }: { children: ReactNode }) {
     if(role==='manager') items.push(['/photo-mapping','Photo Mapping'],['/data-health','Data Health'],['/users','User & Access'])
     return items
   }, [role])
-  const mobilePrimary = useMemo<NavItem[]>(() => nav.slice(0, MOBILE_PRIMARY_COUNT).map(([href,label]) => [href, mobileLabel[href] || label]), [nav])
-  const extraNav = useMemo<NavItem[]>(() => nav.slice(MOBILE_PRIMARY_COUNT), [nav])
+  const mobileOrderedNav = useMemo<NavItem[]>(() => {
+    if(role==='payroll') return nav
+    const priority = MOBILE_PRIORITY_PATHS.flatMap((href) => {
+      const item = nav.find(([navHref]) => navHref === href)
+      return item ? [item] : []
+    })
+    const priorityPaths = new Set(priority.map(([href]) => href))
+    return [...priority, ...nav.filter(([href]) => !priorityPaths.has(href))]
+  }, [nav, role])
+  const mobilePrimary = useMemo<NavItem[]>(() => mobileOrderedNav.slice(0, MOBILE_PRIMARY_COUNT).map(([href,label]) => [href, mobileLabel[href] || label]), [mobileOrderedNav])
+  const extraNav = useMemo<NavItem[]>(() => mobileOrderedNav.slice(MOBILE_PRIMARY_COUNT), [mobileOrderedNav])
 
   useEffect(() => {
     const supabase = getSupabase()
@@ -231,7 +241,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
     {mobileMore && <>
       <button className="mobile-more-backdrop" aria-label="ปิดเมนูเพิ่มเติม" onClick={()=>setMobileMore(false)} />
-      <section className="mobile-more-sheet" aria-label="เมนูเพิ่มเติม">
+      <section id="mobile-more-menu" className="mobile-more-sheet" aria-label="เมนูเพิ่มเติม">
         <div className="mobile-more-handle" />
         <div className="mobile-more-user">
           <div><b>{userName}</b><span>{displayRole}</span></div>
@@ -246,7 +256,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
     <nav className="mobile-nav" aria-label="เมนูหลักบนมือถือ">
       {mobilePrimary.map(([href,label]) => <Link key={href} className={navIsActive(path,href)?'active':''} href={href}>{label}</Link>)}
-      <button type="button" className={(mobileMore||extraActive)?'active':''} onClick={()=>setMobileMore(v=>!v)}>เพิ่มเติม</button>
+      <button type="button" className={(mobileMore||extraActive)?'active':''} aria-expanded={mobileMore} aria-controls="mobile-more-menu" onClick={()=>setMobileMore(v=>!v)}>เพิ่มเติม</button>
     </nav>
 
     <style jsx global>{`
