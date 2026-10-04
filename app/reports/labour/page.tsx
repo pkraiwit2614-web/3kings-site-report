@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
 import { getSupabase } from '@/lib/supabase'
-import { requireSuccessfulReads } from '@/lib/liveLoader'
+import { readAllPages, requireCompletePagedReads } from '@/lib/pagedRead'
 import { dateTH } from '@/lib/format'
 import type { Project } from '@/lib/types'
 
@@ -80,6 +80,7 @@ export default function LabourVerificationPage(){
   const [message,setMessage]=useState('')
   const [refreshTick,setRefreshTick]=useState(0)
   const [focusEntry,setFocusEntry]=useState('')
+  const [readSignals,setReadSignals]=useState<Array<{label:string;loaded:number;count:number;truncated:boolean}>>([])
 
   useEffect(()=>{
     const onFocus=()=>setRefreshTick(v=>v+1)
@@ -104,23 +105,33 @@ export default function LabourVerificationPage(){
       const userResult=await s.auth.getUser()
       const user=userResult.data.user
       const [e,b,w,p,ep,a,pr,pi,profile]=await Promise.all([
-        s.from('site_operations_entries').select('id,work_date,source_row,project_name_raw,area_raw,supervisor_raw,male_count,female_count,total_manpower,work_detail,status_text,next_plan,afternoon_detail,specific_area,supervisor_worker_id').order('work_date',{ascending:false}).order('source_row',{ascending:false}).limit(1500),
-        s.from('labour_verification_batches').select('*').order('work_date',{ascending:false}),
-        s.from('labour_workers').select('worker_id,full_name,nickname,default_team,status,display_label').order('worker_id'),
-        s.from('projects').select('id,code,name,site_group,target_handover,active,sort_order').order('sort_order'),
-        s.from('site_operations_entry_projects').select('entry_id,project_id'),
-        s.from('labour_daily_assignments').select('*').order('work_date',{ascending:false}),
-        s.from('payroll_verification_records').select('*').order('updated_at',{ascending:false}),
-        s.from('payroll_verification_items').select('*').order('updated_at',{ascending:false}),
+        readAllPages<SiteEntry>({label:'site_operations_entries',keyOf:x=>x.id,fetchPage:(from,to)=>
+          s.from('site_operations_entries').select('id,work_date,source_row,project_name_raw,area_raw,supervisor_raw,male_count,female_count,total_manpower,work_detail,status_text,next_plan,afternoon_detail,specific_area,supervisor_worker_id',{count:'exact'}).order('work_date',{ascending:false}).order('source_row',{ascending:false}).order('id',{ascending:false}).range(from,to)}),
+        readAllPages<Batch>({label:'labour_verification_batches',keyOf:x=>x.id,fetchPage:(from,to)=>
+          s.from('labour_verification_batches').select('*',{count:'exact'}).order('work_date',{ascending:false}).order('id',{ascending:false}).range(from,to)}),
+        readAllPages<Worker>({label:'labour_workers',keyOf:x=>x.worker_id,fetchPage:(from,to)=>
+          s.from('labour_workers').select('worker_id,full_name,nickname,default_team,status,display_label',{count:'exact'}).order('worker_id').range(from,to)}),
+        readAllPages<Project>({label:'projects',keyOf:x=>x.id,fetchPage:(from,to)=>
+          s.from('projects').select('id,code,name,site_group,target_handover,active,sort_order',{count:'exact'}).order('sort_order').order('id').range(from,to)}),
+        readAllPages<EntryProject>({label:'site_operations_entry_projects',keyOf:x=>x.entry_id+':'+x.project_id,fetchPage:(from,to)=>
+          s.from('site_operations_entry_projects').select('entry_id,project_id',{count:'exact'}).order('entry_id').order('project_id').range(from,to)}),
+        readAllPages<Assignment>({label:'labour_daily_assignments',keyOf:x=>x.id,fetchPage:(from,to)=>
+          s.from('labour_daily_assignments').select('*',{count:'exact'}).order('work_date',{ascending:false}).order('id',{ascending:false}).range(from,to)}),
+        readAllPages<PayrollRecord>({label:'payroll_verification_records',keyOf:x=>x.id,fetchPage:(from,to)=>
+          s.from('payroll_verification_records').select('*',{count:'exact'}).order('updated_at',{ascending:false}).order('id',{ascending:false}).range(from,to)}),
+        readAllPages<PayrollItem>({label:'payroll_verification_items',keyOf:x=>x.id,fetchPage:(from,to)=>
+          s.from('payroll_verification_items').select('*',{count:'exact'}).order('updated_at',{ascending:false}).order('id',{ascending:false}).range(from,to)}),
         user?s.from('profiles').select('role,active').eq('user_id',user.id).maybeSingle():Promise.resolve({data:null,error:null})
       ])
-      requireSuccessfulReads([e,b,w,p,ep,a,pr,pi])
+      const paged=[e,b,w,p,ep,a,pr,pi]
+      setReadSignals(paged.map(({label,loaded,count,truncated})=>({label,loaded,count,truncated})))
+      requireCompletePagedReads(paged)
       if(profile.error)throw profile.error
       if(!alive)return
-      const nextEntries=(e.data||[]) as SiteEntry[]
-      setEntries(nextEntries);setBatches((b.data||[]) as Batch[]);setWorkers((w.data||[]) as Worker[])
-      setProjects((p.data||[]) as Project[]);setEntryProjects((ep.data||[]) as EntryProject[]);setAssignments((a.data||[]) as Assignment[])
-      setPayrollRecords((pr.data||[]) as PayrollRecord[]);setPayrollItems((pi.data||[]) as PayrollItem[])
+      const nextEntries=e.data
+      setEntries(nextEntries);setBatches(b.data);setWorkers(w.data)
+      setProjects(p.data);setEntryProjects(ep.data);setAssignments(a.data)
+      setPayrollRecords(pr.data);setPayrollItems(pi.data)
       setRole(String(profile.data?.role||'viewer'))
       const latest=latestUsableDate(nextEntries)
       setSelectedDate(v=>v||latest)
@@ -351,6 +362,7 @@ export default function LabourVerificationPage(){
   }
 
   return <AppShell>
+    {readSignals.some(x=>x.truncated)&&<div className="panel" role="alert" style={{marginBottom:10}}>โหลดข้อมูลไม่ครบ • {readSignals.filter(x=>x.truncated).map(x=>x.label+' '+x.loaded+'/'+x.count).join(' • ')}</div>}
     {loadError&&<div className="panel" role="alert" style={{marginBottom:10}}>โหลด Labour Verification ไม่สำเร็จ กรุณาลองใหม่ <button type="button" className="button" onClick={()=>setRefreshTick(v=>v+1)}>ลองใหม่</button></div>}
     <PageHeader title="Labour & Payroll Verification" subtitle="Labour PDF รันอัตโนมัติเหมือนเดิม • หน้านี้ใช้ยืนยันทีมรายวันและตรวจบัตรตอกเพื่อสร้าง Payroll Verification Record" action={<div className="labour-mode"><button type="button" className={mode==='verify'?'active':''} onClick={()=>setMode('verify')}>ยืนยันทีมรายวัน</button>{canPayroll&&<button type="button" className={mode==='payroll'?'active':''} onClick={()=>setMode('payroll')}>Payroll Verification Record</button>}</div>}/>
 
