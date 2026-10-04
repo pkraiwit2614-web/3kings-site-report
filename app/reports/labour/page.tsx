@@ -371,7 +371,7 @@ export default function LabourVerificationPage(){
         <div><span>Needs review</span><b>{visibleBatches.filter(x=>x.verification_status==='needs_review').length}</b></div>
       </section>
 
-      {!canVerify&&<div className="panel labour-readonly">บัญชีนี้ดูข้อมูลได้ แต่การยืนยัน/แก้ทีมคนงานสงวนไว้สำหรับ Manager หรือ Engineer</div>}
+      {!canVerify&&<div className="panel labour-readonly">บัญชีนี้ดูข้อมูลได้ แต่การยืนยัน/แก้ทีมคนงานสงวนไว้สำหรับ Manager, Engineer หรือ Payroll</div>}
 
       {loading?<div className="panel">กำลังโหลดข้อมูล…</div>:!visibleBatches.length?<div className="panel labour-empty">ไม่พบรายการตาม Filter</div>:<div className="labour-stack">
         {visibleBatches.map(batch=>{
@@ -490,7 +490,7 @@ export default function LabourVerificationPage(){
               {effectiveStatus==='needs_review'&&<div className="payroll-warning">ข้อมูลทีมรายวันมีการเปลี่ยนหลังการตรวจ Payroll • ต้องเปิดตรวจบัตรตอกซ้ำก่อนใช้ยอด</div>}
 
               <div className="payroll-actions">
-                <button type="button" className="button primary" disabled={!canPayroll||!rows.length||batch.verification_status!=='verified'} onClick={()=>startPayrollReview(batch)}>{draft.length?'โหลดข้อมูลจากระบบใหม่':'เริ่มตรวจบัตรตอก'}</button>
+                <button type="button" className="button primary" disabled={!canPayroll||!rows.length||batch.verification_status!=='verified'} onClick={()=>startPayrollReview(batch)}>{draft.length?'โหลดข้อมูลจากระบบใหม่':record?.verification_method==='web'?'เปิดรายการเดิม':'เริ่มตรวจบัตรตอก'}</button>
                 {draft.length>0&&<><button type="button" className="button" onClick={()=>markAllTimecards(batch,true)}>✓ ตรงทุกคน</button><button type="button" className="button" onClick={()=>clearAllOt(batch)}>OT = 0 ทั้งทีม</button></>}
                 {record?.timecard_checked_at&&<span className="payroll-audit">ตรวจบัตรล่าสุด {new Date(record.timecard_checked_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}</span>}
               </div>
