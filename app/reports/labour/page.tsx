@@ -527,7 +527,7 @@ export default function LabourVerificationPage(){
             </article>
           })}
         </div>}
-      </>}}
+      </>}
     </>}
 
     <style jsx>{`
