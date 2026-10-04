@@ -27,8 +27,8 @@ export default function RolePermissionGuard20260927(){
       if(cancelled||!profile?.active)return
       const role=String(profile.role||'viewer')
       body.classList.add(`role-${role==='foreman'?'report-user':role}`)
-      if(role==='viewer'&&WRITE_REPORT_PATHS.some(rx=>rx.test(path))){
-        router.replace('/reports')
+      if((role==='viewer'||role==='payroll')&&WRITE_REPORT_PATHS.some(rx=>rx.test(path))){
+        router.replace(role==='payroll'?'/reports/labour':'/reports')
         return
       }
       if(role!=='manager'&&OWNER_ONLY_PATHS.has(path)){
@@ -46,6 +46,12 @@ export default function RolePermissionGuard20260927(){
     body.role-viewer a[href='/reports/new'],
     body.role-viewer a[href^='/reports/'][href$='/edit'],
     body.role-viewer a[href='/data-health'],
+    body.role-payroll .sidebar a[href='/reports/quick'],
+    body.role-payroll .mobile-nav a[href='/reports/quick'],
+    body.role-payroll .mobile-more-links a[href='/reports/quick'],
+    body.role-payroll a[href='/reports/new'],
+    body.role-payroll a[href^='/reports/'][href$='/edit'],
+    body.role-payroll a[href='/data-health'],
     body.role-report-user a[href='/data-health'],
     body.role-engineer a[href='/data-health']{display:none!important}
   `}</style>
