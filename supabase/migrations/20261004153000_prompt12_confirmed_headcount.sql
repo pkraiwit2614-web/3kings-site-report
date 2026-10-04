@@ -255,9 +255,9 @@ set
   headcount_confirmed_at=case when b.verification_status='verified' then b.verified_at else null end,
   headcount_confirmation_status=case when b.verification_status='verified' then 'confirmed' else 'unconfirmed' end,
   updated_at=now()
-from public.site_operations_entries e
-join roster r on r.id=b.id
-where e.id=b.site_operations_entry_id;
+from public.site_operations_entries e, roster r
+where e.id=b.site_operations_entry_id
+  and r.id=b.id;
 
 create or replace function public.labour_headcount_batch_guard()
 returns trigger
