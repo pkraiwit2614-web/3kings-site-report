@@ -9,9 +9,10 @@ import { getSupabase } from '@/lib/supabase'
 import { createLiveLoader } from '@/lib/liveLoader'
 import { readAllPages, requireCompletePagedReads } from '@/lib/pagedRead'
 import { dateTH } from '@/lib/format'
+import { bangkokToday, isUsableActualWorkDate, latestUsableDate } from '@/lib/workDateIntegrity'
 import type { Project, ScheduleTask } from '@/lib/types'
 
-type SiteEntry={id:string;source_row:number;source_timestamp:string|null;work_date:string;project_name_raw:string|null;area_raw:string|null;supervisor_raw:string|null;male_count:number|null;female_count:number|null;total_manpower:number|null;work_detail:string|null;status_text:string|null;next_plan:string|null;afternoon_detail:string|null;specific_area:string|null;supervisor_worker_id:string|null;mapping_status:string;synced_at:string}
+type SiteEntry={id:string;source_row:number;source_timestamp:string|null;work_date:string;project_name_raw:string|null;area_raw:string|null;supervisor_raw:string|null;male_count:number|null;female_count:number|null;total_manpower:number|null;work_detail:string|null;status_text:string|null;next_plan:string|null;afternoon_detail:string|null;specific_area:string|null;supervisor_worker_id:string|null;mapping_status:string;synced_at:string;work_date_validation_status?:string|null;work_date_validation_reason?:string|null}
 type EntryProject={entry_id:string;project_id:string;mapping_method:string}
 type LabourBatch={id:string;site_operations_entry_id:string;verification_status:string;verified_at:string|null}
 type LabourWorker={worker_id:string;full_name:string;display_label:string|null;default_team:string|null}
@@ -45,15 +46,6 @@ function dateTimeTH(value:string|null|undefined){
   return new Intl.DateTimeFormat('th-TH',{timeZone:'Asia/Bangkok',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(d)+' น.'
 }
 function pct(v:number|null|undefined){return v===null||v===undefined?'-':Math.round(Number(v)*100)+'%'}
-function bangkokToday(){
-  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date())
-  const get=(type:string)=>parts.find(x=>x.type===type)?.value||''
-  return get('year')+'-'+get('month')+'-'+get('day')
-}
-function latestUsableDate(rows:SiteEntry[]){
-  const today=bangkokToday()
-  return rows.map(x=>x.work_date).filter(x=>x<=today).sort((a,b)=>b.localeCompare(a))[0]||rows[0]?.work_date||''
-}
 function isOpenProcurement(row:ProcurementRow){return !closedProcurementPattern.test([row.current_status,row.procurement_status,row.payment_status].filter(Boolean).join(' '))}
 
 export default function SiteOperationsPage(){
@@ -153,12 +145,15 @@ export default function SiteOperationsPage(){
     return map
   },[procurement,procurementProjectIds])
 
-  const availableDates=useMemo(()=>Array.from(new Set(entries.map(x=>x.work_date))).sort((a,b)=>b.localeCompare(a)),[entries])
+  const today=bangkokToday()
+  const actualEntries=useMemo(()=>entries.filter(entry=>isUsableActualWorkDate(entry,today)),[entries,today])
+  const workDateReviewQueue=useMemo(()=>entries.filter(entry=>!isUsableActualWorkDate(entry,today)),[entries,today])
+  const availableDates=useMemo(()=>Array.from(new Set(actualEntries.map(x=>x.work_date))).sort((a,b)=>b.localeCompare(a)),[actualEntries])
   const mappedProjectIds=useMemo(()=>new Set(entryProjects.map(x=>x.project_id)),[entryProjects])
   const projectFilterOptions=useMemo(()=>projects.filter(p=>p.active||mappedProjectIds.has(p.id)),[projects,mappedProjectIds])
   const filtered=useMemo(()=>{
     const needle=normalizeText(q)
-    return entries.filter(entry=>{
+    return actualEntries.filter(entry=>{
       if(selectedDate&&entry.work_date!==selectedDate)return false
       const pids=projectIdsByEntry.get(entry.id)||[]
       if(selectedProject&&!pids.includes(selectedProject))return false
@@ -166,7 +161,7 @@ export default function SiteOperationsPage(){
       const projectText=pids.flatMap(id=>[projectById.get(id)?.code,projectById.get(id)?.name])
       return normalizeText([entry.supervisor_raw,entry.project_name_raw,entry.area_raw,entry.work_detail,entry.status_text,entry.next_plan,entry.afternoon_detail,entry.specific_area,...projectText].join(' ')).includes(needle)
     })
-  },[entries,selectedDate,selectedProject,q,projectIdsByEntry,projectById])
+  },[actualEntries,selectedDate,selectedProject,q,projectIdsByEntry,projectById])
 
   const scheduleCandidate=(entry:SiteEntry)=>{
     const source=[entry.work_detail,entry.afternoon_detail,entry.specific_area,entry.area_raw].filter(Boolean).join(' ')
@@ -201,6 +196,11 @@ export default function SiteOperationsPage(){
     {readSignals.some(x=>x.truncated)&&<div className="panel" role="alert" style={{marginBottom:10}}>โหลดข้อมูลไม่ครบ • {readSignals.filter(x=>x.truncated).map(x=>x.label+' '+x.loaded+'/'+x.count).join(' • ')}</div>}
     {loadError&&<div className="panel" role="alert" style={{marginBottom:10}}>โหลดข้อมูล Site Operations ไม่สำเร็จบางส่วน • ระบบคงข้อมูลเดิมไว้ก่อน <button type="button" className="button" style={{marginLeft:8}} onClick={()=>window.dispatchEvent(new Event('focus'))}>ลองใหม่</button></div>}
     <PageHeader title="Site Operations" subtitle="ข้อมูลจาก Google Form / Daily Site Report แบบ Read-only • ใช้ข้อมูลที่หน้างานรายงานแล้วต่อยอดทันทีโดยไม่กรอกซ้ำ" action={<div className="siteops-actions"><span><small>Source Sync ล่าสุด</small><b>{dateTimeTH(latestSynced)}</b></span><Link href="/reports/labour" className="button">Labour Verification</Link></div>}/>
+
+    {workDateReviewQueue.length>0&&<section className="panel work-date-review" role="status">
+      <header><div><b>Work Date Review Queue</b><small>Raw evidence only • ไม่รวม Actual / Manpower / Labour / Payroll จนกว่าจะมีหลักฐานแก้วันที่</small></div><strong>{workDateReviewQueue.length}</strong></header>
+      {workDateReviewQueue.map(entry=>{const batch=batchByEntry.get(entry.id);return <div className="work-date-review-row" key={entry.id}><div><b>{entry.supervisor_raw||'ไม่ระบุผู้ควบคุมงาน'}</b><small>Form row {entry.source_row} • {entry.area_raw||entry.project_name_raw||'-'}</small></div><div><span>Work Date ต้นทาง</span><b>{dateTH(entry.work_date)}</b></div><div><span>เหตุผล</span><b>{entry.work_date_validation_reason||'วันที่ไม่ผ่าน validation'}</b></div><div><span>Labour/Payroll</span><b>{batch?'Needs review / blocked':'ไม่มี Labour Batch • contractor/raw evidence เท่านั้น'}</b></div></div>})}
+    </section>}
 
     <section className="panel siteops-filter">
       <label>วันที่<select value={selectedDate} onChange={e=>setSelectedDate(e.target.value)}><option value="">ทุกวันที่</option>{availableDates.map(d=><option key={d} value={d}>{dateTH(d)}</option>)}</select></label>
@@ -249,6 +249,7 @@ export default function SiteOperationsPage(){
 
     <style jsx>{`
       .siteops-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}.siteops-actions>span{display:grid;text-align:right}.siteops-actions small{font-size:9.5px;color:var(--muted)}.siteops-actions b{font-size:11px}
+      .work-date-review{margin-bottom:10px;border-color:#e9c66f;background:#fffaf0}.work-date-review>header{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:7px}.work-date-review>header div{display:grid}.work-date-review>header small{color:var(--muted);font-size:9px}.work-date-review>header strong{font-size:20px;color:#8a5b00}.work-date-review-row{display:grid;grid-template-columns:minmax(180px,1.4fr) repeat(3,minmax(140px,1fr));gap:8px;padding:8px 0;border-top:1px solid #f0dfb6}.work-date-review-row>div{display:grid;gap:2px}.work-date-review-row span,.work-date-review-row small{font-size:8.5px;color:var(--muted)}.work-date-review-row b{font-size:10px}
       .siteops-filter{display:grid;grid-template-columns:170px minmax(220px,280px) minmax(260px,1fr) auto;gap:8px;align-items:end;padding:10px;margin-bottom:10px;position:sticky;top:0;z-index:16}.siteops-filter label{display:grid;gap:4px;font-size:10px;font-weight:800;color:var(--muted)}.siteops-filter select,.siteops-filter input{min-height:36px;border:1px solid var(--line);border-radius:9px;background:#fff;padding:7px 9px;color:var(--text);font:inherit;font-size:12px}
       .siteops-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}.siteops-kpis>div{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}.siteops-kpis span{display:block;font-size:9px;font-weight:900;color:var(--muted);letter-spacing:.05em;text-transform:uppercase}.siteops-kpis b{display:block;margin:4px 0 1px;font-size:23px;color:var(--navy)}.siteops-kpis small{font-size:9.5px;color:var(--muted)}
       .siteops-cross-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}.siteops-cross{padding:12px;display:flex;flex-direction:column;min-height:158px}.siteops-cross>b{font-size:11px;color:var(--navy)}.siteops-cross>strong{font-size:28px;margin:10px 0 2px;color:var(--navy)}.siteops-cross p{font-size:10px;line-height:1.5;color:var(--muted);margin:0 0 8px}.siteops-cross a{margin-top:auto;font-size:10px;font-weight:800}
