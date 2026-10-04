@@ -44,6 +44,12 @@ const viewerNav: NavItem[] = [
   ['/presentation', 'Executive Presentation']
 ]
 
+const payrollNav: NavItem[] = [
+  ['/reports/labour', 'Payroll Verification'],
+  ['/reports', 'Site Operations'],
+  ['/', 'Dashboard']
+]
+
 const MOBILE_PRIMARY_COUNT = 5
 const mobileLabel: Record<string,string> = {
   '/': 'Dashboard',
@@ -62,13 +68,15 @@ function roleLabel(role:string,userName:string){
   if(role==='manager') return 'Admin'
   if(role==='engineer') return 'Engineer'
   if(role==='foreman') return 'Site User · ดูข้อมูล'
+  if(role==='payroll') return 'Payroll · Labour Verification'
   if(role==='viewer') return 'Viewer · ดูข้อมูล'
   return 'User'
 }
 
 function navIsActive(path:string,href:string){
   if(href==='/defect-flow') return path==='/defect-flow'||path==='/defects'
-  if(href==='/reports') return path==='/reports'||path.startsWith('/reports/')
+  if(href==='/reports/labour') return path==='/reports/labour'
+  if(href==='/reports') return path==='/reports'||(path.startsWith('/reports/')&&path!=='/reports/labour')
   return path===href
 }
 
@@ -83,6 +91,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const nav = useMemo<NavItem[]>(() => {
     if(role==='viewer') return viewerNav
     if(role==='foreman') return reportUserNav
+    if(role==='payroll') return payrollNav
     const items=[...managementNav]
     if(role==='manager') items.push(['/photo-mapping','Photo Mapping'],['/data-health','Data Health'],['/users','User & Access'])
     return items
@@ -215,7 +224,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       </nav>}
       {isSiteOperationsSection&&<nav className="defect-section-tabs" aria-label="Site Operations navigation">
         <Link href="/reports" className={path==='/reports'?'active':''}>Site Operations</Link>
-        <Link href="/reports/labour" className={path==='/reports/labour'?'active':''}>Labour Verification</Link>
+        <Link href="/reports/labour" className={path==='/reports/labour'?'active':''}>Payroll Verification Record</Link>
       </nav>}
       {children}
     </main>
