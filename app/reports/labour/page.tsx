@@ -6,9 +6,10 @@ import PageHeader from '@/components/PageHeader'
 import { getSupabase } from '@/lib/supabase'
 import { readAllPages, requireCompletePagedReads } from '@/lib/pagedRead'
 import { dateTH } from '@/lib/format'
+import { bangkokToday, isBatchWorkDateUsable, isUsableActualWorkDate, latestUsableDate } from '@/lib/workDateIntegrity'
 import type { Project } from '@/lib/types'
 
-type SiteEntry={id:string;work_date:string;source_row:number;project_name_raw:string|null;area_raw:string|null;supervisor_raw:string|null;male_count:number|null;female_count:number|null;total_manpower:number|null;work_detail:string|null;status_text:string|null;next_plan:string|null;afternoon_detail:string|null;specific_area:string|null;supervisor_worker_id:string|null}
+type SiteEntry={id:string;work_date:string;source_row:number;project_name_raw:string|null;area_raw:string|null;supervisor_raw:string|null;male_count:number|null;female_count:number|null;total_manpower:number|null;work_detail:string|null;status_text:string|null;next_plan:string|null;afternoon_detail:string|null;specific_area:string|null;supervisor_worker_id:string|null;work_date_validation_status?:string|null;work_date_validation_reason?:string|null}
 type Batch={id:string;site_operations_entry_id:string;work_date:string;expected_headcount:number|null;supervisor_worker_id:string|null;supervisor_raw:string|null;home_team:string|null;verification_status:string;verified_by:string|null;verified_at:string|null;note:string|null}
 type Worker={worker_id:string;full_name:string;nickname:string|null;default_team:string|null;status:string|null;display_label:string|null}
 type EntryProject={entry_id:string;project_id:string}
@@ -23,15 +24,6 @@ function addDays(value:string,days:number){
   if(Number.isNaN(d.getTime()))return value
   d.setUTCDate(d.getUTCDate()+days)
   return d.toISOString().slice(0,10)
-}
-function bangkokToday(){
-  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date())
-  const get=(type:string)=>parts.find(x=>x.type===type)?.value||''
-  return get('year')+'-'+get('month')+'-'+get('day')
-}
-function latestUsableDate(rows:SiteEntry[]){
-  const today=bangkokToday()
-  return rows.map(x=>x.work_date).filter(x=>x<=today).sort((a,b)=>b.localeCompare(a))[0]||rows[0]?.work_date||''
 }
 function movementLabel(value:string){
   const map:Record<string,string>={same_team:'ทีมเดิม',borrowed:'ย้าย/ถูกยืมไปช่วยทีมอื่น',returned:'กลับทีมเดิม',other:'อื่น ๆ'}
@@ -106,7 +98,7 @@ export default function LabourVerificationPage(){
       const user=userResult.data.user
       const [e,b,w,p,ep,a,pr,pi,profile]=await Promise.all([
         readAllPages<SiteEntry>({label:'site_operations_entries',keyOf:x=>x.id,fetchPage:(from,to)=>
-          s.from('site_operations_entries').select('id,work_date,source_row,project_name_raw,area_raw,supervisor_raw,male_count,female_count,total_manpower,work_detail,status_text,next_plan,afternoon_detail,specific_area,supervisor_worker_id',{count:'exact'}).order('work_date',{ascending:false}).order('source_row',{ascending:false}).order('id',{ascending:false}).range(from,to)}),
+          s.from('site_operations_entries').select('id,work_date,source_row,project_name_raw,area_raw,supervisor_raw,male_count,female_count,total_manpower,work_detail,status_text,next_plan,afternoon_detail,specific_area,supervisor_worker_id,work_date_validation_status,work_date_validation_reason',{count:'exact'}).order('work_date',{ascending:false}).order('source_row',{ascending:false}).order('id',{ascending:false}).range(from,to)}),
         readAllPages<Batch>({label:'labour_verification_batches',keyOf:x=>x.id,fetchPage:(from,to)=>
           s.from('labour_verification_batches').select('*',{count:'exact'}).order('work_date',{ascending:false}).order('id',{ascending:false}).range(from,to)}),
         readAllPages<Worker>({label:'labour_workers',keyOf:x=>x.worker_id,fetchPage:(from,to)=>
@@ -146,7 +138,9 @@ export default function LabourVerificationPage(){
 
   const canVerify=role==='manager'||role==='engineer'||role==='payroll'
   const canPayroll=canVerify
+  const today=bangkokToday()
   const entryById=useMemo(()=>new Map(entries.map(x=>[x.id,x])),[entries])
+  const batchByEntry=useMemo(()=>new Map(batches.map(x=>[x.site_operations_entry_id,x])),[batches])
   const workerById=useMemo(()=>new Map(workers.map(x=>[x.worker_id,x])),[workers])
   const projectById=useMemo(()=>new Map(projects.map(x=>[x.id,x])),[projects])
   const projectIdsByEntry=useMemo(()=>{
@@ -159,13 +153,15 @@ export default function LabourVerificationPage(){
     for(const row of assignments){const list=map.get(row.batch_id)||[];list.push(row);map.set(row.batch_id,list)}
     return map
   },[assignments])
-  const availableDates=useMemo(()=>Array.from(new Set(batches.map(x=>x.work_date))).sort((a,b)=>b.localeCompare(a)),[batches])
+  const usableBatches=useMemo(()=>batches.filter(batch=>isBatchWorkDateUsable(batch,entryById.get(batch.site_operations_entry_id),today)),[batches,entryById,today])
+  const workDateReviewQueue=useMemo(()=>entries.filter(entry=>!isUsableActualWorkDate(entry,today)),[entries,today])
+  const availableDates=useMemo(()=>Array.from(new Set(usableBatches.map(x=>x.work_date))).sort((a,b)=>b.localeCompare(a)),[usableBatches])
   const teamOptions=useMemo(()=>Array.from(new Set(workers.map(x=>x.default_team).filter(Boolean) as string[])).sort((a,b)=>a.localeCompare(b,'th')),[workers])
   const activeWorkers=useMemo(()=>workers.filter(x=>String(x.status||'').toLowerCase()!=='inactive'),[workers])
 
   const visibleBatches=useMemo(()=>{
     const needle=q.trim().toLowerCase()
-    return batches.filter(batch=>{
+    return usableBatches.filter(batch=>{
       if(selectedDate&&batch.work_date!==selectedDate)return false
       if(statusFilter&&batch.verification_status!==statusFilter)return false
       if(focusEntry&&batch.site_operations_entry_id!==focusEntry)return false
@@ -173,7 +169,8 @@ export default function LabourVerificationPage(){
       const entry=entryById.get(batch.site_operations_entry_id)
       return [batch.supervisor_raw,batch.home_team,entry?.area_raw,entry?.project_name_raw,entry?.work_detail].join(' ').toLowerCase().includes(needle)
     })
-  },[batches,selectedDate,statusFilter,focusEntry,q,entryById])
+  },[usableBatches,selectedDate,statusFilter,focusEntry,q,entryById])
+  const ensureBatchWorkDateUsable=(batch:Batch)=>{if(isBatchWorkDateUsable(batch,entryById.get(batch.site_operations_entry_id),bangkokToday()))return true;setMessage('Work Date รายการนี้ถูกกักไว้เพื่อตรวจสอบ • ห้ามยืนยัน Labour/Payroll จนกว่าจะมีหลักฐานแก้วันที่ต้นทาง');return false}
 
   const draftFor=(batch:Batch)=>drafts[batch.id]||[]
   const updateDraft=(batchId:string,index:number,patch:Partial<DraftAssignment>)=>{
@@ -214,7 +211,7 @@ export default function LabourVerificationPage(){
 
   const confirmSupervisor=async(batch:Batch)=>{
     const workerId=supervisorPick[batch.id]||''
-    if(!canVerify||!workerId||saving[batch.id])return
+    if(!canVerify||!workerId||saving[batch.id]||!ensureBatchWorkDateUsable(batch))return
     setSaving(prev=>({...prev,[batch.id]:true}));setMessage('')
     try{
       const {error}=await getSupabase().rpc('labour_confirm_supervisor_mapping',{p_batch_id:batch.id,p_worker_id:workerId})
@@ -226,7 +223,7 @@ export default function LabourVerificationPage(){
   }
 
   const saveBatch=async(batch:Batch)=>{
-    if(!canVerify||saving[batch.id])return
+    if(!canVerify||saving[batch.id]||!ensureBatchWorkDateUsable(batch))return
     const rows=draftFor(batch)
     if((batch.expected_headcount||0)>0&&!rows.length){setMessage('กรุณาเลือกคนงานก่อนยืนยัน');return}
     setSaving(prev=>({...prev,[batch.id]:true}));setMessage('')
@@ -268,7 +265,7 @@ export default function LabourVerificationPage(){
   }
   const payrollBatches=useMemo(()=>{
     const needle=q.trim().toLowerCase()
-    return batches.filter(batch=>{
+    return usableBatches.filter(batch=>{
       if(dateFrom&&batch.work_date<dateFrom)return false
       if(dateTo&&batch.work_date>dateTo)return false
       const effective=payrollStatusFor(batch)
@@ -277,7 +274,7 @@ export default function LabourVerificationPage(){
       const entry=entryById.get(batch.site_operations_entry_id)
       return [batch.supervisor_raw,batch.home_team,entry?.area_raw,entry?.project_name_raw,entry?.work_detail].join(' ').toLowerCase().includes(needle)
     })
-  },[batches,dateFrom,dateTo,payrollStatusFilter,q,entryById,payrollRecordByBatch])
+  },[usableBatches,dateFrom,dateTo,payrollStatusFilter,q,entryById,payrollRecordByBatch])
   const payrollDraftFor=(batch:Batch)=>payrollDrafts[batch.id]||[]
   const startPayrollReview=(batch:Batch)=>{
     const record=payrollRecordByBatch.get(batch.id)
@@ -318,7 +315,7 @@ export default function LabourVerificationPage(){
     setPayrollDrafts(prev=>({...prev,[batch.id]:(prev[batch.id]||[]).map(x=>Number(x.ot_hours||0)===0?x:{...x,ot_hours:'0',timecard_match:false})}))
   }
   const savePayrollWeb=async(batch:Batch,status:'draft'|'timecard_checked')=>{
-    if(!canPayroll||saving['payroll-'+batch.id])return
+    if(!canPayroll||saving['payroll-'+batch.id]||!ensureBatchWorkDateUsable(batch))return
     const rows=payrollDraftFor(batch)
     if(!rows.length){setMessage('ยังไม่มีรายชื่อคนงานสำหรับตรวจบัตรตอก กรุณายืนยันทีมรายวันก่อน');return}
     if(status==='timecard_checked'&&rows.some(x=>!x.timecard_match)){setMessage('ยังมีคนงานที่ไม่ได้ติ๊ก “ตรงกับบัตรตอก”');return}
@@ -345,7 +342,7 @@ export default function LabourVerificationPage(){
     finally{setSaving(prev=>({...prev,['payroll-'+batch.id]:false}))}
   }
   const saveLegacyPayroll=async(batch:Batch)=>{
-    if(!canPayroll||saving['payroll-'+batch.id])return
+    if(!canPayroll||saving['payroll-'+batch.id]||!ensureBatchWorkDateUsable(batch))return
     const ref=(externalRefs[batch.id]||payrollRecordByBatch.get(batch.id)?.external_reference||'').trim()
     if(!ref){setMessage('กรุณาระบุชื่อไฟล์ Excel / เลขอ้างอิงที่ใช้ตรวจค่าแรง');return}
     setSaving(prev=>({...prev,['payroll-'+batch.id]:true}));setMessage('')
@@ -367,6 +364,7 @@ export default function LabourVerificationPage(){
     <PageHeader title="Labour & Payroll Verification" subtitle="Labour PDF รันอัตโนมัติเหมือนเดิม • หน้านี้ใช้ยืนยันทีมรายวันและตรวจบัตรตอกเพื่อสร้าง Payroll Verification Record" action={<div className="labour-mode"><button type="button" className={mode==='verify'?'active':''} onClick={()=>setMode('verify')}>ยืนยันทีมรายวัน</button>{canPayroll&&<button type="button" className={mode==='payroll'?'active':''} onClick={()=>setMode('payroll')}>Payroll Verification Record</button>}</div>}/>
 
     {message&&<div className="notice" style={{marginBottom:10}}>{message}</div>}
+    {workDateReviewQueue.length>0&&<section className="panel work-date-review" style={{marginBottom:10}}><b>Work Date Review Queue — {workDateReviewQueue.length} รายการ</b><div style={{fontSize:9,color:'var(--muted)',marginTop:2}}>เก็บ raw/source evidence ไว้ครบ แต่ไม่รวมใน Team Verification หรือ Payroll และไม่เดาวันใหม่</div>{workDateReviewQueue.map(entry=>{const batch=batchByEntry.get(entry.id);return <div key={entry.id} style={{display:'grid',gridTemplateColumns:'minmax(160px,1fr) 110px minmax(170px,1fr)',gap:8,padding:'7px 0',borderTop:'1px solid var(--line)',marginTop:6}}><span><b>{entry.supervisor_raw||'-'}</b><small style={{display:'block'}}>Form row {entry.source_row} • {entry.area_raw||entry.project_name_raw||'-'}</small></span><span><small>Work Date ต้นทาง</small><b style={{display:'block'}}>{dateTH(entry.work_date)}</b></span><span><small>{entry.work_date_validation_reason||'วันที่ไม่ผ่าน validation'}</small><b style={{display:'block'}}>{batch?'Batch ถูกกัก / Needs review':'ไม่มี Labour Batch • raw/contractor evidence เท่านั้น'}</b></span></div>})}</section>}
 
     {mode==='verify'?<>
       <section className="panel labour-filter">
