@@ -120,7 +120,7 @@ export default function DashboardPage() {
         const [p,t,so,sop,pr,sr,sd]=await Promise.all([
           s.from('projects').select('id,code,name,target_handover,active,sort_order').eq('active',true).order('sort_order').abortSignal(signal),
           s.from('v_schedule_tasks').select('id,project_id,task_name,category,actual_progress,current_plan_progress,current_variance,delay_days,site_status,blocker,next_action,target_close,planned_start,planned_end,actual_start,actual_end,area,source_task_no,contractor').abortSignal(signal),
-          s.from('site_operations_entries').select('id,work_date,project_name_raw,area_raw,total_manpower,work_detail,status_text,next_plan,mapping_status,synced_at,work_date_validation_status').order('work_date',{ascending:false}).order('source_row',{ascending:false}).limit(300).abortSignal(signal),
+          s.from('site_operations_entries').select('id,work_date,project_name_raw,area_raw,total_manpower,work_detail,status_text,next_plan,mapping_status,synced_at,work_date_validation_status').lte('work_date',bangkokToday()).or('work_date_validation_status.is.null,work_date_validation_status.eq.valid').order('work_date',{ascending:false}).order('source_row',{ascending:false}).limit(300).abortSignal(signal),
           s.from('site_operations_entry_projects').select('entry_id,project_id').limit(1200).abortSignal(signal),
           s.from('procurement_items').select('id,project_id,vendor,item_name,current_status,expected_delivery_text,expected_delivery').order('created_at',{ascending:false}).abortSignal(signal),
           s.from('drive_sync_runs').select('sync_type,project_code,created_at').eq('status','success').order('created_at',{ascending:false}).limit(30).abortSignal(signal),
@@ -241,6 +241,7 @@ export default function DashboardPage() {
   const usableSiteOperations=useMemo(()=>siteOperations.filter(row=>isUsableActualWorkDate(row,today)),[siteOperations,today])
   const latestSiteOperationsDate=latestUsableDate(usableSiteOperations,today)
   const latestSiteOperations=useMemo(()=>usableSiteOperations.filter(row=>row.work_date===latestSiteOperationsDate),[usableSiteOperations,latestSiteOperationsDate])
+  const siteOpsTodayCount=usableSiteOperations.filter(row=>row.work_date===today).length
   const siteOpsProjectIdsByEntry=useMemo(()=>{
     const map=new Map<string,string[]>()
     for(const link of siteOperationProjects){const list=map.get(link.entry_id)||[];if(!list.includes(link.project_id))list.push(link.project_id);map.set(link.entry_id,list)}
@@ -303,7 +304,7 @@ export default function DashboardPage() {
           <div className="executive-kpi"><span>Active Sites</span><b>{projects.length}</b><small>{statusSummary.total} Site / Plot มี Schedule</small></div>
           <button className="executive-kpi warn" onClick={()=>openFollowup('delayed')}><span>Delayed Tasks</span><b>{delayedTotal}</b><small>คลิกดูรายการงานล่าช้า</small></button>
           <button className="executive-kpi danger" onClick={()=>openFollowup('blockers')}><span>Open Blockers</span><b>{blockersTotal}</b><small>คลิกดูปัญหาที่ยังค้าง</small></button>
-          <div className="executive-kpi"><span>Reports Today</span><b>{reportToday}</b><small>รายงานประจำวันที่ส่งวันนี้</small></div>
+          <div className="executive-kpi"><span>Site Ops Today</span><b>{siteOpsTodayCount}</b><small>รายการ Daily Site Report ที่ Sync เข้า Site Operations วันนี้</small></div>
           <div className="executive-kpi"><span>Latest Manpower</span><b>{latestManpower}</b><small>คน • Site Operations {latestSiteOperationsDate?dateTH(latestSiteOperationsDate):'ยังไม่มีข้อมูล'}</small></div>
         </div>
         <div className="portfolio-status-strip">
