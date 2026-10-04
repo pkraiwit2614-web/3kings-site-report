@@ -8,6 +8,7 @@ import { readAllPages, requireCompletePagedReads } from '@/lib/pagedRead'
 import { dateTH } from '@/lib/format'
 import { bangkokToday, isBatchWorkDateUsable, latestUsableDate } from '@/lib/workDateIntegrity'
 import type { Project } from '@/lib/types'
+import {canManageLabour,canViewPayroll,resolveAccessRole,type AccessRole} from '@/lib/accessControl'
 
 type SiteEntry={id:string;work_date:string;source_row:number;project_name_raw:string|null;area_raw:string|null;supervisor_raw:string|null;male_count:number|null;female_count:number|null;total_manpower:number|null;work_detail:string|null;status_text:string|null;next_plan:string|null;afternoon_detail:string|null;specific_area:string|null;supervisor_worker_id:string|null;work_date_validation_status?:string|null;work_date_validation_reason?:string|null}
 type Batch={id:string;site_operations_entry_id:string;work_date:string;expected_headcount:number|null;supervisor_worker_id:string|null;supervisor_raw:string|null;home_team:string|null;verification_status:string;verified_by:string|null;verified_at:string|null;note:string|null}
@@ -45,7 +46,7 @@ function attendanceLabel(value:string){
 export default function LabourVerificationPage(){
   const [loading,setLoading]=useState(true)
   const [loadError,setLoadError]=useState(false)
-  const [role,setRole]=useState('viewer')
+  const [accessRole,setAccessRole]=useState<AccessRole|null>(null)
   const [entries,setEntries]=useState<SiteEntry[]>([])
   const [batches,setBatches]=useState<Batch[]>([])
   const [workers,setWorkers]=useState<Worker[]>([])
@@ -98,7 +99,19 @@ export default function LabourVerificationPage(){
       const s=getSupabase()
       const userResult=await s.auth.getUser()
       const user=userResult.data.user
-      const [e,b,w,p,ep,a,pr,pi,profile]=await Promise.all([
+      if(!user)throw new Error('AUTH_REQUIRED')
+
+      const profile=await s.from('profiles').select('role,active').eq('user_id',user.id).maybeSingle()
+      if(profile.error)throw profile.error
+      if(!profile.data?.active)throw new Error('INACTIVE_USER')
+      const nextAccessRole=resolveAccessRole(profile.data.role,user.id)
+      if(!nextAccessRole)throw new Error('ROLE_NOT_ALLOWED')
+      const payrollAllowed=canViewPayroll(nextAccessRole)
+
+      const emptyPayrollRecord={label:'payroll_verification_records',data:[] as PayrollRecord[],count:0,loaded:0,truncated:false}
+      const emptyPayrollItem={label:'payroll_verification_items',data:[] as PayrollItem[],count:0,loaded:0,truncated:false}
+
+      const [e,b,w,p,ep,a,pr,pi]=await Promise.all([
         readAllPages<SiteEntry>({label:'site_operations_entries',keyOf:x=>x.id,fetchPage:(from,to)=>
           s.from('site_operations_entries').select('id,work_date,source_row,project_name_raw,area_raw,supervisor_raw,male_count,female_count,total_manpower,work_detail,status_text,next_plan,afternoon_detail,specific_area,supervisor_worker_id,work_date_validation_status,work_date_validation_reason',{count:'exact'}).order('work_date',{ascending:false}).order('source_row',{ascending:false}).order('id',{ascending:false}).range(from,to)}),
         readAllPages<Batch>({label:'labour_verification_batches',keyOf:x=>x.id,fetchPage:(from,to)=>
@@ -111,22 +124,21 @@ export default function LabourVerificationPage(){
           s.from('site_operations_entry_projects').select('entry_id,project_id',{count:'exact'}).order('entry_id').order('project_id').range(from,to)}),
         readAllPages<Assignment>({label:'labour_daily_assignments',keyOf:x=>x.id,fetchPage:(from,to)=>
           s.from('labour_daily_assignments').select('*',{count:'exact'}).order('work_date',{ascending:false}).order('id',{ascending:false}).range(from,to)}),
-        readAllPages<PayrollRecord>({label:'payroll_verification_records',keyOf:x=>x.id,fetchPage:(from,to)=>
-          s.from('payroll_verification_records').select('*',{count:'exact'}).order('updated_at',{ascending:false}).order('id',{ascending:false}).range(from,to)}),
-        readAllPages<PayrollItem>({label:'payroll_verification_items',keyOf:x=>x.id,fetchPage:(from,to)=>
-          s.from('payroll_verification_items').select('*',{count:'exact'}).order('updated_at',{ascending:false}).order('id',{ascending:false}).range(from,to)}),
-        user?s.from('profiles').select('role,active').eq('user_id',user.id).maybeSingle():Promise.resolve({data:null,error:null})
+        payrollAllowed?readAllPages<PayrollRecord>({label:'payroll_verification_records',keyOf:x=>x.id,fetchPage:(from,to)=>
+          s.from('payroll_verification_records').select('*',{count:'exact'}).order('updated_at',{ascending:false}).order('id',{ascending:false}).range(from,to)}):Promise.resolve(emptyPayrollRecord),
+        payrollAllowed?readAllPages<PayrollItem>({label:'payroll_verification_items',keyOf:x=>x.id,fetchPage:(from,to)=>
+          s.from('payroll_verification_items').select('*',{count:'exact'}).order('updated_at',{ascending:false}).order('id',{ascending:false}).range(from,to)}):Promise.resolve(emptyPayrollItem)
       ])
-      const paged=[e,b,w,p,ep,a,pr,pi]
+      const paged=payrollAllowed?[e,b,w,p,ep,a,pr,pi]:[e,b,w,p,ep,a]
       setReadSignals(paged.map(({label,loaded,count,truncated})=>({label,loaded,count,truncated})))
       requireCompletePagedReads(paged)
-      if(profile.error)throw profile.error
       if(!alive)return
       const nextEntries=e.data
       setEntries(nextEntries);setBatches(b.data);setWorkers(w.data)
       setProjects(p.data);setEntryProjects(ep.data);setAssignments(a.data)
       setPayrollRecords(pr.data);setPayrollItems(pi.data)
-      setRole(String(profile.data?.role||'viewer'))
+      setAccessRole(nextAccessRole)
+      if(!payrollAllowed)setMode('verify')
       const latest=latestUsableDate(nextEntries)
       setSelectedDate(v=>v||latest)
       setDateTo(v=>v||latest)
@@ -138,8 +150,8 @@ export default function LabourVerificationPage(){
     return()=>{alive=false}
   },[refreshTick])
 
-  const canVerify=role==='manager'||role==='engineer'||role==='payroll'
-  const canPayroll=canVerify
+  const canVerify=canManageLabour(accessRole)
+  const canPayroll=canViewPayroll(accessRole)
   const today=bangkokToday()
   const entryById=useMemo(()=>new Map(entries.map(x=>[x.id,x])),[entries])
   const workerById=useMemo(()=>new Map(workers.map(x=>[x.worker_id,x])),[workers])
@@ -361,7 +373,7 @@ export default function LabourVerificationPage(){
   return <AppShell>
     {readSignals.some(x=>x.truncated)&&<div className="panel" role="alert" style={{marginBottom:10}}>โหลดข้อมูลไม่ครบ • {readSignals.filter(x=>x.truncated).map(x=>x.label+' '+x.loaded+'/'+x.count).join(' • ')}</div>}
     {loadError&&<div className="panel" role="alert" style={{marginBottom:10}}>โหลด Labour Verification ไม่สำเร็จ กรุณาลองใหม่ <button type="button" className="button" onClick={()=>setRefreshTick(v=>v+1)}>ลองใหม่</button></div>}
-    <PageHeader title="Labour & Payroll Verification" subtitle="Labour PDF รันอัตโนมัติเหมือนเดิม • หน้านี้ใช้ยืนยันทีมรายวันและตรวจบัตรตอกเพื่อสร้าง Payroll Verification Record" action={<div className="labour-mode"><button type="button" className={mode==='verify'?'active':''} onClick={()=>setMode('verify')}>ยืนยันทีมรายวัน</button>{canPayroll&&<button type="button" className={mode==='payroll'?'active':''} onClick={()=>setMode('payroll')}>Payroll Verification Record</button>}</div>}/>
+    <PageHeader title={canPayroll?'Labour & Payroll Verification':'Labour'} subtitle={canPayroll?'Labour PDF รันอัตโนมัติเหมือนเดิม • หน้านี้ใช้ยืนยันทีมรายวันและตรวจบัตรตอกเพื่อสร้าง Payroll Verification Record':'ดูข้อมูลทีมและแรงงานจาก Site Operations • ไม่มีสิทธิ์เข้าถึงข้อมูล Payroll'} action={<div className="labour-mode"><button type="button" className={mode==='verify'?'active':''} onClick={()=>setMode('verify')}>ยืนยันทีมรายวัน</button>{canPayroll&&<button type="button" className={mode==='payroll'?'active':''} onClick={()=>setMode('payroll')}>Payroll Verification Record</button>}</div>}/>
 
     {message&&<div className="notice" style={{marginBottom:10}}>{message}</div>}
 
@@ -380,7 +392,7 @@ export default function LabourVerificationPage(){
         <div><span>Needs review</span><b>{visibleBatches.filter(x=>x.verification_status==='needs_review').length}</b></div>
       </section>
 
-      {!canVerify&&<div className="panel labour-readonly">บัญชีนี้ดูข้อมูลได้ แต่การยืนยัน/แก้ทีมคนงานสงวนไว้สำหรับ Manager, Engineer หรือ Payroll</div>}
+      {!canVerify&&<div className="panel labour-readonly">บัญชีนี้ดูข้อมูล Labour ได้ แต่การยืนยัน/แก้ทีมคนงานสงวนไว้สำหรับ Admin</div>}
 
       {loading?<div className="panel">กำลังโหลดข้อมูล…</div>:!visibleBatches.length?<div className="panel labour-empty">ไม่พบรายการตาม Filter</div>:<div className="labour-stack">
         {visibleBatches.map(batch=>{
