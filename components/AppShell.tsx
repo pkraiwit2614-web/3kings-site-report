@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { ReactNode, useEffect, useMemo, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import BrandLogo from '@/components/BrandLogo'
+import {canViewPayroll,resolveAccessRole,type AccessRole} from '@/lib/accessControl'
 
 type NavItem = [string,string]
 
@@ -15,21 +16,10 @@ const managementNav: NavItem[] = [
   ['/materials', 'วัสดุ เครื่องมือและผู้รับเหมา'],
   ['/defect-flow', 'Defect Report'],
   ['/reports', 'Site Operations'],
+  ['/reports/labour', 'Labour & Payroll'],
   ['/site-photos', 'รูปภาพหน้างาน'],
   ['/procurement', 'การจัดซื้อ/จัดจ้าง'],
   ['/weekly', 'รายงานการทำงานประจำสัปดาห์']
-]
-
-const reportUserNav: NavItem[] = [
-  ['/', 'Dashboard'],
-  ['/schedule', 'แผนงานที่กำหนด'],
-  ['/site-photos', 'รูปภาพหน้างาน'],
-  ['/defect-flow', 'Defect Report'],
-  ['/reports', 'Site Operations'],
-  ['/materials', 'วัสดุ เครื่องมือและผู้รับเหมา'],
-  ['/procurement', 'การจัดซื้อ/จัดจ้าง'],
-  ['/weekly', 'รายงานการทำงานประจำสัปดาห์'],
-  ['/presentation', 'Executive Presentation']
 ]
 
 const viewerNav: NavItem[] = [
@@ -38,16 +28,15 @@ const viewerNav: NavItem[] = [
   ['/site-photos', 'รูปภาพหน้างาน'],
   ['/defect-flow', 'Defect Report'],
   ['/reports', 'Site Operations'],
+  ['/reports/labour', 'Labour'],
   ['/materials', 'วัสดุ เครื่องมือและผู้รับเหมา'],
   ['/procurement', 'การจัดซื้อ/จัดจ้าง'],
   ['/weekly', 'รายงานการทำงานประจำสัปดาห์'],
   ['/presentation', 'Executive Presentation']
 ]
 
-const payrollNav: NavItem[] = [
-  ['/reports/labour', 'Payroll Verification'],
-  ['/reports', 'Site Operations'],
-  ['/', 'Dashboard']
+const defectContributorNav: NavItem[] = [
+  ['/defect-flow', 'Defect Report']
 ]
 
 const MOBILE_PRIMARY_COUNT = 4
@@ -59,18 +48,17 @@ const mobileLabel: Record<string,string> = {
   '/materials': 'วัสดุ',
   '/defect-flow': 'Defect',
   '/site-photos': 'รูปหน้างาน',
-  '/reports': 'Site Ops'
+  '/reports': 'Site Ops',
+  '/reports/labour': 'Labour'
 }
 
 const DRIVE_WATCH_PATHS = new Set(['/', '/presentation', '/schedule', '/materials', '/site-photos', '/procurement', '/photo-mapping', '/data-health'])
 
-function roleLabel(role:string,userName:string){
-  if(userName.trim().toLowerCase()==='golf') return 'Site Supervisor'
-  if(role==='manager') return 'Admin'
-  if(role==='engineer') return 'Engineer'
-  if(role==='foreman') return 'Site User · ดูข้อมูล'
-  if(role==='payroll') return 'Payroll · Labour Verification'
+function roleLabel(role:AccessRole|null,userName:string){
+  if(role==='owner'||userName.trim().toLowerCase()==='golf') return 'Site Supervisor'
+  if(role==='admin') return 'Admin'
   if(role==='viewer') return 'Viewer · ดูข้อมูล'
+  if(role==='defect_contributor') return 'Defect Contributor'
   return 'User'
 }
 
@@ -85,27 +73,27 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const path = usePathname(); const router = useRouter()
   const [userName, setUserName] = useState('')
   const [role, setRole] = useState('')
+  const [userId, setUserId] = useState('')
   const [ready, setReady] = useState(false)
   const [accessError, setAccessError] = useState(false)
   const [accessAttempt, setAccessAttempt] = useState(0)
   const [mobileMore, setMobileMore] = useState(false)
+  const accessRole=useMemo(()=>resolveAccessRole(role,userId),[role,userId])
   const nav = useMemo<NavItem[]>(() => {
-    if(role==='viewer') return viewerNav
-    if(role==='foreman') return reportUserNav
-    if(role==='payroll') return payrollNav
-    const items=[...managementNav]
-    if(role==='manager') items.push(['/photo-mapping','Photo Mapping'],['/data-health','Data Health'],['/users','User & Access'])
-    return items
-  }, [role])
+    if(accessRole==='defect_contributor') return defectContributorNav
+    if(accessRole==='viewer') return viewerNav
+    if(accessRole==='admin') return managementNav
+    if(accessRole==='owner') return [...managementNav,['/photo-mapping','Photo Mapping'],['/data-health','Data Health'],['/users','User & Access']]
+    return []
+  }, [accessRole])
   const mobileOrderedNav = useMemo<NavItem[]>(() => {
-    if(role==='payroll') return nav
     const priority = MOBILE_PRIORITY_PATHS.flatMap((href) => {
       const item = nav.find(([navHref]) => navHref === href)
       return item ? [item] : []
     })
     const priorityPaths = new Set(priority.map(([href]) => href))
     return [...priority, ...nav.filter(([href]) => !priorityPaths.has(href))]
-  }, [nav, role])
+  }, [nav])
   const mobilePrimary = useMemo<NavItem[]>(() => mobileOrderedNav.slice(0, MOBILE_PRIMARY_COUNT).map(([href,label]) => [href, mobileLabel[href] || label]), [mobileOrderedNav])
   const extraNav = useMemo<NavItem[]>(() => mobileOrderedNav.slice(MOBILE_PRIMARY_COUNT), [mobileOrderedNav])
 
@@ -128,7 +116,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
         if (!alive || controller.signal.aborted) return
         if (profileError) throw profileError
         if (!profile?.active) { await supabase.auth.signOut(); if (alive && !controller.signal.aborted) router.replace('/login'); return }
-        setUserName(profile.full_name || data.user.email || 'User'); setRole(profile.role || 'viewer'); setReady(true)
+        const nextRole=resolveAccessRole(profile.role,data.user.id)
+        if(!nextRole){ await supabase.auth.signOut(); if(alive&&!controller.signal.aborted)router.replace('/login'); return }
+        setUserName(profile.full_name || data.user.email || 'User'); setUserId(data.user.id); setRole(profile.role || 'viewer'); setReady(true)
       } catch {
         if (alive) setAccessError(true)
       } finally {
@@ -212,7 +202,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
     router.replace('/login')
   }
 
-  const displayRole = roleLabel(role,userName)
+  const displayRole = roleLabel(accessRole,userName)
 
   if (!ready) return <div className="loading-screen">{accessError ? <div role="alert"><p>ตรวจสอบสิทธิ์ไม่สำเร็จ กรุณาตรวจการเชื่อมต่อแล้วลองใหม่</p><button type="button" onClick={() => setAccessAttempt(v => v + 1)}>ลองใหม่</button></div> : 'กำลังโหลดระบบ…'}</div>
 
@@ -234,7 +224,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       </nav>}
       {isSiteOperationsSection&&<nav className="defect-section-tabs" aria-label="Site Operations navigation">
         <Link href="/reports" className={path==='/reports'?'active':''}>Site Operations</Link>
-        <Link href="/reports/labour" className={path==='/reports/labour'?'active':''}>Payroll Verification Record</Link>
+        <Link href="/reports/labour" className={path==='/reports/labour'?'active':''}>{canViewPayroll(accessRole)?'Payroll Verification Record':'Labour'}</Link>
       </nav>}
       {children}
     </main>
