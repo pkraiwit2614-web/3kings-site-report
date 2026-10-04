@@ -7,7 +7,7 @@ import { getSupabase } from '@/lib/supabase'
 import { readAllPages, requireCompletePagedReads } from '@/lib/pagedRead'
 import { dateTH } from '@/lib/format'
 import { bangkokToday, isBatchWorkDateUsable, latestUsableDate } from '@/lib/workDateIntegrity'
-import { confirmedHeadcount, countLabel, headcountSourceStatus, isHeadcountConfirmed, maleFemaleHeadcount } from '@/lib/headcountReconciliation'
+import { confirmedHeadcount, countLabel, headcountSourceStatus, isHeadcountConfirmed, isHeadcountReviewCase, maleFemaleHeadcount } from '@/lib/headcountReconciliation'
 import type { Project } from '@/lib/types'
 
 type SiteEntry={id:string;work_date:string;source_row:number;project_name_raw:string|null;area_raw:string|null;supervisor_raw:string|null;male_count:number|null;female_count:number|null;total_manpower:number|null;work_detail:string|null;status_text:string|null;next_plan:string|null;afternoon_detail:string|null;specific_area:string|null;supervisor_worker_id:string|null;work_date_validation_status?:string|null;work_date_validation_reason?:string|null}
@@ -166,11 +166,15 @@ export default function LabourVerificationPage(){
   const teamOptions=useMemo(()=>Array.from(new Set(workers.map(x=>x.default_team).filter(Boolean) as string[])).sort((a,b)=>a.localeCompare(b,'th')),[workers])
   const activeWorkers=useMemo(()=>workers.filter(x=>String(x.status||'').toLowerCase()!=='inactive'),[workers])
 
+  const labourStatusFor=(batch:Batch)=>{
+    const entry=entryById.get(batch.site_operations_entry_id)
+    return entry&&isHeadcountReviewCase(batch,entry)?'needs_review':batch.verification_status
+  }
   const visibleBatches=useMemo(()=>{
     const needle=q.trim().toLowerCase()
     return usableBatches.filter(batch=>{
       if(selectedDate&&batch.work_date!==selectedDate)return false
-      if(statusFilter&&batch.verification_status!==statusFilter)return false
+      if(statusFilter&&labourStatusFor(batch)!==statusFilter)return false
       if(focusEntry&&batch.site_operations_entry_id!==focusEntry)return false
       if(!needle)return true
       const entry=entryById.get(batch.site_operations_entry_id)
@@ -417,9 +421,9 @@ export default function LabourVerificationPage(){
 
       <section className="labour-kpis">
         <div><span>รายการวันนี้</span><b>{visibleBatches.length}</b></div>
-        <div><span>Verified</span><b>{visibleBatches.filter(x=>x.verification_status==='verified').length}</b></div>
-        <div><span>Pending</span><b>{visibleBatches.filter(x=>x.verification_status==='pending').length}</b></div>
-        <div><span>Needs review</span><b>{visibleBatches.filter(x=>x.verification_status==='needs_review').length}</b></div>
+        <div><span>Verified</span><b>{visibleBatches.filter(x=>labourStatusFor(x)==='verified').length}</b></div>
+        <div><span>Pending</span><b>{visibleBatches.filter(x=>labourStatusFor(x)==='pending').length}</b></div>
+        <div><span>Needs review</span><b>{visibleBatches.filter(x=>labourStatusFor(x)==='needs_review').length}</b></div>
       </section>
 
       {!canVerify&&<div className="panel labour-readonly">บัญชีนี้ดูข้อมูลได้ แต่การยืนยัน/แก้ทีมคนงานสงวนไว้สำหรับ Manager, Engineer หรือ Payroll</div>}
@@ -441,10 +445,11 @@ export default function LabourVerificationPage(){
           const editingHeadcount=!isHeadcountConfirmed(batch)||Boolean(headcountDrafts[batch.id])
           const headcountNeedsEvidence=sourceStatus!=='matched'||['daily_report','monthly_report','company_roster','contractor_only','manual_review'].includes(headcountDraft.basis)
           const supervisor=batch.supervisor_worker_id?workerById.get(batch.supervisor_worker_id):null
+          const effectiveLabourStatus=labourStatusFor(batch)
           return <article className="panel labour-card" key={batch.id}>
             <header>
               <div><b>{batch.supervisor_raw||'ไม่ระบุหัวหน้าทีม'}</b><small>{dateTH(batch.work_date)} • Form row {entry.source_row} • {entry.area_raw||entry.project_name_raw||'-'}</small></div>
-              <div><span className={'verify-status '+batch.verification_status}>{statusLabel(batch.verification_status)}</span><strong>{authority===null?'Headcount ยังไม่ยืนยัน':authority+' คน'}</strong></div>
+              <div><span className={'verify-status '+effectiveLabourStatus}>{statusLabel(effectiveLabourStatus)}</span><strong>{authority===null?'Headcount ยังไม่ยืนยัน':authority+' คน'}</strong></div>
             </header>
 
             <div className="labour-source">
