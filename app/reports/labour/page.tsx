@@ -234,7 +234,7 @@ export default function LabourVerificationPage(){
   }
 
   const updateHeadcountDraft=(batchId:string,patch:Partial<HeadcountDraft>)=>{
-    setHeadcountDrafts(prev=>({...prev,[batchId]:{count:'',basis:'',evidence:'',...(prev[batchId]||{}),...patch}}))
+    setHeadcountDrafts(prev=>({...prev,[batchId]:{...(prev[batchId]||{count:'',basis:'',evidence:''}),...patch}}))
   }
   const beginHeadcountEdit=(batch:Batch)=>{
     setHeadcountDrafts(prev=>({...prev,[batch.id]:{
