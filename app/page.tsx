@@ -10,12 +10,15 @@ import DashboardMaterialsStatus from '@/components/DashboardMaterialsStatus'
 import { getSupabase } from '@/lib/supabase'
 import { createLiveLoader, requireSuccessfulReads } from '@/lib/liveLoader'
 import { pct, dateTH } from '@/lib/format'
+import { bangkokToday, isUsableActualWorkDate, latestUsableDate } from '@/lib/workDateIntegrity'
 import type { Project, ScheduleTask } from '@/lib/types'
 
 type FollowupView = 'critical' | 'delayed' | 'blockers'
 type SiteStatusFilter = 'all' | 'ontrack' | 'atrisk' | 'delayed'
 type CurvePoint = { label:string; plan:number; actual:number }
 type ProjectStat = { p:Project; avgActual:number; avgPlan:number; delayed:number; blockers:number; taskCount:number; variance:number; syncedAt?:string|null }
+type DashboardSiteOperation = { id:string; work_date:string; project_name_raw:string|null; area_raw:string|null; total_manpower:number|null; work_detail:string|null; status_text:string|null; next_plan:string|null; mapping_status:string|null; synced_at:string|null; work_date_validation_status?:string|null }
+type DashboardSiteOperationProject = { entry_id:string; project_id:string }
 
 function clampPct(v:number){ return Math.max(0,Math.min(100,Math.round(v*100))) }
 
@@ -91,7 +94,8 @@ export default function DashboardPage() {
   const [loadError,setLoadError]=useState(false)
   const [projects,setProjects]=useState<Project[]>([])
   const [tasks,setTasks]=useState<ScheduleTask[]>([])
-  const [reports,setReports]=useState<any[]>([])
+  const [siteOperations,setSiteOperations]=useState<DashboardSiteOperation[]>([])
+  const [siteOperationProjects,setSiteOperationProjects]=useState<DashboardSiteOperationProject[]>([])
   const [proc,setProc]=useState<any[]>([])
   const [syncRuns,setSyncRuns]=useState<any[]>([])
   const [snapshotDays,setSnapshotDays]=useState<any[]>([])
@@ -113,20 +117,22 @@ export default function DashboardPage() {
     const s=getSupabase()
     const loader=createLiveLoader({
       load:async(signal)=>{
-        const [p,t,r,pr,sr,sd]=await Promise.all([
+        const [p,t,so,sop,pr,sr,sd]=await Promise.all([
           s.from('projects').select('id,code,name,target_handover,active,sort_order').eq('active',true).order('sort_order').abortSignal(signal),
           s.from('v_schedule_tasks').select('id,project_id,task_name,category,actual_progress,current_plan_progress,current_variance,delay_days,site_status,blocker,next_action,target_close,planned_start,planned_end,actual_start,actual_end,area,source_task_no,contractor').abortSignal(signal),
-          s.from('daily_reports').select('id,project_id,report_date,total_manpower,summary,status,created_at').order('report_date',{ascending:false}).order('created_at',{ascending:false}).limit(100).abortSignal(signal),
+          s.from('site_operations_entries').select('id,work_date,project_name_raw,area_raw,total_manpower,work_detail,status_text,next_plan,mapping_status,synced_at,work_date_validation_status').lte('work_date',bangkokToday()).or('work_date_validation_status.is.null,work_date_validation_status.eq.valid').order('work_date',{ascending:false}).order('source_row',{ascending:false}).limit(300).abortSignal(signal),
+          s.from('site_operations_entry_projects').select('entry_id,project_id').limit(1200).abortSignal(signal),
           s.from('procurement_items').select('id,project_id,vendor,item_name,current_status,expected_delivery_text,expected_delivery').order('created_at',{ascending:false}).abortSignal(signal),
           s.from('drive_sync_runs').select('sync_type,project_code,created_at').eq('status','success').order('created_at',{ascending:false}).limit(30).abortSignal(signal),
           s.from('v_schedule_snapshot_days').select('snapshot_date').order('snapshot_date',{ascending:false}).limit(60).abortSignal(signal)
         ])
-        requireSuccessfulReads([p,t,r,pr,sr,sd])
+        requireSuccessfulReads([p,t,so,sop,pr,sr,sd])
         if(!alive||signal.aborted)return
         setLoadError(false)
         setProjects((p.data||[]) as Project[])
         setTasks((t.data||[]) as ScheduleTask[])
-        setReports(r.data||[])
+        setSiteOperations((so.data||[]) as DashboardSiteOperation[])
+        setSiteOperationProjects((sop.data||[]) as DashboardSiteOperationProject[])
         setProc(pr.data||[])
         setSyncRuns(sr.data||[])
         setSnapshotDays(sd.data||[])
@@ -143,7 +149,8 @@ export default function DashboardPage() {
     const channel=s.channel('dashboard-live-refresh')
       .on('postgres_changes',{event:'*',schema:'public',table:'projects'},queueLoad)
       .on('postgres_changes',{event:'*',schema:'public',table:'schedule_tasks'},queueLoad)
-      .on('postgres_changes',{event:'*',schema:'public',table:'daily_reports'},queueLoad)
+      .on('postgres_changes',{event:'*',schema:'public',table:'site_operations_entries'},queueLoad)
+      .on('postgres_changes',{event:'*',schema:'public',table:'site_operations_entry_projects'},queueLoad)
       .on('postgres_changes',{event:'*',schema:'public',table:'procurement_items'},queueLoad)
       .on('postgres_changes',{event:'*',schema:'public',table:'drive_sync_runs'},queueLoad)
       .subscribe()
@@ -230,10 +237,24 @@ export default function DashboardPage() {
 
   const delayedTotal=delayedTasks.length
   const blockersTotal=blockerTasks.length
-  const today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Bangkok'})
-  const reportToday=reports.filter(r=>r.report_date===today).length
-  const latestReports=useMemo(()=>{const seen=new Set<string>();const out:any[]=[];for(const r of reports){if(!seen.has(r.project_id)){seen.add(r.project_id);out.push(r)}}return out},[reports])
-  const latestManpower=latestReports.reduce((s,r)=>s+(Number(r.total_manpower)||0),0)
+  const today=bangkokToday()
+  const usableSiteOperations=useMemo(()=>siteOperations.filter(row=>isUsableActualWorkDate(row,today)),[siteOperations,today])
+  const latestSiteOperationsDate=latestUsableDate(usableSiteOperations,today)
+  const latestSiteOperations=useMemo(()=>usableSiteOperations.filter(row=>row.work_date===latestSiteOperationsDate),[usableSiteOperations,latestSiteOperationsDate])
+  const siteOpsTodayCount=usableSiteOperations.filter(row=>row.work_date===today).length
+  const siteOpsProjectIdsByEntry=useMemo(()=>{
+    const map=new Map<string,string[]>()
+    for(const link of siteOperationProjects){const list=map.get(link.entry_id)||[];if(!list.includes(link.project_id))list.push(link.project_id);map.set(link.entry_id,list)}
+    return map
+  },[siteOperationProjects])
+  const latestSiteOpsProjectIds=useMemo(()=>Array.from(new Set(latestSiteOperations.flatMap(row=>siteOpsProjectIdsByEntry.get(row.id)||[]))),[latestSiteOperations,siteOpsProjectIdsByEntry])
+  const latestManpower=latestSiteOperations.reduce((sum,row)=>sum+(Number(row.total_manpower)||0),0)
+  const latestSiteOpsNeedsReview=latestSiteOperations.filter(row=>row.mapping_status==='needs_review'||!(siteOpsProjectIdsByEntry.get(row.id)||[]).length).length
+  const latestSiteOpsRisk=useMemo(()=>latestSiteOpsProjectIds.reduce((acc,projectId)=>{
+    const stat=projectStats.find(x=>x.p.id===projectId)
+    if(stat){acc.delayed+=stat.delayed;acc.blockers+=stat.blockers}
+    return acc
+  },{delayed:0,blockers:0}),[latestSiteOpsProjectIds,projectStats])
   const openProc=useMemo(()=>proc.filter(x=>!/(ส่งครบ|delivered|closed|complete|completed|เสร็จ|รับของแล้ว)/i.test(`${x.current_status||''}`)),[proc])
 
   const followupTasks=useMemo(()=>{
@@ -274,7 +295,7 @@ export default function DashboardPage() {
       <Link href="/site-photos" className="button management-action-secondary">📷 รูปภาพหน้างาน</Link>
       <PrintButton reportTitle="Management Dashboard"/>
     </div>} />
-    <div className="panel" style={{padding:'10px 14px',marginBottom:14,display:'flex',justifyContent:'space-between',gap:10,alignItems:'center',flexWrap:'wrap'}}><span className="small muted">ข้อมูล Dashboard จาก Schedule / Materials / Daily Report</span><b className="small">อัปเดตข้อมูลล่าสุด: {dateTimeTH(latestDataSyncAt)}</b></div>
+    <div className="panel" style={{padding:'10px 14px',marginBottom:14,display:'flex',justifyContent:'space-between',gap:10,alignItems:'center',flexWrap:'wrap'}}><span className="small muted">ข้อมูล Dashboard จาก Schedule / Materials / Site Operations (Daily Site Report)</span><b className="small">อัปเดตข้อมูลล่าสุด: {dateTimeTH(latestDataSyncAt)}</b></div>
     {loading?<div className="panel">กำลังโหลดข้อมูล…</div>:<>
       <section className="executive-section">
         <div className="executive-section-title"><span>1</span><div><b>PROJECT KPI SUMMARY</b><small>ภาพรวมโครงการจาก Schedule และข้อมูลหน้างานล่าสุด</small></div></div>
@@ -283,8 +304,8 @@ export default function DashboardPage() {
           <div className="executive-kpi"><span>Active Sites</span><b>{projects.length}</b><small>{statusSummary.total} Site / Plot มี Schedule</small></div>
           <button className="executive-kpi warn" onClick={()=>openFollowup('delayed')}><span>Delayed Tasks</span><b>{delayedTotal}</b><small>คลิกดูรายการงานล่าช้า</small></button>
           <button className="executive-kpi danger" onClick={()=>openFollowup('blockers')}><span>Open Blockers</span><b>{blockersTotal}</b><small>คลิกดูปัญหาที่ยังค้าง</small></button>
-          <div className="executive-kpi"><span>Reports Today</span><b>{reportToday}</b><small>รายงานประจำวันที่ส่งวันนี้</small></div>
-          <div className="executive-kpi"><span>Latest Manpower</span><b>{latestManpower}</b><small>คน • รวมจากรายงานล่าสุดของแต่ละ Site</small></div>
+          <div className="executive-kpi"><span>Site Ops Today</span><b>{siteOpsTodayCount}</b><small>รายการ Daily Site Report ที่ Sync เข้า Site Operations วันนี้</small></div>
+          <div className="executive-kpi"><span>Latest Manpower</span><b>{latestManpower}</b><small>คน • Site Operations {latestSiteOperationsDate?dateTH(latestSiteOperationsDate):'ยังไม่มีข้อมูล'}</small></div>
         </div>
         <div className="portfolio-status-strip">
           <button type="button" onClick={()=>openSiteStatus('ontrack')} style={{border:'1px solid var(--line)',background:'var(--surface)',borderRadius:11,padding:'9px 12px',display:'grid',gridTemplateColumns:'auto 1fr auto',alignItems:'center',gap:8,textAlign:'left',color:'var(--text)'}}><span className="status-dot good-dot"/><b>On Track</b><strong>{statusSummary.onTrack} <span style={{fontSize:10,fontWeight:700}}>Site / Plot</span></strong><small style={{gridColumn:'2/-1',color:'var(--muted)'}}>Δ ≥ -3% • คลิกดูรายละเอียด</small></button>
@@ -307,7 +328,7 @@ export default function DashboardPage() {
       </section>
 
       <div className="dashboard-grid two-main">
-        <section className="panel dashboard-module"><div className="module-title"><span>6</span><div><b>MANPOWER / DAILY REPORT</b><small>กำลังคนจากรายงานล่าสุดของแต่ละ Site และสถานะการส่งรายงานวันนี้</small></div><Link href="/reports">ดูรายงาน →</Link></div><div className="resource-kpis"><div><span>แรงงานล่าสุด</span><b>{latestManpower}</b><small>คน จาก {latestReports.length} Site ที่มีรายงาน</small></div><div><span>Reports Today</span><b>{reportToday}</b><small>รายงานประจำวัน</small></div><div><span>Active Sites</span><b>{projects.length}</b><small>Site / Plot ที่เปิดใช้งาน</small></div></div><div className="resource-list">{latestReports.slice(0,8).map(r=><div key={r.id}><div><b>{projects.find(p=>p.id===r.project_id)?.code||'-'}</b><small>{r.summary||'Daily Report'} • {dateTH(r.report_date)}</small></div><span>{Number(r.total_manpower)||0} คน</span></div>)}{!latestReports.length&&<p className="muted">ยังไม่มี Daily Report</p>}</div></section>
+        <section id="dashboard-site-operations" className="panel dashboard-module"><div className="module-title"><span>6</span><div><b>SITE OPERATIONS — EXECUTIVE DAILY</b><small>Daily Site Report ที่ไขว้กับ Schedule เพื่อให้เห็นงานหน้างาน กำลังคน ความเสี่ยง และ Next plan ในภาพเดียว</small></div><Link href="/reports">เปิด Site Operations →</Link></div><div className="resource-kpis"><div><span>ข้อมูลหน้างานล่าสุด</span><b>{latestSiteOperations.length}</b><small>{latestSiteOperationsDate?dateTH(latestSiteOperationsDate):'ยังไม่มีข้อมูล'} • {latestSiteOpsProjectIds.length} Site / Plot</small></div><div><span>กำลังคนล่าสุด</span><b>{latestManpower}</b><small>คน ตามข้อมูล Site Operations ที่ใช้เป็น Actual ได้</small></div><div><span>Schedule Risk ของ Site ที่รายงาน</span><b>{latestSiteOpsRisk.delayed}</b><small>Delayed • {latestSiteOpsRisk.blockers} Blocker • ต้องทบทวน mapping {latestSiteOpsNeedsReview}</small></div></div><div className="resource-list">{latestSiteOperations.slice(0,8).map(row=>{const pids=siteOpsProjectIdsByEntry.get(row.id)||[];const codes=pids.map(id=>projects.find(p=>p.id===id)?.code).filter(Boolean);const risk=pids.reduce((acc,id)=>{const stat=projectStats.find(x=>x.p.id===id);if(stat){acc.delayed+=stat.delayed;acc.blockers+=stat.blockers}return acc},{delayed:0,blockers:0});return <div key={row.id}><div><b>{codes.length?codes.join(' / '):(row.area_raw||row.project_name_raw||'ยังไม่ map Site')}</b><small>{row.work_detail||'ไม่ระบุรายละเอียดงาน'} • {dateTH(row.work_date)}</small><small>Schedule: {risk.delayed} Delayed • {risk.blockers} Blocker{row.next_plan?` • Next: ${row.next_plan}`:''}</small></div><span>{Number(row.total_manpower)||0} คน • <Link href="/reports">เปิด →</Link></span></div>})}{!latestSiteOperations.length&&<p className="muted">ยังไม่มี Site Operations ที่ผ่าน Work Date validation สำหรับใช้เป็น Actual</p>}</div></section>
         <section className="panel dashboard-module"><div className="module-title"><span style={{fontSize:10}}>7A</span><div><b>PURCHASING FOLLOW-UP</b><small>สถานะรายการจัดซื้อ/จัดจ้าง</small></div><Link href="/procurement">เปิดจัดซื้อ →</Link></div><div style={{padding:'9px 14px',borderBottom:'1px solid var(--line)',fontSize:11,color:'var(--muted)'}}><b style={{color:'var(--text)'}}>อัปเดตข้อมูลล่าสุด:</b> {dateTimeTH(latestMaterialsSyncAt)}</div><div className="resource-kpis" style={{gridTemplateColumns:'repeat(2,1fr)'}}><div><span>รายการต้องติดตาม</span><b>{openProc.length}</b><small>รายการที่ยังไม่ปิด</small></div><div><span>มีข้อมูลทั้งหมด</span><b>{proc.length}</b><small>รายการใน Procurement</small></div></div><div className="resource-list">{openProc.slice(0,8).map(x=><div key={x.id}><div><b>{x.item_name}</b><small>{projects.find(p=>p.id===x.project_id)?.code||'-'} • {x.vendor||'ยังไม่ระบุผู้ขาย'}</small></div><span>{x.expected_delivery_text||'ยังไม่ระบุกำหนด'}</span></div>)}{!openProc.length&&<p className="muted">ไม่มีรายการจัดซื้อค้างในข้อมูลปัจจุบัน</p>}</div></section>
       </div>
 
