@@ -87,7 +87,7 @@ export default function SiteOperationsPage(){
           readAllPages<LabourWorker>({label:'labour_workers',signal,keyOf:x=>x.worker_id,fetchPage:(from,to)=>
             s.from('labour_workers').select('worker_id,full_name,display_label,default_team',{count:'exact'}).order('worker_id').range(from,to).abortSignal(signal)}),
           readAllPages<LabourBatch>({label:'labour_verification_batches',signal,keyOf:x=>x.id,fetchPage:(from,to)=>
-            s.from('labour_verification_batches').select('id,site_operations_entry_id,verification_status,verified_at,confirmed_headcount,headcount_source_status,headcount_confirmation_status,confirmed_headcount_basis',{count:'exact'}).order('id').range(from,to).abortSignal(signal)})
+            s.from('labour_verification_batches').select('*',{count:'exact'}).order('id').range(from,to).abortSignal(signal)})
         ])
         const paged=[e,ep,p,t,pr,pl,w,b]
         setReadSignals(paged.map(({label,loaded,count,truncated})=>({label,loaded,count,truncated})))
