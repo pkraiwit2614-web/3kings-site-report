@@ -27,3 +27,6 @@ jobs:
 
       - name: Stability regression tests
         run: node tests/stability.test.cjs
+
+      - name: RBAC regression tests
+        run: node tests/rbac.test.cjs
