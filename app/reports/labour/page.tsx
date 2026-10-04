@@ -156,7 +156,7 @@ export default function LabourVerificationPage(){
   const usableBatches=useMemo(()=>batches.filter(batch=>isBatchWorkDateUsable(batch,entryById.get(batch.site_operations_entry_id),today)),[batches,entryById,today])
   const workDateReviewQueue=useMemo(()=>entries.filter(entry=>!isUsableActualWorkDate(entry,today)),[entries,today])
   const availableDates=useMemo(()=>Array.from(new Set(usableBatches.map(x=>x.work_date))).sort((a,b)=>b.localeCompare(a)),[usableBatches])
-  const teamOptions=useMemo(()=>Array.from(new Set(workers.map(x=>x.default_team).filter(Boolean) as string[])).sort((a,b)=>a.localeCompare(b,'th')),[workers])
+  const teamOptions=useMemo(()=>Array.from(new Set([...workers.map(x=>x.default_team),...batches.map(x=>x.home_team)].filter(Boolean) as string[])).sort((a,b)=>a.localeCompare(b,'th')),[workers,batches])
   const activeWorkers=useMemo(()=>workers.filter(x=>String(x.status||'').toLowerCase()!=='inactive'),[workers])
 
   const visibleBatches=useMemo(()=>{
@@ -201,9 +201,11 @@ export default function LabourVerificationPage(){
     if(workerId===batch.supervisor_worker_id){setMessage('หัวหน้าทีมถูกแยกจากรายการคนงานและไม่รวมใน Worker Payroll');return}
     if(existing.some(x=>x.worker_id===workerId)){setMessage('คนงานคนนี้อยู่ในรายการแล้ว');return}
     const pids=projectIdsByEntry.get(batch.site_operations_entry_id)||[]
+    const workingTeam=batch.home_team||''
+    if(!workingTeam){setMessage('ยังไม่ทราบทีมที่ทำงานจริงของชุดนี้ • กรุณาตรวจ/ยืนยันทีมก่อนเพิ่มคน');return}
     setDrafts(prev=>({...prev,[batch.id]:[...existing,{
-      worker_id:workerId,project_id:pids.length===1?pids[0]:'',working_team:worker?.default_team||batch.home_team||'',
-      movement_status:worker?.default_team===batch.home_team?'same_team':'borrowed',allocation_hours:'',notes:''
+      worker_id:workerId,project_id:pids.length===1?pids[0]:'',working_team:workingTeam,
+      movement_status:worker?.default_team?worker.default_team===workingTeam?'same_team':'borrowed':'other',allocation_hours:'',notes:''
     }]}))
     setAddWorker(prev=>({...prev,[batch.id]:''}))
   }
