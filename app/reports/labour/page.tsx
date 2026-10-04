@@ -6,7 +6,7 @@ import PageHeader from '@/components/PageHeader'
 import { getSupabase } from '@/lib/supabase'
 import { readAllPages, requireCompletePagedReads } from '@/lib/pagedRead'
 import { dateTH } from '@/lib/format'
-import { bangkokToday, isBatchWorkDateUsable, isUsableActualWorkDate, latestUsableDate } from '@/lib/workDateIntegrity'
+import { bangkokToday, isBatchWorkDateUsable, latestUsableDate } from '@/lib/workDateIntegrity'
 import type { Project } from '@/lib/types'
 
 type SiteEntry={id:string;work_date:string;source_row:number;project_name_raw:string|null;area_raw:string|null;supervisor_raw:string|null;male_count:number|null;female_count:number|null;total_manpower:number|null;work_detail:string|null;status_text:string|null;next_plan:string|null;afternoon_detail:string|null;specific_area:string|null;supervisor_worker_id:string|null;work_date_validation_status?:string|null;work_date_validation_reason?:string|null}
@@ -140,7 +140,6 @@ export default function LabourVerificationPage(){
   const canPayroll=canVerify
   const today=bangkokToday()
   const entryById=useMemo(()=>new Map(entries.map(x=>[x.id,x])),[entries])
-  const batchByEntry=useMemo(()=>new Map(batches.map(x=>[x.site_operations_entry_id,x])),[batches])
   const workerById=useMemo(()=>new Map(workers.map(x=>[x.worker_id,x])),[workers])
   const projectById=useMemo(()=>new Map(projects.map(x=>[x.id,x])),[projects])
   const projectIdsByEntry=useMemo(()=>{
@@ -154,7 +153,6 @@ export default function LabourVerificationPage(){
     return map
   },[assignments])
   const usableBatches=useMemo(()=>batches.filter(batch=>isBatchWorkDateUsable(batch,entryById.get(batch.site_operations_entry_id),today)),[batches,entryById,today])
-  const workDateReviewQueue=useMemo(()=>entries.filter(entry=>!isUsableActualWorkDate(entry,today)),[entries,today])
   const availableDates=useMemo(()=>Array.from(new Set(usableBatches.map(x=>x.work_date))).sort((a,b)=>b.localeCompare(a)),[usableBatches])
   const teamOptions=useMemo(()=>Array.from(new Set(workers.map(x=>x.default_team).filter(Boolean) as string[])).sort((a,b)=>a.localeCompare(b,'th')),[workers])
   const activeWorkers=useMemo(()=>workers.filter(x=>String(x.status||'').toLowerCase()!=='inactive'),[workers])
@@ -364,7 +362,6 @@ export default function LabourVerificationPage(){
     <PageHeader title="Labour & Payroll Verification" subtitle="Labour PDF รันอัตโนมัติเหมือนเดิม • หน้านี้ใช้ยืนยันทีมรายวันและตรวจบัตรตอกเพื่อสร้าง Payroll Verification Record" action={<div className="labour-mode"><button type="button" className={mode==='verify'?'active':''} onClick={()=>setMode('verify')}>ยืนยันทีมรายวัน</button>{canPayroll&&<button type="button" className={mode==='payroll'?'active':''} onClick={()=>setMode('payroll')}>Payroll Verification Record</button>}</div>}/>
 
     {message&&<div className="notice" style={{marginBottom:10}}>{message}</div>}
-    {workDateReviewQueue.length>0&&<section className="panel work-date-review" style={{marginBottom:10}}><b>Work Date Review Queue — {workDateReviewQueue.length} รายการ</b><div style={{fontSize:9,color:'var(--muted)',marginTop:2}}>เก็บ raw/source evidence ไว้ครบ แต่ไม่รวมใน Team Verification หรือ Payroll และไม่เดาวันใหม่</div>{workDateReviewQueue.map(entry=>{const batch=batchByEntry.get(entry.id);return <div key={entry.id} style={{display:'grid',gridTemplateColumns:'minmax(160px,1fr) 110px minmax(170px,1fr)',gap:8,padding:'7px 0',borderTop:'1px solid var(--line)',marginTop:6}}><span><b>{entry.supervisor_raw||'-'}</b><small style={{display:'block'}}>Form row {entry.source_row} • {entry.area_raw||entry.project_name_raw||'-'}</small></span><span><small>Work Date ต้นทาง</small><b style={{display:'block'}}>{dateTH(entry.work_date)}</b></span><span><small>{entry.work_date_validation_reason||'วันที่ไม่ผ่าน validation'}</small><b style={{display:'block'}}>{batch?'Batch ถูกกัก / Needs review':'ไม่มี Labour Batch • raw/contractor evidence เท่านั้น'}</b></span></div>})}</section>}
 
     {mode==='verify'?<>
       <section className="panel labour-filter">
