@@ -19,7 +19,7 @@ export default function RolePermissionGuard20260927(){
     let cancelled=false
     const apply=async()=>{
       const body=document.body
-      body.classList.remove('role-viewer','role-report-user','role-engineer','role-manager')
+      body.classList.remove('role-viewer','role-report-user','role-engineer','role-manager','role-payroll')
       const s=getSupabase()
       const {data:{user}}=await s.auth.getUser()
       if(cancelled||!user)return
