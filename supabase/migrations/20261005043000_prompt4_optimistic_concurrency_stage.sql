@@ -49,7 +49,6 @@ set search_path to 'public'
 as $$
 declare
   v_user uuid := (select auth.uid());
-  v_batch public.labour_verification_batches%rowtype;
   v_expected integer;
   v_confirmed integer;
   v_headcount_confirmation_status text;
@@ -59,6 +58,9 @@ declare
   v_work_date_validation_status text;
   v_supervisor_worker_id text;
   v_source_fingerprint text;
+  v_batch_revision bigint;
+  v_last_save_fingerprint text;
+  v_last_save_base_revision bigint;
   v_distinct_workers integer:=0;
   v_request_fingerprint text;
 begin
@@ -92,10 +94,15 @@ begin
     )
   );
 
-  select b,
+  select
+    b.expected_headcount,b.confirmed_headcount,b.headcount_confirmation_status,
+    b.work_date,b.site_operations_entry_id,b.supervisor_worker_id,
+    b.concurrency_revision,b.last_save_fingerprint,b.last_save_base_revision,
     e.source_fingerprint,e.work_date,e.work_date_validation_status
   into
-    v_batch,
+    v_expected,v_confirmed,v_headcount_confirmation_status,
+    v_work_date,v_entry_id,v_supervisor_worker_id,
+    v_batch_revision,v_last_save_fingerprint,v_last_save_base_revision,
     v_source_fingerprint,v_entry_work_date,v_work_date_validation_status
   from public.labour_verification_batches b
   join public.site_operations_entries e on e.id=b.site_operations_entry_id
@@ -108,27 +115,20 @@ begin
     raise exception 'STALE_LABOUR_SAVE_RELOAD_REQUIRED source_changed';
   end if;
 
-  if v_batch.concurrency_revision is distinct from p_expected_batch_revision then
-    if v_batch.concurrency_revision=p_expected_batch_revision+1
-       and v_batch.last_save_base_revision=p_expected_batch_revision
-       and v_batch.last_save_fingerprint=v_request_fingerprint then
+  if v_batch_revision is distinct from p_expected_batch_revision then
+    if v_batch_revision=p_expected_batch_revision+1
+       and v_last_save_base_revision=p_expected_batch_revision
+       and v_last_save_fingerprint=v_request_fingerprint then
       select count(distinct a.worker_id)
         into v_distinct_workers
       from public.labour_daily_assignments a
       where a.batch_id=p_batch_id
-        and (v_batch.supervisor_worker_id is null or a.worker_id<>v_batch.supervisor_worker_id);
+        and (v_supervisor_worker_id is null or a.worker_id<>v_supervisor_worker_id);
       return v_distinct_workers;
     end if;
     raise exception 'STALE_LABOUR_SAVE_RELOAD_REQUIRED expected_batch_revision_%_current_%',
-      p_expected_batch_revision,v_batch.concurrency_revision;
+      p_expected_batch_revision,v_batch_revision;
   end if;
-
-  v_expected := v_batch.expected_headcount;
-  v_confirmed := v_batch.confirmed_headcount;
-  v_headcount_confirmation_status := v_batch.headcount_confirmation_status;
-  v_work_date := v_batch.work_date;
-  v_entry_id := v_batch.site_operations_entry_id;
-  v_supervisor_worker_id := v_batch.supervisor_worker_id;
 
   if v_work_date is distinct from v_entry_work_date then
     raise exception 'LABOUR_BATCH_WORK_DATE_MISMATCH';
@@ -238,8 +238,11 @@ set search_path to ''
 as $$
 declare
   v_user uuid := (select auth.uid());
-  v_batch public.labour_verification_batches%rowtype;
   v_source_fingerprint text;
+  v_batch_revision bigint;
+  v_batch_supervisor_worker_id text;
+  v_batch_verification_status text;
+  v_batch_verified_at timestamptz;
   v_record public.payroll_verification_records%rowtype;
   v_record_id uuid;
   v_expected_items integer := 0;
@@ -288,8 +291,12 @@ begin
 
   -- Lock the batch and canonical source first. This serializes all saves for one batch
   -- and prevents a source update from slipping between the comparison and write.
-  select b, e.source_fingerprint
-    into v_batch, v_source_fingerprint
+  select
+    b.concurrency_revision,b.supervisor_worker_id,b.verification_status,b.verified_at,
+    e.source_fingerprint
+  into
+    v_batch_revision,v_batch_supervisor_worker_id,v_batch_verification_status,v_batch_verified_at,
+    v_source_fingerprint
   from public.labour_verification_batches b
   join public.site_operations_entries e on e.id=b.site_operations_entry_id
   where b.id=p_labour_batch_id
@@ -300,9 +307,9 @@ begin
   if v_source_fingerprint is distinct from p_expected_source_fingerprint then
     raise exception 'STALE_PAYROLL_SAVE_RELOAD_REQUIRED source_changed';
   end if;
-  if v_batch.concurrency_revision is distinct from p_expected_batch_revision then
+  if v_batch_revision is distinct from p_expected_batch_revision then
     raise exception 'STALE_PAYROLL_SAVE_RELOAD_REQUIRED expected_batch_revision_%_current_%',
-      p_expected_batch_revision,v_batch.concurrency_revision;
+      p_expected_batch_revision,v_batch_revision;
   end if;
 
   select * into v_record
@@ -366,7 +373,7 @@ begin
     if nullif(btrim(coalesce(p_external_reference,'')),'') is null then raise exception 'EXTERNAL_REFERENCE_REQUIRED'; end if;
   else
     if p_status='external_verified' then raise exception 'WEB_METHOD_CANNOT_USE_EXTERNAL_VERIFIED'; end if;
-    if v_batch.verification_status<>'verified' and p_status in ('timecard_checked','verified') then
+    if v_batch_verification_status<>'verified' and p_status in ('timecard_checked','verified') then
       raise exception 'LABOUR_TEAM_MUST_BE_VERIFIED_FIRST';
     end if;
   end if;
@@ -374,7 +381,7 @@ begin
   select count(*) into v_expected_items
   from public.labour_daily_assignments a
   where a.batch_id=p_labour_batch_id
-    and (v_batch.supervisor_worker_id is null or a.worker_id<>v_batch.supervisor_worker_id);
+    and (v_batch_supervisor_worker_id is null or a.worker_id<>v_batch_supervisor_worker_id);
 
   select count(distinct x.worker_id) into v_received_items
   from jsonb_to_recordset(p_items) as x(
@@ -403,7 +410,7 @@ begin
      and a.batch_id=p_labour_batch_id
      and a.worker_id=x.worker_id
     where a.id is null
-       or (v_batch.supervisor_worker_id is not null and x.worker_id=v_batch.supervisor_worker_id)
+       or (v_batch_supervisor_worker_id is not null and x.worker_id=v_batch_supervisor_worker_id)
   ) then
     raise exception 'PAYROLL_ITEM_NOT_IN_VERIFIED_TEAM';
   end if;
@@ -443,7 +450,7 @@ begin
     verified_by,verified_at,last_save_fingerprint,last_save_base_revision,updated_at
   )
   values(
-    p_labour_batch_id,p_method,p_status,v_batch.verified_at,
+    p_labour_batch_id,p_method,p_status,v_batch_verified_at,
     nullif(btrim(coalesce(p_external_reference,'')),''),
     nullif(btrim(coalesce(p_note,'')),''),
     case when p_status in ('timecard_checked','verified') then v_user else null end,
