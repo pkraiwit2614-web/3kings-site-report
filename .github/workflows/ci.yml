@@ -43,5 +43,8 @@ jobs:
       - name: Prompt 4 optimistic concurrency tests
         run: node --test tests/payroll/optimistic-concurrency.test.cjs
 
+      - name: Prompt 5 manpower reconciliation tests
+        run: node --test tests/prompt5-manpower-reconciliation.test.cjs
+
       - name: RBAC regression tests
         run: node tests/rbac.test.cjs
