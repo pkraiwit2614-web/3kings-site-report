@@ -166,7 +166,7 @@ function UsersContent() {
         </div>
         <div className="row" style={{gap:8,flexWrap:'wrap'}}>
           <button className="button" onClick={()=>setShowCreate(v=>!v)}>+ เพิ่มผู้ใช้งาน</button>
-          <button className="button" disabled title="RBAC ใหม่ไม่เปลี่ยนสิทธิ์บัญชีเดิมอัตโนมัติ">สร้างชุดบัญชี — ปิดไว้</button>
+          <button className="button" onClick={seed} disabled title="RBAC ใหม่ไม่เปลี่ยนสิทธิ์บัญชีเดิมอัตโนมัติ">{seeding?'กำลังสร้าง…':'สร้างชุดบัญชี — ปิดไว้'}</button>
         </div>
       </div>
     </div>
