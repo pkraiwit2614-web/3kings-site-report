@@ -10,6 +10,7 @@ import { bangkokToday, isBatchWorkDateUsable, latestUsableDate } from '@/lib/wor
 import { confirmedHeadcount, countLabel, headcountSourceStatus, isHeadcountConfirmed, isHeadcountReviewCase, maleFemaleHeadcount } from '@/lib/headcountReconciliation'
 import type { Project } from '@/lib/types'
 import {canManageLabour,canViewPayroll,resolveAccessRole,type AccessRole} from '@/lib/accessControl'
+import { canUseCanonicalDownstream, canonicalFlowState, type CanonicalStateRow } from '@/lib/siteOperationsCanonical'
 
 type SiteEntry={id:string;work_date:string;source_row:number;project_name_raw:string|null;area_raw:string|null;supervisor_raw:string|null;male_count:number|null;female_count:number|null;total_manpower:number|null;work_detail:string|null;status_text:string|null;next_plan:string|null;afternoon_detail:string|null;specific_area:string|null;source_fingerprint:string;supervisor_worker_id:string|null;work_date_validation_status?:string|null;work_date_validation_reason?:string|null}
 type Batch={id:string;site_operations_entry_id:string;work_date:string;expected_headcount:number|null;confirmed_headcount:number|null;confirmed_headcount_basis:string|null;confirmed_headcount_evidence:string|null;headcount_source_status:'matched'|'mismatch'|'unknown'|null;headcount_confirmation_status:'confirmed'|'unconfirmed'|null;headcount_confirmed_at:string|null;supervisor_worker_id:string|null;supervisor_raw:string|null;home_team:string|null;verification_status:string;verified_by:string|null;verified_at:string|null;verified_source_fingerprint:string|null;note:string|null;concurrency_revision:number;contractor_person_count:number|null;contractor_count_basis:string|null;contractor_count_evidence:string|null;contractor_count_confirmed_at:string|null}
@@ -71,6 +72,7 @@ export default function LabourVerificationPage(){
   const [assignments,setAssignments]=useState<Assignment[]>([])
   const [payrollRecords,setPayrollRecords]=useState<PayrollRecord[]>([])
   const [payrollItems,setPayrollItems]=useState<PayrollItem[]>([])
+  const [canonicalStates,setCanonicalStates]=useState<CanonicalStateRow[]>([])
   const [selectedDate,setSelectedDate]=useState('')
   const [statusFilter,setStatusFilter]=useState('')
   const [q,setQ]=useState('')
@@ -93,6 +95,7 @@ export default function LabourVerificationPage(){
   const [message,setMessage]=useState('')
   const [refreshTick,setRefreshTick]=useState(0)
   const [focusEntry,setFocusEntry]=useState('')
+  const [duplicateEvidence,setDuplicateEvidence]=useState<Record<string,string>>({})
   const [readSignals,setReadSignals]=useState<Array<{label:string;loaded:number;count:number;truncated:boolean}>>([])
 
   useEffect(()=>{
@@ -141,11 +144,17 @@ export default function LabourVerificationPage(){
       const paged=payrollAllowed?[e,b,w,p,ep,a,pr,pi]:[e,b,w,p,ep,a]
       setReadSignals(paged.map(({label,loaded,count,truncated})=>({label,loaded,count,truncated})))
       requireCompletePagedReads(paged)
+      let nextCanonical:CanonicalStateRow[]=[]
+      try{
+        const canonical=await readAllPages<CanonicalStateRow>({label:'v_site_operations_canonical_state',keyOf:x=>x.entry_id,fetchPage:(from,to)=>
+          s.from('v_site_operations_canonical_state').select('entry_id,source_row,group_id,group_state,canonical_entry_id,flow_state,decision_evidence,decided_at',{count:'exact'}).order('source_row',{ascending:false}).range(from,to)})
+        nextCanonical=canonical.data
+      }catch{/* Preserve existing behaviour if the canonical view is unavailable. */}
       if(!alive)return
       const nextEntries=e.data
       setEntries(nextEntries);setBatches(b.data);setWorkers(w.data)
       setProjects(p.data);setEntryProjects(ep.data);setAssignments(a.data)
-      setPayrollRecords(pr.data);setPayrollItems(pi.data)
+      setPayrollRecords(pr.data);setPayrollItems(pi.data);setCanonicalStates(nextCanonical)
       setAccessRole(nextAccessRole)
       if(!payrollAllowed)setMode('verify')
       const latest=latestUsableDate(nextEntries)
@@ -163,6 +172,7 @@ export default function LabourVerificationPage(){
   const canPayroll=canViewPayroll(accessRole)
   const today=bangkokToday()
   const entryById=useMemo(()=>new Map(entries.map(x=>[x.id,x])),[entries])
+  const canonicalByEntry=useMemo(()=>new Map(canonicalStates.map(x=>[x.entry_id,x])),[canonicalStates])
   const workerById=useMemo(()=>new Map(workers.map(x=>[x.worker_id,x])),[workers])
   const projectById=useMemo(()=>new Map(projects.map(x=>[x.id,x])),[projects])
   const projectIdsByEntry=useMemo(()=>{
@@ -175,7 +185,16 @@ export default function LabourVerificationPage(){
     for(const row of assignments){const list=map.get(row.batch_id)||[];list.push(row);map.set(row.batch_id,list)}
     return map
   },[assignments])
-  const usableBatches=useMemo(()=>batches.filter(batch=>isBatchWorkDateUsable(batch,entryById.get(batch.site_operations_entry_id),today)),[batches,entryById,today])
+  const workDateUsableBatches=useMemo(()=>batches.filter(batch=>isBatchWorkDateUsable(batch,entryById.get(batch.site_operations_entry_id),today)),[batches,entryById,today])
+  const usableBatches=useMemo(()=>workDateUsableBatches.filter(batch=>canUseCanonicalDownstream(canonicalByEntry.get(batch.site_operations_entry_id))),[workDateUsableBatches,canonicalByEntry])
+  const duplicateReviewGroups=useMemo(()=>{
+    const map=new Map<string,CanonicalStateRow[]>()
+    for(const row of canonicalStates){
+      if(!row.group_id||row.group_state!=='suspected'||canonicalFlowState(row)!=='suspected')continue
+      const list=map.get(row.group_id)||[];list.push(row);map.set(row.group_id,list)
+    }
+    return Array.from(map.entries()).map(([id,rows])=>({id,rows:rows.sort((a,b)=>a.source_row-b.source_row)}))
+  },[canonicalStates])
   const availableDates=useMemo(()=>Array.from(new Set(usableBatches.map(x=>x.work_date))).sort((a,b)=>b.localeCompare(a)),[usableBatches])
   const teamOptions=useMemo(()=>Array.from(new Set([...workers.map(x=>x.default_team),...batches.map(x=>x.home_team)].filter(Boolean) as string[])).sort((a,b)=>a.localeCompare(b,'th')),[workers,batches])
   const activeWorkers=useMemo(()=>workers.filter(x=>String(x.status||'').toLowerCase()!=='inactive'),[workers])
@@ -494,6 +513,27 @@ export default function LabourVerificationPage(){
     finally{setSaving(prev=>({...prev,['payroll-'+batch.id]:false}))}
   }
 
+  const resolveDuplicate=async(groupId:string,resolution:'confirmed_duplicate'|'confirmed_distinct',canonicalEntryId:string|null)=>{
+    if(!canVerify||saving['duplicate-'+groupId])return
+    const evidence=(duplicateEvidence[groupId]||'').trim()
+    if(!evidence){setMessage('Duplicate Review ต้องมีหลักฐาน/เหตุผลก่อนยืนยันสถานะ');return}
+    setSaving(prev=>({...prev,['duplicate-'+groupId]:true}));setMessage('')
+    try{
+      const {error}=await getSupabase().rpc('site_operations_resolve_duplicate',{
+        p_group_id:groupId,
+        p_resolution:resolution,
+        p_canonical_entry_id:canonicalEntryId,
+        p_evidence:evidence
+      })
+      if(error)throw error
+      setMessage(resolution==='confirmed_duplicate'
+        ?'ยืนยันรายการซ้ำแล้ว • คง raw rows ทุกแถว และใช้เฉพาะ canonical row ใน Site Operations/Labour/Payroll'
+        :'ยืนยันว่าเป็นคนละงานแล้ว • แต่ละ raw row กลับเข้า flow แยกกันตามหลักฐาน')
+      setDuplicateEvidence(prev=>{const next={...prev};delete next[groupId];return next})
+      setRefreshTick(v=>v+1)
+    }catch(err:any){setMessage(String(err?.message||'ยืนยัน Duplicate Review ไม่สำเร็จ'))}
+    finally{setSaving(prev=>({...prev,['duplicate-'+groupId]:false}))}
+  }
 
   return <AppShell>
     {readSignals.some(x=>x.truncated)&&<div className="panel" role="alert" style={{marginBottom:10}}>โหลดข้อมูลไม่ครบ • {readSignals.filter(x=>x.truncated).map(x=>x.label+' '+x.loaded+'/'+x.count).join(' • ')}</div>}
@@ -503,6 +543,22 @@ export default function LabourVerificationPage(){
     {message&&<div className="notice" role="status" aria-live="polite" style={{marginBottom:10}}>{message}</div>}
 
     {mode==='verify'?<>
+      {duplicateReviewGroups.length>0&&<section className="duplicate-review-stack">
+        {duplicateReviewGroups.map(group=><article className="panel duplicate-review-card" key={group.id}>
+          <header><div><b>Suspected duplicate • ต้องตรวจหลักฐานก่อนใช้ downstream</b><small>{group.rows.length} raw rows • ไม่มีการ merge อัตโนมัติ</small></div></header>
+          <div className="duplicate-review-members">
+            {group.rows.map(row=>{const entry=entryById.get(row.entry_id);return <div key={row.entry_id}>
+              <div><b>Form row {row.source_row}</b><span>{entry?dateTH(entry.work_date):'-'} • {entry?.supervisor_raw||'-'} • {entry?.project_name_raw||'-'}</span><small>{entry?.work_detail||'-'}</small></div>
+              {canVerify&&<button type="button" className="button" disabled={saving['duplicate-'+group.id]} onClick={()=>resolveDuplicate(group.id,'confirmed_duplicate',row.entry_id)}>ยืนยันซ้ำ → ใช้ row {row.source_row} เป็น canonical</button>}
+            </div>})}
+          </div>
+          {canVerify?<div className="duplicate-review-decision">
+            <label>หลักฐาน / เหตุผล<input value={duplicateEvidence[group.id]||''} onChange={e=>setDuplicateEvidence(prev=>({...prev,[group.id]:e.target.value}))} placeholder="เช่น ตรวจ Google Form + หน้างานแล้ว เป็นการกดส่งซ้ำ / เป็นคนละกะ"/></label>
+            <button type="button" className="button" disabled={saving['duplicate-'+group.id]} onClick={()=>resolveDuplicate(group.id,'confirmed_distinct',null)}>ยืนยันว่าเป็นคนละงาน</button>
+          </div>:<div className="duplicate-review-readonly">รายการนี้ถูกกักจากยอด/การยืนยันจน Admin ตรวจหลักฐาน</div>}
+        </article>)}
+      </section>}
+
       <section className="panel labour-filter">
         <label>วันที่<select value={selectedDate} onChange={e=>{setSelectedDate(e.target.value);setFocusEntry('')}}><option value="">ทุกวันที่</option>{availableDates.map(d=><option key={d} value={d}>{dateTH(d)}</option>)}</select></label>
         <label>สถานะ<select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}><option value="">ทุกสถานะ</option><option value="pending">รอยืนยัน</option><option value="needs_review">ต้องตรวจข้อมูล</option><option value="verified">ยืนยันแล้ว</option></select></label>
@@ -734,6 +790,7 @@ export default function LabourVerificationPage(){
     </>}
 
     <style jsx>{`
+      .duplicate-review-stack{display:grid;gap:10px;margin-bottom:10px}.duplicate-review-card{padding:0;overflow:hidden;border-color:#e5b76a;background:#fffdf7}.duplicate-review-card>header{display:flex;justify-content:space-between;padding:10px 12px;background:#fff6df;border-bottom:1px solid #ead29a;color:#765300}.duplicate-review-card header b{font-size:10.5px}.duplicate-review-card header small{display:block;margin-top:2px;font-size:8.5px}.duplicate-review-members{display:grid}.duplicate-review-members>div{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:9px 12px;border-bottom:1px solid #f0e4c7}.duplicate-review-members b{font-size:10px}.duplicate-review-members span,.duplicate-review-members small{display:block;margin-top:2px;font-size:8.5px;line-height:1.4;color:var(--muted)}.duplicate-review-decision{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end;padding:10px 12px}.duplicate-review-decision label{display:grid;gap:4px;font-size:9px;font-weight:850;color:#765300}.duplicate-review-decision input{min-height:35px;border:1px solid #d9c28f;border-radius:8px;padding:6px 8px;font-size:9.5px}.duplicate-review-readonly{padding:10px 12px;font-size:9px;color:#765300}@media(max-width:760px){.duplicate-review-members>div,.duplicate-review-decision{grid-template-columns:1fr}.duplicate-review-members .button{justify-self:start}}
       .labour-mode{display:inline-flex;gap:4px;padding:4px;border:1px solid var(--line);border-radius:11px;background:#f4f7fa}.labour-mode button{border:0;background:transparent;border-radius:8px;padding:8px 11px;font-size:10px;font-weight:850;color:var(--muted);cursor:pointer}.labour-mode button.active{background:var(--navy);color:#fff}
       .labour-filter,.report-filter{display:grid;grid-template-columns:170px 170px minmax(260px,1fr) auto;gap:8px;align-items:end;padding:10px;margin-bottom:10px}.labour-filter label,.report-filter label{display:grid;gap:4px;font-size:10px;font-weight:800;color:var(--muted)}.labour-filter select,.labour-filter input,.report-filter select,.report-filter input{min-height:36px;border:1px solid var(--line);border-radius:9px;background:#fff;padding:7px 9px;font:inherit;font-size:12px}
       .labour-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}.labour-kpis>div{padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}.labour-kpis span{display:block;font-size:9px;font-weight:850;color:var(--muted)}.labour-kpis b{display:block;margin-top:3px;font-size:21px;color:var(--navy)}
