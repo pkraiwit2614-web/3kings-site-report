@@ -7,6 +7,7 @@ const fs=require('node:fs')
 const migration=fs.readFileSync('supabase/migrations/20261005045000_prompt5_manpower_classification.sql','utf8')
 const page=fs.readFileSync('app/reports/labour/page.tsx','utf8')
 const fixture=JSON.parse(fs.readFileSync('tests/fixtures/prompt5-manpower.json','utf8'))
+const {canonicalizeLabourRows}=require('./prompt23/labour-payroll-contract.cjs')
 
 test('Prompt 5 preserves Prompt 12 raw evidence and expected-headcount authority',()=>{
   assert.doesNotMatch(migration,/update\s+public\.site_operations_entries\s+set/i)
@@ -68,4 +69,18 @@ test('Prompt 4 optimistic-concurrency overloads are preserved',()=>{
 
 test('no RBAC/RLS policy rewrite is introduced',()=>{
   assert.doesNotMatch(migration,/create\s+policy|alter\s+policy|drop\s+policy/i)
+})
+
+
+test('Labour PDF person count follows the same payroll eligibility authority while keeping supervisor role independent',()=>{
+  const rows=[
+    {work_date:'2026-10-05',entity_type:'worker',worker_key:'SYN-SUP-ELIGIBLE',supervisor_key:'SYN-SUP-ELIGIBLE',payroll_eligible:true,project:'P6',verification_status:'pending'},
+    {work_date:'2026-10-05',entity_type:'worker',worker_key:'W002',supervisor_key:'W002',payroll_eligible:false,project:'P6',verification_status:'pending'},
+    {work_date:'2026-10-05',entity_type:'contractor',worker_key:'DC-CONTRACTOR',supervisor_key:'SYN-SUP-ELIGIBLE',payroll_eligible:false,project:'P6',verification_status:'pending'},
+    {work_date:'2026-10-05',entity_type:'non_person',worker_key:'RSE',supervisor_key:'SYN-SUP-ELIGIBLE',payroll_eligible:false,project:'P6',verification_status:'pending'}
+  ]
+  const pages=canonicalizeLabourRows(rows)
+  assert.equal(pages.length,1)
+  assert.deepEqual(pages[0].workers.map(x=>x.worker_key),['SYN-SUP-ELIGIBLE'])
+  assert.deepEqual(pages[0].supervisors,['SYN-SUP-ELIGIBLE'])
 })
