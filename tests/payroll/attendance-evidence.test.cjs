@@ -53,3 +53,13 @@ test('source preserves Prompt 2/4 guards and adds server/UI evidence gates',()=>
   assert.match(page,/clock_spans_next_day/)
   assert.match(page,/attendance_exception_evidence/)
 })
+
+
+test('legacy 6-argument payroll RPC is not client-executable',()=>{
+  const root=path.join(__dirname,'..','..')
+  const sql=fs.readFileSync(path.join(root,'supabase','migrations','20261005073000_prompt15_disable_legacy_payroll_rpc.sql'),'utf8')
+  assert.match(sql,/REVOKE EXECUTE ON FUNCTION public\.payroll_save_verification\(uuid,text,text,text,text,jsonb\) FROM PUBLIC/)
+  assert.match(sql,/FROM anon/)
+  assert.match(sql,/FROM authenticated/)
+  assert.match(sql,/GRANT EXECUTE ON FUNCTION public\.payroll_save_verification\(uuid,text,text,text,text,jsonb\) TO service_role/)
+})
