@@ -57,3 +57,6 @@ jobs:
 
       - name: Admin role preview regression tests
         run: node tests/role-preview.test.cjs
+
+      - name: Activity Log security regression tests
+        run: node tests/activity-log.test.cjs
