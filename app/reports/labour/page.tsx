@@ -163,7 +163,7 @@ export default function LabourVerificationPage(){
   },[assignments])
   const usableBatches=useMemo(()=>batches.filter(batch=>isBatchWorkDateUsable(batch,entryById.get(batch.site_operations_entry_id),today)),[batches,entryById,today])
   const availableDates=useMemo(()=>Array.from(new Set(usableBatches.map(x=>x.work_date))).sort((a,b)=>b.localeCompare(a)),[usableBatches])
-  const teamOptions=useMemo(()=>Array.from(new Set(workers.map(x=>x.default_team).filter(Boolean) as string[])).sort((a,b)=>a.localeCompare(b,'th')),[workers])
+  const teamOptions=useMemo(()=>Array.from(new Set([...workers.map(x=>x.default_team),...batches.map(x=>x.home_team)].filter(Boolean) as string[])).sort((a,b)=>a.localeCompare(b,'th')),[workers,batches])
   const activeWorkers=useMemo(()=>workers.filter(x=>String(x.status||'').toLowerCase()!=='inactive'),[workers])
 
   const labourStatusFor=(batch:Batch)=>{
