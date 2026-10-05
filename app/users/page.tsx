@@ -74,7 +74,6 @@ function UsersContent() {
   const [credentials, setCredentials] = useState<Credential[]>([])
   const [showCreate, setShowCreate] = useState(false)
   const [creating, setCreating] = useState(false)
-  const [seeding, setSeeding] = useState(false)
   const [username, setUsername] = useState('')
   const [fullName, setFullName] = useState('')
   const [role, setRole] = useState('viewer')
@@ -96,24 +95,6 @@ function UsersContent() {
   useEffect(() => { void load() }, [])
 
   const numberedCount = useMemo(() => rows.filter(r => /^USER\d{2}$/i.test(r.username || '')).length, [rows])
-
-  const seed = async () => {
-    if (!window.confirm('สร้าง USER01–USER20 และ AI-VIEWER ตอนนี้? บัญชีที่มีอยู่แล้วจะไม่ถูกสร้างซ้ำ')) return
-    setSeeding(true)
-    setMessage('')
-    setCredentials([])
-    try {
-      throw new Error('การสร้างชุด USER01–20 ถูกปิดไว้สำหรับ RBAC ใหม่ • กรุณาสร้าง/จัดสิทธิ์เป็นรายบัญชีเพื่อไม่เปลี่ยนสิทธิ์บัญชีเดิมอัตโนมัติ')
-      const data = await adminAction('seed_initial')
-      setCredentials((data.credentials || []) as Credential[])
-      setMessage(`สร้างบัญชีใหม่ ${data.credentials?.length || 0} บัญชี${data.skipped?.length ? ` • ข้ามบัญชีเดิม ${data.skipped.length}` : ''}`)
-      await load()
-    } catch (err:any) {
-      setMessage(err?.message || 'สร้างบัญชีเริ่มต้นไม่สำเร็จ')
-    } finally {
-      setSeeding(false)
-    }
-  }
 
   const create = async () => {
     const cleanUsername = username.trim().toUpperCase()
@@ -166,7 +147,7 @@ function UsersContent() {
         </div>
         <div className="row" style={{gap:8,flexWrap:'wrap'}}>
           <button className="button" onClick={()=>setShowCreate(v=>!v)}>+ เพิ่มผู้ใช้งาน</button>
-          <button className="button" onClick={seed} disabled title="RBAC ใหม่ไม่เปลี่ยนสิทธิ์บัญชีเดิมอัตโนมัติ">{seeding?'กำลังสร้าง…':'สร้างชุดบัญชี — ปิดไว้'}</button>
+          <button className="button" disabled title="RBAC ใหม่ไม่เปลี่ยนสิทธิ์บัญชีเดิมอัตโนมัติ">สร้างชุดบัญชี — ปิดไว้</button>
         </div>
       </div>
     </div>
