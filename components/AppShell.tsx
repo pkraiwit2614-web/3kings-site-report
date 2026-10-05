@@ -59,8 +59,8 @@ const mobileLabel: Record<string,string> = {
 
 const DRIVE_WATCH_PATHS = new Set(['/', '/presentation', '/schedule', '/materials', '/site-photos', '/procurement', '/photo-mapping', '/data-health'])
 
-function roleLabel(role:AccessRole|null,userName:string){
-  if(role==='owner'||userName.trim().toLowerCase()==='golf') return 'Site Supervisor'
+function roleLabel(role:AccessRole|null){
+  if(role==='owner') return 'Site Supervisor'
   if(role==='admin') return 'Admin'
   if(role==='viewer') return 'Viewer · ดูข้อมูล'
   if(role==='defect_contributor') return 'Defect Contributor'
@@ -221,7 +221,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
     </select>
   </label>:null
 
-  const displayRole = roleLabel(presentationRole,userName)
+  const displayRole = roleLabel(presentationRole)
 
   if (!ready || (actualRole!==null&&!previewReady)) return <div className="loading-screen">{accessError ? <div role="alert"><p>ตรวจสอบสิทธิ์ไม่สำเร็จ กรุณาตรวจการเชื่อมต่อแล้วลองใหม่</p><button type="button" onClick={() => setAccessAttempt(v => v + 1)}>ลองใหม่</button></div> : 'กำลังโหลดระบบ…'}</div>
 
