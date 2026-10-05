@@ -22,6 +22,7 @@ function loadTs(file, mocks = {}, extra = '') {
 const {createLiveLoader, requireSuccessfulReads} = loadTs('lib/liveLoader.ts')
 const tick = () => new Promise(resolve => setImmediate(resolve))
 const workDateIntegrity=loadTs('lib/workDateIntegrity.ts')
+const accessControl=loadTs('lib/accessControl.ts')
 test('Work Date integrity uses Bangkok midnight and excludes future/review dates',()=>{assert.equal(workDateIntegrity.bangkokToday(new Date('2026-10-03T16:59:59.999Z')),'2026-10-03');assert.equal(workDateIntegrity.bangkokToday(new Date('2026-10-03T17:00:00.000Z')),'2026-10-04');const rows=[{work_date:'2026-12-09',work_date_validation_status:'future_review'},{work_date:'2026-09-30',work_date_validation_status:'valid'},{work_date:'2026-09-16',work_date_validation_status:'valid'}];assert.equal(workDateIntegrity.latestUsableDate(rows,'2026-10-04'),'2026-09-30');assert.equal(workDateIntegrity.latestUsableDate([rows[0]],'2026-10-04'),'');assert.equal(workDateIntegrity.isUsableActualWorkDate(rows[0],'2026-10-04'),false)})
 
 
@@ -181,7 +182,7 @@ function accessFixture(profileResult, authPromise) {
   const supabase={auth:{getUser:()=>authPromise||Promise.resolve({data:{user:{id:'user',email:'test'}},error:null}),signOut:async()=>{state.signouts++}},from:()=>query}
   const effect=loadEffect('components/AppShell.tsx','const checkAccess',{
     getSupabase:()=>supabase,router:{replace:p=>state.redirects.push(p)},
-    setAccessError:v=>state.errors.push(v),setUserName:()=>{},setRole:()=>{},setReady:v=>state.ready.push(v)
+    setAccessError:v=>state.errors.push(v),setUserName:()=>{},setUserId:()=>{},setRole:()=>{},setReady:v=>state.ready.push(v),resolveAccessRole:accessControl.resolveAccessRole
   })
   return {state,effect}
 }

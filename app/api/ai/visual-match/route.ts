@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getVercelOidcToken } from '@vercel/oidc'
+import {OWNER_USER_ID} from '@/lib/accessControl'
 
 export const runtime='nodejs'
 export const maxDuration=60
@@ -168,7 +169,7 @@ export async function POST(request:NextRequest){
     const {data:{user},error:userError}=await supabase.auth.getUser(accessToken)
     if(userError||!user)return NextResponse.json({ok:false,error:'invalid_auth'},{status:401})
     const {data:profile}=await supabase.from('profiles').select('role,active').eq('user_id',user.id).maybeSingle()
-    if(!profile?.active||!['manager','engineer'].includes(profile.role||''))return NextResponse.json({ok:false,error:'forbidden'},{status:403})
+    if(!profile?.active||user.id!==OWNER_USER_ID||profile.role!=='manager')return NextResponse.json({ok:false,error:'forbidden'},{status:403})
 
     const body=await request.json().catch(()=>null) as any
     const taskId=cleanText(body?.taskId,80)
