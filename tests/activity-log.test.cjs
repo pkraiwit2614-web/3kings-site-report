@@ -3,6 +3,7 @@ const fs=require('fs')
 const assert=require('node:assert/strict')
 
 const migration=fs.readFileSync('supabase/migrations/20261005143000_activity_log.sql','utf8')
+const hardening=fs.readFileSync('supabase/migrations/20261005144000_activity_log_audit_hardening.sql','utf8')
 const tracker=fs.readFileSync('components/ActivityTracker.tsx','utf8')
 const helper=fs.readFileSync('lib/activityLog.ts','utf8')
 const shell=fs.readFileSync('components/AppShell.tsx','utf8')
@@ -15,6 +16,10 @@ assert.match(migration,/using \(\(select auth\.uid\(\)\) = 'bc6ee244-3472-422f-b
 assert.match(migration,/revoke all on table public\.activity_logs from anon, authenticated/)
 assert.match(migration,/grant insert, select on table public\.activity_logs to authenticated/)
 assert.doesNotMatch(migration,/grant update|grant delete/i)
+assert.match(hardening,/drop constraint if exists activity_logs_user_id_fkey/)
+assert.match(hardening,/revoke insert on table public\.activity_logs from authenticated/)
+assert.match(hardening,/grant insert \(user_id, client_session_id, event_type, path, action, target, metadata, user_agent\)/)
+assert.doesNotMatch(hardening,/created_at[^\n]*grant insert/i)
 
 assert.match(tracker,/eventType: 'page_view'/)
 assert.match(tracker,/eventType: 'click'/)
