@@ -74,7 +74,7 @@ test('confirmed authority is independent of pending/needs_review/verified displa
 })
 
 test('migration preserves raw evidence and gates downstream on confirmed headcount',()=>{
-  const sql=fs.readFileSync('supabase/migrations/20261005033000_prompt12_confirmed_headcount.sql','utf8')
+  const sql=fs.readFileSync('supabase/migrations/20261005032946_prompt12_confirmed_headcount_rebased.sql','utf8')
   assert.match(sql,/expected_headcount=case when b\.verification_status='verified' then r\.roster_count else null end/)
   assert.match(sql,/if v_headcount_confirmation_status<>'confirmed'/)
   assert.match(sql,/if v_distinct_workers<>v_confirmed/)
