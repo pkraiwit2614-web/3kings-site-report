@@ -1,0 +1,13 @@
+{
+  "purpose": "Prompt 5 manpower authority fixtures. Counts are synthetic unless tied to an explicit worker-master classification.",
+  "team_leader_fixtures": [
+    {"worker_id":"W002","label":"พี่ปู","worker_class":"company","payroll_eligible":false,"reason":"prompt01_team_leader_separate_pay"},
+    {"worker_id":"W005","label":"บังรุน","worker_class":"company","payroll_eligible":false,"reason":"prompt01_team_leader_separate_pay"},
+    {"worker_id":"W001","label":"ช่างอ๊อด","worker_class":"company","payroll_eligible":false,"reason":"prompt01_team_leader_separate_pay"},
+    {"worker_id":"W004","label":"ช่างต่อ","worker_class":"company","payroll_eligible":false,"reason":"prompt01_team_leader_separate_pay"}
+  ],
+  "eligible_supervisor_fixture": {"worker_id":"SYN-SUP-ELIGIBLE","label":"Synthetic eligible supervisor","worker_class":"company","payroll_eligible":true},
+  "dc_contractor_worker_ids":["W031","W032","W064","W067","W094"],
+  "distinct_dc_supervisor":{"worker_id":"W012","label":"ลุงทอง","worker_class":"company","payroll_eligible":true},
+  "non_person_source_labels":["RSE","ผู้รับเหมา RSE","ช่างสุ","หมู่ 8"]
+}
