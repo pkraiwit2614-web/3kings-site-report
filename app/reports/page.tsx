@@ -11,7 +11,7 @@ import { readAllPages, requireCompletePagedReads } from '@/lib/pagedRead'
 import { dateTH } from '@/lib/format'
 import { bangkokToday, isUsableActualWorkDate, latestUsableDate } from '@/lib/workDateIntegrity'
 import { confirmedHeadcount, countLabel, headcountSourceStatus, isHeadcountConfirmed, isHeadcountReviewCase, maleFemaleHeadcount } from '@/lib/headcountReconciliation'
-import { canUseCanonicalDownstream, canonicalFlowState, type CanonicalStateRow } from '@/lib/siteOperationsCanonical'
+import { canUseCanonicalDownstream, canonicalFlowState, deriveSuspectedCanonicalFallback, type CanonicalStateRow } from '@/lib/siteOperationsCanonical'
 import type { Project, ScheduleTask } from '@/lib/types'
 
 type SiteEntry={id:string;source_row:number;source_timestamp:string|null;work_date:string;project_name_raw:string|null;area_raw:string|null;supervisor_raw:string|null;male_count:number|null;female_count:number|null;total_manpower:number|null;work_detail:string|null;status_text:string|null;next_plan:string|null;afternoon_detail:string|null;specific_area:string|null;supervisor_worker_id:string|null;mapping_status:string;synced_at:string;work_date_validation_status?:string|null;work_date_validation_reason?:string|null}
@@ -99,7 +99,7 @@ export default function SiteOperationsPage(){
           const canonical=await readAllPages<CanonicalStateRow>({label:'v_site_operations_canonical_state',signal,keyOf:x=>x.entry_id,fetchPage:(from,to)=>
             s.from('v_site_operations_canonical_state').select('entry_id,source_row,group_id,group_state,canonical_entry_id,flow_state,decision_evidence,decided_at',{count:'exact'}).order('source_row',{ascending:false}).range(from,to).abortSignal(signal)})
           nextCanonical=canonical.data
-        }catch{/* Migration not active yet: preserve pre-Prompt-13 read behavior in Preview. */}
+        }catch{nextCanonical=deriveSuspectedCanonicalFallback(e.data)}
         if(!alive||signal.aborted)return
         const nextEntries=e.data
         setLoadError(false);setEntries(nextEntries);setEntryProjects(ep.data)
