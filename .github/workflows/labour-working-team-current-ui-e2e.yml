@@ -27,7 +27,7 @@ jobs:
 
       - name: Install dependencies and build exact branch
         run: |
-          npm ci
+          npm install
           npm run build
           npm install --no-save --ignore-scripts playwright@1.55.0
           npx playwright install --with-deps chromium
