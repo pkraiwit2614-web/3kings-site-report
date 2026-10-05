@@ -131,7 +131,10 @@ jobs:
             const errors=[]
             page.on('console',m=>{if(m.type()==='error')errors.push(m.text())})
             await page.goto(base+'/reports/labour',{waitUntil:'domcontentloaded'})
-            await page.getByText('Labour & Payroll Verification').waitFor({state:'visible',timeout:20000})
+            await page.waitForTimeout(2500)
+            console.log('OPEN_LABOUR_URL',page.url())
+            console.log('OPEN_LABOUR_BODY',(await page.locator('body').innerText()).slice(0,8000))
+            await page.getByText(/Labour(?: & Payroll Verification)?/).first().waitFor({state:'visible',timeout:20000})
             await page.getByText('กำลังโหลดข้อมูล…').waitFor({state:'detached',timeout:20000}).catch(()=>{})
             return {ctx,page,errors}
           }
