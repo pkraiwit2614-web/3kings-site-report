@@ -51,6 +51,7 @@ export default function RolePermissionGuard20260927(){
     body.access-role-admin a[href='/users'],
     body.access-role-viewer a[href='/photo-mapping'],
     body.access-role-viewer a[href='/data-health'],
-    body.access-role-viewer a[href='/users']{display:none!important}
+    body.access-role-viewer a[href='/users'],
+    body.access-role-defect_contributor a[href='/?section=defect#dashboard-defect']{display:none!important}
   `}</style>
 }
