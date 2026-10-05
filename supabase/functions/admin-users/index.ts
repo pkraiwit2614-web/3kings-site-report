@@ -8,8 +8,7 @@ const corsHeaders = {
 
 const OWNER_ID = 'bc6ee244-3472-422f-bbf9-d551987ee9a3'
 const INTERNAL_DOMAIN = '3kings.invalid'
-const ASSIGNABLE_ROLES = new Set(['admin', 'viewer', 'defect_contributor'])
-const LEGACY_ROLES = new Set(['engineer', 'foreman', 'payroll'])
+const VALID_ROLES = new Set(['manager', 'engineer', 'foreman', 'viewer'])
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -118,7 +117,7 @@ Deno.serve(async (req: Request) => {
     const role = String(payload?.role || 'viewer').toLowerCase()
     const password = String(payload?.password || '')
     if (!validUsername(username)) return json({ ok: false, error: 'invalid_username' }, 400)
-    if (!ASSIGNABLE_ROLES.has(role)) return json({ ok: false, error: 'invalid_role' }, 400)
+    if (!VALID_ROLES.has(role) || role === 'manager') return json({ ok: false, error: 'invalid_role' }, 400)
     if (!validPassword(password)) return json({ ok: false, error: 'invalid_password' }, 400)
 
     const email = internalEmail(username)
@@ -148,7 +147,7 @@ Deno.serve(async (req: Request) => {
     const role = payload?.role === undefined ? current.role : String(payload.role || '').toLowerCase()
     const active = payload?.active === undefined ? current.active : Boolean(payload.active)
     if (username && !validUsername(username)) return json({ ok: false, error: 'invalid_username' }, 400)
-    if (!ASSIGNABLE_ROLES.has(role) && !(LEGACY_ROLES.has(role) && role === current.role)) return json({ ok: false, error: 'invalid_role' }, 400)
+    if (!VALID_ROLES.has(role) || role === 'manager') return json({ ok: false, error: 'invalid_role' }, 400)
 
     if (username && username !== current.username) {
       const { error: authError } = await admin.auth.admin.updateUserById(target, {
@@ -166,7 +165,7 @@ Deno.serve(async (req: Request) => {
       if (authMetaError) return json({ ok: false, error: authMetaError.message }, 400)
     }
 
-    const { error: profileError } = await admin.from('profiles').update({
+    const { error: profileError } = await manager.from('profiles').update({
       username: username || null,
       full_name: fullName || username || null,
       email: username ? internalEmail(username) : null,
@@ -194,7 +193,7 @@ Deno.serve(async (req: Request) => {
       ...Array.from({ length: 20 }, (_, i) => {
         const n = i + 1
         const username = `USER${String(n).padStart(2, '0')}`
-        return { username, full_name: `ผู้ใช้งาน ${String(n).padStart(2, '0')}`, role: n <= 10 ? 'admin' : 'viewer' }
+        return { username, full_name: `ผู้ใช้งาน ${String(n).padStart(2, '0')}`, role: n <= 10 ? 'foreman' : 'viewer' }
       }),
       { username: 'AI-VIEWER', full_name: 'AI System Viewer', role: 'viewer' },
     ]
