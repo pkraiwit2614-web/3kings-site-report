@@ -1,0 +1,257 @@
+name: Admin Role Preview Browser E2E
+
+on:
+  push:
+    branches:
+      - test/admin-role-preview-e2e-20261005
+    paths:
+      - '.github/workflows/admin-role-preview-browser-e2e.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  browser-role-preview-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      APP_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_SUPABASE_URL: https://woqbxlhikzhhoaiinwqf.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Bg2m2kErq2n8q_jO9LXe5w_U5_29Yrq
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Build exact app commit and install browser
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+          npm install --no-save --ignore-scripts playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Start exact app commit locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          (npm run start -- -p 3000 > /tmp/3kings-next.log 2>&1 & echo $! > /tmp/3kings-next.pid)
+          for i in $(seq 1 60); do
+            if curl -fsS "$APP_URL/login" >/dev/null; then
+              echo "Local Next.js ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/3kings-next.log
+          exit 42
+
+      - name: Run role preview browser E2E
+        shell: bash
+        run: |
+          cat > role-preview-e2e.mjs <<'EOF'
+          import { chromium } from 'playwright'
+          import fs from 'node:fs'
+          import assert from 'node:assert/strict'
+
+          const base=process.env.APP_URL
+          const supabaseOrigin='https://woqbxlhikzhhoaiinwqf.supabase.co'
+          const storageKey='sb-woqbxlhikzhhoaiinwqf-auth-token'
+          const previewKey='3kings:role-preview'
+          const ownerId='bc6ee244-3472-422f-bbf9-d551987ee9a3'
+          const adminId='33333333-3333-4333-8333-333333333333'
+          const viewerId='44444444-4444-4444-8444-444444444444'
+          const defectId='55555555-5555-4555-8555-555555555555'
+          const results=[]
+
+          function fakeJwt(sub){
+            const b64=o=>Buffer.from(JSON.stringify(o)).toString('base64url')
+            return b64({alg:'HS256',typ:'JWT'})+'.'+b64({sub,role:'authenticated',exp:4102444800})+'.stub'
+          }
+          function authUser(id,email){
+            const now='2026-10-05T00:00:00.000Z'
+            return {id,aud:'authenticated',role:'authenticated',email,email_confirmed_at:now,confirmed_at:now,last_sign_in_at:now,app_metadata:{provider:'email',providers:['email']},user_metadata:{},identities:[],created_at:now,updated_at:now,is_anonymous:false}
+          }
+          function session(id,email){
+            const user=authUser(id,email)
+            return {access_token:fakeJwt(id),token_type:'bearer',expires_in:3600,expires_at:4102444800,refresh_token:'stub-refresh',user}
+          }
+          function json(route,body,status=200){
+            const contentRange=Array.isArray(body)?(body.length?`0-${body.length-1}/${body.length}`:'*/0'):'0-0/1'
+            return route.fulfill({status,contentType:'application/json',body:JSON.stringify(body),headers:{'content-range':contentRange,'access-control-expose-headers':'Content-Range','access-control-allow-origin':'*'}})
+          }
+          function actualAccessRole(profileRole,id){
+            if(id===ownerId&&profileRole==='manager')return 'owner'
+            if(['admin','manager','engineer','payroll'].includes(profileRole))return 'admin'
+            if(['viewer','foreman'].includes(profileRole))return 'viewer'
+            if(profileRole==='defect_contributor')return 'defect_contributor'
+            return null
+          }
+          function allowedPath(role,path){
+            if(role==='owner')return true
+            if(role==='defect_contributor')return path==='/defect-flow'||path==='/defects'
+            if(role==='admin')return !['/photo-mapping','/data-health','/data-house','/users'].some(p=>path===p||path.startsWith(p+'/'))
+            if(role==='viewer'){
+              if(['/photo-mapping','/data-health','/data-house','/users'].some(p=>path===p||path.startsWith(p+'/')))return false
+              if(path==='/reports/new'||path==='/reports/quick')return false
+              return true
+            }
+            return false
+          }
+          async function installMocks(context,{profileRole,id,name,maliciousPreview=null}){
+            const email=`${profileRole}-role-preview-e2e@example.invalid`
+            const actualRole=actualAccessRole(profileRole,id)
+            await context.addInitScript(({storageKey,authValue,previewKey,maliciousPreview})=>{
+              localStorage.setItem(storageKey,authValue)
+              if(maliciousPreview)sessionStorage.setItem(previewKey,maliciousPreview)
+            },{storageKey,authValue:JSON.stringify(session(id,email)),previewKey,maliciousPreview})
+
+            await context.route('**/api/access-control?**',async route=>{
+              const u=new URL(route.request().url())
+              const path=u.searchParams.get('path')||'/'
+              const allowed=allowedPath(actualRole,path)
+              return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({allowed,role:actualRole,redirect:allowed?null:'/'})})
+            })
+            await context.route(supabaseOrigin+'/**',async route=>{
+              const req=route.request()
+              const u=new URL(req.url())
+              const path=u.pathname
+              if(path==='/auth/v1/user')return json(route,authUser(id,email))
+              if(path==='/auth/v1/logout')return json(route,{})
+              if(path==='/rest/v1/profiles')return json(route,{full_name:name,role:profileRole,active:true})
+              if(path.startsWith('/rest/v1/'))return json(route,[])
+              return json(route,{})
+            })
+          }
+          async function openLabour(browser,opts,viewport={width:1440,height:900}){
+            const ctx=await browser.newContext({viewport})
+            await installMocks(ctx,opts)
+            const page=await ctx.newPage()
+            const errors=[]
+            page.on('console',m=>{if(m.type()==='error')errors.push(m.text())})
+            await page.goto(base+'/reports/labour',{waitUntil:'domcontentloaded'})
+            await page.getByText('Labour & Payroll Verification').waitFor({state:'visible',timeout:20000})
+            await page.getByText('กำลังโหลดข้อมูล…').waitFor({state:'detached',timeout:20000}).catch(()=>{})
+            return {ctx,page,errors}
+          }
+          async function previewSelect(page,scope='desktop'){
+            if(scope==='mobile')return page.locator('.mobile-preview-control select')
+            return page.locator('.sidebar .role-preview-control select')
+          }
+
+          const browser=await chromium.launch()
+          try{
+            {
+              const {ctx,page,errors}=await openLabour(browser,{profileRole:'manager',id:ownerId,name:'Synthetic Owner'})
+              const select=await previewSelect(page)
+              await select.waitFor({state:'visible'})
+              assert.deepEqual(await select.locator('option').evaluateAll(opts=>opts.map(o=>o.value)),['','admin','viewer','defect_contributor'])
+              await select.selectOption('viewer')
+              await page.getByText('Previewing as: Viewer').waitFor({state:'visible'})
+              assert.equal(await page.evaluate(k=>sessionStorage.getItem(k),previewKey),'viewer')
+              assert.equal(await page.locator("a[href='/users']").count(),0)
+              assert.equal(await page.getByText('Payroll Verification Record',{exact:true}).count(),0)
+              await page.reload({waitUntil:'domcontentloaded'})
+              await page.getByText('Previewing as: Viewer').waitFor({state:'visible'})
+              assert.equal(await page.evaluate(k=>sessionStorage.getItem(k),previewKey),'viewer')
+              await page.getByRole('button',{name:'Exit Preview'}).click()
+              await page.getByText('Previewing as: Viewer').waitFor({state:'detached'})
+              assert.equal(await page.evaluate(k=>sessionStorage.getItem(k),previewKey),null)
+              assert((await page.locator("a[href='/users']").count())>0)
+              results.push({case:'owner desktop viewer preview + refresh + exit',status:'PASS'})
+              assert.equal(errors.length,0,'owner desktop console errors: '+errors.join(' | '))
+              await ctx.close()
+            }
+
+            {
+              const {ctx,page}=await openLabour(browser,{profileRole:'manager',id:ownerId,name:'Synthetic Owner'}, {width:390,height:844})
+              await page.getByRole('button',{name:'เพิ่มเติม'}).click()
+              const select=await previewSelect(page,'mobile')
+              await select.waitFor({state:'visible'})
+              await select.selectOption('defect_contributor')
+              await page.getByText('Previewing as: Defect Contributor').waitFor({state:'visible'})
+              assert.equal(await page.evaluate(k=>sessionStorage.getItem(k),previewKey),'defect_contributor')
+              results.push({case:'owner mobile preview control',status:'PASS'})
+              await ctx.close()
+            }
+
+            {
+              const {ctx,page}=await openLabour(browser,{profileRole:'engineer',id:adminId,name:'Synthetic Admin'})
+              const select=await previewSelect(page)
+              assert.deepEqual(await select.locator('option').evaluateAll(opts=>opts.map(o=>o.value)),['','viewer','defect_contributor'])
+              assert.equal(await select.locator("option[value='owner']").count(),0)
+              await select.selectOption('viewer')
+              await page.getByText('UI preview only · Actual access remains Admin').waitFor({state:'visible'})
+              results.push({case:'admin cannot preview owner',status:'PASS'})
+              await ctx.close()
+            }
+
+            {
+              const {ctx,page}=await openLabour(browser,{profileRole:'viewer',id:viewerId,name:'Synthetic Viewer',maliciousPreview:'admin'})
+              assert.equal(await page.locator('.role-preview-control select').count(),0)
+              assert.equal(await page.evaluate(k=>sessionStorage.getItem(k),previewKey),null)
+              await page.goto(base+'/users',{waitUntil:'domcontentloaded'})
+              await page.waitForURL(u=>u.pathname==='/',{timeout:15000})
+              assert.equal(await page.locator('.role-preview-control select').count(),0)
+              results.push({case:'viewer cannot activate preview or direct-url elevate',status:'PASS'})
+              await ctx.close()
+            }
+
+            {
+              const ctx=await browser.newContext({viewport:{width:1280,height:800}})
+              await installMocks(ctx,{profileRole:'defect_contributor',id:defectId,name:'Synthetic Defect'})
+              const page=await ctx.newPage()
+              await page.goto(base+'/defects',{waitUntil:'domcontentloaded'})
+              await page.waitForTimeout(800)
+              assert.equal(await page.locator('.role-preview-control select').count(),0)
+              assert((await page.locator("a[href='/defects']").count())>0)
+              results.push({case:'defect contributor has no preview control',status:'PASS'})
+              await ctx.close()
+            }
+
+            {
+              const {ctx,page}=await openLabour(browser,{profileRole:'manager',id:ownerId,name:'Synthetic Owner'})
+              const select=await previewSelect(page)
+              await select.selectOption('viewer')
+              await page.getByText('Previewing as: Viewer').waitFor({state:'visible'})
+              await page.getByRole('button',{name:'ออกจากระบบ'}).click()
+              await page.waitForURL('**/login',{timeout:15000})
+              assert.equal(await page.evaluate(k=>sessionStorage.getItem(k),previewKey),null)
+              results.push({case:'logout clears preview state',status:'PASS'})
+              await ctx.close()
+            }
+
+            {
+              const ctx=await browser.newContext({viewport:{width:1280,height:800}})
+              await installMocks(ctx,{profileRole:'manager',id:ownerId,name:'Synthetic Owner'})
+              const page=await ctx.newPage()
+              await page.goto(base+'/reports/labour',{waitUntil:'domcontentloaded'})
+              assert.equal(await page.evaluate(k=>sessionStorage.getItem(k),previewKey),null)
+              assert.equal(await page.getByText(/Previewing as:/).count(),0)
+              results.push({case:'new session starts with actual role',status:'PASS'})
+              await page.screenshot({path:'admin-role-preview-e2e-pass.png',fullPage:true})
+              await ctx.close()
+            }
+
+            fs.writeFileSync('admin-role-preview-e2e-results.json',JSON.stringify({status:'PASS',results},null,2))
+            console.log(JSON.stringify({status:'PASS',results},null,2))
+          }catch(err){
+            fs.writeFileSync('admin-role-preview-e2e-results.json',JSON.stringify({status:'FAIL',error:String(err?.stack||err),results},null,2))
+            console.error(err)
+            throw err
+          }finally{
+            await browser.close()
+          }
+          EOF
+          node role-preview-e2e.mjs
+
+      - name: Upload role preview E2E evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-role-preview-browser-e2e
+          path: |
+            admin-role-preview-e2e-results.json
+            admin-role-preview-e2e-pass.png
+          if-no-files-found: ignore
