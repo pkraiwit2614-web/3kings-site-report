@@ -1,4 +1,5 @@
 -- Prompt 13: canonical duplicate candidate/linkage guard.
+-- Preview retrigger: no runtime logic change.
 -- Generic, exact-normalized candidate detection only. Never fuzzy auto-merge.
 -- Raw Site Operations source rows/IDs/fingerprints are preserved.
 
