@@ -191,7 +191,7 @@ CREATE OR REPLACE FUNCTION public.daily_report_apply_revision_v34(p_report_id uu
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO 'public', 'private', 'pg_temp'
-AS $function$
+AS $function$;
 declare
   v_report public.daily_reports%rowtype; v_items jsonb; v_photos jsonb; v_snapshot jsonb; v_new_revision integer;
 begin
@@ -217,14 +217,14 @@ begin
   from jsonb_to_recordset(coalesce(p_items,'[]'::jsonb)) as x(schedule_task_id text,work_category text,work_item text,actual_progress numeric,manpower integer,contractor text,status text,blocker text,next_action text,target_date text,remarks text)
   where btrim(coalesce(x.work_item,''))<>'';
   return v_new_revision;
-end; $function$
+end; $function$;
 
 
 CREATE OR REPLACE FUNCTION public.labour_confirm_supervisor_mapping(p_batch_id uuid, p_worker_id text)
  RETURNS text
  LANGUAGE plpgsql
  SET search_path TO 'public'
-AS $function$
+AS $function$;
 declare
   v_user uuid := (select auth.uid());
   v_entry_id uuid;
@@ -288,14 +288,14 @@ begin
 
   return p_worker_id;
 end;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.labour_confirm_headcount(p_batch_id uuid, p_confirmed_headcount integer, p_basis text, p_evidence_note text)
  RETURNS integer
  LANGUAGE plpgsql
  SET search_path TO 'public'
-AS $function$
+AS $function$;
 declare
   v_user uuid := (select auth.uid());
   v_source_status text;
@@ -371,14 +371,14 @@ begin
 
   return p_confirmed_headcount;
 end;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.labour_verify_batch(p_batch_id uuid, p_note text, p_assignments jsonb)
  RETURNS integer
  LANGUAGE plpgsql
  SET search_path TO 'public'
-AS $function$
+AS $function$;
 declare
   v_user uuid := (select auth.uid());
   v_expected integer;
@@ -503,14 +503,14 @@ begin
 
   return v_distinct_workers;
 end;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.labour_payroll_guard_row()
  RETURNS trigger
  LANGUAGE plpgsql
  SET search_path TO 'pg_catalog', 'public'
-AS $function$
+AS $function$;
 declare
  b public.labour_verification_batches%rowtype;
  r public.payroll_verification_records%rowtype;
@@ -604,7 +604,7 @@ begin
  if tg_op='DELETE' then return old; end if;
  return new;
 end;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.payroll_save_verification(p_labour_batch_id uuid, p_method text, p_status text, p_note text, p_external_reference text, p_items jsonb)
@@ -612,7 +612,7 @@ CREATE OR REPLACE FUNCTION public.payroll_save_verification(p_labour_batch_id uu
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO ''
-AS $function$
+AS $function$;
 declare
   v_user uuid := (select auth.uid());
   v_batch public.labour_verification_batches%rowtype;
@@ -813,7 +813,7 @@ begin
 
   return v_record_id;
 end;
-$function$
+$function$;
 
 
 revoke all on function public.labour_confirm_supervisor_mapping(uuid,text) from public,anon;
