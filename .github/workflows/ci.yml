@@ -33,3 +33,6 @@ jobs:
 
       - name: Prompt 12 headcount reconciliation tests
         run: node tests/headcount-reconciliation.test.cjs
+
+      - name: RBAC regression tests
+        run: node tests/rbac.test.cjs
