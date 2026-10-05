@@ -6,6 +6,8 @@ import { ReactNode, useEffect, useMemo, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import BrandLogo from '@/components/BrandLogo'
 import {canViewPayroll,resolveAccessRole,type AccessRole} from '@/lib/accessControl'
+import useRolePreview from '@/components/useRolePreview'
+import {ROLE_PREVIEW_LABELS} from '@/lib/rolePreview'
 
 type NavItem = [string,string]
 
@@ -81,14 +83,15 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [accessError, setAccessError] = useState(false)
   const [accessAttempt, setAccessAttempt] = useState(0)
   const [mobileMore, setMobileMore] = useState(false)
-  const accessRole=useMemo(()=>resolveAccessRole(role,userId),[role,userId])
+  const actualRole=useMemo(()=>resolveAccessRole(role,userId),[role,userId])
+  const {previewRole,presentationRole,targets:previewTargets,ready:previewReady,startPreview,exitPreview}=useRolePreview(actualRole)
   const nav = useMemo<NavItem[]>(() => {
-    if(accessRole==='defect_contributor') return defectContributorNav
-    if(accessRole==='viewer') return viewerNav
-    if(accessRole==='admin') return managementNav
-    if(accessRole==='owner') return [...managementNav,['/photo-mapping','Photo Mapping'],['/data-health','Data Health'],['/users','User & Access']]
+    if(presentationRole==='defect_contributor') return defectContributorNav
+    if(presentationRole==='viewer') return viewerNav
+    if(presentationRole==='admin') return managementNav
+    if(presentationRole==='owner') return [...managementNav,['/photo-mapping','Photo Mapping'],['/data-health','Data Health'],['/users','User & Access']]
     return []
-  }, [accessRole])
+  }, [presentationRole])
   const mobileOrderedNav = useMemo<NavItem[]>(() => {
     const priority = MOBILE_PRIORITY_PATHS.flatMap((href) => {
       const item = nav.find(([navHref]) => navHref === href)
@@ -201,13 +204,26 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     setMobileMore(false)
+    exitPreview()
     await getSupabase().auth.signOut()
     router.replace('/login')
   }
 
-  const displayRole = roleLabel(accessRole,userName)
+  const renderPreviewControl=()=>previewTargets.length?<label className="role-preview-control">
+    <span>Preview as</span>
+    <select value={previewRole||''} onChange={(event)=>{
+      const value=event.currentTarget.value as AccessRole
+      if(value)startPreview(value)
+      else exitPreview()
+    }}>
+      <option value="">Actual role{actualRole?` · ${ROLE_PREVIEW_LABELS[actualRole]}`:''}</option>
+      {previewTargets.map(target=><option key={target} value={target}>{ROLE_PREVIEW_LABELS[target]}</option>)}
+    </select>
+  </label>:null
 
-  if (!ready) return <div className="loading-screen">{accessError ? <div role="alert"><p>ตรวจสอบสิทธิ์ไม่สำเร็จ กรุณาตรวจการเชื่อมต่อแล้วลองใหม่</p><button type="button" onClick={() => setAccessAttempt(v => v + 1)}>ลองใหม่</button></div> : 'กำลังโหลดระบบ…'}</div>
+  const displayRole = roleLabel(presentationRole,userName)
+
+  if (!ready || (actualRole!==null&&!previewReady)) return <div className="loading-screen">{accessError ? <div role="alert"><p>ตรวจสอบสิทธิ์ไม่สำเร็จ กรุณาตรวจการเชื่อมต่อแล้วลองใหม่</p><button type="button" onClick={() => setAccessAttempt(v => v + 1)}>ลองใหม่</button></div> : 'กำลังโหลดระบบ…'}</div>
 
   const extraActive = extraNav.some(([href]) => navIsActive(path,href))
   const isDefectSection = path==='/defect-flow'||path==='/defects'
@@ -217,17 +233,21 @@ export default function AppShell({ children }: { children: ReactNode }) {
     <aside className="sidebar">
       <div className="brand"><BrandLogo className="brand-logo"/><div><b>3 Kings Construction</b><small>Site Report V3.4</small></div></div>
       <nav>{nav.map(([href,label]) => <Link key={href} className={navIsActive(path,href)?'active':''} href={href}>{label}</Link>)}</nav>
-      <div className="userbox"><b>{userName}</b><span>{displayRole}</span><button onClick={signOut}>ออกจากระบบ</button></div>
+      <div className="userbox"><b>{userName}</b><span>{displayRole}</span>{renderPreviewControl()}<button onClick={signOut}>ออกจากระบบ</button></div>
     </aside>
 
     <main className="main">
+      {previewRole&&<div className="role-preview-banner" role="status" data-role-preview={previewRole}>
+        <div><b>Previewing as: {ROLE_PREVIEW_LABELS[previewRole]}</b><span>UI preview only · Actual access remains {actualRole?ROLE_PREVIEW_LABELS[actualRole]:'Unknown'}</span></div>
+        <button type="button" onClick={exitPreview}>Exit Preview</button>
+      </div>}
       {isDefectSection&&<nav className="defect-section-tabs" aria-label="Defect navigation">
         <Link href="/defect-flow" className={path==='/defect-flow'?'active':''}>Live Handover / Defect Flow</Link>
         <Link href="/defects" className={path==='/defects'?'active':''}>Defect Report</Link>
       </nav>}
       {isSiteOperationsSection&&<nav className="defect-section-tabs" aria-label="Site Operations navigation">
         <Link href="/reports" className={path==='/reports'?'active':''}>Site Operations</Link>
-        <Link href="/reports/labour" className={path==='/reports/labour'?'active':''}>{canViewPayroll(accessRole)?'Payroll Verification Record':'Labour'}</Link>
+        <Link href="/reports/labour" className={path==='/reports/labour'?'active':''}>{canViewPayroll(presentationRole)?'Payroll Verification Record':'Labour'}</Link>
       </nav>}
       {children}
     </main>
@@ -240,6 +260,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <div><b>{userName}</b><span>{displayRole}</span></div>
           <button type="button" onClick={()=>setMobileMore(false)}>ปิด</button>
         </div>
+        {previewTargets.length>0&&<div className="mobile-preview-control">{renderPreviewControl()}</div>}
         <div className="mobile-more-links">
           {extraNav.map(([href,label]) => <Link key={href} className={navIsActive(path,href)?'active':''} href={href}>{label}<span>›</span></Link>)}
         </div>
@@ -253,6 +274,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
     </nav>
 
     <style jsx global>{`
+      .role-preview-control{display:grid;gap:4px;margin-top:8px;text-align:left}.role-preview-control>span{font-size:9px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;opacity:.72}.role-preview-control select{width:100%;min-height:34px;border:1px solid #cbd5df;border-radius:8px;background:#fff;padding:6px 8px;color:#172a43;font:inherit;font-size:10px;font-weight:700}.role-preview-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px;padding:9px 11px;border:1px solid #d8b454;border-radius:10px;background:#fff8df;color:#5c4300}.role-preview-banner>div{display:grid;gap:2px}.role-preview-banner b{font-size:11px}.role-preview-banner span{font-size:9.5px}.role-preview-banner button{min-height:30px;border:1px solid #caa43f;border-radius:8px;background:#fff;color:#6a4d00;padding:5px 9px;font:inherit;font-size:9.5px;font-weight:800;white-space:nowrap}.mobile-preview-control{padding:0 16px 12px}.mobile-preview-control .role-preview-control{margin-top:0}
       .defect-section-tabs{display:inline-flex;align-items:center;gap:4px;padding:4px;margin:0 0 12px;border:1px solid #d9e0e7;border-radius:12px;background:#f4f7fa;box-shadow:0 3px 10px rgba(23,42,67,.05)}
       .defect-section-tabs a{display:flex;align-items:center;justify-content:center;min-height:34px;padding:7px 12px;border-radius:9px;color:#617083;font-size:11px;font-weight:800;text-decoration:none;white-space:nowrap;transition:background .15s ease,color .15s ease,box-shadow .15s ease}
       .defect-section-tabs a:hover{background:#e9eef4;color:#213d5e}
@@ -284,6 +306,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       #site-performance a[href^='/projects/'] div[style*='grid-template-columns']>div{min-width:0;overflow:hidden}
       #site-performance a[href^='/projects/'] div[style*='grid-template-columns'] small{white-space:nowrap;font-size:9.5px}
       @media(max-width:760px){
+        .role-preview-banner{align-items:flex-start}.role-preview-banner>div{min-width:0}.role-preview-banner span{line-height:1.35}
         .defect-section-tabs{display:flex;width:100%;overflow-x:auto;justify-content:flex-start}
         .defect-section-tabs a{flex:0 0 auto}
         .dashboard-module .module-title{grid-template-columns:30px minmax(0,1fr);padding:11px 12px;min-height:58px}
