@@ -50,3 +50,32 @@ export function canonicalFlowState(row:Pick<CanonicalStateRow,'flow_state'>|null
 export function canUseCanonicalDownstream(row:Pick<CanonicalStateRow,'flow_state'>|null|undefined){
   return canonicalFlowState(row)==='active'
 }
+
+
+export function deriveSuspectedCanonicalFallback<T extends DuplicateCandidateInput&{id:string;source_row:number}>(entries:T[]):CanonicalStateRow[]{
+  const groups=new Map<string,T[]>()
+  for(const entry of entries){
+    const signature=duplicateCandidateSignature(entry)
+    if(!signature)continue
+    const list=groups.get(signature)||[]
+    list.push(entry)
+    groups.set(signature,list)
+  }
+  const rows:CanonicalStateRow[]=[]
+  for(const list of groups.values()){
+    if(list.length<2)continue
+    for(const entry of list){
+      rows.push({
+        entry_id:entry.id,
+        source_row:entry.source_row,
+        group_id:null,
+        group_state:'suspected',
+        canonical_entry_id:null,
+        flow_state:'suspected',
+        decision_evidence:null,
+        decided_at:null,
+      })
+    }
+  }
+  return rows
+}
