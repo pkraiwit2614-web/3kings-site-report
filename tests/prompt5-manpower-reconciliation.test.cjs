@@ -51,7 +51,7 @@ test('contractor count has structured authority and cannot be supplied through g
   assert.match(migration,/CONTRACTOR_COUNT_EVIDENCE_REQUIRED/)
   assert.match(migration,/labour_confirm_contractor_count/)
   assert.match(migration,/STALE_CONTRACTOR_COUNT_RELOAD_REQUIRED/)
-  assert.match(page,/p_expected_source_fingerprint:contractorDraft.source_fingerprint/)
+  assert.match(page,/p_expected_source_fingerprint:draft.source_fingerprint/)
   assert.match(page,/Contractor \/ non-payroll/)
   assert.match(page,/ไม่คำนวณจาก Reported - Company Payroll/)
 })
