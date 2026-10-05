@@ -46,5 +46,8 @@ jobs:
       - name: Prompt 5 manpower reconciliation tests
         run: node --test tests/prompt5-manpower-reconciliation.test.cjs
 
+      - name: Prompt 15 attendance evidence tests
+        run: node --test tests/payroll/attendance-evidence.test.cjs
+
       - name: RBAC regression tests
         run: node tests/rbac.test.cjs
