@@ -10,8 +10,8 @@ import { bangkokToday, isBatchWorkDateUsable, latestUsableDate } from '@/lib/wor
 import { confirmedHeadcount, countLabel, headcountSourceStatus, isHeadcountConfirmed, isHeadcountReviewCase, maleFemaleHeadcount } from '@/lib/headcountReconciliation'
 import type { Project } from '@/lib/types'
 
-type SiteEntry={id:string;work_date:string;source_row:number;project_name_raw:string|null;area_raw:string|null;supervisor_raw:string|null;male_count:number|null;female_count:number|null;total_manpower:number|null;work_detail:string|null;status_text:string|null;next_plan:string|null;afternoon_detail:string|null;specific_area:string|null;supervisor_worker_id:string|null;work_date_validation_status?:string|null;work_date_validation_reason?:string|null}
-type Batch={id:string;site_operations_entry_id:string;work_date:string;expected_headcount:number|null;confirmed_headcount:number|null;confirmed_headcount_basis:string|null;confirmed_headcount_evidence:string|null;headcount_source_status:'matched'|'mismatch'|'unknown'|null;headcount_confirmation_status:'confirmed'|'unconfirmed'|null;headcount_confirmed_at:string|null;supervisor_worker_id:string|null;supervisor_raw:string|null;home_team:string|null;verification_status:string;verified_by:string|null;verified_at:string|null;note:string|null}
+type SiteEntry={id:string;work_date:string;source_row:number;project_name_raw:string|null;area_raw:string|null;supervisor_raw:string|null;male_count:number|null;female_count:number|null;total_manpower:number|null;work_detail:string|null;status_text:string|null;next_plan:string|null;afternoon_detail:string|null;specific_area:string|null;source_fingerprint:string;supervisor_worker_id:string|null;work_date_validation_status?:string|null;work_date_validation_reason?:string|null}
+type Batch={id:string;site_operations_entry_id:string;work_date:string;expected_headcount:number|null;confirmed_headcount:number|null;confirmed_headcount_basis:string|null;confirmed_headcount_evidence:string|null;headcount_source_status:'matched'|'mismatch'|'unknown'|null;headcount_confirmation_status:'confirmed'|'unconfirmed'|null;headcount_confirmed_at:string|null;supervisor_worker_id:string|null;supervisor_raw:string|null;home_team:string|null;verification_status:string;verified_by:string|null;verified_at:string|null;verified_source_fingerprint:string|null;note:string|null}
 type Worker={worker_id:string;full_name:string;nickname:string|null;default_team:string|null;status:string|null;display_label:string|null}
 type EntryProject={entry_id:string;project_id:string}
 type Assignment={id:string;batch_id:string;worker_id:string;work_date:string;project_id:string|null;home_team:string|null;working_team:string|null;movement_status:string;allocation_hours:number|null;allocation_share:number|null;work_detail:string|null;notes:string|null;verified_at:string|null}
@@ -107,7 +107,7 @@ export default function LabourVerificationPage(){
       const user=userResult.data.user
       const [e,b,w,p,ep,a,pr,pi,profile]=await Promise.all([
         readAllPages<SiteEntry>({label:'site_operations_entries',keyOf:x=>x.id,fetchPage:(from,to)=>
-          s.from('site_operations_entries').select('id,work_date,source_row,project_name_raw,area_raw,supervisor_raw,male_count,female_count,total_manpower,work_detail,status_text,next_plan,afternoon_detail,specific_area,supervisor_worker_id,work_date_validation_status,work_date_validation_reason',{count:'exact'}).order('work_date',{ascending:false}).order('source_row',{ascending:false}).order('id',{ascending:false}).range(from,to)}),
+          s.from('site_operations_entries').select('id,work_date,source_row,project_name_raw,area_raw,supervisor_raw,male_count,female_count,total_manpower,work_detail,status_text,next_plan,afternoon_detail,specific_area,source_fingerprint,supervisor_worker_id,work_date_validation_status,work_date_validation_reason',{count:'exact'}).order('work_date',{ascending:false}).order('source_row',{ascending:false}).order('id',{ascending:false}).range(from,to)}),
         readAllPages<Batch>({label:'labour_verification_batches',keyOf:x=>x.id,fetchPage:(from,to)=>
           s.from('labour_verification_batches').select('*',{count:'exact'}).order('work_date',{ascending:false}).order('id',{ascending:false}).range(from,to)}),
         readAllPages<Worker>({label:'labour_workers',keyOf:x=>x.worker_id,fetchPage:(from,to)=>
@@ -168,7 +168,13 @@ export default function LabourVerificationPage(){
 
   const labourStatusFor=(batch:Batch)=>{
     const entry=entryById.get(batch.site_operations_entry_id)
-    return entry&&isHeadcountReviewCase(batch,entry)?'needs_review':batch.verification_status
+    if(!entry)return batch.verification_status
+    if(isHeadcountReviewCase(batch,entry))return 'needs_review'
+    if(batch.verification_status==='verified'&&(
+      !batch.verified_source_fingerprint||
+      batch.verified_source_fingerprint!==entry.source_fingerprint
+    ))return 'needs_review'
+    return batch.verification_status
   }
   const visibleBatches=useMemo(()=>{
     const needle=q.trim().toLowerCase()
@@ -305,7 +311,7 @@ export default function LabourVerificationPage(){
   const payrollStatusFor=(batch:Batch)=>{
     const record=payrollRecordByBatch.get(batch.id)
     if(!record)return 'pending'
-    if(batch.verification_status!=='verified'&&record.status!=='draft')return 'needs_review'
+    if(labourStatusFor(batch)!=='verified'&&record.status!=='draft')return 'needs_review'
     if(record.source_labour_verified_at&&batch.verified_at&&new Date(record.source_labour_verified_at).getTime()!==new Date(batch.verified_at).getTime())return 'needs_review'
     return record.status
   }
@@ -362,6 +368,7 @@ export default function LabourVerificationPage(){
   }
   const savePayrollWeb=async(batch:Batch,status:'draft'|'timecard_checked')=>{
     if(!canPayroll||saving['payroll-'+batch.id]||!ensureBatchWorkDateUsable(batch))return
+    if(labourStatusFor(batch)!=='verified'){setMessage('ข้อมูลต้นทางมีการเปลี่ยนหลังยืนยันทีม • ต้องตรวจและยืนยันทีมรายวันใหม่ก่อนตรวจ Payroll');return}
     const rows=payrollDraftFor(batch)
     if(!rows.length){setMessage('ยังไม่มีรายชื่อคนงานสำหรับตรวจบัตรตอก กรุณายืนยันทีมรายวันก่อน');return}
     if(status==='timecard_checked'&&rows.some(x=>!x.timecard_match)){setMessage('ยังมีคนงานที่ไม่ได้ติ๊ก “ตรงกับบัตรตอก”');return}
@@ -569,11 +576,11 @@ export default function LabourVerificationPage(){
 
               {payrollAuthority===null&&<div className="payroll-warning">Headcount ยังไม่มีผู้ยืนยัน • ห้ามใช้เป็น Worker Payroll downstream จนกว่าจะ Confirmed</div>}
               {batch.confirmed_headcount_basis==='contractor_only'&&<div className="payroll-warning">รายการนี้ยืนยันว่าเป็นผู้รับเหมาเท่านั้น • ไม่รวมใน Worker Payroll</div>}
-              {batch.verification_status!=='verified'&&<div className="payroll-warning">ทีมรายวันนี้ยังไม่ผ่านการยืนยันรายชื่อ • ต้องยืนยันทีมก่อนตรวจบัตรตอก และยังยืนยันยอดเงินไม่ได้จนกว่ากติกาบัญชีจะพร้อม</div>}
+              {labourStatusFor(batch)!=='verified'&&<div className="payroll-warning">ทีมรายวันนี้ยังไม่ผ่านการยืนยันรายชื่อ • ต้องยืนยันทีมก่อนตรวจบัตรตอก และยังยืนยันยอดเงินไม่ได้จนกว่ากติกาบัญชีจะพร้อม</div>}
               {effectiveStatus==='needs_review'&&<div className="payroll-warning">ข้อมูลทีมรายวันมีการเปลี่ยนหลังการตรวจ Payroll • ต้องเปิดตรวจบัตรตอกซ้ำก่อนใช้ยอด</div>}
 
               <div className="payroll-actions">
-                <button type="button" className="button primary" disabled={!canPayroll||batch.verification_status!=='verified'||payrollAuthority===null||batch.confirmed_headcount_basis==='contractor_only'||rows.length!==payrollAuthority} onClick={()=>startPayrollReview(batch)}>{draft.length?'โหลดข้อมูลจากระบบใหม่':record?.verification_method==='web'?'เปิดรายการเดิม':'เริ่มตรวจบัตรตอก'}</button>
+                <button type="button" className="button primary" disabled={!canPayroll||labourStatusFor(batch)!=='verified'||payrollAuthority===null||batch.confirmed_headcount_basis==='contractor_only'||rows.length!==payrollAuthority} onClick={()=>startPayrollReview(batch)}>{draft.length?'โหลดข้อมูลจากระบบใหม่':record?.verification_method==='web'?'เปิดรายการเดิม':'เริ่มตรวจบัตรตอก'}</button>
                 {draft.length>0&&<><button type="button" className="button" onClick={()=>markAllTimecards(batch,true)}>✓ ตรงทุกคน</button><button type="button" className="button" onClick={()=>clearAllOt(batch)}>OT = 0 ทั้งทีม</button></>}
                 {record?.timecard_checked_at&&<span className="payroll-audit">ตรวจบัตรล่าสุด {new Date(record.timecard_checked_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}</span>}
               </div>
