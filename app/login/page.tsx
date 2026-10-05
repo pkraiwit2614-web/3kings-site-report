@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getSupabase } from '@/lib/supabase'
 import BrandLogo from '@/components/BrandLogo'
+import { logActivity } from '@/lib/activityLog'
 
 const INTERNAL_LOGIN_DOMAIN = '3kings.invalid'
 
@@ -56,6 +57,13 @@ export default function LoginPage() {
         await s.auth.signOut()
         throw new Error('inactive_user')
       }
+      await logActivity({
+        userId:data.user.id,
+        eventType:'login',
+        path:'/login',
+        action:'password_login',
+        metadata:{landing:landingForRole(String(profile.role||'viewer'))},
+      })
       router.replace(landingForRole(String(profile.role||'viewer')))
     } catch {
       setMessage('รหัสผู้ใช้หรือรหัสผ่านไม่ถูกต้อง หรือบัญชีถูกปิดใช้งาน กรุณาตรวจสอบแล้วลองอีกครั้ง หรือติดต่อผู้ดูแลระบบ')

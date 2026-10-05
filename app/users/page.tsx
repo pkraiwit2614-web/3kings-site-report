@@ -5,6 +5,7 @@ import AppShell from '@/components/AppShell'
 import OwnerOnlyGate from '@/components/OwnerOnlyGate'
 import PageHeader from '@/components/PageHeader'
 import StatusBadge from '@/components/StatusBadge'
+import ActivityLogPanel from '@/components/ActivityLogPanel'
 import { getSupabase } from '@/lib/supabase'
 import { OWNER_USER_ID } from '@/lib/accessControl'
 
@@ -78,6 +79,7 @@ function UsersContent() {
   const [fullName, setFullName] = useState('')
   const [role, setRole] = useState('viewer')
   const [password, setPassword] = useState(makePassword())
+  const [activeTab, setActiveTab] = useState<'users'|'activity'>('users')
 
   const load = async () => {
     setLoading(true)
@@ -134,8 +136,14 @@ function UsersContent() {
   }
 
   return <>
-    <PageHeader title="User & Access" subtitle="สร้างบัญชีให้ทีมงาน • กำหนดสิทธิ์ • Reset Password • ปิดบัญชี"/>
+    <PageHeader title="User & Access" subtitle="จัดการบัญชีและสิทธิ์ • ตรวจสอบ Activity การใช้งาน"/>
 
+    <nav className="user-access-tabs" aria-label="User & Access navigation">
+      <button type="button" className={activeTab==='users'?'active':''} onClick={()=>setActiveTab('users')}>ผู้ใช้งานและสิทธิ์</button>
+      <button type="button" className={activeTab==='activity'?'active':''} onClick={()=>setActiveTab('activity')}>Activity Log</button>
+    </nav>
+
+    {activeTab==='users' ? <>
     <div className="panel" style={{marginBottom:14}}>
       <div className="row between" style={{gap:12,alignItems:'flex-start',flexWrap:'wrap'}}>
         <div>
@@ -175,6 +183,15 @@ function UsersContent() {
       <tbody>{rows.map(row => <UserRow key={row.user_id} row={row} onChanged={load} onCredential={(c)=>setCredentials([c])} onMessage={setMessage}/>)}</tbody>
     </table></div>}
     <p className="muted small" style={{lineHeight:1.65}}>บัญชีที่สร้างจากหน้านี้เข้าใช้งานด้วย Username + Password ได้ทันที ไม่มีขั้นตอนยืนยันอีเมล • สิทธิ์ถูกบังคับทั้ง Route และฐานข้อมูล ไม่ใช่เพียงซ่อนเมนู</p>
+    </> : <ActivityLogPanel profiles={rows}/>}
+    <style jsx>{`
+      .user-access-tabs{display:inline-flex;align-items:center;gap:4px;padding:4px;margin:0 0 14px;border:1px solid #d9e0e7;border-radius:12px;background:#f4f7fa;box-shadow:0 3px 10px rgba(23,42,67,.05)}
+      .user-access-tabs button{display:flex;align-items:center;justify-content:center;min-height:34px;padding:7px 12px;border:0;border-radius:9px;background:transparent;color:#617083;font:inherit;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap}
+      .user-access-tabs button:hover{background:#e9eef4;color:#213d5e}
+      .user-access-tabs button.active{background:#172a43;color:#fff;box-shadow:0 3px 8px rgba(23,42,67,.18)}
+      @media(max-width:760px){.user-access-tabs{display:flex;width:100%}.user-access-tabs button{flex:1}}
+      @media print{.user-access-tabs{display:none!important}}
+    `}</style>
   </>
 }
 
