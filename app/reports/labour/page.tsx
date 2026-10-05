@@ -10,7 +10,7 @@ import { bangkokToday, isBatchWorkDateUsable, latestUsableDate } from '@/lib/wor
 import { confirmedHeadcount, countLabel, headcountSourceStatus, isHeadcountConfirmed, isHeadcountReviewCase, maleFemaleHeadcount } from '@/lib/headcountReconciliation'
 import type { Project } from '@/lib/types'
 import {canManageLabour,canViewPayroll,resolveAccessRole,type AccessRole} from '@/lib/accessControl'
-import { canUseCanonicalDownstream, canonicalFlowState, type CanonicalStateRow } from '@/lib/siteOperationsCanonical'
+import { canUseCanonicalDownstream, canonicalFlowState, deriveSuspectedCanonicalFallback, type CanonicalStateRow } from '@/lib/siteOperationsCanonical'
 
 type SiteEntry={id:string;work_date:string;source_row:number;project_name_raw:string|null;area_raw:string|null;supervisor_raw:string|null;male_count:number|null;female_count:number|null;total_manpower:number|null;work_detail:string|null;status_text:string|null;next_plan:string|null;afternoon_detail:string|null;specific_area:string|null;source_fingerprint:string;supervisor_worker_id:string|null;work_date_validation_status?:string|null;work_date_validation_reason?:string|null}
 type Batch={id:string;site_operations_entry_id:string;work_date:string;expected_headcount:number|null;confirmed_headcount:number|null;confirmed_headcount_basis:string|null;confirmed_headcount_evidence:string|null;headcount_source_status:'matched'|'mismatch'|'unknown'|null;headcount_confirmation_status:'confirmed'|'unconfirmed'|null;headcount_confirmed_at:string|null;supervisor_worker_id:string|null;supervisor_raw:string|null;home_team:string|null;verification_status:string;verified_by:string|null;verified_at:string|null;verified_source_fingerprint:string|null;note:string|null;concurrency_revision:number;contractor_person_count:number|null;contractor_count_basis:string|null;contractor_count_evidence:string|null;contractor_count_confirmed_at:string|null}
@@ -149,7 +149,7 @@ export default function LabourVerificationPage(){
         const canonical=await readAllPages<CanonicalStateRow>({label:'v_site_operations_canonical_state',keyOf:x=>x.entry_id,fetchPage:(from,to)=>
           s.from('v_site_operations_canonical_state').select('entry_id,source_row,group_id,group_state,canonical_entry_id,flow_state,decision_evidence,decided_at',{count:'exact'}).order('source_row',{ascending:false}).range(from,to)})
         nextCanonical=canonical.data
-      }catch{/* Preview before migration: preserve existing behaviour until DB contract exists. */}
+      }catch{nextCanonical=deriveSuspectedCanonicalFallback(e.data)}
       if(!alive)return
       const nextEntries=e.data
       setEntries(nextEntries);setBatches(b.data);setWorkers(w.data)
