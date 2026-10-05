@@ -31,7 +31,6 @@ const viewerNav: NavItem[] = [
   ['/calendar', 'ปฏิทินงาน'],
   ['/site-photos', 'รูปภาพหน้างาน'],
   ['/defect-flow', 'Defect Report'],
-  ['/reports', 'Site Operations'],
   ['/reports/labour', 'Labour'],
   ['/materials', 'วัสดุ เครื่องมือและผู้รับเหมา'],
   ['/procurement', 'การจัดซื้อ/จัดจ้าง'],
@@ -246,7 +245,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         <Link href="/defects" className={path==='/defects'?'active':''}>Defect Report</Link>
       </nav>}
       {isSiteOperationsSection&&<nav className="defect-section-tabs" aria-label="Site Operations navigation">
-        <Link href="/reports" className={path==='/reports'?'active':''}>Site Operations</Link>
+        {presentationRole!=='viewer'&&<Link href="/reports" className={path==='/reports'?'active':''}>Site Operations</Link>}
         <Link href="/reports/labour" className={path==='/reports/labour'?'active':''}>{canViewPayroll(presentationRole)?'Payroll Verification Record':'Labour'}</Link>
       </nav>}
       {children}

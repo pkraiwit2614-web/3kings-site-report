@@ -30,6 +30,7 @@ export function canAccessPath(role:AccessRole,path:string){
     return value==='/defect-flow'||value==='/defects'||value.startsWith('/defects/')
   }
   if(OWNER_ONLY_PREFIXES.some(prefix=>value===prefix||value.startsWith(prefix+'/')))return false
+  if(role==='viewer'&&value.startsWith('/reports')&&value!=='/reports/labour'&&!value.startsWith('/reports/labour/'))return false
   if(role==='viewer'&&REPORT_WRITE_PATHS.some(rx=>rx.test(value)))return false
   return role==='admin'||role==='viewer'
 }
