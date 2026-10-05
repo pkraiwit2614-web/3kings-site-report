@@ -209,8 +209,11 @@ export default function MaterialsPage(){
         </div>
       </div>
       <div className="panel table-wrap" style={{maxHeight:560,overflow:'auto'}}>
-        <table style={{minWidth:1180}}>
-          <thead><tr><th>Plot</th><th>หมวด</th><th>วัสดุ / งาน</th><th>ยี่ห้อ / รุ่น / สเปก</th><th>สถานะ</th><th>รายละเอียดล่าสุด</th><th>ผู้ติดต่อ</th></tr></thead>
+        <table className="materials-print-table materials-status-print-table" style={{minWidth:1180}}>
+          <thead>
+            <tr className="materials-print-repeat-title"><th colSpan={7}>3 Kings Construction — วัสดุ เครื่องมือและผู้รับเหมา · Materials Status</th></tr>
+            <tr><th>Plot</th><th>หมวด</th><th>วัสดุ / งาน</th><th>ยี่ห้อ / รุ่น / สเปก</th><th>สถานะ</th><th>รายละเอียดล่าสุด</th><th>ผู้ติดต่อ</th></tr>
+          </thead>
           <tbody>{filtered.map(x=>{
             const detail=[x.status_detail,x.notes].filter(Boolean).filter((v:string,i:number,a:string[])=>a.indexOf(v)===i)
             return <tr key={x.id}>
@@ -237,8 +240,11 @@ export default function MaterialsPage(){
         <b className="small">พบ {filteredProcurement.length} รายการ</b>
       </div>
       <div className="panel table-wrap" style={{maxHeight:430,overflow:'auto'}}>
-        <table className="procurement-related-table" style={{minWidth:1500}}>
-          <thead><tr><th>Plot</th><th>PO / PR</th><th>ผู้ขาย / ผู้รับเหมา</th><th>รายการ</th><th>สถานะ PO / ชำระ</th><th>ขั้นตอนปัจจุบัน</th><th>กำหนดส่ง / เข้าหน้างาน</th><th>รายละเอียด / สิ่งที่ต้องตาม</th><th>อัปเดต</th></tr></thead>
+        <table className="procurement-related-table materials-print-table procurement-print-table" style={{minWidth:1500}}>
+          <thead>
+            <tr className="materials-print-repeat-title"><th colSpan={9}>3 Kings Construction — วัสดุ เครื่องมือและผู้รับเหมา · PO / จัดซื้อจัดจ้างที่เกี่ยวข้อง</th></tr>
+            <tr><th>Plot</th><th>PO / PR</th><th>ผู้ขาย / ผู้รับเหมา</th><th>รายการ</th><th>สถานะ PO / ชำระ</th><th>ขั้นตอนปัจจุบัน</th><th>กำหนดส่ง / เข้าหน้างาน</th><th>รายละเอียด / สิ่งที่ต้องตาม</th><th>อัปเดต</th></tr>
+          </thead>
           <tbody>{filteredProcurement.map(x=><tr key={x.id}>
             <td><b>{procurementPlotText(x)}</b></td>
             <td><b>{[x.po_no,x.pr_no].filter(Boolean).join(' / ')||'-'}</b></td>
@@ -297,7 +303,7 @@ export default function MaterialsPage(){
           <span className="small muted" style={{marginLeft:'auto',whiteSpace:'nowrap'}}>ข้อมูลทะเบียนจาก Drive Sync</span>
         </div>
       </div>
-      <div className="panel table-wrap" style={{maxHeight:600,overflow:'auto'}}><table><thead><tr><th>รหัส</th><th>หมวด</th><th>เครื่องมือ / เครื่องจักร</th><th>ยี่ห้อ / รุ่น</th><th>จำนวน</th><th>สถานะ</th><th>สถานที่ล่าสุด</th><th>ผู้รับผิดชอบ</th><th>วันที่อัปเดต</th><th>หมายเหตุ</th></tr></thead><tbody>{filteredTools.map(x=><tr key={x.id}><td><b>{x.item_code||'-'}</b></td><td>{x.category||'-'}</td><td><b>{x.item_name||'-'}</b></td><td>{[x.brand,x.model_spec].filter(Boolean).join(' / ')||'-'}</td><td>{x.quantity??'-'} {x.unit||''}</td><td><StatusBadge value={x.status}/></td><td>{x.location||'-'}</td><td>{x.responsible_person||'-'}</td><td>{dateTH(x.source_updated_at)}</td><td>{x.notes||'-'}</td></tr>)}</tbody></table></div>
+      <div className="panel table-wrap" style={{maxHeight:600,overflow:'auto'}}><table className="materials-print-table tools-print-table"><thead><tr className="materials-print-repeat-title"><th colSpan={10}>3 Kings Construction — วัสดุ เครื่องมือและผู้รับเหมา · Tool &amp; Machine</th></tr><tr><th>รหัส</th><th>หมวด</th><th>เครื่องมือ / เครื่องจักร</th><th>ยี่ห้อ / รุ่น</th><th>จำนวน</th><th>สถานะ</th><th>สถานที่ล่าสุด</th><th>ผู้รับผิดชอบ</th><th>วันที่อัปเดต</th><th>หมายเหตุ</th></tr></thead><tbody>{filteredTools.map(x=><tr key={x.id}><td><b>{x.item_code||'-'}</b></td><td>{x.category||'-'}</td><td><b>{x.item_name||'-'}</b></td><td>{[x.brand,x.model_spec].filter(Boolean).join(' / ')||'-'}</td><td>{x.quantity??'-'} {x.unit||''}</td><td><StatusBadge value={x.status}/></td><td>{x.location||'-'}</td><td>{x.responsible_person||'-'}</td><td>{dateTH(x.source_updated_at)}</td><td>{x.notes||'-'}</td></tr>)}</tbody></table></div>
     </section>
   </AppShell>
 }

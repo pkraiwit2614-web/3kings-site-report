@@ -1,6 +1,7 @@
 .report-print-header{display:none}
 .page-header-print-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
 .report-print-button{white-space:nowrap}
+.materials-print-repeat-title{display:none}
 
 @media print{
   @page{size:A4 landscape;margin:10mm}
@@ -73,6 +74,72 @@
   body.report-print-mode .schedule-summary-card{box-shadow:none!important;transform:none!important}
   body.report-print-mode .schedule-portfolio-row{break-inside:avoid;page-break-inside:avoid;box-shadow:none!important;transform:none!important}
   body.report-print-mode .schedule-table-panel{padding:0!important;border:0!important}
+
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] section[aria-labelledby="materials-status-title"] .panel,
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] section[aria-labelledby="material-procurement-title"] .panel,
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] section[aria-labelledby="tool-machine-title"] .panel{
+    break-inside:auto!important;
+    page-break-inside:auto!important;
+  }
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] .materials-print-table{
+    width:100%!important;
+    min-width:0!important;
+    table-layout:fixed!important;
+    border-collapse:collapse!important;
+  }
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] .materials-print-table thead{
+    display:table-header-group!important;
+  }
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] .materials-print-table tr{
+    break-inside:avoid!important;
+    page-break-inside:avoid!important;
+  }
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] .materials-print-repeat-title{
+    display:table-row!important;
+  }
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] .materials-print-repeat-title th{
+    background:#17243a!important;
+    color:#fff!important;
+    border-bottom:2px solid #c99a3b!important;
+    padding:6px 5px!important;
+    font-size:8.2px!important;
+    font-weight:800!important;
+    line-height:1.3!important;
+    text-align:left!important;
+  }
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] section>div:first-child{
+    break-after:avoid!important;
+    page-break-after:avoid!important;
+  }
+
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] .materials-status-print-table thead tr:not(.materials-print-repeat-title) th:nth-child(1){width:7%}
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] .materials-status-print-table thead tr:not(.materials-print-repeat-title) th:nth-child(2){width:12%}
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] .materials-status-print-table thead tr:not(.materials-print-repeat-title) th:nth-child(3){width:18%}
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] .materials-status-print-table thead tr:not(.materials-print-repeat-title) th:nth-child(4){width:15%}
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] .materials-status-print-table thead tr:not(.materials-print-repeat-title) th:nth-child(5){width:11%}
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] .materials-status-print-table thead tr:not(.materials-print-repeat-title) th:nth-child(6){width:27%}
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] .materials-status-print-table thead tr:not(.materials-print-repeat-title) th:nth-child(7){width:10%}
+
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] .procurement-print-table thead tr:not(.materials-print-repeat-title) th:nth-child(1){width:8%}
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] .procurement-print-table thead tr:not(.materials-print-repeat-title) th:nth-child(2){width:11%}
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] .procurement-print-table thead tr:not(.materials-print-repeat-title) th:nth-child(3){width:12%}
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] .procurement-print-table thead tr:not(.materials-print-repeat-title) th:nth-child(4){width:15%}
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] .procurement-print-table thead tr:not(.materials-print-repeat-title) th:nth-child(5){width:12%}
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] .procurement-print-table thead tr:not(.materials-print-repeat-title) th:nth-child(6){width:12%}
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] .procurement-print-table thead tr:not(.materials-print-repeat-title) th:nth-child(7){width:12%}
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] .procurement-print-table thead tr:not(.materials-print-repeat-title) th:nth-child(8){width:13%}
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] .procurement-print-table thead tr:not(.materials-print-repeat-title) th:nth-child(9){width:5%}
+
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] .tools-print-table thead tr:not(.materials-print-repeat-title) th:nth-child(1){width:8%}
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] .tools-print-table thead tr:not(.materials-print-repeat-title) th:nth-child(2){width:8%}
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] .tools-print-table thead tr:not(.materials-print-repeat-title) th:nth-child(3){width:15%}
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] .tools-print-table thead tr:not(.materials-print-repeat-title) th:nth-child(4){width:11%}
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] .tools-print-table thead tr:not(.materials-print-repeat-title) th:nth-child(5){width:7%}
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] .tools-print-table thead tr:not(.materials-print-repeat-title) th:nth-child(6){width:9%}
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] .tools-print-table thead tr:not(.materials-print-repeat-title) th:nth-child(7){width:10%}
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] .tools-print-table thead tr:not(.materials-print-repeat-title) th:nth-child(8){width:10%}
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] .tools-print-table thead tr:not(.materials-print-repeat-title) th:nth-child(9){width:10%}
+  body.report-print-mode[data-print-report="วัสดุ เครื่องมือและผู้รับเหมา"] .tools-print-table thead tr:not(.materials-print-repeat-title) th:nth-child(10){width:12%}
 
   body.report-print-mode section[aria-labelledby="materials-status-title"],
   body.report-print-mode section[aria-labelledby="tool-machine-title"]{break-before:auto}
