@@ -34,5 +34,8 @@ jobs:
       - name: Prompt 12 headcount reconciliation tests
         run: node tests/headcount-reconciliation.test.cjs
 
+      - name: Prompt 3 source revision invalidation tests
+        run: node --test tests/payroll/source-revision-invalidation.test.cjs
+
       - name: RBAC regression tests
         run: node tests/rbac.test.cjs
