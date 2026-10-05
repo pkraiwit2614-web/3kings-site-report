@@ -22,7 +22,7 @@ function estimatedLines(text, widthMm, fontPt = 9) {
 function canonicalizeLabourRows(rows) {
   const pages = new Map()
   for (const row of rows || []) {
-    if (!row || row.entity_type !== 'worker' || !row.work_date || !row.worker_key) continue
+    if (!row || row.entity_type !== 'worker' || row.payroll_eligible === false || !row.work_date || !row.worker_key) continue
     let page = pages.get(row.work_date)
     if (!page) {
       page = {work_date: row.work_date, supervisors: new Set(), projects: new Set(), workers: new Map(), details: new Set(), source_statuses: new Set()}
