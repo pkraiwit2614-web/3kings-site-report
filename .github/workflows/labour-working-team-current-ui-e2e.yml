@@ -109,6 +109,13 @@ jobs:
             const uid=appRole==='viewer'?viewerId:engineerId
             const email=appRole==='viewer'?'viewer-ui-e2e@example.invalid':'engineer-ui-e2e@example.invalid'
             await context.addInitScript(({storageKey,value})=>localStorage.setItem(storageKey,value),{storageKey,value:JSON.stringify(session(uid,email))})
+            await context.route('**/api/access-control?**', async route => {
+              return route.fulfill({
+                status:200,
+                contentType:'application/json',
+                body:JSON.stringify({allowed:true,role:appRole==='viewer'?'viewer':'admin',redirect:null})
+              })
+            })
             await context.route(supabaseOrigin+'/**', async route => {
               const req=route.request()
               const u=new URL(req.url())
@@ -133,6 +140,8 @@ jobs:
               if(path==='/rest/v1/labour_daily_assignments') return json(route,assignments)
               if(path==='/rest/v1/payroll_verification_records') return json(route,[])
               if(path==='/rest/v1/payroll_verification_items') return json(route,[])
+              if(path==='/rest/v1/drive_sync_runs') return json(route,[])
+              if(path==='/rest/v1/v_schedule_tasks') return json(route,[])
 
               if(path==='/rest/v1/rpc/labour_verify_batch'){
                 const body=req.postDataJSON()
@@ -195,7 +204,7 @@ jobs:
             const page=await ctx.newPage()
             const browserErrors=[]
             page.on('console',m=>{if(m.type()==='error') browserErrors.push(m.text())})
-            await page.goto(base+'/reports/labour?date=2026-10-04',{waitUntil:'networkidle'})
+            await page.goto(base+'/reports/labour?date=2026-10-04',{waitUntil:'domcontentloaded'})
             await page.getByText('Labour & Payroll Verification').waitFor({state:'visible',timeout:15000})
             await page.getByText('กำลังโหลดข้อมูล…').waitFor({state:'detached',timeout:15000}).catch(()=>{})
             console.log('BODY_BEFORE_CARD', (await page.locator('body').innerText()).slice(0,12000))
@@ -245,7 +254,7 @@ jobs:
               assert(initial==='same_team','returned must not be inferred automatically')
               await c.locator('label').filter({hasText:'การย้ายทีม'}).locator('select').selectOption('returned')
               await save(c)
-              await page.reload({waitUntil:'networkidle'})
+              await page.reload({waitUntil:'domcontentloaded'})
               const reloaded=await card(page,'Returned')
               await reloaded.getByRole('button',{name:/โหลดชุดที่ยืนยันไว้/}).click()
               const persisted=await field(reloaded,'การย้ายทีม')
@@ -268,7 +277,7 @@ jobs:
             const viewerCtx=await browser.newContext({viewport:{width:1280,height:900}})
             await installMocks(viewerCtx,'viewer')
             const viewer=await viewerCtx.newPage()
-            await viewer.goto(base+'/reports/labour?date=2026-10-04',{waitUntil:'networkidle'})
+            await viewer.goto(base+'/reports/labour?date=2026-10-04',{waitUntil:'domcontentloaded'})
             await viewer.getByText('บัญชีนี้ดูข้อมูลได้ แต่การยืนยัน/แก้ทีมคนงานสงวนไว้สำหรับ Manager, Engineer หรือ Payroll').waitFor({state:'visible',timeout:15000})
             const addButtons=viewer.getByRole('button',{name:'เพิ่มคน'})
             const count=await addButtons.count()
