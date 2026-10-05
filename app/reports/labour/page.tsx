@@ -321,19 +321,24 @@ export default function LabourVerificationPage(){
     if(status==='timecard_checked'&&rows.some(x=>!x.timecard_match)){setMessage('ยังมีคนงานที่ไม่ได้ติ๊ก “ตรงกับบัตรตอก”');return}
     setSaving(prev=>({...prev,['payroll-'+batch.id]:true}));setMessage('')
     try{
+      if(rows.some(x=>![x.work_units,x.ot_hours].every(v=>v.trim()!==''&&Number.isFinite(Number(v))&&Number(v)>=0&&/^\d+(?:\.\d{1,2})?$/.test(v))||Number(x.work_units)>1||Number(x.ot_hours)>24)){
+        throw new Error('กรุณาระบุวันทำงาน 0–1 และ OT 0–24 เป็นตัวเลขทศนิยมไม่เกิน 2 ตำแหน่ง')
+      }
       const payload=rows.map(x=>({
         labour_assignment_id:x.labour_assignment_id,worker_id:x.worker_id,attendance_status:x.attendance_status,
         clock_in:x.clock_in||null,clock_out:x.clock_out||null,
-        work_units:Number(x.work_units||0),ot_hours:Number(x.ot_hours||0),timecard_match:x.timecard_match,
-        regular_rate:x.regular_rate,ot_rate:x.ot_rate,regular_pay:x.regular_pay,ot_pay:x.ot_pay,
-        adjustment:Number(x.adjustment||0),total_pay:x.total_pay,
-        calculation_status:x.calculation_status||'rate_pending',note:x.note||null
+        work_units:Number(x.work_units),ot_hours:Number(x.ot_hours),timecard_match:x.timecard_match,
+        adjustment:x.adjustment,note:x.note||null
       }))
       const {error}=await getSupabase().rpc('payroll_save_verification',{
         p_labour_batch_id:batch.id,p_method:'web',p_status:status,p_note:payrollNotes[batch.id]||'',
         p_external_reference:null,p_items:payload
       })
-      if(error)throw error
+      if(error){
+        if(/PAYROLL_RULES_NOT_APPROVED|CLIENT_PAYROLL|CLIENT_CALCULATION/.test(error.message))throw new Error('ยังยืนยันยอดเงินไม่ได้: รออัตรา สูตร และกติกาปัดเศษที่บัญชีอนุมัติ')
+        if(/INVALID_PAYROLL/.test(error.message))throw new Error('ข้อมูลจำนวนวัน OT หรือรายการปรับปรุงไม่ถูกต้อง กรุณาตรวจตัวเลขและทศนิยม')
+        throw error
+      }
       setMessage(status==='timecard_checked'
         ?'ตรวจบัตรตอกครบแล้ว • บันทึก Payroll Verification Record • ยอดเงินรอ Rate Master'
         :'บันทึกฉบับร่าง Payroll Verification Record แล้ว')
@@ -341,22 +346,7 @@ export default function LabourVerificationPage(){
     }catch(err:any){setMessage(String(err?.message||'บันทึก Payroll Verification ไม่สำเร็จ'))}
     finally{setSaving(prev=>({...prev,['payroll-'+batch.id]:false}))}
   }
-  const saveLegacyPayroll=async(batch:Batch)=>{
-    if(!canPayroll||saving['payroll-'+batch.id]||!ensureBatchWorkDateUsable(batch))return
-    const ref=(externalRefs[batch.id]||payrollRecordByBatch.get(batch.id)?.external_reference||'').trim()
-    if(!ref){setMessage('กรุณาระบุชื่อไฟล์ Excel / เลขอ้างอิงที่ใช้ตรวจค่าแรง');return}
-    setSaving(prev=>({...prev,['payroll-'+batch.id]:true}));setMessage('')
-    try{
-      const {error}=await getSupabase().rpc('payroll_save_verification',{
-        p_labour_batch_id:batch.id,p_method:'legacy_excel',p_status:'external_verified',
-        p_note:payrollNotes[batch.id]||'',p_external_reference:ref,p_items:[]
-      })
-      if(error)throw error
-      setMessage('บันทึก Verified Payroll จาก Excel เดิมแล้ว • เก็บ Reference ไว้ตรวจสอบย้อนหลัง')
-      setRefreshTick(v=>v+1)
-    }catch(err:any){setMessage(String(err?.message||'บันทึกการยืนยันจาก Excel ไม่สำเร็จ'))}
-    finally{setSaving(prev=>({...prev,['payroll-'+batch.id]:false}))}
-  }
+
 
   return <AppShell>
     {readSignals.some(x=>x.truncated)&&<div className="panel" role="alert" style={{marginBottom:10}}>โหลดข้อมูลไม่ครบ • {readSignals.filter(x=>x.truncated).map(x=>x.label+' '+x.loaded+'/'+x.count).join(' • ')}</div>}
@@ -510,7 +500,7 @@ export default function LabourVerificationPage(){
                 <div><span>วิธียืนยัน Payroll</span><b>{record?.verification_method==='legacy_excel'?'Legacy Excel':'Web Verification'}</b><small>{record?.external_reference||'Audit trail ในระบบ'}</small></div>
               </div>
 
-              {batch.verification_status!=='verified'&&<div className="payroll-warning">ทีมรายวันนี้ยังไม่ผ่านการยืนยันรายชื่อ • ใช้ Excel เดิมได้ แต่การตรวจบัตรตอกผ่าน Web ต้องยืนยันทีมก่อน</div>}
+              {batch.verification_status!=='verified'&&<div className="payroll-warning">ทีมรายวันนี้ยังไม่ผ่านการยืนยันรายชื่อ • ต้องยืนยันทีมก่อนตรวจบัตรตอก และยังยืนยันยอดเงินไม่ได้จนกว่ากติกาบัญชีจะพร้อม</div>}
               {effectiveStatus==='needs_review'&&<div className="payroll-warning">ข้อมูลทีมรายวันมีการเปลี่ยนหลังการตรวจ Payroll • ต้องเปิดตรวจบัตรตอกซ้ำก่อนใช้ยอด</div>}
 
               <div className="payroll-actions">
@@ -543,8 +533,8 @@ export default function LabourVerificationPage(){
               </div>}
 
               <details className="legacy-payroll">
-                <summary>ยังใช้ Excel แบบเดิมอยู่? บันทึก Verified Payroll จาก Excel ได้</summary>
-                <div><label>ชื่อไฟล์ / Reference<input value={externalRefs[batch.id]??record?.external_reference??''} onChange={e=>setExternalRefs(prev=>({...prev,[batch.id]:e.target.value}))} placeholder="เช่น Labour Cost Week 40.xlsx"/></label><label>หมายเหตุ<input value={payrollNotes[batch.id]??record?.note??''} onChange={e=>setPayrollNotes(prev=>({...prev,[batch.id]:e.target.value}))} placeholder="ถ้ามี"/></label><button type="button" className="button" disabled={payrollSaving} onClick={()=>saveLegacyPayroll(batch)}>ยืนยันจาก Excel เดิม</button></div>
+                <summary>เอกสาร Excel ประกอบการตรวจ — ยังยืนยันยอดเงินไม่ได้</summary>
+                <div><label>ชื่อไฟล์ / Reference<input disabled value={externalRefs[batch.id]??record?.external_reference??''} onChange={e=>setExternalRefs(prev=>({...prev,[batch.id]:e.target.value}))} placeholder="เช่น Labour Cost Week 40.xlsx"/></label><label>หมายเหตุ<input value={payrollNotes[batch.id]??record?.note??''} onChange={e=>setPayrollNotes(prev=>({...prev,[batch.id]:e.target.value}))} placeholder="ถ้ามี"/></label><button type="button" className="button" disabled title="รออัตรา สูตร และกติกาปัดเศษที่บัญชียืนยัน">รอกติกาบัญชียืนยัน</button></div>
               </details>
 
               {record?.verified_at&&<div className="labour-verified-line">Verified ล่าสุด {new Date(record.verified_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})} • {payrollStatusLabel(effectiveStatus)}</div>}
