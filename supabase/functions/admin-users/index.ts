@@ -8,7 +8,7 @@ const corsHeaders = {
 
 const OWNER_ID = 'bc6ee244-3472-422f-bbf9-d551987ee9a3'
 const INTERNAL_DOMAIN = '3kings.invalid'
-const VALID_ROLES = new Set(['manager', 'engineer', 'foreman', 'viewer'])
+const VALID_ROLES = new Set(['manager', 'admin', 'viewer', 'defect_contributor', 'engineer', 'foreman', 'payroll'])
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -165,7 +165,7 @@ Deno.serve(async (req: Request) => {
       if (authMetaError) return json({ ok: false, error: authMetaError.message }, 400)
     }
 
-    const { error: profileError } = await manager.from('profiles').update({
+    const { error: profileError } = await admin.from('profiles').update({
       username: username || null,
       full_name: fullName || username || null,
       email: username ? internalEmail(username) : null,
