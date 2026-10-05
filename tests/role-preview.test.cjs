@@ -1,0 +1,56 @@
+const fs=require('fs')
+const assert=require('node:assert/strict')
+const ts=require('typescript')
+const vm=require('node:vm')
+
+function loadTs(file){
+  const source=fs.readFileSync(file,'utf8')
+  const output=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText
+  const module={exports:{}}
+  vm.runInNewContext(output,{module,exports:module.exports,require})
+  return module.exports
+}
+
+const previewSource=fs.readFileSync('lib/rolePreview.ts','utf8')
+const hook=fs.readFileSync('components/useRolePreview.ts','utf8')
+const shell=fs.readFileSync('components/AppShell.tsx','utf8')
+const guard=fs.readFileSync('components/RolePermissionGuard20260927.tsx','utf8')
+const labour=fs.readFileSync('app/reports/labour/page.tsx','utf8')
+const accessApi=fs.readFileSync('app/api/access-control/route.ts','utf8')
+const boundary=fs.readFileSync('components/AccessBoundary.tsx','utf8')
+const preview=loadTs('lib/rolePreview.ts')
+
+assert.deepEqual([...preview.previewTargetsFor('owner')],['admin','viewer','defect_contributor'])
+assert.deepEqual([...preview.previewTargetsFor('admin')],['viewer','defect_contributor'])
+assert.deepEqual([...preview.previewTargetsFor('viewer')],[])
+assert.deepEqual([...preview.previewTargetsFor('defect_contributor')],[])
+assert.equal(preview.canUseRolePreview('owner'),true)
+assert.equal(preview.canUseRolePreview('admin'),true)
+assert.equal(preview.canUseRolePreview('viewer'),false)
+assert.equal(preview.effectivePresentationRole('owner','admin'),'admin')
+assert.equal(preview.effectivePresentationRole('admin','viewer'),'viewer')
+assert.equal(preview.effectivePresentationRole('admin','owner'),'admin')
+assert.equal(preview.effectivePresentationRole('viewer','admin'),'viewer')
+
+assert.match(previewSource,/sessionStorage\.getItem\(ROLE_PREVIEW_STORAGE_KEY\)/)
+assert.match(previewSource,/sessionStorage\.setItem\(ROLE_PREVIEW_STORAGE_KEY,target\)/)
+assert.match(previewSource,/sessionStorage\.removeItem\(ROLE_PREVIEW_STORAGE_KEY\)/)
+assert.doesNotMatch(previewSource,/localStorage/)
+assert.doesNotMatch(previewSource,/profiles|updateUser|setSession|auth\.admin|supabase/i)
+
+assert.match(hook,/effectivePresentationRole\(actualRole,previewRole\)/)
+assert.match(shell,/const actualRole=useMemo\(\(\)=>resolveAccessRole\(role,userId\)/)
+assert.match(shell,/Previewing as:/)
+assert.match(shell,/Actual access remains/)
+assert.doesNotMatch(shell,/userName\.trim\(\)\.toLowerCase\(\)==='golf'/)
+assert.match(shell,/exitPreview\(\)[\s\S]*auth\.signOut\(\)/)
+assert.match(shell,/canViewPayroll\(presentationRole\)\?'Payroll Verification Record':'Labour'/)
+assert.match(guard,/if\(!canAccessPath\(role,path\)\)router\.replace\(defaultPathForRole\(role\)\)/)
+assert.match(guard,/access-role-\$\{presentationRole\}/)
+assert.match(labour,/const payrollAllowed=canViewPayroll\(nextAccessRole\)/)
+assert.match(labour,/canManageLabour\(presentationRole\)/)
+assert.match(labour,/canViewPayroll\(presentationRole\)/)
+assert.doesNotMatch(accessApi,/previewRole|rolePreview|ROLE_PREVIEW/)
+assert.doesNotMatch(boundary,/previewRole|rolePreview|ROLE_PREVIEW/)
+
+console.log('Admin role preview security/presentation regression checks passed')

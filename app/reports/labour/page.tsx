@@ -10,6 +10,7 @@ import { bangkokToday, isBatchWorkDateUsable, latestUsableDate } from '@/lib/wor
 import { confirmedHeadcount, countLabel, headcountSourceStatus, isHeadcountConfirmed, isHeadcountReviewCase, maleFemaleHeadcount } from '@/lib/headcountReconciliation'
 import type { Project } from '@/lib/types'
 import {canManageLabour,canViewPayroll,resolveAccessRole,type AccessRole} from '@/lib/accessControl'
+import useRolePreview from '@/components/useRolePreview'
 import { canUseCanonicalDownstream, canonicalFlowState, deriveSuspectedCanonicalFallback, type CanonicalStateRow } from '@/lib/siteOperationsCanonical'
 
 type SiteEntry={id:string;work_date:string;source_row:number;project_name_raw:string|null;area_raw:string|null;supervisor_raw:string|null;male_count:number|null;female_count:number|null;total_manpower:number|null;work_detail:string|null;status_text:string|null;next_plan:string|null;afternoon_detail:string|null;specific_area:string|null;source_fingerprint:string;supervisor_worker_id:string|null;work_date_validation_status?:string|null;work_date_validation_reason?:string|null}
@@ -63,7 +64,7 @@ function isCompanyPayrollWorker(worker:Worker|undefined|null){
 export default function LabourVerificationPage(){
   const [loading,setLoading]=useState(true)
   const [loadError,setLoadError]=useState(false)
-  const [accessRole,setAccessRole]=useState<AccessRole|null>(null)
+  const [actualAccessRole,setActualAccessRole]=useState<AccessRole|null>(null)
   const [entries,setEntries]=useState<SiteEntry[]>([])
   const [batches,setBatches]=useState<Batch[]>([])
   const [workers,setWorkers]=useState<Worker[]>([])
@@ -155,7 +156,7 @@ export default function LabourVerificationPage(){
       setEntries(nextEntries);setBatches(b.data);setWorkers(w.data)
       setProjects(p.data);setEntryProjects(ep.data);setAssignments(a.data)
       setPayrollRecords(pr.data);setPayrollItems(pi.data);setCanonicalStates(nextCanonical)
-      setAccessRole(nextAccessRole)
+      setActualAccessRole(nextAccessRole)
       if(!payrollAllowed)setMode('verify')
       const latest=latestUsableDate(nextEntries)
       setSelectedDate(v=>v||latest)
@@ -168,8 +169,12 @@ export default function LabourVerificationPage(){
     return()=>{alive=false}
   },[refreshTick])
 
-  const canVerify=canManageLabour(accessRole)
-  const canPayroll=canViewPayroll(accessRole)
+  const {presentationRole,ready:rolePreviewReady}=useRolePreview(actualAccessRole)
+  const canVerify=rolePreviewReady&&canManageLabour(presentationRole)
+  const canPayroll=rolePreviewReady&&canViewPayroll(presentationRole)
+  useEffect(()=>{
+    if(rolePreviewReady&&!canPayroll&&mode==='payroll')setMode('verify')
+  },[rolePreviewReady,canPayroll,mode])
   const today=bangkokToday()
   const entryById=useMemo(()=>new Map(entries.map(x=>[x.id,x])),[entries])
   const canonicalByEntry=useMemo(()=>new Map(canonicalStates.map(x=>[x.entry_id,x])),[canonicalStates])
