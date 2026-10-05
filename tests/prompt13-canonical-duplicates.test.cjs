@@ -85,3 +85,16 @@ test('retry/idempotency contracts are encoded by stable candidate key and unique
   assert.match(sql,/on conflict\(entry_id\) do update/)
   assert.match(sql,/v_decision_fp is distinct from v_current_fp/)
 })
+
+
+test('canonical-view fallback quarantines exact duplicate candidates without auto-merging',()=>{
+  const rows=[
+    {id:'a',source_row:185,...base},
+    {id:'b',source_row:186,...base},
+    {id:'c',source_row:187,...base,afternoon_detail:'กะบ่าย'},
+  ]
+  const fallback=c.deriveSuspectedCanonicalFallback(rows)
+  assert.deepEqual(Array.from(fallback.map(x=>x.source_row)).sort((a,b)=>a-b),[185,186])
+  assert.equal(fallback.every(x=>x.flow_state==='suspected'&&x.group_id===null),true)
+  assert.equal(fallback.every(x=>c.canUseCanonicalDownstream(x)===false),true)
+})
