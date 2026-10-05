@@ -12,15 +12,17 @@ import type { Project } from '@/lib/types'
 import {canManageLabour,canViewPayroll,resolveAccessRole,type AccessRole} from '@/lib/accessControl'
 
 type SiteEntry={id:string;work_date:string;source_row:number;project_name_raw:string|null;area_raw:string|null;supervisor_raw:string|null;male_count:number|null;female_count:number|null;total_manpower:number|null;work_detail:string|null;status_text:string|null;next_plan:string|null;afternoon_detail:string|null;specific_area:string|null;source_fingerprint:string;supervisor_worker_id:string|null;work_date_validation_status?:string|null;work_date_validation_reason?:string|null}
-type Batch={id:string;site_operations_entry_id:string;work_date:string;expected_headcount:number|null;confirmed_headcount:number|null;confirmed_headcount_basis:string|null;confirmed_headcount_evidence:string|null;headcount_source_status:'matched'|'mismatch'|'unknown'|null;headcount_confirmation_status:'confirmed'|'unconfirmed'|null;headcount_confirmed_at:string|null;supervisor_worker_id:string|null;supervisor_raw:string|null;home_team:string|null;verification_status:string;verified_by:string|null;verified_at:string|null;verified_source_fingerprint:string|null;note:string|null}
+type Batch={id:string;site_operations_entry_id:string;work_date:string;expected_headcount:number|null;confirmed_headcount:number|null;confirmed_headcount_basis:string|null;confirmed_headcount_evidence:string|null;headcount_source_status:'matched'|'mismatch'|'unknown'|null;headcount_confirmation_status:'confirmed'|'unconfirmed'|null;headcount_confirmed_at:string|null;supervisor_worker_id:string|null;supervisor_raw:string|null;home_team:string|null;verification_status:string;verified_by:string|null;verified_at:string|null;verified_source_fingerprint:string|null;note:string|null;concurrency_revision:number}
 type Worker={worker_id:string;full_name:string;nickname:string|null;default_team:string|null;status:string|null;display_label:string|null}
 type EntryProject={entry_id:string;project_id:string}
 type Assignment={id:string;batch_id:string;worker_id:string;work_date:string;project_id:string|null;home_team:string|null;working_team:string|null;movement_status:string;allocation_hours:number|null;allocation_share:number|null;work_detail:string|null;notes:string|null;verified_at:string|null}
 type DraftAssignment={worker_id:string;project_id:string;working_team:string;movement_status:string;allocation_hours:string;notes:string}
-type PayrollRecord={id:string;labour_batch_id:string;verification_method:'web'|'legacy_excel';status:'draft'|'timecard_checked'|'verified'|'external_verified'|'needs_review';source_labour_verified_at:string|null;external_reference:string|null;note:string|null;timecard_checked_at:string|null;verified_at:string|null;updated_at:string}
+type PayrollRecord={id:string;labour_batch_id:string;verification_method:'web'|'legacy_excel';status:'draft'|'timecard_checked'|'verified'|'external_verified'|'needs_review';source_labour_verified_at:string|null;external_reference:string|null;note:string|null;timecard_checked_at:string|null;verified_at:string|null;updated_at:string;concurrency_revision:number}
 type PayrollItem={id:string;record_id:string;labour_assignment_id:string|null;worker_id:string;attendance_status:string;clock_in:string|null;clock_out:string|null;work_units:number;ot_hours:number;timecard_match:boolean;regular_rate:number|null;ot_rate:number|null;regular_pay:number|null;ot_pay:number|null;adjustment:number;total_pay:number|null;calculation_status:string;note:string|null}
 type PayrollDraftItem={labour_assignment_id:string;worker_id:string;attendance_status:string;clock_in:string;clock_out:string;work_units:string;ot_hours:string;timecard_match:boolean;regular_rate:number|null;ot_rate:number|null;regular_pay:number|null;ot_pay:number|null;adjustment:number;total_pay:number|null;calculation_status:string;note:string}
 type HeadcountDraft={count:string;basis:string;evidence:string}
+type DraftBase={source_fingerprint:string;batch_revision:number}
+type PayrollDraftBase=DraftBase&{payroll_revision:number}
 
 function addDays(value:string,days:number){
   const d=new Date(value+'T12:00:00Z')
@@ -69,7 +71,9 @@ export default function LabourVerificationPage(){
   const [dateTo,setDateTo]=useState('')
   const [payrollStatusFilter,setPayrollStatusFilter]=useState('')
   const [drafts,setDrafts]=useState<Record<string,DraftAssignment[]>>({})
+  const [draftBases,setDraftBases]=useState<Record<string,DraftBase>>({})
   const [payrollDrafts,setPayrollDrafts]=useState<Record<string,PayrollDraftItem[]>>({})
+  const [payrollDraftBases,setPayrollDraftBases]=useState<Record<string,PayrollDraftBase>>({})
   const [payrollNotes,setPayrollNotes]=useState<Record<string,string>>({})
   const [externalRefs,setExternalRefs]=useState<Record<string,string>>({})
   const [notes,setNotes]=useState<Record<string,string>>({})
@@ -189,13 +193,29 @@ export default function LabourVerificationPage(){
     })
   },[usableBatches,selectedDate,statusFilter,focusEntry,q,entryById])
   const ensureBatchWorkDateUsable=(batch:Batch)=>{if(isBatchWorkDateUsable(batch,entryById.get(batch.site_operations_entry_id),bangkokToday()))return true;setMessage('Work Date รายการนี้ถูกกักไว้เพื่อตรวจสอบ • ห้ามยืนยัน Labour/Payroll จนกว่าจะมีหลักฐานแก้วันที่ต้นทาง');return false}
+  const draftBaseFor=(batch:Batch):DraftBase|null=>{
+    const entry=entryById.get(batch.site_operations_entry_id)
+    const revision=Number(batch.concurrency_revision)
+    if(!entry?.source_fingerprint||!Number.isInteger(revision)||revision<1)return null
+    return {source_fingerprint:entry.source_fingerprint,batch_revision:revision}
+  }
+  const payrollDraftBaseFor=(batch:Batch,record?:PayrollRecord):PayrollDraftBase|null=>{
+    const base=draftBaseFor(batch)
+    if(!base)return null
+    const payrollRevision=record?Number(record.concurrency_revision):0
+    if(!Number.isInteger(payrollRevision)||payrollRevision<0)return null
+    return {...base,payroll_revision:payrollRevision}
+  }
 
   const draftFor=(batch:Batch)=>drafts[batch.id]||[]
   const updateDraft=(batchId:string,index:number,patch:Partial<DraftAssignment>)=>{
     setDrafts(prev=>({...prev,[batchId]:(prev[batchId]||[]).map((x,i)=>i===index?{...x,...patch}:x)}))
   }
   const loadExisting=(batch:Batch)=>{
+    const base=draftBaseFor(batch)
+    if(!base){setMessage('โหลด Draft ไม่ได้ เพราะยังไม่มี source/revision ที่เชื่อถือได้');return}
     const rows=(assignmentsByBatch.get(batch.id)||[]).filter(x=>x.worker_id!==batch.supervisor_worker_id)
+    setDraftBases(prev=>({...prev,[batch.id]:base}))
     setDrafts(prev=>({...prev,[batch.id]:rows.map(x=>({
       worker_id:x.worker_id,project_id:x.project_id||'',working_team:x.working_team||x.home_team||'',
       movement_status:x.movement_status||'same_team',allocation_hours:x.allocation_hours===null?'':String(x.allocation_hours),notes:x.notes||''
@@ -203,6 +223,9 @@ export default function LabourVerificationPage(){
     setNotes(prev=>({...prev,[batch.id]:batch.note||''}))
   }
   const useHomeTeam=(batch:Batch)=>{
+    const base=draftBaseFor(batch)
+    if(!base){setMessage('สร้าง Draft ไม่ได้ เพราะยังไม่มี source/revision ที่เชื่อถือได้');return}
+    setDraftBases(prev=>({...prev,[batch.id]:base}))
     const candidates=activeWorkers.filter(w=>batch.home_team&&w.default_team===batch.home_team&&w.worker_id!==batch.supervisor_worker_id)
     const pids=projectIdsByEntry.get(batch.site_operations_entry_id)||[]
     const defaultProject=pids.length===1?pids[0]:''
@@ -216,6 +239,11 @@ export default function LabourVerificationPage(){
     if(!workerId)return
     const worker=workerById.get(workerId)
     const existing=draftFor(batch)
+    if(!draftBases[batch.id]){
+      const base=draftBaseFor(batch)
+      if(!base){setMessage('แก้ Draft ไม่ได้ เพราะยังไม่มี source/revision ที่เชื่อถือได้');return}
+      setDraftBases(prev=>({...prev,[batch.id]:base}))
+    }
     if(workerId===batch.supervisor_worker_id){setMessage('หัวหน้าทีมถูกแยกจากรายการคนงานและไม่รวมใน Worker Payroll');return}
     if(existing.some(x=>x.worker_id===workerId)){setMessage('คนงานคนนี้อยู่ในรายการแล้ว');return}
     const pids=projectIdsByEntry.get(batch.site_operations_entry_id)||[]
@@ -276,6 +304,8 @@ export default function LabourVerificationPage(){
 
   const saveBatch=async(batch:Batch)=>{
     if(!canVerify||saving[batch.id]||!ensureBatchWorkDateUsable(batch))return
+    const base=draftBases[batch.id]
+    if(!base){setMessage('Draft นี้ยังไม่มี revision อ้างอิง • กรุณาโหลดรายการเดิมหรือสร้าง Draft ใหม่ก่อนบันทึก');return}
     const rows=draftFor(batch)
     const authority=confirmedHeadcount(batch)
     if(authority===null){setMessage('ต้องยืนยัน Confirmed headcount ก่อนยืนยันทีมคนงาน');return}
@@ -292,14 +322,17 @@ export default function LabourVerificationPage(){
         notes:x.notes||null
       }))
       const {data,error}=await getSupabase().rpc('labour_verify_batch',{
-        p_batch_id:batch.id,p_note:notes[batch.id]||'',p_assignments:payload
+        p_batch_id:batch.id,p_note:notes[batch.id]||'',p_assignments:payload,
+        p_expected_source_fingerprint:base.source_fingerprint,p_expected_batch_revision:base.batch_revision
       })
       if(error)throw error
       setMessage('ยืนยันทีมคนงานแล้ว '+String(data||rows.length)+' คน • เก็บเป็น Verified Labour Dataset')
+      setDraftBases(prev=>({...prev,[batch.id]:{source_fingerprint:base.source_fingerprint,batch_revision:base.batch_revision+1}}))
       setRefreshTick(v=>v+1)
     }catch(err:any){
       const raw=String(err?.message||'ยืนยันไม่สำเร็จ')
-      if(raw.includes('HEADCOUNT_CONFIRMATION_REQUIRED'))setMessage('ยังไม่มี Confirmed headcount • กรุณาตรวจหลักฐานและยืนยันจำนวนก่อน')
+      if(raw.includes('STALE_LABOUR_SAVE_RELOAD_REQUIRED')){setMessage('มีข้อมูล Labour/Source ใหม่กว่าตอนที่เริ่มแก้ • ระบบปฏิเสธการบันทึกเพื่อไม่ให้ทับข้อมูลล่าสุด • Draft ของคุณยังอยู่ กรุณาโหลดข้อมูลล่าสุดและ reconcile ก่อนบันทึกใหม่');setRefreshTick(v=>v+1)}
+      else if(raw.includes('HEADCOUNT_CONFIRMATION_REQUIRED'))setMessage('ยังไม่มี Confirmed headcount • กรุณาตรวจหลักฐานและยืนยันจำนวนก่อน')
       else if(raw.includes('HEADCOUNT_MISMATCH'))setMessage('จำนวนรายชื่อไม่ตรงกับ Confirmed headcount • ต้องแก้จำนวนหรือรายชื่อให้ตรงกันก่อน')
       else setMessage(raw)
     }finally{setSaving(prev=>({...prev,[batch.id]:false}))}
@@ -333,6 +366,9 @@ export default function LabourVerificationPage(){
   const payrollDraftFor=(batch:Batch)=>payrollDrafts[batch.id]||[]
   const startPayrollReview=(batch:Batch)=>{
     const record=payrollRecordByBatch.get(batch.id)
+    const base=payrollDraftBaseFor(batch,record)
+    if(!base){setMessage('เริ่ม Payroll Draft ไม่ได้ เพราะยังไม่มี source/revision ที่เชื่อถือได้');return}
+    setPayrollDraftBases(prev=>({...prev,[batch.id]:base}))
     const saved=record?payrollItemsByRecord.get(record.id)||[]:[]
     const savedByWorker=new Map(saved.map(x=>[x.worker_id,x]))
     const rows=(assignmentsByBatch.get(batch.id)||[]).filter(x=>x.worker_id!==batch.supervisor_worker_id)
@@ -372,6 +408,8 @@ export default function LabourVerificationPage(){
   const savePayrollWeb=async(batch:Batch,status:'draft'|'timecard_checked')=>{
     if(!canPayroll||saving['payroll-'+batch.id]||!ensureBatchWorkDateUsable(batch))return
     if(labourStatusFor(batch)!=='verified'){setMessage('ข้อมูลต้นทางมีการเปลี่ยนหลังยืนยันทีม • ต้องตรวจและยืนยันทีมรายวันใหม่ก่อนตรวจ Payroll');return}
+    const base=payrollDraftBases[batch.id]
+    if(!base){setMessage('Payroll Draft นี้ยังไม่มี revision อ้างอิง • กรุณาเปิดรายการล่าสุดก่อนบันทึก');return}
     const rows=payrollDraftFor(batch)
     if(!rows.length){setMessage('ยังไม่มีรายชื่อคนงานสำหรับตรวจบัตรตอก กรุณายืนยันทีมรายวันก่อน');return}
     if(status==='timecard_checked'&&rows.some(x=>!x.timecard_match)){setMessage('ยังมีคนงานที่ไม่ได้ติ๊ก “ตรงกับบัตรตอก”');return}
@@ -388,7 +426,8 @@ export default function LabourVerificationPage(){
       }))
       const {error}=await getSupabase().rpc('payroll_save_verification',{
         p_labour_batch_id:batch.id,p_method:'web',p_status:status,p_note:payrollNotes[batch.id]||'',
-        p_external_reference:null,p_items:payload
+        p_external_reference:null,p_items:payload,p_expected_source_fingerprint:base.source_fingerprint,
+        p_expected_batch_revision:base.batch_revision,p_expected_payroll_revision:base.payroll_revision
       })
       if(error){
         if(/PAYROLL_RULES_NOT_APPROVED|CLIENT_PAYROLL|CLIENT_CALCULATION/.test(error.message))throw new Error('ยังยืนยันยอดเงินไม่ได้: รออัตรา สูตร และกติกาปัดเศษที่บัญชีอนุมัติ')
@@ -398,8 +437,13 @@ export default function LabourVerificationPage(){
       setMessage(status==='timecard_checked'
         ?'ตรวจบัตรตอกครบแล้ว • บันทึก Payroll Verification Record • ยอดเงินรอ Rate Master'
         :'บันทึกฉบับร่าง Payroll Verification Record แล้ว')
+      setPayrollDraftBases(prev=>({...prev,[batch.id]:{...base,payroll_revision:base.payroll_revision+1}}))
       setRefreshTick(v=>v+1)
-    }catch(err:any){setMessage(String(err?.message||'บันทึก Payroll Verification ไม่สำเร็จ'))}
+    }catch(err:any){
+      const raw=String(err?.message||'บันทึก Payroll Verification ไม่สำเร็จ')
+      if(raw.includes('STALE_PAYROLL_SAVE_RELOAD_REQUIRED')){setMessage('มีข้อมูล Payroll/Labour ใหม่กว่าตอนที่เริ่มแก้ • ระบบปฏิเสธการบันทึกเพื่อไม่ให้ทับข้อมูลล่าสุด • Draft ของคุณยังอยู่ กรุณาโหลดข้อมูลล่าสุดและ reconcile ก่อนบันทึกใหม่');setRefreshTick(v=>v+1)}
+      else setMessage(raw)
+    }
     finally{setSaving(prev=>({...prev,['payroll-'+batch.id]:false}))}
   }
 
