@@ -37,6 +37,9 @@ jobs:
       - name: Prompt 12 headcount reconciliation tests
         run: node tests/headcount-reconciliation.test.cjs
 
+      - name: Prompt 5 manpower reconciliation tests
+        run: node --test tests/prompt5-manpower-reconciliation.test.cjs
+
       - name: Prompt 3 source revision invalidation tests
         run: node --test tests/payroll/source-revision-invalidation.test.cjs
 
