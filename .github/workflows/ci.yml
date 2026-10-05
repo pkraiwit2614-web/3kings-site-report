@@ -40,5 +40,8 @@ jobs:
       - name: Prompt 3 source revision invalidation tests
         run: node --test tests/payroll/source-revision-invalidation.test.cjs
 
+      - name: Prompt 4 optimistic concurrency tests
+        run: node --test tests/payroll/optimistic-concurrency.test.cjs
+
       - name: RBAC regression tests
         run: node tests/rbac.test.cjs
