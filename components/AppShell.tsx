@@ -8,6 +8,8 @@ import BrandLogo from '@/components/BrandLogo'
 import {canViewPayroll,resolveAccessRole,type AccessRole} from '@/lib/accessControl'
 import useRolePreview from '@/components/useRolePreview'
 import {ROLE_PREVIEW_LABELS} from '@/lib/rolePreview'
+import ActivityTracker from '@/components/ActivityTracker'
+import { logActivity } from '@/lib/activityLog'
 
 type NavItem = [string,string]
 
@@ -204,6 +206,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const signOut = async () => {
     setMobileMore(false)
     exitPreview()
+    await logActivity({userId,eventType:'logout',path})
     await getSupabase().auth.signOut()
     router.replace('/login')
   }
@@ -229,6 +232,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const isSiteOperationsSection = path==='/reports'||path==='/reports/labour'
 
   return <div className="app-shell">
+    <ActivityTracker userId={userId}/>
     <aside className="sidebar">
       <div className="brand"><BrandLogo className="brand-logo"/><div><b>3 Kings Construction</b><small>Site Report V3.4</small></div></div>
       <nav>{nav.map(([href,label]) => <Link key={href} className={navIsActive(path,href)?'active':''} href={href}>{label}</Link>)}</nav>
