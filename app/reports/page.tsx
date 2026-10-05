@@ -10,11 +10,12 @@ import { createLiveLoader } from '@/lib/liveLoader'
 import { readAllPages, requireCompletePagedReads } from '@/lib/pagedRead'
 import { dateTH } from '@/lib/format'
 import { bangkokToday, isUsableActualWorkDate, latestUsableDate } from '@/lib/workDateIntegrity'
+import { confirmedHeadcount, countLabel, headcountSourceStatus, isHeadcountConfirmed, isHeadcountReviewCase, maleFemaleHeadcount } from '@/lib/headcountReconciliation'
 import type { Project, ScheduleTask } from '@/lib/types'
 
 type SiteEntry={id:string;source_row:number;source_timestamp:string|null;work_date:string;project_name_raw:string|null;area_raw:string|null;supervisor_raw:string|null;male_count:number|null;female_count:number|null;total_manpower:number|null;work_detail:string|null;status_text:string|null;next_plan:string|null;afternoon_detail:string|null;specific_area:string|null;supervisor_worker_id:string|null;mapping_status:string;synced_at:string;work_date_validation_status?:string|null;work_date_validation_reason?:string|null}
 type EntryProject={entry_id:string;project_id:string;mapping_method:string}
-type LabourBatch={id:string;site_operations_entry_id:string;verification_status:string;verified_at:string|null}
+type LabourBatch={id:string;site_operations_entry_id:string;verification_status:string;verified_at:string|null;confirmed_headcount:number|null;headcount_source_status:'matched'|'mismatch'|'unknown'|null;headcount_confirmation_status:'confirmed'|'unconfirmed'|null;confirmed_headcount_basis:string|null}
 type LabourWorker={worker_id:string;full_name:string;display_label:string|null;default_team:string|null}
 type ProcurementRow={id:string;project_id:string|null;vendor:string|null;item_name:string|null;current_status:string|null;procurement_status:string|null;payment_status:string|null;expected_delivery_text:string|null;condition_note:string|null;po_no:string|null;pr_no:string|null}
 type ProcurementLink={procurement_item_id:string;project_id:string}
@@ -86,7 +87,7 @@ export default function SiteOperationsPage(){
           readAllPages<LabourWorker>({label:'labour_workers',signal,keyOf:x=>x.worker_id,fetchPage:(from,to)=>
             s.from('labour_workers').select('worker_id,full_name,display_label,default_team',{count:'exact'}).order('worker_id').range(from,to).abortSignal(signal)}),
           readAllPages<LabourBatch>({label:'labour_verification_batches',signal,keyOf:x=>x.id,fetchPage:(from,to)=>
-            s.from('labour_verification_batches').select('id,site_operations_entry_id,verification_status,verified_at',{count:'exact'}).order('id').range(from,to).abortSignal(signal)})
+            s.from('labour_verification_batches').select('*',{count:'exact'}).order('id').range(from,to).abortSignal(signal)})
         ])
         const paged=[e,ep,p,t,pr,pl,w,b]
         setReadSignals(paged.map(({label,loaded,count,truncated})=>({label,loaded,count,truncated})))
@@ -186,9 +187,11 @@ export default function SiteOperationsPage(){
 
   const scheduleReadyCount=filtered.filter(x=>scheduleCandidate(x)?.task).length
   const materialSignalCount=filtered.filter(x=>procurementCheck(x).signal).length
-  const verifiedCount=filtered.filter(x=>batchByEntry.get(x.id)?.verification_status==='verified').length
-  const needsReviewCount=filtered.filter(x=>batchByEntry.get(x.id)?.verification_status==='needs_review'||x.mapping_status==='needs_review').length
-  const manpowerTotal=filtered.reduce((sum,x)=>sum+Number(x.total_manpower||0),0)
+  const verifiedCount=filtered.filter(x=>{const b=batchByEntry.get(x.id);return b?.verification_status==='verified'&&isHeadcountConfirmed(b)}).length
+  const needsReviewCount=filtered.filter(x=>{const b=batchByEntry.get(x.id);return b?.verification_status==='needs_review'||x.mapping_status==='needs_review'||isHeadcountReviewCase(b,x)}).length
+  const manpowerKnown=filtered.filter(x=>x.total_manpower!==null&&x.total_manpower!==undefined)
+  const manpowerUnknownCount=filtered.length-manpowerKnown.length
+  const manpowerTotal=manpowerKnown.reduce((sum,x)=>sum+Number(x.total_manpower),0)
   const linkedProjectIds=new Set(filtered.flatMap(x=>projectIdsByEntry.get(x.id)||[]))
   const latestSynced=entries.map(x=>x.synced_at).filter(Boolean).sort().at(-1)||null
 
@@ -207,7 +210,7 @@ export default function SiteOperationsPage(){
     <section className="siteops-kpis">
       <div><span>Daily Entries</span><b>{filtered.length}</b><small>รายการจาก Form</small></div>
       <div><span>หน้างาน</span><b>{linkedProjectIds.size}</b><small>Project ที่ map แบบ explicit</small></div>
-      <div><span>กำลังคน</span><b>{manpowerTotal}</b><small>คนตามรายงานต้นทาง</small></div>
+      <div><span>กำลังคน</span><b>{manpowerKnown.length?manpowerTotal:'ไม่ระบุ'}</b><small>Raw source{manpowerUnknownCount?' • '+manpowerUnknownCount+' รายการไม่ระบุ (ไม่คิดเป็น 0)':''}</small></div>
       <div><span>Labour Verified</span><b>{verifiedCount}</b><small>ยืนยันทีมแล้ว</small></div>
     </section>
 
@@ -228,15 +231,20 @@ export default function SiteOperationsPage(){
         const batch=batchByEntry.get(entry.id)
         const schedule=scheduleCandidate(entry)
         const proc=procurementCheck(entry)
+        const authority=confirmedHeadcount(batch)
+        const sourceHeadcountStatus=headcountSourceStatus(batch,entry)
+        const sexTotal=maleFemaleHeadcount(entry)
+        const headcountReview=isHeadcountReviewCase(batch,entry)
+        const labourVerified=batch?.verification_status==='verified'&&authority!==null
         return <article className="panel siteops-entry" key={entry.id}>
-          <header><div><div className="siteops-title"><b>{entry.supervisor_raw||'ไม่ระบุผู้ควบคุมงาน'}</b>{worker&&<span>→ {worker.display_label||worker.full_name}</span>}</div><small>{dateTH(entry.work_date)} • Form row {entry.source_row} • {entry.area_raw||entry.project_name_raw||'ไม่ระบุพื้นที่'}</small></div><div className="siteops-entry-meta"><StatusBadge value={entry.status_text||'pending'} multiline/><span>{entry.total_manpower??0} คน</span><span className={batch?.verification_status==='verified'?'verified':batch?.verification_status==='needs_review'?'review':''}>Labour: {batch?.verification_status==='verified'?'Verified':batch?.verification_status==='needs_review'?'Needs review':'Pending'}</span></div></header>
+          <header><div><div className="siteops-title"><b>{entry.supervisor_raw||'ไม่ระบุผู้ควบคุมงาน'}</b>{worker&&<span>→ {worker.display_label||worker.full_name}</span>}</div><small>{dateTH(entry.work_date)} • Form row {entry.source_row} • {entry.area_raw||entry.project_name_raw||'ไม่ระบุพื้นที่'}</small></div><div className="siteops-entry-meta"><StatusBadge value={entry.status_text||'pending'} multiline/><span>Raw {countLabel(entry.total_manpower)} คน</span><span className={labourVerified?'verified':headcountReview||batch?.verification_status==='needs_review'?'review':''}>Labour: {labourVerified?'Verified':headcountReview||batch?.verification_status==='needs_review'?'Needs review':'Pending'}</span></div></header>
           <div className="siteops-projects"><span>Project</span>{projectList.length?projectList.map(p=><b key={p.id}>{p.code}</b>):<b className="warn">ยังไม่ map Project</b>}<small>Source: {entry.project_name_raw||'-'} • {entry.area_raw||'-'}</small></div>
           <div className="siteops-work"><div><span>งานที่รายงาน</span><b>{entry.work_detail||'ไม่ระบุรายละเอียดงาน'}</b></div>{entry.afternoon_detail&&<div><span>ช่วงบ่าย</span><b>{entry.afternoon_detail}</b></div>}{entry.next_plan&&<div><span>Next plan</span><b>{entry.next_plan}</b></div>}{entry.specific_area&&<div><span>Specific area</span><b>{entry.specific_area}</b></div>}</div>
           <div className="siteops-checks">
             <div><span>Schedule</span>{schedule?<><b>Candidate: {schedule.task.task_name}</b><small>{projectById.get(schedule.task.project_id)?.code||'-'} • Plan {pct(schedule.task.current_plan_progress)} • Actual {pct(schedule.task.actual_progress)}</small><small>Candidate only — ไม่เขียนกลับ Schedule</small></>:<><b className="muted">ยังไม่มี candidate ชัดเจน</b><small>คง Daily Report เป็น evidence โดยไม่เดา Task</small></>}</div>
             <div><span>Procurement</span>{proc.signal?<><b className="warn">พบข้อความที่เกี่ยวกับวัสดุ/ของ/PO</b>{proc.rows.length?proc.rows.map(r=><small key={r.id}>{r.item_name||'-'} • {r.current_status||r.procurement_status||'ต้องติดตาม'}{r.expected_delivery_text?' • '+r.expected_delivery_text:''}</small>):<small>มี Procurement เปิด {proc.openCount} รายการใน Project แต่ยังจับคู่รายการไม่ได้ชัดเจน</small>}</>:<><b>ไม่พบ Material blocker จากรายงาน</b><small>รายการจัดซื้อเปิดใน Project: {proc.openCount}</small></>}</div>
             <div><span>Progress evidence</span><b>{entry.status_text||'ไม่ระบุสถานะ'}</b><small>ใช้รายละเอียดงาน + สถานะ + Next plan เป็น evidence</small><small>% Actual ยังคงมาจาก Schedule เท่านั้น</small></div>
-            <div><span>Labour</span><b>{entry.total_manpower??0} คน • ชาย {entry.male_count??0} / หญิง {entry.female_count??0}</b><small>{worker?'Home team: '+(worker.default_team||'ยังไม่ระบุ'):'Supervisor identity ยังไม่ยืนยัน'}</small><Link href={'/reports/labour?date='+entry.work_date+'&entry='+entry.id}>เปิด Labour Verification →</Link></div>
+            <div><span>Labour</span><b>Raw {countLabel(entry.total_manpower)} • ชาย {countLabel(entry.male_count)} / หญิง {countLabel(entry.female_count)} • ชาย+หญิง {countLabel(sexTotal)}</b><small className={sourceHeadcountStatus==='mismatch'?'warn':''}>{sourceHeadcountStatus==='mismatch'?'Source discrepancy — ต้องตรวจ':sourceHeadcountStatus==='unknown'?'Source ไม่ครบ — Unknown ไม่ใช่ 0':'Raw source สอดคล้อง'}</small><small>{authority===null?'Confirmed headcount: ยังไม่มีผู้ยืนยัน':'Confirmed headcount: '+authority+' คน • ใช้ downstream'}</small><small>{worker?'Home team: '+(worker.default_team||'ยังไม่ระบุ'):'Supervisor identity ยังไม่ยืนยัน'}</small><Link href={'/reports/labour?date='+entry.work_date+'&entry='+entry.id}>เปิด Labour Verification →</Link></div>
           </div>
         </article>
       })}
