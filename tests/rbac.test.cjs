@@ -7,7 +7,7 @@ const boundary=fs.readFileSync('components/AccessBoundary.tsx','utf8')
 const labour=fs.readFileSync('app/reports/labour/page.tsx','utf8')
 const users=fs.readFileSync('app/users/page.tsx','utf8')
 const visual=fs.readFileSync('app/api/ai/visual-match/route.ts','utf8')
-const migration=fs.readFileSync('supabase/migrations/20261005034500_rbac_v2_owner_admin_viewer_defect.sql','utf8')
+const migration=fs.readFileSync('supabase/migrations/20261005033728_rbac_v2_owner_admin_viewer_defect.sql','utf8')
 
 assert.match(access,/defect_contributor/)
 assert.match(access,/OWNER_ONLY_PREFIXES=\['\/photo-mapping','\/data-health','\/data-house','\/users'\]/)
