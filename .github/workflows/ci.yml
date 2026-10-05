@@ -30,3 +30,6 @@ jobs:
 
       - name: Prompt 23 labour/payroll QA
         run: node --test tests/prompt23/labour-payroll.test.cjs
+
+      - name: Prompt 12 headcount reconciliation tests
+        run: node tests/headcount-reconciliation.test.cjs
