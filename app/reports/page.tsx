@@ -11,6 +11,7 @@ import { readAllPages, requireCompletePagedReads } from '@/lib/pagedRead'
 import { dateTH } from '@/lib/format'
 import { bangkokToday, isUsableActualWorkDate, latestUsableDate } from '@/lib/workDateIntegrity'
 import { confirmedHeadcount, countLabel, headcountSourceStatus, isHeadcountConfirmed, isHeadcountReviewCase, maleFemaleHeadcount } from '@/lib/headcountReconciliation'
+import { canUseCanonicalDownstream, canonicalFlowState, type CanonicalStateRow } from '@/lib/siteOperationsCanonical'
 import type { Project, ScheduleTask } from '@/lib/types'
 
 type SiteEntry={id:string;source_row:number;source_timestamp:string|null;work_date:string;project_name_raw:string|null;area_raw:string|null;supervisor_raw:string|null;male_count:number|null;female_count:number|null;total_manpower:number|null;work_detail:string|null;status_text:string|null;next_plan:string|null;afternoon_detail:string|null;specific_area:string|null;supervisor_worker_id:string|null;mapping_status:string;synced_at:string;work_date_validation_status?:string|null;work_date_validation_reason?:string|null}
@@ -60,6 +61,7 @@ export default function SiteOperationsPage(){
   const [procurementLinks,setProcurementLinks]=useState<ProcurementLink[]>([])
   const [workers,setWorkers]=useState<LabourWorker[]>([])
   const [batches,setBatches]=useState<LabourBatch[]>([])
+  const [canonicalStates,setCanonicalStates]=useState<CanonicalStateRow[]>([])
   const [selectedDate,setSelectedDate]=useState('')
   const [selectedProject,setSelectedProject]=useState('')
   const [q,setQ]=useState('')
@@ -92,12 +94,18 @@ export default function SiteOperationsPage(){
         const paged=[e,ep,p,t,pr,pl,w,b]
         setReadSignals(paged.map(({label,loaded,count,truncated})=>({label,loaded,count,truncated})))
         requireCompletePagedReads(paged)
+        let nextCanonical:CanonicalStateRow[]=[]
+        try{
+          const canonical=await readAllPages<CanonicalStateRow>({label:'v_site_operations_canonical_state',signal,keyOf:x=>x.entry_id,fetchPage:(from,to)=>
+            s.from('v_site_operations_canonical_state').select('entry_id,source_row,group_id,group_state,canonical_entry_id,flow_state,decision_evidence,decided_at',{count:'exact'}).order('source_row',{ascending:false}).range(from,to).abortSignal(signal)})
+          nextCanonical=canonical.data
+        }catch{/* Migration not active yet: preserve pre-Prompt-13 read behavior. */}
         if(!alive||signal.aborted)return
         const nextEntries=e.data
         setLoadError(false);setEntries(nextEntries);setEntryProjects(ep.data)
         setProjects(p.data);setTasks(t.data)
         setProcurement(pr.data);setProcurementLinks(pl.data)
-        setWorkers(w.data);setBatches(b.data)
+        setWorkers(w.data);setBatches(b.data);setCanonicalStates(nextCanonical)
         setSelectedDate(v=>v||latestUsableDate(nextEntries))
       },
       onError:()=>{if(alive)setLoadError(true)},
@@ -125,6 +133,7 @@ export default function SiteOperationsPage(){
   const projectById=useMemo(()=>new Map(projects.map(x=>[x.id,x])),[projects])
   const workerById=useMemo(()=>new Map(workers.map(x=>[x.worker_id,x])),[workers])
   const batchByEntry=useMemo(()=>new Map(batches.map(x=>[x.site_operations_entry_id,x])),[batches])
+  const canonicalByEntry=useMemo(()=>new Map(canonicalStates.map(x=>[x.entry_id,x])),[canonicalStates])
   const projectIdsByEntry=useMemo(()=>{
     const map=new Map<string,string[]>()
     for(const link of entryProjects){const list=map.get(link.entry_id)||[];if(!list.includes(link.project_id))list.push(link.project_id);map.set(link.entry_id,list)}
@@ -148,7 +157,8 @@ export default function SiteOperationsPage(){
   },[procurement,procurementProjectIds])
 
   const today=bangkokToday()
-  const actualEntries=useMemo(()=>entries.filter(entry=>isUsableActualWorkDate(entry,today)),[entries,today])
+  const actualEntries=useMemo(()=>entries.filter(entry=>isUsableActualWorkDate(entry,today)&&canUseCanonicalDownstream(canonicalByEntry.get(entry.id))),[entries,today,canonicalByEntry])
+  const duplicateReviewEntries=useMemo(()=>entries.filter(entry=>canonicalFlowState(canonicalByEntry.get(entry.id))==='suspected'),[entries,canonicalByEntry])
   const availableDates=useMemo(()=>Array.from(new Set(actualEntries.map(x=>x.work_date))).sort((a,b)=>b.localeCompare(a)),[actualEntries])
   const mappedProjectIds=useMemo(()=>new Set(entryProjects.map(x=>x.project_id)),[entryProjects])
   const projectFilterOptions=useMemo(()=>projects.filter(p=>p.active||mappedProjectIds.has(p.id)),[projects,mappedProjectIds])
@@ -223,6 +233,13 @@ export default function SiteOperationsPage(){
 
     <div className="siteops-source-note"><b>Data lineage:</b> Google Form → Daily Site Report → Site Operations Raw Dataset → Cross-check • Labour Cost อ่านเฉพาะข้อมูลที่ผ่าน Labour Verification แล้ว</div>
 
+    {duplicateReviewEntries.length>0&&<section className="panel siteops-duplicate-review">
+      <b>Duplicate candidates รอตรวจ {duplicateReviewEntries.length} raw rows</b>
+      <p>รายการเหล่านี้ยังคง raw evidence ครบ แต่ถูกกักออกจาก Site Operations totals / Labour / Payroll จนกว่าจะมีหลักฐานยืนยันว่าเป็นรายการซ้ำหรือเป็นงานคนละรายการ</p>
+      <div>{duplicateReviewEntries.map(entry=><span key={entry.id}>Form row {entry.source_row} • {dateTH(entry.work_date)} • {entry.supervisor_raw||'-'} • {entry.project_name_raw||'-'} • {entry.work_detail||'-'}</span>)}</div>
+      <Link href="/reports/labour" className="button">เปิด Duplicate Review →</Link>
+    </section>}
+
     {loading?<div className="panel">กำลังโหลด Site Operations…</div>:!filtered.length?<div className="panel siteops-empty"><b>ไม่พบรายงานตาม Filter</b><span>ข้อมูลใหม่จะเข้าหน้านี้จากระบบ Sync โดยไม่ต้องกรอกใน Web App ซ้ำ</span></div>:<div className="siteops-list">
       {filtered.map(entry=>{
         const pids=projectIdsByEntry.get(entry.id)||[]
@@ -256,6 +273,7 @@ export default function SiteOperationsPage(){
       .siteops-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}.siteops-kpis>div{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}.siteops-kpis span{display:block;font-size:9px;font-weight:900;color:var(--muted);letter-spacing:.05em;text-transform:uppercase}.siteops-kpis b{display:block;margin:4px 0 1px;font-size:23px;color:var(--navy)}.siteops-kpis small{font-size:9.5px;color:var(--muted)}
       .siteops-cross-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}.siteops-cross{padding:12px;display:flex;flex-direction:column;min-height:158px}.siteops-cross>b{font-size:11px;color:var(--navy)}.siteops-cross>strong{font-size:28px;margin:10px 0 2px;color:var(--navy)}.siteops-cross p{font-size:10px;line-height:1.5;color:var(--muted);margin:0 0 8px}.siteops-cross a{margin-top:auto;font-size:10px;font-weight:800}
       .siteops-source-note{padding:8px 10px;margin-bottom:10px;border:1px solid var(--line);border-radius:10px;background:#f5f7fa;font-size:10px;line-height:1.5;color:var(--muted)}.siteops-source-note b{color:var(--text)}
+      .siteops-duplicate-review{display:grid;gap:7px;margin-bottom:10px;padding:12px;border-color:#e5b76a;background:#fff9ed}.siteops-duplicate-review>b{font-size:11px;color:#765300}.siteops-duplicate-review p{margin:0;font-size:9px;line-height:1.5;color:#765300}.siteops-duplicate-review>div{display:grid;gap:4px}.siteops-duplicate-review span{font-size:9px;line-height:1.45;color:var(--text)}.siteops-duplicate-review .button{justify-self:start}
       .siteops-list{display:grid;gap:10px}.siteops-entry{padding:0;overflow:hidden}.siteops-entry>header{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:11px 13px;background:linear-gradient(135deg,#172a43,#213d5e);color:#fff}.siteops-title{display:flex;gap:7px;align-items:baseline;flex-wrap:wrap}.siteops-title>b{font-size:14px}.siteops-title span{font-size:10px;color:#c9d5e1}.siteops-entry header small{display:block;margin-top:3px;font-size:9px;color:#c9d5e1}.siteops-entry-meta{display:flex;gap:5px;align-items:center;justify-content:flex-end;flex-wrap:wrap}.siteops-entry-meta>span{padding:5px 7px;border:1px solid rgba(255,255,255,.18);border-radius:8px;font-size:9px}.siteops-entry-meta>span.verified{background:rgba(64,170,104,.18);color:#d8f5e3}.siteops-entry-meta>span.review{background:rgba(226,164,50,.18);color:#ffe7b3}
       .siteops-projects{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:8px 13px;background:#f8fafc;border-bottom:1px solid var(--line);font-size:9.5px}.siteops-projects>span{font-weight:900;color:var(--muted)}.siteops-projects>b{padding:3px 7px;border-radius:999px;background:#e9eef4;color:var(--navy)}.siteops-projects>small{margin-left:auto;color:var(--muted)}
       .siteops-work{display:grid;gap:7px;padding:10px 13px;border-bottom:1px solid var(--line)}.siteops-work>div{display:grid;grid-template-columns:85px minmax(0,1fr);gap:8px}.siteops-work span{font-size:9px;font-weight:900;color:var(--muted);text-transform:uppercase}.siteops-work b{font-size:10.5px;line-height:1.55;font-weight:650}
