@@ -52,6 +52,17 @@ async function adminAction(action: string, payload: Record<string,unknown> = {})
   return data
 }
 
+function edgeCompatibleRole(role:string){
+  if(role==='admin')return 'engineer'
+  if(role==='defect_contributor')return 'viewer'
+  return role==='viewer'?role:'viewer'
+}
+
+async function setCanonicalRole(userId:string,role:string){
+  const {error}=await getSupabase().rpc('owner_set_profile_role',{p_user_id:userId,p_role:role})
+  if(error)throw error
+}
+
 export default function UsersPage() {
   return <OwnerOnlyGate><AppShell><UsersContent/></AppShell></OwnerOnlyGate>
 }
@@ -92,6 +103,7 @@ function UsersContent() {
     setMessage('')
     setCredentials([])
     try {
+      throw new Error('การสร้างชุด USER01–20 ถูกปิดไว้สำหรับ RBAC ใหม่ • กรุณาสร้าง/จัดสิทธิ์เป็นรายบัญชีเพื่อไม่เปลี่ยนสิทธิ์บัญชีเดิมอัตโนมัติ')
       const data = await adminAction('seed_initial')
       setCredentials((data.credentials || []) as Credential[])
       setMessage(`สร้างบัญชีใหม่ ${data.credentials?.length || 0} บัญชี${data.skipped?.length ? ` • ข้ามบัญชีเดิม ${data.skipped.length}` : ''}`)
@@ -112,7 +124,8 @@ function UsersContent() {
     setCreating(true)
     setMessage('')
     try {
-      await adminAction('create', { username: cleanUsername, full_name: fullName.trim(), role, password })
+      const data = await adminAction('create', { username: cleanUsername, full_name: fullName.trim(), role:edgeCompatibleRole(role), password })
+      await setCanonicalRole(String(data.user?.user_id||''),role)
       setCredentials([{ username: cleanUsername, password, role, full_name: fullName.trim() }])
       setMessage(`สร้าง ${cleanUsername} เรียบร้อย พร้อมนำ Username / Password ส่งให้ผู้ใช้งานได้ทันที`)
       setUsername('')
@@ -153,7 +166,7 @@ function UsersContent() {
         </div>
         <div className="row" style={{gap:8,flexWrap:'wrap'}}>
           <button className="button" onClick={()=>setShowCreate(v=>!v)}>+ เพิ่มผู้ใช้งาน</button>
-          <button className="button primary" onClick={seed} disabled={seeding}>{seeding?'กำลังสร้าง…':'สร้าง USER01–20 + AI Viewer'}</button>
+          <button className="button" disabled title="RBAC ใหม่ไม่เปลี่ยนสิทธิ์บัญชีเดิมอัตโนมัติ">สร้างชุดบัญชี — ปิดไว้</button>
         </div>
       </div>
     </div>
@@ -196,7 +209,8 @@ function UserRow({ row, onChanged, onCredential, onMessage }: { row: Profile; on
   const save = async () => {
     setSaving(true); onMessage('')
     try {
-      await adminAction('update',{user_id:row.user_id,username:username.trim().toUpperCase()||null,full_name:name.trim(),role,active})
+      await adminAction('update',{user_id:row.user_id,username:username.trim().toUpperCase()||null,full_name:name.trim(),role:edgeCompatibleRole(role),active})
+      await setCanonicalRole(row.user_id,role)
       onMessage(`อัปเดต ${username || name || row.email || 'ผู้ใช้งาน'} เรียบร้อย`)
       await onChanged()
     } catch(err:any){ onMessage(err?.message || 'อัปเดตไม่สำเร็จ') }
