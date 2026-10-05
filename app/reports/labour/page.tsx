@@ -7,10 +7,11 @@ import { getSupabase } from '@/lib/supabase'
 import { readAllPages, requireCompletePagedReads } from '@/lib/pagedRead'
 import { dateTH } from '@/lib/format'
 import { bangkokToday, isBatchWorkDateUsable, latestUsableDate } from '@/lib/workDateIntegrity'
+import { confirmedHeadcount, countLabel, headcountSourceStatus, isHeadcountConfirmed, isHeadcountReviewCase, maleFemaleHeadcount } from '@/lib/headcountReconciliation'
 import type { Project } from '@/lib/types'
 
 type SiteEntry={id:string;work_date:string;source_row:number;project_name_raw:string|null;area_raw:string|null;supervisor_raw:string|null;male_count:number|null;female_count:number|null;total_manpower:number|null;work_detail:string|null;status_text:string|null;next_plan:string|null;afternoon_detail:string|null;specific_area:string|null;supervisor_worker_id:string|null;work_date_validation_status?:string|null;work_date_validation_reason?:string|null}
-type Batch={id:string;site_operations_entry_id:string;work_date:string;expected_headcount:number|null;supervisor_worker_id:string|null;supervisor_raw:string|null;home_team:string|null;verification_status:string;verified_by:string|null;verified_at:string|null;note:string|null}
+type Batch={id:string;site_operations_entry_id:string;work_date:string;expected_headcount:number|null;confirmed_headcount:number|null;confirmed_headcount_basis:string|null;confirmed_headcount_evidence:string|null;headcount_source_status:'matched'|'mismatch'|'unknown'|null;headcount_confirmation_status:'confirmed'|'unconfirmed'|null;headcount_confirmed_at:string|null;supervisor_worker_id:string|null;supervisor_raw:string|null;home_team:string|null;verification_status:string;verified_by:string|null;verified_at:string|null;note:string|null}
 type Worker={worker_id:string;full_name:string;nickname:string|null;default_team:string|null;status:string|null;display_label:string|null}
 type EntryProject={entry_id:string;project_id:string}
 type Assignment={id:string;batch_id:string;worker_id:string;work_date:string;project_id:string|null;home_team:string|null;working_team:string|null;movement_status:string;allocation_hours:number|null;allocation_share:number|null;work_detail:string|null;notes:string|null;verified_at:string|null}
@@ -18,6 +19,7 @@ type DraftAssignment={worker_id:string;project_id:string;working_team:string;mov
 type PayrollRecord={id:string;labour_batch_id:string;verification_method:'web'|'legacy_excel';status:'draft'|'timecard_checked'|'verified'|'external_verified'|'needs_review';source_labour_verified_at:string|null;external_reference:string|null;note:string|null;timecard_checked_at:string|null;verified_at:string|null;updated_at:string}
 type PayrollItem={id:string;record_id:string;labour_assignment_id:string|null;worker_id:string;attendance_status:string;clock_in:string|null;clock_out:string|null;work_units:number;ot_hours:number;timecard_match:boolean;regular_rate:number|null;ot_rate:number|null;regular_pay:number|null;ot_pay:number|null;adjustment:number;total_pay:number|null;calculation_status:string;note:string|null}
 type PayrollDraftItem={labour_assignment_id:string;worker_id:string;attendance_status:string;clock_in:string;clock_out:string;work_units:string;ot_hours:string;timecard_match:boolean;regular_rate:number|null;ot_rate:number|null;regular_pay:number|null;ot_pay:number|null;adjustment:number;total_pay:number|null;calculation_status:string;note:string}
+type HeadcountDraft={count:string;basis:string;evidence:string}
 
 function addDays(value:string,days:number){
   const d=new Date(value+'T12:00:00Z')
@@ -40,6 +42,10 @@ function payrollStatusLabel(value:string){
 function attendanceLabel(value:string){
   const map:Record<string,string>={present:'มาทำงาน',absent:'ขาด',leave:'ลา',half_day:'ครึ่งวัน',other:'อื่น ๆ'}
   return map[value]||value
+}
+function headcountBasisLabel(value:string|null|undefined){
+  const map:Record<string,string>={source_total:'Source total',male_female:'ชาย + หญิง',daily_report:'Daily Report',monthly_report:'Monthly Report',company_roster:'Company roster',legacy_verified_roster:'Roster ที่เคยยืนยันแล้ว',contractor_only:'ผู้รับเหมาเท่านั้น',manual_review:'ตรวจไขว้ด้วยคน'}
+  return value?map[value]||value:'-'
 }
 
 export default function LabourVerificationPage(){
@@ -68,6 +74,7 @@ export default function LabourVerificationPage(){
   const [notes,setNotes]=useState<Record<string,string>>({})
   const [addWorker,setAddWorker]=useState<Record<string,string>>({})
   const [supervisorPick,setSupervisorPick]=useState<Record<string,string>>({})
+  const [headcountDrafts,setHeadcountDrafts]=useState<Record<string,HeadcountDraft>>({})
   const [saving,setSaving]=useState<Record<string,boolean>>({})
   const [message,setMessage]=useState('')
   const [refreshTick,setRefreshTick]=useState(0)
@@ -159,11 +166,15 @@ export default function LabourVerificationPage(){
   const teamOptions=useMemo(()=>Array.from(new Set(workers.map(x=>x.default_team).filter(Boolean) as string[])).sort((a,b)=>a.localeCompare(b,'th')),[workers])
   const activeWorkers=useMemo(()=>workers.filter(x=>String(x.status||'').toLowerCase()!=='inactive'),[workers])
 
+  const labourStatusFor=(batch:Batch)=>{
+    const entry=entryById.get(batch.site_operations_entry_id)
+    return entry&&isHeadcountReviewCase(batch,entry)?'needs_review':batch.verification_status
+  }
   const visibleBatches=useMemo(()=>{
     const needle=q.trim().toLowerCase()
     return usableBatches.filter(batch=>{
       if(selectedDate&&batch.work_date!==selectedDate)return false
-      if(statusFilter&&batch.verification_status!==statusFilter)return false
+      if(statusFilter&&labourStatusFor(batch)!==statusFilter)return false
       if(focusEntry&&batch.site_operations_entry_id!==focusEntry)return false
       if(!needle)return true
       const entry=entryById.get(batch.site_operations_entry_id)
@@ -222,10 +233,44 @@ export default function LabourVerificationPage(){
     finally{setSaving(prev=>({...prev,[batch.id]:false}))}
   }
 
+  const updateHeadcountDraft=(batchId:string,patch:Partial<HeadcountDraft>)=>{
+    setHeadcountDrafts(prev=>({...prev,[batchId]:{...(prev[batchId]||{count:'',basis:'',evidence:''}),...patch}}))
+  }
+  const beginHeadcountEdit=(batch:Batch)=>{
+    setHeadcountDrafts(prev=>({...prev,[batch.id]:{
+      count:batch.confirmed_headcount===null?'':String(batch.confirmed_headcount),
+      basis:batch.confirmed_headcount_basis||'',
+      evidence:batch.confirmed_headcount_evidence||''
+    }}))
+  }
+  const confirmHeadcount=async(batch:Batch)=>{
+    if(!canVerify||saving['headcount-'+batch.id]||!ensureBatchWorkDateUsable(batch))return
+    const draft=headcountDrafts[batch.id]||{count:'',basis:'',evidence:''}
+    if(draft.count.trim()===''||!/^\\d+$/.test(draft.count.trim())){setMessage('กรุณาระบุ Confirmed headcount เป็นจำนวนเต็มตั้งแต่ 0 ขึ้นไป');return}
+    if(!draft.basis){setMessage('กรุณาระบุหลักฐานที่ใช้ยืนยัน Headcount');return}
+    const entry=entryById.get(batch.site_operations_entry_id)
+    const sourceStatus=entry?headcountSourceStatus(batch,entry):'unknown'
+    const needsEvidence=sourceStatus!=='matched'||['daily_report','monthly_report','company_roster','contractor_only','manual_review'].includes(draft.basis)
+    if(needsEvidence&&!draft.evidence.trim()){setMessage('กรณีข้อมูลขัดกัน/ไม่ครบ ต้องใส่หลักฐานหรือเหตุผลที่ใช้ยืนยัน โดยไม่แก้ raw source');return}
+    setSaving(prev=>({...prev,['headcount-'+batch.id]:true}));setMessage('')
+    try{
+      const {data,error}=await getSupabase().rpc('labour_confirm_headcount',{
+        p_batch_id:batch.id,p_confirmed_headcount:Number(draft.count),p_basis:draft.basis,p_evidence_note:draft.evidence||''
+      })
+      if(error)throw error
+      setMessage('ยืนยัน Headcount แล้ว '+String(data)+' คน • downstream จะใช้ค่านี้แทน raw source')
+      setHeadcountDrafts(prev=>{const next={...prev};delete next[batch.id];return next})
+      setRefreshTick(v=>v+1)
+    }catch(err:any){setMessage(String(err?.message||'ยืนยัน Headcount ไม่สำเร็จ'))}
+    finally{setSaving(prev=>({...prev,['headcount-'+batch.id]:false}))}
+  }
+
   const saveBatch=async(batch:Batch)=>{
     if(!canVerify||saving[batch.id]||!ensureBatchWorkDateUsable(batch))return
     const rows=draftFor(batch)
-    if((batch.expected_headcount||0)>0&&!rows.length){setMessage('กรุณาเลือกคนงานก่อนยืนยัน');return}
+    const authority=confirmedHeadcount(batch)
+    if(authority===null){setMessage('ต้องยืนยัน Confirmed headcount ก่อนยืนยันทีมคนงาน');return}
+    if(rows.length!==authority){setMessage('รายชื่อคนงานต้องตรงกับ Confirmed headcount ก่อนยืนยัน • ห้ามใช้หมายเหตุเพื่อข้ามจำนวน');return}
     setSaving(prev=>({...prev,[batch.id]:true}));setMessage('')
     try{
       const payload=rows.map(x=>({
@@ -245,7 +290,8 @@ export default function LabourVerificationPage(){
       setRefreshTick(v=>v+1)
     }catch(err:any){
       const raw=String(err?.message||'ยืนยันไม่สำเร็จ')
-      if(raw.includes('HEADCOUNT_MISMATCH'))setMessage('จำนวนคนที่เลือกไม่ตรงกับ Headcount ใน Daily Report — หากข้อมูลต้นทางมีข้อยกเว้น ให้ใส่หมายเหตุแล้วกดยืนยันอีกครั้ง')
+      if(raw.includes('HEADCOUNT_CONFIRMATION_REQUIRED'))setMessage('ยังไม่มี Confirmed headcount • กรุณาตรวจหลักฐานและยืนยันจำนวนก่อน')
+      else if(raw.includes('HEADCOUNT_MISMATCH'))setMessage('จำนวนรายชื่อไม่ตรงกับ Confirmed headcount • ต้องแก้จำนวนหรือรายชื่อให้ตรงกันก่อน')
       else setMessage(raw)
     }finally{setSaving(prev=>({...prev,[batch.id]:false}))}
   }
@@ -365,9 +411,9 @@ export default function LabourVerificationPage(){
 
       <section className="labour-kpis">
         <div><span>รายการวันนี้</span><b>{visibleBatches.length}</b></div>
-        <div><span>Verified</span><b>{visibleBatches.filter(x=>x.verification_status==='verified').length}</b></div>
-        <div><span>Pending</span><b>{visibleBatches.filter(x=>x.verification_status==='pending').length}</b></div>
-        <div><span>Needs review</span><b>{visibleBatches.filter(x=>x.verification_status==='needs_review').length}</b></div>
+        <div><span>Verified</span><b>{visibleBatches.filter(x=>labourStatusFor(x)==='verified').length}</b></div>
+        <div><span>Pending</span><b>{visibleBatches.filter(x=>labourStatusFor(x)==='pending').length}</b></div>
+        <div><span>Needs review</span><b>{visibleBatches.filter(x=>labourStatusFor(x)==='needs_review').length}</b></div>
       </section>
 
       {!canVerify&&<div className="panel labour-readonly">บัญชีนี้ดูข้อมูลได้ แต่การยืนยัน/แก้ทีมคนงานสงวนไว้สำหรับ Manager, Engineer หรือ Payroll</div>}
@@ -381,22 +427,42 @@ export default function LabourVerificationPage(){
           const existing=(assignmentsByBatch.get(batch.id)||[]).filter(x=>x.worker_id!==batch.supervisor_worker_id)
           const draft=draftFor(batch)
           const homeCandidates=activeWorkers.filter(w=>batch.home_team&&w.default_team===batch.home_team&&w.worker_id!==batch.supervisor_worker_id)
-          const headcount=Number(batch.expected_headcount||0)
-          const countMismatch=draft.length>0&&headcount!==draft.length
+          const authority=confirmedHeadcount(batch)
+          const sourceStatus=headcountSourceStatus(batch,entry)
+          const sexTotal=maleFemaleHeadcount(entry)
+          const countMismatch=authority!==null&&draft.length>0&&authority!==draft.length
+          const headcountDraft=headcountDrafts[batch.id]||{count:'',basis:'',evidence:''}
+          const editingHeadcount=!isHeadcountConfirmed(batch)||Boolean(headcountDrafts[batch.id])
+          const headcountNeedsEvidence=sourceStatus!=='matched'||['daily_report','monthly_report','company_roster','contractor_only','manual_review'].includes(headcountDraft.basis)
           const supervisor=batch.supervisor_worker_id?workerById.get(batch.supervisor_worker_id):null
+          const effectiveLabourStatus=labourStatusFor(batch)
           return <article className="panel labour-card" key={batch.id}>
             <header>
               <div><b>{batch.supervisor_raw||'ไม่ระบุหัวหน้าทีม'}</b><small>{dateTH(batch.work_date)} • Form row {entry.source_row} • {entry.area_raw||entry.project_name_raw||'-'}</small></div>
-              <div><span className={'verify-status '+batch.verification_status}>{statusLabel(batch.verification_status)}</span><strong>{headcount} คน</strong></div>
+              <div><span className={'verify-status '+effectiveLabourStatus}>{statusLabel(effectiveLabourStatus)}</span><strong>{authority===null?'Headcount ยังไม่ยืนยัน':authority+' คน'}</strong></div>
             </header>
 
             <div className="labour-source">
               <div><span>Daily Report</span><b>{entry.work_detail||'-'}</b></div>
               {entry.afternoon_detail&&<div><span>ช่วงบ่าย</span><b>{entry.afternoon_detail}</b></div>}
               {entry.next_plan&&<div><span>Next plan</span><b>{entry.next_plan}</b></div>}
-              <div><span>Source headcount</span><b>คนงาน {entry.total_manpower??0} • หัวหน้าทีมแยกต่างหาก</b></div>
+              <div><span>Source headcount</span><b>รวม {countLabel(entry.total_manpower)} • ชาย {countLabel(entry.male_count)} • หญิง {countLabel(entry.female_count)} • ชาย+หญิง {countLabel(sexTotal)}</b><small className={sourceStatus==='mismatch'?'bad-text':''}>{sourceStatus==='mismatch'?'Source discrepancy: รวม ≠ ชาย+หญิง':sourceStatus==='unknown'?'Source บางช่องไม่ระบุ — ห้ามตีความเป็น 0':'Raw source สอดคล้องกัน แต่ยังไม่ใช่ authority จนกว่าจะมีผู้ยืนยัน'}</small></div>
               <div><span>Project</span><b>{linkedProjects.map(p=>p.code).join(' / ')||'ยังไม่ map Project'}</b></div>
               <div><span>Home team</span><b>{batch.home_team||'ยังไม่ยืนยัน identity ของหัวหน้าทีม'}</b></div>
+            </div>
+
+            <div className={'headcount-authority '+(sourceStatus==='mismatch'?'review':sourceStatus==='unknown'?'unknown':'')}>
+              <div className="headcount-authority-title"><b>{sourceStatus==='mismatch'?'ต้องตรวจ Headcount: Source ขัดกัน':sourceStatus==='unknown'?'ต้องตรวจ Headcount: Source ไม่ครบ':'Headcount Source พร้อมให้ยืนยัน'}</b><span>Worker Payroll ใช้เฉพาะ Confirmed headcount • ผู้รับเหมาไม่รวมกับคนงานบริษัท</span></div>
+              {!editingHeadcount&&authority!==null?<div className="headcount-confirmed">
+                <div><b>✓ Confirmed {authority} คน</b><small>{headcountBasisLabel(batch.confirmed_headcount_basis)}{batch.confirmed_headcount_evidence?' • '+batch.confirmed_headcount_evidence:''}</small></div>
+                <button type="button" className="button" disabled={!canVerify} onClick={()=>beginHeadcountEdit(batch)}>แก้ Headcount</button>
+              </div>:<div className="headcount-confirm-form">
+                <label>Confirmed headcount<input type="number" min="0" step="1" value={headcountDraft.count} onChange={e=>updateHeadcountDraft(batch.id,{count:e.target.value})} placeholder="ไม่กรอก = ยังไม่ยืนยัน" disabled={!canVerify}/></label>
+                <label>หลักฐาน<select value={headcountDraft.basis} onChange={e=>updateHeadcountDraft(batch.id,{basis:e.target.value})} disabled={!canVerify}><option value="">เลือกหลักฐาน</option><option value="source_total">Source total</option><option value="male_female">ชาย + หญิง</option><option value="daily_report">Daily Report</option><option value="monthly_report">Monthly Report</option><option value="company_roster">Company roster / รายชื่อบริษัท</option><option value="contractor_only">ผู้รับเหมาเท่านั้น → Worker Payroll = 0</option><option value="manual_review">ตรวจไขว้ด้วยคน</option></select></label>
+                <label className="headcount-evidence">หลักฐาน/เหตุผล<input value={headcountDraft.evidence} onChange={e=>updateHeadcountDraft(batch.id,{evidence:e.target.value})} placeholder={headcountNeedsEvidence?'จำเป็น: เช่น Monthly C=E+F / บริษัท 5 + ผู้รับเหมา 7':'ถ้ามีข้อมูลประกอบเพิ่มเติม'}/></label>
+                <button type="button" className="button primary" disabled={!canVerify||saving['headcount-'+batch.id]||headcountDraft.count.trim()===''||!headcountDraft.basis||(headcountNeedsEvidence&&!headcountDraft.evidence.trim())} onClick={()=>confirmHeadcount(batch)}>{saving['headcount-'+batch.id]?'กำลังยืนยัน…':'ยืนยัน Headcount'}</button>
+                {isHeadcountConfirmed(batch)&&<button type="button" className="button" onClick={()=>setHeadcountDrafts(prev=>{const next={...prev};delete next[batch.id];return next})}>ยกเลิก</button>}
+              </div>}
             </div>
 
             {batch.supervisor_worker_id?<div className="supervisor-confirmed">
@@ -423,7 +489,7 @@ export default function LabourVerificationPage(){
             </div>
 
             {draft.length?<div className="labour-draft">
-              <div className="labour-draft-head"><b>รายชื่อที่จะยืนยัน</b><span className={countMismatch?'bad-text':''}>{draft.length} / {headcount} คน{countMismatch?' • จำนวนไม่ตรง':''}</span></div>
+              <div className="labour-draft-head"><b>รายชื่อที่จะยืนยัน</b><span className={countMismatch?'bad-text':''}>{draft.length} / {authority===null?'ยังไม่ยืนยัน Headcount':authority+' คน'}{countMismatch?' • จำนวนไม่ตรง Confirmed':''}</span></div>
               {draft.map((row,index)=>{
                 const worker=workerById.get(row.worker_id)
                 return <div className="labour-person" key={row.worker_id+'-'+index}>
@@ -435,14 +501,14 @@ export default function LabourVerificationPage(){
                   <button type="button" className="link-danger" onClick={()=>removeDraft(batch.id,index)}>ลบ</button>
                 </div>
               })}
-            </div>:<div className="labour-no-draft">ยังไม่ได้เลือกรายชื่อ • ใช้ “ทีมเดิมทั้งหมด” เพื่อลดการกรอก หรือเพิ่มเฉพาะคนที่ต้องการจาก Worker Master</div>}
+            </div>:<div className="labour-no-draft">{authority===0?'Confirmed headcount = 0 • ไม่มี Worker Payroll roster สำหรับรายการนี้':'ยังไม่ได้เลือกรายชื่อ • ใช้ “ทีมเดิมทั้งหมด” เพื่อลดการกรอก หรือเพิ่มเฉพาะคนที่ต้องการจาก Worker Master'}</div>}
 
             <div className="labour-confirm">
-              <label>หมายเหตุการยืนยัน<input value={notes[batch.id]??batch.note??''} onChange={e=>setNotes(prev=>({...prev,[batch.id]:e.target.value}))} placeholder={countMismatch?'จำนวนไม่ตรงกับ Daily Report ต้องระบุสาเหตุ':'เช่น A ย้ายไปช่วยทีมช่างพร 1 วัน'}/></label>
-              <button type="button" className="primary" disabled={!canVerify||saving[batch.id]||!draft.length} onClick={()=>saveBatch(batch)}>{saving[batch.id]?'กำลังยืนยัน…':batch.verification_status==='verified'?'ยืนยันการแก้ไข':'ยืนยันทีมคนงาน'}</button>
+              <label>หมายเหตุการยืนยัน<input value={notes[batch.id]??batch.note??''} onChange={e=>setNotes(prev=>({...prev,[batch.id]:e.target.value}))} placeholder="เช่น A ย้ายไปช่วยทีมช่างพร 1 วัน"/></label>
+              <button type="button" className="primary" disabled={!canVerify||saving[batch.id]||authority===null||draft.length!==authority} onClick={()=>saveBatch(batch)}>{saving[batch.id]?'กำลังยืนยัน…':batch.verification_status==='verified'?'ยืนยันการแก้ไข':'ยืนยันทีมคนงาน'}</button>
             </div>
             {batch.verification_status==='verified'&&batch.verified_at&&<div className="labour-save-state verified">
-              <div><b>✓ ทีมคนงานยืนยันแล้ว</b><span>{existing.length} / {headcount} คน • บันทึกเป็น Verified Labour Dataset</span></div>
+              <div><b>✓ ทีมคนงานยืนยันแล้ว</b><span>{existing.length} / {authority===null?'ไม่ทราบ':authority} คน • บันทึกเป็น Verified Labour Dataset</span></div>
               <small>ยืนยันล่าสุด {new Date(batch.verified_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}</small>
             </div>}
             {batch.verification_status==='needs_review'&&batch.verified_at&&<div className="labour-save-state review">
@@ -484,7 +550,8 @@ export default function LabourVerificationPage(){
             const draft=payrollDraftFor(batch)
             const leader=batch.supervisor_worker_id?workerById.get(batch.supervisor_worker_id):null
             const linkedProjects=(projectIdsByEntry.get(entry.id)||[]).map(id=>projectById.get(id)).filter(Boolean) as Project[]
-            const countMismatch=Number(batch.expected_headcount||0)>0&&rows.length>0&&rows.length!==Number(batch.expected_headcount||0)
+            const payrollAuthority=confirmedHeadcount(batch)
+            const countMismatch=payrollAuthority!==null&&rows.length!==payrollAuthority
             const allMatched=draft.length>0&&draft.every(x=>x.timecard_match)
             const payrollSaving=Boolean(saving['payroll-'+batch.id])
             return <article className="panel payroll-card" key={batch.id}>
@@ -496,15 +563,17 @@ export default function LabourVerificationPage(){
               <div className="payroll-summary-grid">
                 <div><span>หัวหน้าทีม</span><b>{leader?.nickname||leader?.display_label||batch.supervisor_raw||'-'}</b><small>แยกการจ่าย • ไม่รวมใน Worker Payroll</small></div>
                 <div><span>รายละเอียดงาน</span><b>{entry.work_detail||'-'}</b>{entry.afternoon_detail&&<small>บ่าย: {entry.afternoon_detail}</small>}</div>
-                <div><span>Daily Report</span><b>{batch.expected_headcount??0} คนงาน</b><small className={countMismatch?'bad-text':''}>{rows.length} รายชื่อที่ยืนยันแล้ว{countMismatch?' • จำนวนไม่ตรง Source':''}</small></div>
+                <div><span>Headcount authority</span><b>{payrollAuthority===null?'ยังไม่ยืนยัน':payrollAuthority+' คนงาน'}</b><small className={countMismatch?'bad-text':''}>Raw {countLabel(entry.total_manpower)} • รายชื่อยืนยัน {rows.length}{countMismatch?' • ไม่ตรง Confirmed headcount':''}</small></div>
                 <div><span>วิธียืนยัน Payroll</span><b>{record?.verification_method==='legacy_excel'?'Legacy Excel':'Web Verification'}</b><small>{record?.external_reference||'Audit trail ในระบบ'}</small></div>
               </div>
 
+              {payrollAuthority===null&&<div className="payroll-warning">Headcount ยังไม่มีผู้ยืนยัน • ห้ามใช้เป็น Worker Payroll downstream จนกว่าจะ Confirmed</div>}
+              {batch.confirmed_headcount_basis==='contractor_only'&&<div className="payroll-warning">รายการนี้ยืนยันว่าเป็นผู้รับเหมาเท่านั้น • ไม่รวมใน Worker Payroll</div>}
               {batch.verification_status!=='verified'&&<div className="payroll-warning">ทีมรายวันนี้ยังไม่ผ่านการยืนยันรายชื่อ • ต้องยืนยันทีมก่อนตรวจบัตรตอก และยังยืนยันยอดเงินไม่ได้จนกว่ากติกาบัญชีจะพร้อม</div>}
               {effectiveStatus==='needs_review'&&<div className="payroll-warning">ข้อมูลทีมรายวันมีการเปลี่ยนหลังการตรวจ Payroll • ต้องเปิดตรวจบัตรตอกซ้ำก่อนใช้ยอด</div>}
 
               <div className="payroll-actions">
-                <button type="button" className="button primary" disabled={!canPayroll||!rows.length||batch.verification_status!=='verified'} onClick={()=>startPayrollReview(batch)}>{draft.length?'โหลดข้อมูลจากระบบใหม่':record?.verification_method==='web'?'เปิดรายการเดิม':'เริ่มตรวจบัตรตอก'}</button>
+                <button type="button" className="button primary" disabled={!canPayroll||batch.verification_status!=='verified'||payrollAuthority===null||batch.confirmed_headcount_basis==='contractor_only'||rows.length!==payrollAuthority} onClick={()=>startPayrollReview(batch)}>{draft.length?'โหลดข้อมูลจากระบบใหม่':record?.verification_method==='web'?'เปิดรายการเดิม':'เริ่มตรวจบัตรตอก'}</button>
                 {draft.length>0&&<><button type="button" className="button" onClick={()=>markAllTimecards(batch,true)}>✓ ตรงทุกคน</button><button type="button" className="button" onClick={()=>clearAllOt(batch)}>OT = 0 ทั้งทีม</button></>}
                 {record?.timecard_checked_at&&<span className="payroll-audit">ตรวจบัตรล่าสุด {new Date(record.timecard_checked_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}</span>}
               </div>
@@ -549,7 +618,7 @@ export default function LabourVerificationPage(){
       .labour-filter,.report-filter{display:grid;grid-template-columns:170px 170px minmax(260px,1fr) auto;gap:8px;align-items:end;padding:10px;margin-bottom:10px}.labour-filter label,.report-filter label{display:grid;gap:4px;font-size:10px;font-weight:800;color:var(--muted)}.labour-filter select,.labour-filter input,.report-filter select,.report-filter input{min-height:36px;border:1px solid var(--line);border-radius:9px;background:#fff;padding:7px 9px;font:inherit;font-size:12px}
       .labour-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}.labour-kpis>div{padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}.labour-kpis span{display:block;font-size:9px;font-weight:850;color:var(--muted)}.labour-kpis b{display:block;margin-top:3px;font-size:21px;color:var(--navy)}
       .labour-readonly,.labour-empty{padding:16px;text-align:center;color:var(--muted);font-size:10.5px;margin-bottom:10px}.labour-stack,.worker-report-stack{display:grid;gap:10px}.labour-card{padding:0;overflow:hidden}.labour-card>header,.worker-report>header{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:11px 13px;background:linear-gradient(135deg,#172a43,#213d5e);color:#fff}.labour-card header b,.worker-report header b{font-size:13px}.labour-card header small,.worker-report header small{display:block;margin-top:3px;font-size:9px;color:#c9d5e1}.labour-card header>div:last-child{display:flex;align-items:center;gap:7px}.labour-card header strong,.worker-report header strong{font-size:15px}.verify-status{padding:5px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.2);font-size:9px;font-weight:850}.verify-status.verified{background:rgba(69,170,103,.22)}.verify-status.needs_review{background:rgba(218,154,38,.25)}
-      .labour-source{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;border-bottom:1px solid var(--line)}.labour-source>div{display:grid;grid-template-columns:90px minmax(0,1fr);gap:7px;padding:8px 12px;border-bottom:1px solid #edf0f3}.labour-source span{font-size:8.5px;font-weight:900;color:var(--muted);text-transform:uppercase}.labour-source b{font-size:10px;line-height:1.45}
+      .headcount-authority{margin:0 12px 10px;padding:10px;border:1px solid #cdd9e5;border-radius:12px;background:#f8fbfd}.headcount-authority.review{border-color:#e5b76a;background:#fff9ed}.headcount-authority.unknown{border-color:#c8ced6;background:#f7f8fa}.headcount-authority-title{display:grid;gap:2px;margin-bottom:8px}.headcount-authority-title>b{font-size:11px;color:var(--navy)}.headcount-authority-title>span{font-size:9px;color:var(--muted)}.headcount-confirmed{display:flex;align-items:center;justify-content:space-between;gap:8px}.headcount-confirmed>div{display:grid;gap:2px}.headcount-confirmed b{font-size:11px}.headcount-confirmed small{font-size:9px;color:var(--muted)}.headcount-confirm-form{display:grid;grid-template-columns:150px minmax(180px,220px) minmax(220px,1fr) auto auto;gap:7px;align-items:end}.headcount-confirm-form label{display:grid;gap:3px;font-size:9px;font-weight:800;color:var(--muted)}.headcount-confirm-form input,.headcount-confirm-form select{min-height:34px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:6px 8px;font:inherit;font-size:10px}.headcount-evidence{min-width:0}\n      .labour-source{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;border-bottom:1px solid var(--line)}.labour-source>div{display:grid;grid-template-columns:90px minmax(0,1fr);gap:7px;padding:8px 12px;border-bottom:1px solid #edf0f3}.labour-source span{font-size:8.5px;font-weight:900;color:var(--muted);text-transform:uppercase}.labour-source b{font-size:10px;line-height:1.45}.labour-source small{font-size:8.5px;line-height:1.35;color:var(--muted)}
       .supervisor-resolve{display:grid;grid-template-columns:minmax(180px,.8fr) minmax(280px,1.5fr) auto;gap:7px;align-items:center;padding:9px 12px;background:#fff8e8;border-bottom:1px solid #ead29a}.supervisor-resolve>b{font-size:9.5px;color:#7a5600}.supervisor-resolve select{min-height:34px;border:1px solid #d7c48e;border-radius:8px;background:#fff;padding:6px 8px;font-size:10px}
       .supervisor-confirmed{display:flex;align-items:center;gap:9px;padding:10px 12px;background:#edf8f1;border-bottom:1px solid #b9ddc5;color:#245f38}.supervisor-confirmed-icon{display:grid;place-items:center;flex:0 0 24px;height:24px;border-radius:999px;background:#d7efdf;font-size:13px;font-weight:900}.supervisor-confirmed>div{display:grid;gap:2px;min-width:0}.supervisor-confirmed b{font-size:9px;color:#287643}.supervisor-confirmed strong{font-size:10.5px;color:#183e27}.supervisor-confirmed small{font-size:8.5px;line-height:1.4;color:#4b6e57}
       .labour-tools{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:9px 12px;background:#f8fafc;border-bottom:1px solid var(--line)}.labour-tools select{flex:1 1 300px;min-height:34px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:6px 8px;font-size:10px}
@@ -557,7 +626,7 @@ export default function LabourVerificationPage(){
       .labour-person{display:grid;grid-template-columns:minmax(160px,1.2fr) minmax(145px,.9fr) minmax(145px,.9fr) minmax(145px,.9fr) 90px auto;gap:6px;align-items:end;padding:7px 0;border-top:1px solid #edf0f3}.labour-person-name{align-self:center}.labour-person-name b{display:block;font-size:10.5px}.labour-person-name small{display:block;margin-top:2px;font-size:8.5px;color:var(--muted)}.labour-person label{display:grid;gap:3px;font-size:8px;font-weight:850;color:var(--muted)}.labour-person select,.labour-person input{min-height:31px;border:1px solid var(--line);border-radius:7px;background:#fff;padding:5px 6px;font-size:9px;min-width:0}.labour-no-draft{padding:13px;color:var(--muted);font-size:10px;text-align:center}
       .labour-confirm{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end;padding:10px 12px;border-top:1px solid var(--line);background:#fbfcfd}.labour-confirm label{display:grid;gap:4px;font-size:9px;font-weight:850;color:var(--muted)}.labour-confirm input{min-height:35px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:10px}.labour-confirm .primary{min-height:35px}.labour-save-state{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:9px 12px;border-top:1px solid var(--line)}.labour-save-state>div{display:grid;gap:2px}.labour-save-state b{font-size:9.5px}.labour-save-state span,.labour-save-state small{font-size:8.5px;line-height:1.4}.labour-save-state.verified{background:#edf8f1;border-color:#b9ddc5;color:#287643}.labour-save-state.review{background:#fff6df;border-color:#ead29a;color:#765300}.labour-verified-line{padding:7px 12px;border-top:1px solid var(--line);font-size:8.5px;color:var(--muted);text-align:right}
       .payroll-intro{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:0;padding:0;margin-bottom:10px;overflow:hidden}.payroll-intro>div{padding:12px 14px;border-right:1px solid var(--line)}.payroll-intro>div:last-child{border-right:0}.payroll-intro b{display:block;font-size:11px;color:var(--navy)}.payroll-intro span{display:block;margin-top:4px;font-size:9px;line-height:1.5;color:var(--muted)}.payroll-rule{background:#f8fafc}.payroll-rate{background:#fff9ec}.payroll-filter{grid-template-columns:145px 145px 180px minmax(220px,1fr) auto}.payroll-stack{display:grid;gap:10px}.payroll-card{padding:0;overflow:hidden}.payroll-card>header{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:11px 13px;background:linear-gradient(135deg,#172a43,#213d5e);color:#fff}.payroll-card header b{font-size:13px}.payroll-card header small{display:block;margin-top:3px;font-size:9px;color:#c9d5e1}.payroll-card header>div:last-child{display:flex;align-items:center;gap:7px}.payroll-card header strong{font-size:12px}.payroll-status{padding:5px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.22);font-size:8.5px;font-weight:850}.payroll-status.timecard_checked,.payroll-status.verified,.payroll-status.external_verified{background:rgba(69,170,103,.22)}.payroll-status.needs_review{background:rgba(218,154,38,.28)}.payroll-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-bottom:1px solid var(--line)}.payroll-summary-grid>div{padding:9px 11px;border-right:1px solid #edf0f3}.payroll-summary-grid>div:last-child{border-right:0}.payroll-summary-grid span{display:block;font-size:8px;font-weight:900;color:var(--muted);text-transform:uppercase}.payroll-summary-grid b{display:block;margin-top:3px;font-size:10px;line-height:1.4}.payroll-summary-grid small{display:block;margin-top:3px;font-size:8.5px;color:var(--muted);line-height:1.4}.payroll-warning{padding:8px 12px;background:#fff6df;border-bottom:1px solid #ead29a;color:#765300;font-size:9.5px;font-weight:700}.payroll-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:9px 12px;background:#f8fafc;border-bottom:1px solid var(--line)}.payroll-audit{margin-left:auto;font-size:8.5px;color:var(--muted)}.payroll-worker-table{overflow:auto;padding:0 10px}.payroll-worker-table table{width:100%;min-width:1100px}.payroll-worker-table th,.payroll-worker-table td{font-size:9px;vertical-align:middle;white-space:normal}.payroll-worker-table td:first-child{min-width:150px}.payroll-worker-table td small{display:block;margin-top:2px;color:var(--muted)}.payroll-worker-table select,.payroll-worker-table input{width:100%;min-height:31px;border:1px solid var(--line);border-radius:7px;background:#fff;padding:5px 6px;font-size:9px}.payroll-worker-table input[type=time]{min-width:88px}.payroll-worker-table input[type=number]{min-width:72px}.match-toggle{display:flex;align-items:center;gap:5px;padding:6px 7px;border:1px solid #d9e0e7;border-radius:8px;background:#f8fafc;font-weight:800;color:var(--muted);white-space:nowrap}.match-toggle input{width:auto!important;min-height:auto!important}.match-toggle.matched{background:#edf8f1;border-color:#b9ddc5;color:#287643}.rate-state{display:inline-flex;padding:5px 7px;border-radius:999px;background:#fff4da;color:#7a5600;font-size:8px;font-weight:850;white-space:nowrap}.payroll-confirm{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px;align-items:end;padding:10px 12px;border-top:1px solid var(--line);background:#fbfcfd}.payroll-confirm>label{display:grid;gap:4px;font-size:9px;font-weight:850;color:var(--muted)}.payroll-confirm>label input{min-height:34px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:9.5px}.payroll-confirm>div{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.match-ready,.match-wait{font-size:8.5px;font-weight:850}.match-ready{color:#287643}.match-wait{color:#a16a00}.legacy-payroll{border-top:1px solid var(--line);background:#fff}.legacy-payroll summary{padding:9px 12px;cursor:pointer;font-size:9px;font-weight:800;color:var(--muted)}.legacy-payroll>div{display:grid;grid-template-columns:1fr 1fr auto;gap:7px;align-items:end;padding:0 12px 11px}.legacy-payroll label{display:grid;gap:4px;font-size:8.5px;font-weight:800;color:var(--muted)}.legacy-payroll input{min-height:33px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:9px}
-      @media(max-width:1150px){.supervisor-resolve{grid-template-columns:1fr 1fr}.supervisor-resolve>b{grid-column:1/-1}.labour-person{grid-template-columns:1fr 1fr 1fr}.labour-person-name{grid-column:1/-1}.labour-person .link-danger{justify-self:start}.payroll-summary-grid{grid-template-columns:1fr 1fr}.payroll-summary-grid>div:nth-child(2){border-right:0}.payroll-intro{grid-template-columns:1fr}.payroll-intro>div{border-right:0;border-bottom:1px solid var(--line)}}@media(max-width:760px){.supervisor-resolve{grid-template-columns:1fr}.supervisor-resolve>b{grid-column:auto}.labour-filter,.report-filter,.payroll-filter{grid-template-columns:1fr 1fr}.labour-search{grid-column:1/-1}.labour-kpis{grid-template-columns:1fr 1fr}.labour-card>header,.payroll-card>header{align-items:flex-start}.labour-source,.payroll-summary-grid{grid-template-columns:1fr}.payroll-summary-grid>div{border-right:0;border-bottom:1px solid #edf0f3}.labour-person{grid-template-columns:1fr 1fr}.labour-person-name{grid-column:1/-1}.labour-confirm,.payroll-confirm{grid-template-columns:1fr}.legacy-payroll>div{grid-template-columns:1fr}}@media print{.labour-mode,.labour-filter,.report-filter,.labour-kpis,.labour-readonly,.labour-tools,.labour-confirm,.payroll-actions,.payroll-confirm,.legacy-payroll,.notice{display:none!important}.payroll-card{break-inside:avoid}}
+      @media(max-width:1150px){.headcount-confirm-form{grid-template-columns:1fr 1fr}.headcount-evidence{grid-column:1/-1}.supervisor-resolve{grid-template-columns:1fr 1fr}.supervisor-resolve>b{grid-column:1/-1}.labour-person{grid-template-columns:1fr 1fr 1fr}.labour-person-name{grid-column:1/-1}.labour-person .link-danger{justify-self:start}.payroll-summary-grid{grid-template-columns:1fr 1fr}.payroll-summary-grid>div:nth-child(2){border-right:0}.payroll-intro{grid-template-columns:1fr}.payroll-intro>div{border-right:0;border-bottom:1px solid var(--line)}}@media(max-width:760px){.headcount-confirm-form{grid-template-columns:1fr}.headcount-evidence{grid-column:auto}.headcount-confirmed{align-items:flex-start;flex-direction:column}.supervisor-resolve{grid-template-columns:1fr}.supervisor-resolve>b{grid-column:auto}.labour-filter,.report-filter,.payroll-filter{grid-template-columns:1fr 1fr}.labour-search{grid-column:1/-1}.labour-kpis{grid-template-columns:1fr 1fr}.labour-card>header,.payroll-card>header{align-items:flex-start}.labour-source,.payroll-summary-grid{grid-template-columns:1fr}.payroll-summary-grid>div{border-right:0;border-bottom:1px solid #edf0f3}.labour-person{grid-template-columns:1fr 1fr}.labour-person-name{grid-column:1/-1}.labour-confirm,.payroll-confirm{grid-template-columns:1fr}.legacy-payroll>div{grid-template-columns:1fr}}@media print{.labour-mode,.labour-filter,.report-filter,.labour-kpis,.labour-readonly,.labour-tools,.labour-confirm,.payroll-actions,.payroll-confirm,.legacy-payroll,.notice{display:none!important}.payroll-card{break-inside:avoid}}
     `}</style>
   </AppShell>
 }
