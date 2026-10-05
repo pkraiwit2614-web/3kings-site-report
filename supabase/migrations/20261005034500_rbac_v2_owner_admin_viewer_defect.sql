@@ -191,7 +191,7 @@ CREATE OR REPLACE FUNCTION public.daily_report_apply_revision_v34(p_report_id uu
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO 'public', 'private', 'pg_temp'
-AS $function$;
+AS $function$
 declare
   v_report public.daily_reports%rowtype; v_items jsonb; v_photos jsonb; v_snapshot jsonb; v_new_revision integer;
 begin
@@ -219,83 +219,11 @@ begin
   return v_new_revision;
 end; $function$;
 
-
-CREATE OR REPLACE FUNCTION public.labour_confirm_supervisor_mapping(p_batch_id uuid, p_worker_id text)
- RETURNS text
- LANGUAGE plpgsql
- SET search_path TO 'public'
-AS $function$;
-declare
-  v_user uuid := (select auth.uid());
-  v_entry_id uuid;
-  v_source_name text;
-  v_norm text;
-  v_worker_name text;
-  v_team text;
-  v_has_project boolean;
-begin
-  if v_user is null then raise exception 'AUTH_REQUIRED'; end if;
-  if not exists (
-    select 1 from public.profiles p
-    where p.user_id=v_user and p.active=true and p.role in ('manager','admin','engineer','payroll')
-  ) then
-    raise exception 'NOT_AUTHORIZED_FOR_LABOUR_VERIFICATION';
-  end if;
-
-  select b.site_operations_entry_id,e.supervisor_raw
-  into v_entry_id,v_source_name
-  from public.labour_verification_batches b
-  join public.site_operations_entries e on e.id=b.site_operations_entry_id
-  where b.id=p_batch_id
-  for update of b;
-
-  if not found then raise exception 'LABOUR_BATCH_NOT_FOUND'; end if;
-
-  select w.full_name,w.default_team into v_worker_name,v_team
-  from public.labour_workers w where w.worker_id=p_worker_id;
-
-  if not found then raise exception 'UNKNOWN_WORKER_ID'; end if;
-  if nullif(btrim(coalesce(v_source_name,'')),'') is null then raise exception 'SOURCE_SUPERVISOR_EMPTY'; end if;
-
-  v_norm:=lower(regexp_replace(v_source_name,'[[:space:]().,_/\\-]+','','g'));
-  select exists(select 1 from public.site_operations_entry_projects ep where ep.entry_id=v_entry_id) into v_has_project;
-
-  insert into public.labour_name_map(
-    source_name_norm,source_name,worker_id,canonical_name,map_type,status,source_file_id,synced_at
-  )
-  values(v_norm,v_source_name,p_worker_id,v_worker_name,'WEB_VERIFIED','CONFIRMED','WEB_LABOUR_VERIFICATION',now())
-  on conflict(source_name_norm) do update set
-    source_name=excluded.source_name,worker_id=excluded.worker_id,canonical_name=excluded.canonical_name,
-    map_type='WEB_VERIFIED',status='CONFIRMED',source_file_id='WEB_LABOUR_VERIFICATION',synced_at=now();
-
-  update public.site_operations_entries
-  set supervisor_worker_id=p_worker_id,
-      mapping_status=case when v_has_project then 'mapped' else 'partial' end,
-      updated_at=now()
-  where id=v_entry_id;
-
-  update public.labour_verification_batches
-  set supervisor_worker_id=p_worker_id,
-      home_team=v_team,
-      verification_status=case when verification_status='verified' then 'needs_review' else 'pending' end,
-      updated_at=now()
-  where id=p_batch_id;
-
-  update public.payroll_verification_records
-  set status=case when status in ('verified','external_verified') then 'needs_review' else status end,
-      updated_at=now()
-  where labour_batch_id=p_batch_id;
-
-  return p_worker_id;
-end;
-$function$;
-
-
 CREATE OR REPLACE FUNCTION public.labour_confirm_headcount(p_batch_id uuid, p_confirmed_headcount integer, p_basis text, p_evidence_note text)
  RETURNS integer
  LANGUAGE plpgsql
  SET search_path TO 'public'
-AS $function$;
+AS $function$
 declare
   v_user uuid := (select auth.uid());
   v_source_status text;
@@ -373,12 +301,181 @@ begin
 end;
 $function$;
 
+CREATE OR REPLACE FUNCTION public.labour_confirm_supervisor_mapping(p_batch_id uuid, p_worker_id text)
+ RETURNS text
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_user uuid := (select auth.uid());
+  v_entry_id uuid;
+  v_source_name text;
+  v_norm text;
+  v_worker_name text;
+  v_team text;
+  v_has_project boolean;
+begin
+  if v_user is null then raise exception 'AUTH_REQUIRED'; end if;
+  if not exists (
+    select 1 from public.profiles p
+    where p.user_id=v_user and p.active=true and p.role in ('manager','admin','engineer','payroll')
+  ) then
+    raise exception 'NOT_AUTHORIZED_FOR_LABOUR_VERIFICATION';
+  end if;
+
+  select b.site_operations_entry_id,e.supervisor_raw
+  into v_entry_id,v_source_name
+  from public.labour_verification_batches b
+  join public.site_operations_entries e on e.id=b.site_operations_entry_id
+  where b.id=p_batch_id
+  for update of b;
+
+  if not found then raise exception 'LABOUR_BATCH_NOT_FOUND'; end if;
+
+  select w.full_name,w.default_team into v_worker_name,v_team
+  from public.labour_workers w where w.worker_id=p_worker_id;
+
+  if not found then raise exception 'UNKNOWN_WORKER_ID'; end if;
+  if nullif(btrim(coalesce(v_source_name,'')),'') is null then raise exception 'SOURCE_SUPERVISOR_EMPTY'; end if;
+
+  v_norm:=lower(regexp_replace(v_source_name,'[[:space:]().,_/\\-]+','','g'));
+  select exists(select 1 from public.site_operations_entry_projects ep where ep.entry_id=v_entry_id) into v_has_project;
+
+  insert into public.labour_name_map(
+    source_name_norm,source_name,worker_id,canonical_name,map_type,status,source_file_id,synced_at
+  )
+  values(v_norm,v_source_name,p_worker_id,v_worker_name,'WEB_VERIFIED','CONFIRMED','WEB_LABOUR_VERIFICATION',now())
+  on conflict(source_name_norm) do update set
+    source_name=excluded.source_name,worker_id=excluded.worker_id,canonical_name=excluded.canonical_name,
+    map_type='WEB_VERIFIED',status='CONFIRMED',source_file_id='WEB_LABOUR_VERIFICATION',synced_at=now();
+
+  update public.site_operations_entries
+  set supervisor_worker_id=p_worker_id,
+      mapping_status=case when v_has_project then 'mapped' else 'partial' end,
+      updated_at=now()
+  where id=v_entry_id;
+
+  update public.labour_verification_batches
+  set supervisor_worker_id=p_worker_id,
+      home_team=v_team,
+      verification_status=case when verification_status='verified' then 'needs_review' else 'pending' end,
+      updated_at=now()
+  where id=p_batch_id;
+
+  update public.payroll_verification_records
+  set status=case when status in ('verified','external_verified') then 'needs_review' else status end,
+      updated_at=now()
+  where labour_batch_id=p_batch_id;
+
+  return p_worker_id;
+end;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.labour_payroll_guard_row()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'pg_catalog', 'public'
+AS $function$
+declare
+ b public.labour_verification_batches%rowtype;
+ r public.payroll_verification_records%rowtype;
+ w public.labour_workers%rowtype;
+ v_id uuid;
+ v_user uuid := auth.uid();
+begin
+ if tg_op='UPDATE' and new.id is distinct from old.id then raise exception 'IMMUTABLE_ID'; end if;
+ if tg_table_name='labour_verification_batches' then
+   if tg_op='UPDATE' and new.site_operations_entry_id is distinct from old.site_operations_entry_id then
+     raise exception 'IMMUTABLE_LABOUR_SOURCE';
+   end if;
+   if tg_op<>'DELETE' and new.verification_status='verified'
+     and (tg_op='INSERT' or old.verification_status is distinct from new.verification_status
+       or old.verified_by is distinct from new.verified_by
+       or old.verified_at is distinct from new.verified_at
+       or old.verified_source_fingerprint is distinct from new.verified_source_fingerprint) then
+     if v_user is null or not exists(select 1 from public.profiles where user_id=v_user and active and role in ('manager','admin','engineer','payroll')) then
+       raise exception 'AUTH_REQUIRED_FOR_VERIFICATION';
+     end if;
+     new.verified_by:=v_user;
+     new.verified_at:=now();
+     -- Source fingerprint is asserted, never silently accept a stale revision.
+   end if;
+   if tg_op='UPDATE' and (new.verification_status is distinct from old.verification_status
+     or new.verified_at is distinct from old.verified_at
+     or new.verified_source_fingerprint is distinct from old.verified_source_fingerprint
+     or new.supervisor_worker_id is distinct from old.supervisor_worker_id
+     or new.work_date is distinct from old.work_date or new.expected_headcount is distinct from old.expected_headcount) then
+     update public.payroll_verification_records set status='needs_review',updated_at=now()
+       where labour_batch_id=old.id and status in ('timecard_checked','verified','external_verified');
+   end if;
+ elsif tg_table_name='labour_daily_assignments' then
+   if tg_op='UPDATE' and (new.batch_id is distinct from old.batch_id or new.worker_id is distinct from old.worker_id) then
+     raise exception 'IMMUTABLE_ASSIGNMENT_IDENTITY';
+   end if;
+   v_id:=case when tg_op='DELETE' then old.batch_id else new.batch_id end;
+   select * into b from public.labour_verification_batches where id=v_id for update;
+   update public.payroll_verification_records set status='needs_review',updated_at=now()
+     where labour_batch_id=v_id and status in ('timecard_checked','verified','external_verified');
+   if tg_op<>'DELETE' then
+     if v_user is null or not exists(select 1 from public.profiles where user_id=v_user and active and role in ('manager','admin','engineer','payroll')) then
+       raise exception 'AUTH_REQUIRED_FOR_VERIFICATION';
+     end if;
+     if new.work_date is distinct from b.work_date or new.worker_id=b.supervisor_worker_id then
+       raise exception 'INVALID_LABOUR_ASSIGNMENT';
+     end if;
+     select * into w from public.labour_workers where worker_id=new.worker_id;
+     if not found then raise exception 'UNKNOWN_WORKER_ID'; end if;
+     if new.home_team is distinct from w.default_team then raise exception 'HOME_TEAM_MUST_MATCH_WORKER'; end if;
+     new.verified_by:=v_user; new.verified_at:=now();
+   end if;
+ elsif tg_table_name='payroll_verification_records' then
+   if tg_op='UPDATE' and new.labour_batch_id is distinct from old.labour_batch_id then raise exception 'IMMUTABLE_PAYROLL_BATCH'; end if;
+   v_id:=case when tg_op='DELETE' then old.labour_batch_id else new.labour_batch_id end;
+   perform 1 from public.labour_verification_batches where id=v_id for update;
+   if tg_op<>'DELETE' then
+     if new.status in ('timecard_checked','verified','external_verified') then
+       if v_user is null or not exists(select 1 from public.profiles where user_id=v_user and active and role in ('manager','admin','engineer','payroll')) then
+         raise exception 'AUTH_REQUIRED_FOR_VERIFICATION';
+       end if;
+       if new.status in ('timecard_checked','verified') then
+         new.timecard_checked_by:=v_user; new.timecard_checked_at:=now();
+       end if;
+       if new.status in ('verified','external_verified') then new.verified_by:=v_user; new.verified_at:=now(); end if;
+     else
+       new.verified_by:=null; new.verified_at:=null;
+     end if;
+   end if;
+ else -- payroll items
+   if tg_op='UPDATE' and (new.record_id is distinct from old.record_id or new.worker_id is distinct from old.worker_id) then
+     raise exception 'IMMUTABLE_PAYROLL_ITEM_IDENTITY';
+   end if;
+   v_id:=case when tg_op='DELETE' then old.record_id else new.record_id end;
+   select * into r from public.payroll_verification_records where id=v_id;
+   select * into b from public.labour_verification_batches where id=r.labour_batch_id for update;
+   if r.status in ('timecard_checked','verified') and r.timecard_checked_at is distinct from now() then
+     raise exception 'PAYROLL_REVERIFICATION_REQUIRED';
+   end if;
+   if tg_op<>'DELETE' and r.verification_method='web' then
+     -- FK SET NULL during re-verification preserves historical items, but never a checked state.
+     if not (tg_op='UPDATE' and new.labour_assignment_id is null and old.labour_assignment_id is not null
+       and r.status in ('draft','needs_review')
+       and not exists(select 1 from public.labour_daily_assignments where id=old.labour_assignment_id)) and not exists(select 1 from public.labour_daily_assignments a
+         where a.id=new.labour_assignment_id and a.batch_id=b.id and a.worker_id=new.worker_id
+           and (b.supervisor_worker_id is null or a.worker_id<>b.supervisor_worker_id)) then
+       raise exception 'PAYROLL_ITEM_NOT_IN_VERIFIED_TEAM';
+     end if;
+   end if;
+ end if;
+ if tg_op='DELETE' then return old; end if;
+ return new;
+end;
+$function$;
 
 CREATE OR REPLACE FUNCTION public.labour_verify_batch(p_batch_id uuid, p_note text, p_assignments jsonb)
  RETURNS integer
  LANGUAGE plpgsql
  SET search_path TO 'public'
-AS $function$;
+AS $function$
 declare
   v_user uuid := (select auth.uid());
   v_expected integer;
@@ -505,114 +602,12 @@ begin
 end;
 $function$;
 
-
-CREATE OR REPLACE FUNCTION public.labour_payroll_guard_row()
- RETURNS trigger
- LANGUAGE plpgsql
- SET search_path TO 'pg_catalog', 'public'
-AS $function$;
-declare
- b public.labour_verification_batches%rowtype;
- r public.payroll_verification_records%rowtype;
- w public.labour_workers%rowtype;
- v_id uuid;
- v_user uuid := auth.uid();
-begin
- if tg_op='UPDATE' and new.id is distinct from old.id then raise exception 'IMMUTABLE_ID'; end if;
- if tg_table_name='labour_verification_batches' then
-   if tg_op='UPDATE' and new.site_operations_entry_id is distinct from old.site_operations_entry_id then
-     raise exception 'IMMUTABLE_LABOUR_SOURCE';
-   end if;
-   if tg_op<>'DELETE' and new.verification_status='verified'
-     and (tg_op='INSERT' or old.verification_status is distinct from new.verification_status
-       or old.verified_by is distinct from new.verified_by
-       or old.verified_at is distinct from new.verified_at
-       or old.verified_source_fingerprint is distinct from new.verified_source_fingerprint) then
-     if v_user is null or not exists(select 1 from public.profiles where user_id=v_user and active and role in ('manager','admin','engineer','payroll')) then
-       raise exception 'AUTH_REQUIRED_FOR_VERIFICATION';
-     end if;
-     new.verified_by:=v_user;
-     new.verified_at:=now();
-     -- Source fingerprint is asserted, never silently accept a stale revision.
-   end if;
-   if tg_op='UPDATE' and (new.verification_status is distinct from old.verification_status
-     or new.verified_at is distinct from old.verified_at
-     or new.verified_source_fingerprint is distinct from old.verified_source_fingerprint
-     or new.supervisor_worker_id is distinct from old.supervisor_worker_id
-     or new.work_date is distinct from old.work_date or new.expected_headcount is distinct from old.expected_headcount) then
-     update public.payroll_verification_records set status='needs_review',updated_at=now()
-       where labour_batch_id=old.id and status in ('timecard_checked','verified','external_verified');
-   end if;
- elsif tg_table_name='labour_daily_assignments' then
-   if tg_op='UPDATE' and (new.batch_id is distinct from old.batch_id or new.worker_id is distinct from old.worker_id) then
-     raise exception 'IMMUTABLE_ASSIGNMENT_IDENTITY';
-   end if;
-   v_id:=case when tg_op='DELETE' then old.batch_id else new.batch_id end;
-   select * into b from public.labour_verification_batches where id=v_id for update;
-   update public.payroll_verification_records set status='needs_review',updated_at=now()
-     where labour_batch_id=v_id and status in ('timecard_checked','verified','external_verified');
-   if tg_op<>'DELETE' then
-     if v_user is null or not exists(select 1 from public.profiles where user_id=v_user and active and role in ('manager','admin','engineer','payroll')) then
-       raise exception 'AUTH_REQUIRED_FOR_VERIFICATION';
-     end if;
-     if new.work_date is distinct from b.work_date or new.worker_id=b.supervisor_worker_id then
-       raise exception 'INVALID_LABOUR_ASSIGNMENT';
-     end if;
-     select * into w from public.labour_workers where worker_id=new.worker_id;
-     if not found then raise exception 'UNKNOWN_WORKER_ID'; end if;
-     if new.home_team is distinct from w.default_team then raise exception 'HOME_TEAM_MUST_MATCH_WORKER'; end if;
-     new.verified_by:=v_user; new.verified_at:=now();
-   end if;
- elsif tg_table_name='payroll_verification_records' then
-   if tg_op='UPDATE' and new.labour_batch_id is distinct from old.labour_batch_id then raise exception 'IMMUTABLE_PAYROLL_BATCH'; end if;
-   v_id:=case when tg_op='DELETE' then old.labour_batch_id else new.labour_batch_id end;
-   perform 1 from public.labour_verification_batches where id=v_id for update;
-   if tg_op<>'DELETE' then
-     if new.status in ('timecard_checked','verified','external_verified') then
-       if v_user is null or not exists(select 1 from public.profiles where user_id=v_user and active and role in ('manager','admin','engineer','payroll')) then
-         raise exception 'AUTH_REQUIRED_FOR_VERIFICATION';
-       end if;
-       if new.status in ('timecard_checked','verified') then
-         new.timecard_checked_by:=v_user; new.timecard_checked_at:=now();
-       end if;
-       if new.status in ('verified','external_verified') then new.verified_by:=v_user; new.verified_at:=now(); end if;
-     else
-       new.verified_by:=null; new.verified_at:=null;
-     end if;
-   end if;
- else -- payroll items
-   if tg_op='UPDATE' and (new.record_id is distinct from old.record_id or new.worker_id is distinct from old.worker_id) then
-     raise exception 'IMMUTABLE_PAYROLL_ITEM_IDENTITY';
-   end if;
-   v_id:=case when tg_op='DELETE' then old.record_id else new.record_id end;
-   select * into r from public.payroll_verification_records where id=v_id;
-   select * into b from public.labour_verification_batches where id=r.labour_batch_id for update;
-   if r.status in ('timecard_checked','verified') and r.timecard_checked_at is distinct from now() then
-     raise exception 'PAYROLL_REVERIFICATION_REQUIRED';
-   end if;
-   if tg_op<>'DELETE' and r.verification_method='web' then
-     -- FK SET NULL during re-verification preserves historical items, but never a checked state.
-     if not (tg_op='UPDATE' and new.labour_assignment_id is null and old.labour_assignment_id is not null
-       and r.status in ('draft','needs_review')
-       and not exists(select 1 from public.labour_daily_assignments where id=old.labour_assignment_id)) and not exists(select 1 from public.labour_daily_assignments a
-         where a.id=new.labour_assignment_id and a.batch_id=b.id and a.worker_id=new.worker_id
-           and (b.supervisor_worker_id is null or a.worker_id<>b.supervisor_worker_id)) then
-       raise exception 'PAYROLL_ITEM_NOT_IN_VERIFIED_TEAM';
-     end if;
-   end if;
- end if;
- if tg_op='DELETE' then return old; end if;
- return new;
-end;
-$function$;
-
-
 CREATE OR REPLACE FUNCTION public.payroll_save_verification(p_labour_batch_id uuid, p_method text, p_status text, p_note text, p_external_reference text, p_items jsonb)
  RETURNS uuid
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO ''
-AS $function$;
+AS $function$
 declare
   v_user uuid := (select auth.uid());
   v_batch public.labour_verification_batches%rowtype;
@@ -814,7 +809,6 @@ begin
   return v_record_id;
 end;
 $function$;
-
 
 revoke all on function public.labour_confirm_supervisor_mapping(uuid,text) from public,anon;
 grant execute on function public.labour_confirm_supervisor_mapping(uuid,text) to authenticated;
