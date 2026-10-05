@@ -278,7 +278,7 @@ jobs:
             await installMocks(viewerCtx,'viewer')
             const viewer=await viewerCtx.newPage()
             await viewer.goto(base+'/reports/labour?date=2026-10-04',{waitUntil:'domcontentloaded'})
-            await viewer.getByText('บัญชีนี้ดูข้อมูลได้ แต่การยืนยัน/แก้ทีมคนงานสงวนไว้สำหรับ Manager, Engineer หรือ Payroll').waitFor({state:'visible',timeout:15000})
+            await viewer.getByText('บัญชีนี้ดูข้อมูล Labour ได้ แต่การยืนยัน/แก้ทีมคนงานสงวนไว้สำหรับ Admin').waitFor({state:'visible',timeout:15000})
             const addButtons=viewer.getByRole('button',{name:'เพิ่มคน'})
             const count=await addButtons.count()
             for(let i=0;i<count;i++) assert(await addButtons.nth(i).isDisabled(),'viewer has enabled add worker button')
