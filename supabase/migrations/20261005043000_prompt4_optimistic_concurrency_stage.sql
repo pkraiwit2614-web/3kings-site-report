@@ -92,8 +92,7 @@ begin
     )
   );
 
-  select
-    b.*,
+  select b,
     e.source_fingerprint,e.work_date,e.work_date_validation_status
   into
     v_batch,
@@ -289,7 +288,7 @@ begin
 
   -- Lock the batch and canonical source first. This serializes all saves for one batch
   -- and prevents a source update from slipping between the comparison and write.
-  select b.*, e.source_fingerprint
+  select b, e.source_fingerprint
     into v_batch, v_source_fingerprint
   from public.labour_verification_batches b
   join public.site_operations_entries e on e.id=b.site_operations_entry_id
