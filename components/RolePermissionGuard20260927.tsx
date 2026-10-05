@@ -15,17 +15,15 @@ export default function RolePermissionGuard20260927(){
   useEffect(()=>{
     let cancelled=false
     const apply=async()=>{
-      const body=document.body
-      for(const cls of Array.from(body.classList)){
-        if(cls.startsWith('access-role-'))body.classList.remove(cls)
-      }
       const s=getSupabase()
       const {data:{user}}=await s.auth.getUser()
-      if(cancelled||!user)return
+      if(cancelled)return
+      if(!user){setActualRole(null);return}
       const {data:profile}=await s.from('profiles').select('role,active').eq('user_id',user.id).maybeSingle()
-      if(cancelled||!profile?.active)return
+      if(cancelled)return
+      if(!profile?.active){setActualRole(null);return}
       const role=resolveAccessRole(profile.role,user.id)
-      if(!role)return
+      if(!role){setActualRole(null);return}
       setActualRole(role)
       if(!canAccessPath(role,path))router.replace(defaultPathForRole(role))
     }
