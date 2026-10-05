@@ -6,6 +6,7 @@ on:
       - fix/labour-working-team-default-20261005
     paths:
       - '.github/workflows/labour-working-team-current-ui-e2e.yml'
+      - 'app/reports/labour/page.tsx'
 
 permissions:
   contents: read
