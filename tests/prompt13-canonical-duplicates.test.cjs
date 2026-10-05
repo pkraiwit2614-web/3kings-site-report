@@ -83,5 +83,5 @@ test('retry/idempotency contracts are encoded by stable candidate key and unique
   assert.match(sql,/candidate_key text not null unique/)
   assert.match(sql,/on conflict\(candidate_key\) do update/)
   assert.match(sql,/on conflict\(entry_id\) do update/)
-  assert.match(sql,/decision_members_fingerprint is distinct from v_current_fp/)
+  assert.match(sql,/v_decision_fp is distinct from v_current_fp/)
 })
