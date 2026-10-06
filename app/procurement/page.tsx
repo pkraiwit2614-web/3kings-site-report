@@ -9,6 +9,7 @@ import { getSupabase } from '@/lib/supabase'
 import { createLiveLoader, requireSuccessfulReads } from '@/lib/liveLoader'
 import { dateTH } from '@/lib/format'
 import type { Project } from '@/lib/types'
+import ProcurementEditPanel from '@/components/ProcurementEditPanel'
 
 function dateTimeTH(value:string|null|undefined){
   if(!value)return '-'
@@ -192,6 +193,7 @@ export default function ProcurementPage(){
   } as const
 
   return <AppShell>
+    <ProcurementEditPanel/>
     {loadError&&<div className="panel" role="alert">โหลดข้อมูลไม่สำเร็จ ข้อมูลที่แสดงอาจเป็นข้อมูลเดิม กรุณาลองใหม่ <button type="button" className="button" onClick={()=>window.dispatchEvent(new Event('focus'))}>ลองใหม่</button></div>}
     <PageHeader title="การจัดซื้อ/จัดจ้าง" subtitle="ค้นหาจากวัสดุ งาน ผู้ขาย ผู้รับเหมา เลข PO หรือสถานะ เพื่อดูว่าตอนนี้ติดอยู่ขั้นตอนไหนและต้องตามอะไรต่อ" action={<div className="management-action-grid management-printable-actions">
       <div className="management-action-meta"><span>ข้อมูลอัปเดต</span><b>{dateTimeTH(latestSyncAt)}</b></div>
