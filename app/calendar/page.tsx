@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
+import { useI18n } from '@/components/I18nProvider'
 
 type CalendarMode = 'MONTH' | 'WEEK' | 'AGENDA'
 
@@ -30,6 +31,7 @@ function validMode(value:string|null): value is CalendarMode {
 }
 
 export default function WorkCalendarPage(){
+  const {language}=useI18n()
   const [selected,setSelected]=useState<string[]>(()=>WORK_CALENDARS.map(x=>x.id))
   const [mode,setMode]=useState<CalendarMode>('MONTH')
   const [loadedPrefs,setLoadedPrefs]=useState(false)
@@ -65,7 +67,7 @@ export default function WorkCalendarPage(){
   const embedUrl=useMemo(()=>{
     if(!selected.length)return ''
     const params=new URLSearchParams({
-      hl:'th',
+      hl:language,
       wkst:'1',
       bgcolor:'#ffffff',
       ctz:'Asia/Bangkok',
@@ -84,7 +86,7 @@ export default function WorkCalendarPage(){
       params.append('color',calendar.color)
     }
     return `https://calendar.google.com/calendar/embed?${params.toString()}`
-  },[mode,selected.length,selectedSet])
+  },[language,mode,selected.length,selectedSet])
 
   const toggle=(id:string)=>{
     setSelected(current=>current.includes(id)?current.filter(x=>x!==id):[...current,id])
