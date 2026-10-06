@@ -82,8 +82,8 @@ export default function SiteOperationsPage(){
             s.from('projects').select('id,code,name,site_group,target_handover,active,sort_order',{count:'exact'}).order('sort_order').order('id').range(from,to).abortSignal(signal)}),
           readAllPages<ScheduleTask>({label:'v_schedule_tasks',signal,keyOf:x=>x.id,fetchPage:(from,to)=>
             s.from('v_schedule_tasks').select('id,project_id,source_task_no,category,task_name,area,planned_start,planned_end,current_plan_progress,actual_progress,current_variance,delay_days,site_status,blocker,next_action,target_close,contractor',{count:'exact'}).order('id').range(from,to).abortSignal(signal)}),
-          readAllPages<ProcurementRow>({label:'procurement_items',signal,keyOf:x=>x.id,fetchPage:(from,to)=>
-            s.from('procurement_items').select('id,project_id,vendor,item_name,current_status,procurement_status,payment_status,expected_delivery_text,condition_note,po_no,pr_no',{count:'exact'}).order('id').range(from,to).abortSignal(signal)}),
+          readAllPages<ProcurementRow>({label:'v_procurement_items',signal,keyOf:x=>x.id,fetchPage:(from,to)=>
+            s.from('v_procurement_items').select('id,project_id,vendor,item_name,current_status,procurement_status,payment_status,expected_delivery_text,condition_note,po_no,pr_no',{count:'exact'}).order('id').range(from,to).abortSignal(signal)}),
           readAllPages<ProcurementLink>({label:'procurement_item_projects',signal,keyOf:x=>x.procurement_item_id+':'+x.project_id,fetchPage:(from,to)=>
             s.from('procurement_item_projects').select('procurement_item_id,project_id',{count:'exact'}).order('procurement_item_id').order('project_id').range(from,to).abortSignal(signal)}),
           readAllPages<LabourWorker>({label:'labour_workers',signal,keyOf:x=>x.worker_id,fetchPage:(from,to)=>
