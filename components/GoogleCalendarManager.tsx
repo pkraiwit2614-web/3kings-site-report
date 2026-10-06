@@ -5,6 +5,8 @@ import {useEffect,useMemo,useState} from 'react'
 import useAccessRole from '@/components/useAccessRole'
 import {canEditCalendar} from '@/lib/accessControl'
 import {logActivity} from '@/lib/activityLog'
+import {useI18n} from '@/components/I18nProvider'
+import type {AppLanguage} from '@/lib/i18n'
 
 type CalendarMode='MONTH'|'WEEK'|'AGENDA'
 type WorkCalendar={id:string;label:string;color:string}
@@ -97,12 +99,22 @@ function monthCells(monthKey:string){
   return Array.from({length:42},(_,index)=>addDays(start,index))
 }
 
-function monthLabel(dateKey:string){
-  return new Intl.DateTimeFormat('th-TH',{timeZone:'UTC',month:'long',year:'numeric'}).format(new Date(firstOfMonth(dateKey)+'T12:00:00Z'))
+function displayLocale(language:AppLanguage){
+  if(language==='en')return 'en-GB'
+  if(language==='ru')return 'ru-RU'
+  return 'th-TH'
 }
 
-function dayLabel(dateKey:string){
-  return new Intl.DateTimeFormat('th-TH',{timeZone:'UTC',weekday:'short',day:'numeric',month:'short'}).format(new Date(dateKey+'T12:00:00Z'))
+function monthLabel(dateKey:string,language:AppLanguage){
+  return new Intl.DateTimeFormat(displayLocale(language),{timeZone:'UTC',month:'long',year:'numeric'}).format(new Date(firstOfMonth(dateKey)+'T12:00:00Z'))
+}
+
+function dayLabel(dateKey:string,language:AppLanguage){
+  return new Intl.DateTimeFormat(displayLocale(language),{timeZone:'UTC',weekday:'short',day:'numeric',month:'short'}).format(new Date(dateKey+'T12:00:00Z'))
+}
+
+function weekdayLabels(language:AppLanguage){
+  return Array.from({length:7},(_,index)=>new Intl.DateTimeFormat(displayLocale(language),{timeZone:'UTC',weekday:'short'}).format(new Date(Date.UTC(2024,0,1+index))))
 }
 
 function bangkokDateFromDateTime(value:string){
@@ -176,6 +188,7 @@ async function googleFetch<T>(token:string,url:string,init?:RequestInit):Promise
 }
 
 export default function GoogleCalendarManager(){
+  const {language}=useI18n()
   const {role,userId,ready}=useAccessRole()
   const editable=canEditCalendar(role)
   const envClientId=process.env.NEXT_PUBLIC_GOOGLE_OAUTH_CLIENT_ID||''
@@ -231,14 +244,14 @@ export default function GoogleCalendarManager(){
 
   const readOnlyEmbedUrl=useMemo(()=>{
     if(!selected.length)return ''
-    const params=new URLSearchParams({hl:'th',wkst:'1',bgcolor:'#ffffff',ctz:'Asia/Bangkok',showTitle:'0',showNav:'1',showDate:'1',showPrint:'0',showTabs:'0',showCalendars:'0',showTz:'0',mode})
+    const params=new URLSearchParams({hl:language,wkst:'1',bgcolor:'#ffffff',ctz:'Asia/Bangkok',showTitle:'0',showNav:'1',showDate:'1',showPrint:'0',showTabs:'0',showCalendars:'0',showTz:'0',mode})
     for(const calendar of WORK_CALENDARS){
       if(!selectedSet.has(calendar.id))continue
       params.append('src',calendar.id)
       params.append('color',calendar.color)
     }
     return 'https://calendar.google.com/calendar/embed?'+params.toString()
-  },[mode,selected.length,selectedSet])
+  },[language,mode,selected.length,selectedSet])
 
   const eventsByDate=useMemo(()=>{
     const map=new Map<string,WorkEvent[]>()
@@ -445,7 +458,7 @@ export default function GoogleCalendarManager(){
         <button type="button" className="button" onClick={()=>setFocusDate(todayBangkok())}>วันนี้</button>
         <button type="button" className="button" onClick={goNext}>ถัดไป ›</button>
       </div>
-      <b className="gcal-period">{mode==='WEEK'?dayLabel(weekStart)+' – '+dayLabel(addDays(weekStart,6)):monthLabel(focusDate)}</b>
+      <b className="gcal-period">{mode==='WEEK'?dayLabel(weekStart,language)+' – '+dayLabel(addDays(weekStart,6),language):monthLabel(focusDate,language)}</b>
       <div className="gcal-selection-actions">
         <button type="button" onClick={()=>setSelected(WORK_CALENDARS.map(row=>row.id))}>เลือกทั้งหมด</button>
         <button type="button" onClick={()=>setSelected([])}>ล้าง</button>
@@ -471,7 +484,7 @@ export default function GoogleCalendarManager(){
         {loading&&<div className="gcal-loading">กำลังโหลด Google Calendar…</div>}
         {!token?renderReadOnly():<>
           {mode==='MONTH'&&<>
-            <div className="gcal-weekdays">{['จ','อ','พ','พฤ','ศ','ส','อา'].map(day=><b key={day}>{day}</b>)}</div>
+            <div className="gcal-weekdays">{weekdayLabels(language).map(day=><b key={day}>{day}</b>)}</div>
             <div className="gcal-month-grid">
               {cells.map(dateKey=><div key={dateKey} className={'gcal-day '+(dateKey.slice(0,7)===focusDate.slice(0,7)?'':'outside')+(dateKey===todayBangkok()?' today':'')} onDoubleClick={()=>openCreate(dateKey)}>
                 <div className="gcal-day-head"><button type="button" onClick={()=>openCreate(dateKey)}>{Number(dateKey.slice(8,10))}</button>{dateKey===todayBangkok()&&<small>วันนี้</small>}</div>
@@ -481,12 +494,12 @@ export default function GoogleCalendarManager(){
           </>}
           {mode==='WEEK'&&<div className="gcal-week-grid">
             {weekDays.map(dateKey=><div key={dateKey} className={'gcal-week-day '+(dateKey===todayBangkok()?'today':'')}>
-              <div className="gcal-week-head"><b>{dayLabel(dateKey)}</b>{editable&&<button type="button" className="button" onClick={()=>openCreate(dateKey)}>+ เพิ่ม</button>}</div>
+              <div className="gcal-week-head"><b>{dayLabel(dateKey,language)}</b>{editable&&<button type="button" className="button" onClick={()=>openCreate(dateKey)}>+ เพิ่ม</button>}</div>
               <div className="gcal-week-events">{(eventsByDate.get(dateKey)||[]).map(renderEvent)}{!(eventsByDate.get(dateKey)||[]).length&&<small className="muted">ไม่มีรายการ</small>}</div>
             </div>)}
           </div>}
           {mode==='AGENDA'&&<div className="gcal-agenda">
-            {agendaEvents.map(event=><article key={event.calendarId+':'+event.id}><i style={{background:event.calendarColor}}/><div><b>{event.summary||'(ไม่มีชื่อ)'}</b><small>{dayLabel(eventDay(event))} • {event.start.dateTime?bangkokDateTimeInput(event.start.dateTime).slice(11):'ทั้งวัน'} • {event.calendarLabel}</small>{event.description&&<p>{event.description}</p>}</div>{editable&&<button type="button" className="button" onClick={()=>openEdit(event)}>แก้ไข</button>}</article>)}
+            {agendaEvents.map(event=><article key={event.calendarId+':'+event.id}><i style={{background:event.calendarColor}}/><div><b>{event.summary||'(ไม่มีชื่อ)'}</b><small>{dayLabel(eventDay(event),language)} • {event.start.dateTime?bangkokDateTimeInput(event.start.dateTime).slice(11):'ทั้งวัน'} • {event.calendarLabel}</small>{event.description&&<p>{event.description}</p>}</div>{editable&&<button type="button" className="button" onClick={()=>openEdit(event)}>แก้ไข</button>}</article>)}
             {!agendaEvents.length&&!loading&&<div className="gcal-empty">ไม่มีรายการในช่วงนี้</div>}
           </div>}
         </>}
