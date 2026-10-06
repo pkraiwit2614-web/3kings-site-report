@@ -5,7 +5,10 @@ import Link from 'next/link'
 import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
 import StatusBadge from '@/components/StatusBadge'
+import ProcurementOverrideEditor from '@/components/ProcurementOverrideEditor'
+import useActualAccessRole from '@/components/useActualAccessRole'
 import { getSupabase } from '@/lib/supabase'
+import { canEditProcurement } from '@/lib/accessControl'
 import { createLiveLoader, requireSuccessfulReads } from '@/lib/liveLoader'
 import { dateTH } from '@/lib/format'
 import type { Project } from '@/lib/types'
@@ -58,6 +61,8 @@ function searchable(values:unknown[],needle:string){
 }
 
 export default function ProcurementPage(){
+  const {role:actualRole}=useActualAccessRole()
+  const procurementEditable=canEditProcurement(actualRole)
   const [loadError,setLoadError]=useState(false)
   const [rows,setRows]=useState<any[]>([])
   const [procurementLinks,setProcurementLinks]=useState<any[]>([])
@@ -82,7 +87,7 @@ export default function ProcurementPage(){
     const loader=createLiveLoader({
       load:async(signal)=>{
         const [r,links,p,sync]=await Promise.all([
-          s.from('procurement_items').select('*').abortSignal(signal),
+          s.from('v_procurement_items').select('*').abortSignal(signal),
           s.from('procurement_item_projects').select('procurement_item_id,project_id').abortSignal(signal),
           s.from('projects').select('*').abortSignal(signal),
           s.from('drive_sync_runs').select('created_at').eq('status','success').eq('sync_type','materials').order('created_at',{ascending:false}).limit(1).abortSignal(signal).maybeSingle()
@@ -105,6 +110,7 @@ export default function ProcurementPage(){
     void load()
     const channel=s.channel('procurement-live-refresh')
       .on('postgres_changes',{event:'*',schema:'public',table:'procurement_items'},queueLoad)
+      .on('postgres_changes',{event:'*',schema:'public',table:'procurement_item_overrides'},queueLoad)
       .on('postgres_changes',{event:'*',schema:'public',table:'procurement_item_projects'},queueLoad)
       .on('postgres_changes',{event:'*',schema:'public',table:'projects'},queueLoad)
       .on('postgres_changes',{event:'*',schema:'public',table:'drive_sync_runs'},queueLoad)
@@ -184,6 +190,10 @@ export default function ProcurementPage(){
     })
   },[rows,siteFilter,statusFilter,updateFilter,followUpOnly,needle,projectById,procurementProjectIdsByItem])
 
+  const applyWebUpdate=(itemId:string,next:Record<string,unknown>)=>{
+    setRows(current=>current.map(item=>item.id===itemId?{...item,...next}:item))
+  }
+
   const compactControlStyle={
     minHeight:34,
     padding:'6px 9px',
@@ -238,7 +248,7 @@ export default function ProcurementPage(){
     <div className="panel" style={{padding:0,overflow:'hidden'}}>
       <div className="table-wrap" style={{maxHeight:'calc(100vh - 205px)',overflow:'auto'}}>
         <table style={{minWidth:1450}}>
-          <thead style={{position:'sticky',top:0,zIndex:12,background:'var(--surface)'}}><tr><th>Site / Plot</th><th>PO / PR</th><th>ผู้ขาย / ผู้รับเหมา</th><th>รายการ</th><th>สถานะ PO / ชำระ</th><th style={{width:180,minWidth:180,maxWidth:180}}>ขั้นตอนปัจจุบัน</th><th>กำหนดส่ง / เข้าหน้างาน</th><th>รายละเอียด / สิ่งที่ต้องตาม</th><th>อัปเดตข้อมูล</th></tr></thead>
+          <thead style={{position:'sticky',top:0,zIndex:12,background:'var(--surface)'}}><tr><th>Site / Plot</th><th>PO / PR</th><th>ผู้ขาย / ผู้รับเหมา</th><th>รายการ</th><th>สถานะ PO / ชำระ</th><th style={{width:180,minWidth:180,maxWidth:180}}>ขั้นตอนปัจจุบัน</th><th>กำหนดส่ง / เข้าหน้างาน</th><th>รายละเอียด / สิ่งที่ต้องตาม</th><th>อัปเดตข้อมูล</th>{procurementEditable&&<th>Web Update</th>}</tr></thead>
           <tbody>{filteredRows.map(x=>{const linkedProjects=procurementProjectsFor(x);return <tr key={x.id}>
             <td><b>{linkedProjects.map(p=>p.code).join(' / ')||'ไม่ระบุ Plot'}</b><small>{linkedProjects.map(p=>p.name).filter(Boolean).join(' / ')}</small></td>
             <td><b>{[x.po_no,x.pr_no].filter(Boolean).join(' / ')||'-'}</b></td>
@@ -249,6 +259,7 @@ export default function ProcurementPage(){
             <td><b>{x.expected_delivery_text||'ยังไม่ระบุ'}</b></td>
             <td>{x.condition_note||'-'}</td>
             <td>{dateTH(x.source_updated_at)}</td>
+            {procurementEditable&&<td><ProcurementOverrideEditor item={x} editable={procurementEditable} onSaved={next=>applyWebUpdate(x.id,next)}/></td>}
           </tr>})}</tbody>
         </table>
         {!filteredRows.length&&<p className="muted" style={{padding:16}}>ไม่พบรายการตามคำค้นหรือ Filter ที่เลือก</p>}
