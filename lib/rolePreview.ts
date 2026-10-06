@@ -19,7 +19,7 @@ export function canUseRolePreview(actualRole:AccessRole|null){
 
 export function previewTargetsFor(actualRole:AccessRole|null):AccessRole[]{
   if(actualRole==='owner')return ['admin','viewer','viewer_editor','defect_contributor','defect_editor','purchase']
-  if(actualRole==='admin')return ['viewer','viewer_editor','defect_contributor','defect_editor','purchase']
+  if(actualRole==='admin')return ['viewer','defect_contributor']
   return []
 }
 
