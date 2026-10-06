@@ -165,7 +165,7 @@ async function directGoogleFetch<T>(token:string,url:string,init?:RequestInit):P
   return body as T
 }
 
-export default function GoogleCalendarManager():ReactElement{
+const GoogleCalendarManager=():ReactElement=>{
   const {role,userId,ready}=useAccessRole()
   const editable=canEditCalendar(role)
   const [transport,setTransport]=useState<Transport>('checking')
@@ -593,3 +593,5 @@ export default function GoogleCalendarManager():ReactElement{
     `}</style>
   </section>
 }
+
+export default GoogleCalendarManager
