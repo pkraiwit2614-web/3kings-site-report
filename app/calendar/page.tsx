@@ -2,7 +2,7 @@
 
 import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
-import GoogleCalendarManager from '@/components/GoogleCalendarManager'
+import {GoogleCalendarManager} from '@/components/GoogleCalendarManager'
 
 export default function WorkCalendarPage(){
   return <AppShell>
