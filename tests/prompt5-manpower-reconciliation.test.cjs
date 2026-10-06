@@ -53,8 +53,8 @@ test('contractor count has structured authority and cannot be supplied through g
   assert.match(migration,/labour_confirm_contractor_count/)
   assert.match(migration,/STALE_CONTRACTOR_COUNT_RELOAD_REQUIRED/)
   assert.match(page,/p_expected_source_fingerprint:draft.source_fingerprint/)
-  assert.match(page,/Contractor \/ non-payroll/)
-  assert.match(page,/ไม่คำนวณจาก Reported - Company Payroll/)
+  assert.match(page,/ผู้รับเหมา \/ บุคคลที่ไม่คิดค่าแรงบริษัท/)
+  assert.match(page,/ต้องยืนยันแยกจากจำนวนคนงานบริษัท/)
 })
 
 test('Prompt 4 optimistic-concurrency overloads are preserved',()=>{
