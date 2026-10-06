@@ -8,7 +8,7 @@ const corsHeaders = {
 
 const OWNER_ID = 'bc6ee244-3472-422f-bbf9-d551987ee9a3'
 const INTERNAL_DOMAIN = '3kings.invalid'
-const VALID_ROLES = new Set(['manager', 'admin', 'viewer', 'defect_contributor', 'engineer', 'foreman', 'payroll'])
+const VALID_ROLES = new Set(['manager', 'admin', 'viewer', 'viewer_editor', 'defect_contributor', 'defect_editor', 'purchase', 'engineer', 'foreman', 'payroll'])
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
