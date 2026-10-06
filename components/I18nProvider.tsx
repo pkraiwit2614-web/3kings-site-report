@@ -2,6 +2,7 @@
 
 import {createContext,useCallback,useContext,useEffect,useMemo,useState,type ReactNode} from 'react'
 import {APP_LANGUAGES,isAppLanguage,LANGUAGE_STORAGE_KEY,translateText,type AppLanguage} from '@/lib/i18n'
+import {getSupabase} from '@/lib/supabase'
 
 type I18nContextValue={
   language:AppLanguage
@@ -20,6 +21,33 @@ const textLastApplied=new WeakMap<Text,string>()
 const attrState=new WeakMap<Element,Map<string,{original:string;lastApplied:string}>>()
 const TRANSLATABLE_ATTRS=['placeholder','title','aria-label','aria-placeholder'] as const
 const SKIP_SELECTOR='script,style,noscript,textarea,code,pre,[data-i18n-skip]'
+const THAI_RE=/[\u0E00-\u0E7F]/
+const CACHE_VERSION='v2'
+const MAX_CACHE_ENTRIES=320
+const MAX_CACHE_CHARS=360000
+const dynamicCache=new Map<string,string>()
+let enqueueDynamicTranslation:(source:string)=>void=()=>{}
+
+function cacheKey(language:AppLanguage,source:string){
+  return `${language}:${source.normalize('NFC').trim()}`
+}
+
+function preserveOuterWhitespace(original:string,translated:string){
+  const lead=original.match(/^\s*/)?.[0]||''
+  const tail=original.match(/\s*$/)?.[0]||''
+  return lead+translated+tail
+}
+
+function translateForRender(value:string,language:AppLanguage){
+  const staticTranslation=translateText(value,language)
+  if(language==='th'||!THAI_RE.test(staticTranslation))return staticTranslation
+  const source=value.trim()
+  if(!source)return value
+  const cached=dynamicCache.get(cacheKey(language,source))
+  if(cached)return preserveOuterWhitespace(value,cached)
+  enqueueDynamicTranslation(source)
+  return staticTranslation
+}
 
 function shouldSkip(element:Element|null){
   return Boolean(element?.closest(SKIP_SELECTOR))
@@ -38,7 +66,7 @@ function applyText(node:Text,language:AppLanguage){
     original=current
     textOriginal.set(node,current)
   }
-  const next=translateText(original,language)
+  const next=translateForRender(original,language)
   if(current!==next)node.data=next
   textLastApplied.set(node,next)
 }
@@ -56,7 +84,7 @@ function applyAttribute(element:Element,name:string,language:AppLanguage){
   }else if(current!==item.lastApplied){
     item.original=current
   }
-  const next=translateText(item.original,language)
+  const next=translateForRender(item.original,language)
   if(current!==next)element.setAttribute(name,next)
   item.lastApplied=next
 }
@@ -82,6 +110,39 @@ function applySubtree(root:Node,language:AppLanguage){
   scope.querySelectorAll('*').forEach(element=>applyElement(element,language))
 }
 
+function loadCache(language:AppLanguage){
+  if(language==='th')return
+  try{
+    const raw=window.sessionStorage.getItem(`3kings:i18n-cache:${CACHE_VERSION}:${language}`)
+    if(!raw)return
+    const rows=JSON.parse(raw)
+    if(!Array.isArray(rows))return
+    for(const row of rows){
+      if(!Array.isArray(row)||row.length!==2||typeof row[0]!=='string'||typeof row[1]!=='string')continue
+      dynamicCache.set(cacheKey(language,row[0]),row[1])
+    }
+  }catch{}
+}
+
+function saveCache(language:AppLanguage){
+  if(language==='th')return
+  try{
+    const prefix=`${language}:`
+    const rows:Array<[string,string]>=[]
+    let chars=0
+    for(const [key,value] of Array.from(dynamicCache.entries()).reverse()){
+      if(!key.startsWith(prefix))continue
+      const source=key.slice(prefix.length)
+      const nextChars=source.length+value.length
+      if(rows.length>=MAX_CACHE_ENTRIES||chars+nextChars>MAX_CACHE_CHARS)break
+      rows.push([source,value])
+      chars+=nextChars
+    }
+    rows.reverse()
+    window.sessionStorage.setItem(`3kings:i18n-cache:${CACHE_VERSION}:${language}`,JSON.stringify(rows))
+  }catch{}
+}
+
 export default function I18nProvider({children}:{children:ReactNode}){
   const [language,setLanguageState]=useState<AppLanguage>('th')
 
@@ -96,6 +157,83 @@ export default function I18nProvider({children}:{children:ReactNode}){
   },[])
 
   useEffect(()=>{
+    let cancelled=false
+    let timer:number|null=null
+    let flushing=false
+    const pending=new Set<string>()
+    const failedUntil=new Map<string,number>()
+
+    loadCache(language)
+
+    const scheduleFlush=()=>{
+      if(cancelled||language==='th'||flushing||timer!==null||!pending.size)return
+      timer=window.setTimeout(()=>{
+        timer=null
+        void flush()
+      },90)
+    }
+
+    const enqueue=(source:string)=>{
+      if(cancelled||language==='th'||!source||!THAI_RE.test(source))return
+      if(source.length>5000)return
+      if(dynamicCache.has(cacheKey(language,source)))return
+      if((failedUntil.get(source)||0)>Date.now())return
+      pending.add(source)
+      scheduleFlush()
+    }
+
+    const flush=async()=>{
+      if(cancelled||language==='th'||flushing||!pending.size)return
+      flushing=true
+      const batch:string[]=[]
+      let totalChars=0
+      for(const source of pending){
+        if(batch.length>=30)break
+        if(batch.length&&totalChars+source.length>14000)break
+        pending.delete(source)
+        batch.push(source)
+        totalChars+=source.length
+      }
+
+      try{
+        const {data}=await getSupabase().auth.getSession()
+        const token=data.session?.access_token
+        if(!token){
+          batch.forEach(source=>failedUntil.set(source,Date.now()+10_000))
+          return
+        }
+
+        const response=await fetch('/api/i18n/translate',{
+          method:'POST',
+          headers:{
+            'Content-Type':'application/json',
+            Authorization:`Bearer ${token}`,
+          },
+          body:JSON.stringify({language,texts:batch}),
+          cache:'no-store',
+        })
+        if(!response.ok)throw new Error(`TRANSLATE_${response.status}`)
+        const payload=await response.json()
+        const translations=payload?.translations
+        if(!Array.isArray(translations)||translations.length!==batch.length)throw new Error('TRANSLATE_SHAPE')
+
+        batch.forEach((source,index)=>{
+          const translated=translations[index]
+          if(typeof translated==='string'&&translated.trim()){
+            dynamicCache.set(cacheKey(language,source),translated.trim())
+          }
+        })
+        saveCache(language)
+        if(!cancelled)applySubtree(document.body,language)
+      }catch{
+        batch.forEach(source=>failedUntil.set(source,Date.now()+60_000))
+      }finally{
+        flushing=false
+        if(!cancelled&&pending.size)scheduleFlush()
+      }
+    }
+
+    enqueueDynamicTranslation=enqueue
     document.documentElement.lang=language
     document.documentElement.dataset.i18nLang=language
     applySubtree(document.body,language)
@@ -121,10 +259,16 @@ export default function I18nProvider({children}:{children:ReactNode}){
       attributes:true,
       attributeFilter:[...TRANSLATABLE_ATTRS],
     })
-    return()=>observer.disconnect()
+
+    return()=>{
+      cancelled=true
+      if(timer!==null)window.clearTimeout(timer)
+      observer.disconnect()
+      if(enqueueDynamicTranslation===enqueue)enqueueDynamicTranslation=()=>{}
+    }
   },[language])
 
-  const t=useCallback((value:string)=>translateText(value,language),[language])
+  const t=useCallback((value:string)=>translateForRender(value,language),[language])
   const value=useMemo(()=>({language,setLanguage,t}),[language,setLanguage,t])
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>
 }
