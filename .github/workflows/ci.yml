@@ -60,3 +60,6 @@ jobs:
 
       - name: Activity Log security regression tests
         run: node tests/activity-log.test.cjs
+
+      - name: Defect ingest validation regression
+        run: node tests/defect-ingest-validation.test.cjs

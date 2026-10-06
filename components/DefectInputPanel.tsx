@@ -1,6 +1,6 @@
 'use client'
 
-import {useState} from 'react'
+import {useEffect,useState} from 'react'
 import {getSupabase} from '@/lib/supabase'
 import useAccessRole from '@/components/useAccessRole'
 import {canEditDefect} from '@/lib/accessControl'
@@ -14,6 +14,25 @@ export default function DefectInputPanel(){
  const [file,setFile]=useState<File|null>(null);const [uploading,setUploading]=useState(false);const [uploadMsg,setUploadMsg]=useState('')
  const [room,setRoom]=useState('');const [detail,setDetail]=useState('');const [status,setStatus]=useState('');const [statusGroup,setStatusGroup]=useState('');const [nextAction,setNextAction]=useState('');const [manualMsg,setManualMsg]=useState('');const [saving,setSaving]=useState(false)
 
+ useEffect(()=>{
+   if(!editable||!userId)return
+   let alive=true
+   void (async()=>{
+     const s=getSupabase()
+     const {data}=await s.from('defect_file_uploads')
+       .select('id,storage_path')
+       .eq('created_by',userId)
+       .eq('validation_status','rejected')
+       .limit(20)
+     if(!alive||!data?.length)return
+     for(const row of data){
+       const {error}=await s.storage.from('defect-flow-staging').remove([String(row.storage_path)])
+       if(!error)await s.rpc('defect_forget_rejected_upload',{p_id:row.id})
+     }
+   })()
+   return()=>{alive=false}
+ },[editable,userId])
+
  const upload=async()=>{
    if(!editable||!userId||!file)return
    if(file.type!=='application/pdf'){setUploadMsg('รองรับเฉพาะไฟล์ PDF');return}
@@ -22,10 +41,28 @@ export default function DefectInputPanel(){
    const s=getSupabase();const path=userId+'/'+todayBangkok()+'/'+crypto.randomUUID()+'-'+cleanFileName(file.name)
    const {error:upErr}=await s.storage.from('defect-flow-staging').upload(path,file,{contentType:'application/pdf',upsert:false})
    if(upErr){setUploading(false);setUploadMsg(upErr.message);return}
-   const {error}=await s.rpc('defect_register_file_upload',{p_file_name:file.name,p_storage_path:path,p_mime_type:file.type,p_file_size:file.size,p_client_session_id:getActivitySessionId(),p_user_agent:navigator.userAgent})
+   const {data:{session}}=await s.auth.getSession()
+   if(!session?.access_token){
+     await s.storage.from('defect-flow-staging').remove([path]).catch(()=>null)
+     setUploading(false);setUploadMsg('Session หมดอายุ กรุณาเข้าสู่ระบบใหม่');return
+   }
+   const response=await fetch('/api/defect/validate-upload',{
+     method:'POST',
+     headers:{'content-type':'application/json',authorization:`Bearer ${session.access_token}`},
+     body:JSON.stringify({
+       storagePath:path,fileName:file.name,mimeType:file.type,fileSize:file.size,
+       clientSessionId:getActivitySessionId(),userAgent:navigator.userAgent
+     })
+   })
+   const result=await response.json().catch(()=>null) as any
    setUploading(false)
-   if(error){setUploadMsg(error.message);return}
-   setFile(null);const input=document.getElementById('defect-pdf-upload') as HTMLInputElement|null;if(input)input.value='';setUploadMsg('รับไฟล์แล้ว • Pending Defect Flow (เก็บใน staging อย่างปลอดภัย)')
+   if(!response.ok||!result?.ok){setUploadMsg(result?.message||result?.error||'ตรวจสอบไฟล์ไม่สำเร็จ');return}
+   setFile(null);const input=document.getElementById('defect-pdf-upload') as HTMLInputElement|null;if(input)input.value=''
+   setUploadMsg(result.message||(
+     result.status==='accepted'?'รับเข้า Defect Flow แล้ว':
+     result.status==='duplicate'?'ไฟล์นี้มีอยู่แล้ว จึงไม่เพิ่มซ้ำ':
+     'ไฟล์นี้ไม่ใช่รายการ Defect จึงไม่นำเข้าระบบ'
+   ))
  }
 
  const saveManual=async()=>{
@@ -41,7 +78,7 @@ export default function DefectInputPanel(){
  return <section className="panel defect-input-panel" aria-label="เพิ่มข้อมูล Defect">
    <div className="defect-input-head"><div><b>เพิ่ม / อัปเดต Defect</b><small>เฉพาะผู้ใช้ที่มีสิทธิ์แก้ Defect • ทุกการบันทึกมี Activity Log</small></div></div>
    <div className="defect-input-grid">
-     <article><b>เพิ่มจากไฟล์ PDF</b><p>อัปโหลด Defect PDF เพื่อเข้าคิว Defect Flow</p><input id="defect-pdf-upload" type="file" accept="application/pdf,.pdf" onChange={e=>setFile(e.target.files?.[0]||null)}/><button type="button" className="button" onClick={upload} disabled={!file||uploading}>{uploading?'กำลังอัปโหลด…':'อัปโหลดไฟล์'}</button>{uploadMsg&&<small>{uploadMsg}</small>}<em>Target Drive folder: Defect List Hotel • ระบบจะไม่อ้างว่า Sync เสร็จจนกว่าจะมี Drive runtime worker ยืนยัน</em></article>
+     <article><b>เพิ่มจากไฟล์ PDF</b><p>อัปโหลด PDF แล้วระบบจะตรวจเนื้อหาก่อนรับเข้า Defect Flow</p><input id="defect-pdf-upload" type="file" accept="application/pdf,.pdf" onChange={e=>setFile(e.target.files?.[0]||null)}/><button type="button" className="button" onClick={upload} disabled={!file||uploading}>{uploading?'กำลังอัปโหลด…':'อัปโหลดไฟล์'}</button>{uploadMsg&&<small>{uploadMsg}</small>}<em>ไฟล์ที่ไม่ใช่ Defect หรือไฟล์ซ้ำจะถูกปฏิเสธและลบจาก staging • รับเฉพาะ Defect ที่มีเลขห้อง Above Condo A+B</em></article>
      <article><b>เพิ่มจากรายละเอียด</b><p>กรอกเลขห้องและรายละเอียดล่าสุด ระบบจะอัปเดตข้อมูลที่ Web App ใช้สรุป Defect Flow</p><div className="manual-grid"><label>ห้อง<input value={room} onChange={e=>setRoom(e.target.value.toUpperCase())} placeholder="เช่น A511"/></label><label>สถานะ<input value={status} onChange={e=>setStatus(e.target.value)} placeholder="เว้นว่าง = คงสถานะเดิม"/></label><label>กลุ่มสถานะ<select value={statusGroup} onChange={e=>setStatusGroup(e.target.value)}><option value="">คงเดิม</option><option value="Hotel - Incomplete">New Defect / Incomplete</option><option value="Hotel - Awaiting Check">Awaiting Acceptance</option><option value="Hotel - Checked Complete">Hotel Checked</option><option value="Non-Hotel - Pending Handover">Pending Handover</option><option value="Non-Hotel - Handover Complete">Customer Accepted</option><option value="Non-Hotel - Awaiting Sale">Awaiting Sale</option></select></label><label className="wide">รายละเอียด<textarea value={detail} onChange={e=>setDetail(e.target.value)} placeholder="รายละเอียด Defect ล่าสุด"/></label><label className="wide">ต้องทำต่อ<textarea value={nextAction} onChange={e=>setNextAction(e.target.value)} placeholder="Next Action (ถ้ามี)"/></label></div><button type="button" className="button primary" onClick={saveManual} disabled={saving||!room.trim()||!detail.trim()}>{saving?'กำลังบันทึก…':'บันทึก / อัปเดต Defect'}</button>{manualMsg&&<small>{manualMsg}</small>}</article>
    </div>
    <style jsx>{`
