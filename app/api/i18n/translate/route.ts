@@ -52,6 +52,71 @@ async function authenticate(request:NextRequest){
   return data.user
 }
 
+async function translateBatch(language:TargetLanguage,texts:string[]){
+  const oidcToken=await getVercelOidcToken({expirationBufferMs:60_000})
+  const gateway=await fetch('https://ai-gateway.vercel.sh/v1/chat/completions',{
+    method:'POST',
+    headers:{
+      Authorization:`Bearer ${oidcToken}`,
+      'Content-Type':'application/json',
+      'x-title':'3 Kings Dynamic Translation',
+    },
+    body:JSON.stringify({
+      model:MODEL,
+      messages:[
+        {role:'system',content:systemPrompt(language)},
+        {role:'user',content:JSON.stringify({texts})},
+      ],
+      temperature:0,
+      stream:false,
+      max_tokens:12000,
+      providerOptions:{
+        gateway:{
+          disallowPromptTraining:true,
+        },
+      },
+    }),
+    cache:'no-store',
+  })
+
+  if(!gateway.ok){
+    const gatewayError=await gateway.text().catch(()=> '')
+    console.error('i18n gateway request failed',{status:gateway.status,errorType:gatewayError.slice(0,160)})
+    throw new Error(`gateway_${gateway.status}`)
+  }
+
+  const response=await gateway.json() as any
+  const content=response?.choices?.[0]?.message?.content
+  if(typeof content!=='string')throw new Error('missing_translation_content')
+  const parsed=parseJsonContent(content)
+  const translations=parsed?.translations
+  if(!Array.isArray(translations)||translations.length!==texts.length||translations.some((value:unknown)=>typeof value!=='string'||!value.trim())){
+    throw new Error('invalid_translation_shape')
+  }
+  return translations as string[]
+}
+
+export async function GET(){
+  if(process.env.VERCEL_ENV!=='preview'){
+    return NextResponse.json({ok:false,error:'not_found'},{status:404})
+  }
+  try{
+    const samples=[
+      'Plot 8 — ช่างอ๊อด ทำโครงหลังคาระเบียง และติดตั้ง FCU ชั้น 2',
+      'A419 เหลือ Floor Drain รอของ • PO PL0000918 ยังต้องติดตาม',
+    ]
+    const [en,ru]=await Promise.all([
+      translateBatch('en',samples),
+      translateBatch('ru',samples),
+    ])
+    const required=['Plot 8','อ๊อด','FCU','A419','Floor Drain','PL0000918']
+    const preserved=required.every(token=>[...en,...ru].some(value=>value.includes(token)))
+    return NextResponse.json({ok:true,preserved,en,ru},{headers:{'Cache-Control':'no-store'}})
+  }catch(error){
+    return NextResponse.json({ok:false,error:error instanceof Error?error.message:'preview_smoke_failed'},{status:502,headers:{'Cache-Control':'no-store'}})
+  }
+}
+
 export async function POST(request:NextRequest){
   try{
     const user=await authenticate(request)
@@ -71,47 +136,7 @@ export async function POST(request:NextRequest){
     const totalChars=texts.reduce((sum:number,value:string)=>sum+value.length,0)
     if(totalChars>MAX_TOTAL_CHARS)return NextResponse.json({ok:false,error:'payload_too_large'},{status:413})
 
-    const oidcToken=await getVercelOidcToken({expirationBufferMs:60_000})
-    const gateway=await fetch('https://ai-gateway.vercel.sh/v1/chat/completions',{
-      method:'POST',
-      headers:{
-        Authorization:`Bearer ${oidcToken}`,
-        'Content-Type':'application/json',
-        'x-title':'3 Kings Dynamic Translation',
-      },
-      body:JSON.stringify({
-        model:MODEL,
-        messages:[
-          {role:'system',content:systemPrompt(language)},
-          {role:'user',content:JSON.stringify({texts})},
-        ],
-        temperature:0,
-        stream:false,
-        max_tokens:12000,
-        providerOptions:{
-          gateway:{
-            disallowPromptTraining:true,
-          },
-        },
-      }),
-      cache:'no-store',
-    })
-
-    if(!gateway.ok){
-      const gatewayError=await gateway.text().catch(()=> '')
-      console.error('i18n gateway request failed',{status:gateway.status,errorType:gatewayError.slice(0,160)})
-      return NextResponse.json({ok:false,error:'translation_service_unavailable'},{status:502,headers:{'Cache-Control':'no-store'}})
-    }
-
-    const response=await gateway.json() as any
-    const content=response?.choices?.[0]?.message?.content
-    if(typeof content!=='string')throw new Error('missing_translation_content')
-    const parsed=parseJsonContent(content)
-    const translations=parsed?.translations
-    if(!Array.isArray(translations)||translations.length!==texts.length||translations.some((value:unknown)=>typeof value!=='string'||!value.trim())){
-      throw new Error('invalid_translation_shape')
-    }
-
+    const translations=await translateBatch(language,texts)
     return NextResponse.json(
       {ok:true,translations},
       {headers:{'Cache-Control':'private, no-store, max-age=0'}}
