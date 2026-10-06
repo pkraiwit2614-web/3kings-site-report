@@ -1,8 +1,16 @@
 export const OWNER_USER_ID='bc6ee244-3472-422f-bbf9-d551987ee9a3'
 
-export type AccessRole='owner'|'admin'|'viewer'|'defect_contributor'
+export type AccessRole=
+  |'owner'
+  |'admin'
+  |'viewer'
+  |'viewer_editor'
+  |'defect_contributor'
+  |'defect_editor'
+  |'purchase'
 
 const OWNER_ONLY_PREFIXES=['/photo-mapping','/data-health','/data-house','/users']
+const PAYROLL_PREFIXES=['/reports/labour']
 const REPORT_WRITE_PATHS=[
   /^\/reports\/quick\/?$/,
   /^\/reports\/new\/?$/,
@@ -17,9 +25,12 @@ function cleanPath(path:string){
 export function resolveAccessRole(profileRole:string|undefined|null,userId:string|undefined|null):AccessRole|null{
   const role=String(profileRole||'').toLowerCase()
   if(userId===OWNER_USER_ID&&role==='manager')return 'owner'
-  if(role==='admin'||role==='manager'||role==='engineer'||role==='payroll')return 'admin'
+  if(role==='admin'||role==='engineer'||role==='payroll')return 'admin'
   if(role==='viewer'||role==='foreman')return 'viewer'
+  if(role==='viewer_editor')return 'viewer_editor'
   if(role==='defect_contributor')return 'defect_contributor'
+  if(role==='defect_editor')return 'defect_editor'
+  if(role==='purchase')return 'purchase'
   return null
 }
 
@@ -30,9 +41,9 @@ export function canAccessPath(role:AccessRole,path:string){
     return value==='/defect-flow'||value==='/defects'||value.startsWith('/defects/')
   }
   if(OWNER_ONLY_PREFIXES.some(prefix=>value===prefix||value.startsWith(prefix+'/')))return false
-  if(role==='viewer'&&value.startsWith('/reports')&&value!=='/reports/labour'&&!value.startsWith('/reports/labour/'))return false
-  if(role==='viewer'&&REPORT_WRITE_PATHS.some(rx=>rx.test(value)))return false
-  return role==='admin'||role==='viewer'
+  if(PAYROLL_PREFIXES.some(prefix=>value===prefix||value.startsWith(prefix+'/')))return role==='admin'
+  if(REPORT_WRITE_PATHS.some(rx=>rx.test(value)))return role==='admin'
+  return true
 }
 
 export function defaultPathForRole(role:AccessRole){
@@ -45,4 +56,24 @@ export function canManageLabour(role:AccessRole|null){
 
 export function canViewPayroll(role:AccessRole|null){
   return role==='owner'||role==='admin'
+}
+
+export function canEditSiteOperations(role:AccessRole|null){
+  return role==='owner'||role==='admin'
+}
+
+export function canEditSchedule(role:AccessRole|null){
+  return role==='owner'||role==='viewer_editor'
+}
+
+export function canEditCalendar(role:AccessRole|null){
+  return role==='owner'||role==='viewer_editor'
+}
+
+export function canEditDefects(role:AccessRole|null){
+  return role==='owner'||role==='defect_contributor'||role==='defect_editor'
+}
+
+export function canEditProcurement(role:AccessRole|null){
+  return role==='owner'||role==='purchase'
 }
