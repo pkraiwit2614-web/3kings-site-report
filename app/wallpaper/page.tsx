@@ -154,7 +154,7 @@ export default function WallpaperPage(){
       const [p,t,pr,r,sync]=await Promise.all([
         s.from('projects').select('id,code,name,site_group,target_handover,active,sort_order').eq('active',true).order('sort_order'),
         s.from('v_schedule_tasks').select('id,project_id,source_task_no,category,task_name,area,planned_start,planned_end,current_plan_progress,actual_progress,current_variance,delay_days,site_status,actual_start,actual_end,blocker,next_action,target_close,contractor'),
-        s.from('procurement_items').select('id,project_id,vendor,item_name,current_status,po_no,expected_delivery,expected_delivery_text,created_at').order('created_at',{ascending:false}),
+        s.from('v_procurement_items').select('id,project_id,vendor,item_name,current_status,po_no,expected_delivery,expected_delivery_text,created_at').order('created_at',{ascending:false}),
         s.from('condo_room_status').select('room_no,building,customer_status,status_group,source_modified_at').order('room_no'),
         s.from('drive_sync_runs').select('created_at').eq('status','success').order('created_at',{ascending:false}).limit(1).maybeSingle(),
       ])
