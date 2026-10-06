@@ -236,8 +236,42 @@ $function$;
 revoke all on function public.schedule_save_web_override(uuid,text,text,date,text,text,text,uuid,text) from public,anon;
 grant execute on function public.schedule_save_web_override(uuid,text,text,date,text,text,text,uuid,text) to authenticated;
 
+create or replace view public.v_procurement_source_rows
+with (security_invoker=true)
+as
+with base as (
+  select
+    p.*,
+    coalesce((
+      select string_agg(prj.code,',' order by prj.code)
+      from public.procurement_item_projects l
+      join public.projects prj on prj.id=l.project_id
+      where l.procurement_item_id=p.id
+    ),'') as identity_project_codes,
+    lower(regexp_replace(btrim(coalesce(p.vendor,'')),'\\s+',' ','g')) as identity_vendor,
+    lower(regexp_replace(btrim(coalesce(p.item_name,'')),'\\s+',' ','g')) as identity_item
+  from public.procurement_items p
+),
+ranked as (
+  select
+    b.*,
+    row_number() over (
+      partition by b.identity_vendor,b.identity_item,b.identity_project_codes
+      order by coalesce(b.source_sheet,''),coalesce(b.source_row,2147483647),b.id
+    ) as identity_occurrence
+  from base b
+)
+select
+  r.*,
+  md5(concat_ws('|',r.identity_vendor,r.identity_item,r.identity_project_codes,r.identity_occurrence::text)) as source_identity
+from ranked r;
+
+revoke all on public.v_procurement_source_rows from anon;
+grant select on public.v_procurement_source_rows to authenticated;
+
 create table if not exists public.procurement_item_overrides (
-  item_id uuid primary key references public.procurement_items(id) on delete cascade,
+  source_identity text primary key,
+  last_item_id uuid,
   current_status text,
   expected_delivery_text text,
   expected_delivery date,
@@ -263,18 +297,19 @@ with (security_invoker=true)
 as
 select
   p.id,p.project_id,p.vendor,p.item_name,p.procurement_status,p.payment_status,
-  case when o.item_id is not null then o.current_status else p.current_status end as current_status,
+  case when o.source_identity is not null then o.current_status else p.current_status end as current_status,
   p.pr_no,p.po_no,
-  case when o.item_id is not null then o.expected_delivery_text else p.expected_delivery_text end as expected_delivery_text,
-  case when o.item_id is not null then o.expected_delivery else p.expected_delivery end as expected_delivery,
+  case when o.source_identity is not null then o.expected_delivery_text else p.expected_delivery_text end as expected_delivery_text,
+  case when o.source_identity is not null then o.expected_delivery else p.expected_delivery end as expected_delivery,
   p.actual_delivery,
-  case when o.item_id is not null then o.condition_note else p.condition_note end as condition_note,
+  case when o.source_identity is not null then o.condition_note else p.condition_note end as condition_note,
   p.source_updated_at,p.source_sheet,p.source_row,p.updated_by,p.created_at,p.updated_at,
+  p.source_identity,
   o.review_status as web_review_status,
   o.updated_at as web_override_updated_at,
   o.updated_by as web_override_updated_by
-from public.procurement_items p
-left join public.procurement_item_overrides o on o.item_id=p.id;
+from public.v_procurement_source_rows p
+left join public.procurement_item_overrides o on o.source_identity=p.source_identity;
 
 revoke all on public.v_procurement_items from anon;
 grant select on public.v_procurement_items to authenticated;
@@ -296,6 +331,7 @@ set search_path=''
 as $function$
 declare
   v_user uuid := (select auth.uid());
+  v_identity text;
 begin
   if v_user is null then raise exception 'AUTH_REQUIRED'; end if;
   if not exists(
@@ -307,9 +343,12 @@ begin
   if p_review_status not in ('pending','confirmed','needs_review') then
     raise exception 'INVALID_REVIEW_STATUS';
   end if;
-  if not exists(select 1 from public.procurement_items p where p.id=p_item_id) then
-    raise exception 'PROCUREMENT_ITEM_NOT_FOUND';
-  end if;
+
+  select p.source_identity into v_identity
+  from public.v_procurement_source_rows p
+  where p.id=p_item_id;
+
+  if v_identity is null then raise exception 'PROCUREMENT_ITEM_NOT_FOUND'; end if;
   if char_length(coalesce(p_current_status,''))>1000
      or char_length(coalesce(p_expected_delivery_text,''))>1000
      or char_length(coalesce(p_condition_note,''))>4000 then
@@ -317,18 +356,19 @@ begin
   end if;
 
   insert into public.procurement_item_overrides(
-    item_id,current_status,expected_delivery_text,expected_delivery,condition_note,
+    source_identity,last_item_id,current_status,expected_delivery_text,expected_delivery,condition_note,
     review_status,updated_by,updated_at
   )
   values(
-    p_item_id,
+    v_identity,p_item_id,
     nullif(btrim(coalesce(p_current_status,'')),''),
     nullif(btrim(coalesce(p_expected_delivery_text,'')),''),
     p_expected_delivery,
     nullif(btrim(coalesce(p_condition_note,'')),''),
     p_review_status,v_user,now()
   )
-  on conflict(item_id) do update set
+  on conflict(source_identity) do update set
+    last_item_id=excluded.last_item_id,
     current_status=excluded.current_status,
     expected_delivery_text=excluded.expected_delivery_text,
     expected_delivery=excluded.expected_delivery,
@@ -342,7 +382,7 @@ begin
   ) values (
     v_user,coalesce(p_client_session_id,gen_random_uuid()),
     'data_change','/procurement','procurement_web_override_save',p_item_id::text,
-    jsonb_build_object('review_status',p_review_status),
+    jsonb_build_object('review_status',p_review_status,'source_identity',v_identity),
     left(nullif(btrim(coalesce(p_user_agent,'')),''),500)
   );
 
