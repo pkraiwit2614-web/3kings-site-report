@@ -211,7 +211,7 @@ function UserRow({ row, onChanged, onCredential, onMessage }: { row: Profile; on
   const save = async () => {
     setSaving(true); onMessage('')
     try {
-      await adminAction('update',{user_id:row.user_id,username:username.trim().toUpperCase()||null,full_name:name.trim(),role:edgeCompatibleRole(role),active})
+      await adminAction('update',{user_id:row.user_id,username:username.trim().toUpperCase()||null,full_name:name.trim(),role,active})
       await setCanonicalRole(row.user_id,role)
       onMessage(`อัปเดต ${username || name || row.email || 'ผู้ใช้งาน'} เรียบร้อย`)
       await onChanged()
