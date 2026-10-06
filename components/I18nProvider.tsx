@@ -20,7 +20,8 @@ const textOriginal=new WeakMap<Text,string>()
 const textLastApplied=new WeakMap<Text,string>()
 const attrState=new WeakMap<Element,Map<string,{original:string;lastApplied:string}>>()
 const TRANSLATABLE_ATTRS=['placeholder','title','aria-label','aria-placeholder'] as const
-const SKIP_SELECTOR='script,style,noscript,textarea,code,pre,[data-i18n-skip]'
+const TEXT_SKIP_SELECTOR='script,style,noscript,textarea,code,pre,[data-i18n-skip]'
+const ATTR_SKIP_SELECTOR='script,style,noscript,code,pre,[data-i18n-skip]'
 const THAI_RE=/[\u0E00-\u0E7F]/
 const CACHE_VERSION='v2'
 const MAX_CACHE_ENTRIES=320
@@ -49,13 +50,17 @@ function translateForRender(value:string,language:AppLanguage){
   return staticTranslation
 }
 
-function shouldSkip(element:Element|null){
-  return Boolean(element?.closest(SKIP_SELECTOR))
+function shouldSkipText(element:Element|null){
+  return Boolean(element?.closest(TEXT_SKIP_SELECTOR))
+}
+
+function shouldSkipAttribute(element:Element|null){
+  return Boolean(element?.closest(ATTR_SKIP_SELECTOR))
 }
 
 function applyText(node:Text,language:AppLanguage){
   const parent=node.parentElement
-  if(!parent||shouldSkip(parent))return
+  if(!parent||shouldSkipText(parent))return
   const current=node.data
   let original=textOriginal.get(node)
   const last=textLastApplied.get(node)
@@ -72,7 +77,7 @@ function applyText(node:Text,language:AppLanguage){
 }
 
 function applyAttribute(element:Element,name:string,language:AppLanguage){
-  if(shouldSkip(element))return
+  if(shouldSkipAttribute(element))return
   const current=element.getAttribute(name)
   if(current===null)return
   let state=attrState.get(element)
@@ -100,9 +105,10 @@ function applySubtree(root:Node,language:AppLanguage){
     return
   }
   if(!(root instanceof Element)&&root!==document.body)return
-  if(root instanceof Element&&shouldSkip(root))return
+  if(root instanceof Element&&shouldSkipAttribute(root))return
 
   if(root instanceof Element)applyElement(root,language)
+  if(root instanceof Element&&shouldSkipText(root))return
   const scope=root instanceof Element?root:document.body
   const walker=document.createTreeWalker(scope,NodeFilter.SHOW_TEXT)
   let node=walker.nextNode()
