@@ -67,7 +67,7 @@ export default function MaterialsPage(){
         const [p,m,pr,prLinks,t,sync]=await Promise.all([
           s.from('projects').select('*').eq('active',true).order('sort_order').abortSignal(signal),
           s.from('materials').select('*').order('project_id').order('source_row').abortSignal(signal),
-          s.from('procurement_items').select('*').order('source_updated_at',{ascending:false}).order('source_row').abortSignal(signal),
+          s.from('v_procurement_items').select('*').order('source_updated_at',{ascending:false}).order('source_row').abortSignal(signal),
           s.from('procurement_item_projects').select('procurement_item_id,project_id').abortSignal(signal),
           s.from('tool_machine').select('*').order('item_no').abortSignal(signal),
           s.from('drive_sync_runs').select('created_at').eq('status','success').eq('sync_type','materials').order('created_at',{ascending:false}).limit(1).abortSignal(signal).maybeSingle()
