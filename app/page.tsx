@@ -122,7 +122,7 @@ export default function DashboardPage() {
           s.from('v_schedule_tasks').select('id,project_id,task_name,category,actual_progress,current_plan_progress,current_variance,delay_days,site_status,blocker,next_action,target_close,planned_start,planned_end,actual_start,actual_end,area,source_task_no,contractor').abortSignal(signal),
           s.from('site_operations_entries').select('id,work_date,project_name_raw,area_raw,total_manpower,work_detail,status_text,next_plan,mapping_status,synced_at,work_date_validation_status').lte('work_date',bangkokToday()).or('work_date_validation_status.is.null,work_date_validation_status.eq.valid').order('work_date',{ascending:false}).order('source_row',{ascending:false}).limit(300).abortSignal(signal),
           s.from('site_operations_entry_projects').select('entry_id,project_id').limit(1200).abortSignal(signal),
-          s.from('procurement_items').select('id,project_id,vendor,item_name,current_status,expected_delivery_text,expected_delivery').order('created_at',{ascending:false}).abortSignal(signal),
+          s.from('v_procurement_items').select('id,project_id,vendor,item_name,current_status,expected_delivery_text,expected_delivery').order('created_at',{ascending:false}).abortSignal(signal),
           s.from('drive_sync_runs').select('sync_type,project_code,created_at').eq('status','success').order('created_at',{ascending:false}).limit(30).abortSignal(signal),
           s.from('v_schedule_snapshot_days').select('snapshot_date').order('snapshot_date',{ascending:false}).limit(60).abortSignal(signal)
         ])
