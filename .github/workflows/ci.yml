@@ -63,3 +63,6 @@ jobs:
 
       - name: Defect ingest validation regression
         run: node tests/defect-ingest-validation.test.cjs
+
+      - name: Google Calendar live edit regression
+        run: node tests/google-calendar-live-edit.test.cjs
