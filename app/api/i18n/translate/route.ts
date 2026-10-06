@@ -8,7 +8,8 @@ export const maxDuration = 25
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://wtqubwdduzedmcvyhbgs.supabase.co'
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_Ruyka15H3QApZKY9q2U-Vg_CjmEuMRX'
-const MODEL = 'google/gemini-2.5-flash-lite'
+const GATEWAY_MODEL = 'google/gemini-2.5-flash-lite'
+const GEMINI_DEFAULT_MODEL = 'gemini-3.5-flash-lite'
 const MAX_TEXTS = 30
 const MAX_TEXT_LENGTH = 5000
 const MAX_TOTAL_CHARS = 14000
@@ -52,7 +53,60 @@ async function authenticate(request:NextRequest){
   return data.user
 }
 
-async function translateBatch(language:TargetLanguage,texts:string[]){
+class TranslationProviderError extends Error{
+  status:number
+  provider:string
+  constructor(provider:string,status:number,message:string){
+    super(message)
+    this.name='TranslationProviderError'
+    this.provider=provider
+    this.status=status
+  }
+}
+
+function translationPayload(language:TargetLanguage,texts:string[]){
+  return systemPrompt(language)+'\n\nINPUT_JSON:\n'+JSON.stringify({texts})
+}
+
+function parseTranslations(content:string,texts:string[]){
+  const parsed=parseJsonContent(content)
+  const translations=parsed?.translations
+  if(!Array.isArray(translations)||translations.length!==texts.length||translations.some((value:unknown)=>typeof value!=='string'||!value.trim())){
+    throw new Error('invalid_translation_shape')
+  }
+  return translations as string[]
+}
+
+async function translateViaGemini(language:TargetLanguage,texts:string[]){
+  const apiKey=String(process.env.GEMINI_API_KEY||process.env.GOOGLE_API_KEY||'').trim()
+  if(!apiKey)throw new TranslationProviderError('gemini',503,'gemini_not_configured')
+  const model=String(process.env.GEMINI_TRANSLATION_MODEL||GEMINI_DEFAULT_MODEL).trim()||GEMINI_DEFAULT_MODEL
+  const response=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{
+    method:'POST',
+    headers:{'content-type':'application/json','x-goog-api-key':apiKey},
+    body:JSON.stringify({
+      contents:[{role:'user',parts:[{text:translationPayload(language,texts)}]}],
+      generationConfig:{
+        temperature:0,
+        responseMimeType:'application/json',
+        maxOutputTokens:12000,
+      },
+    }),
+    cache:'no-store',
+    signal:AbortSignal.timeout(22000),
+  })
+  const json=await response.json().catch(()=>null) as any
+  if(!response.ok){
+    throw new TranslationProviderError('gemini',response.status,`gemini_${response.status}`)
+  }
+  const content=(json?.candidates?.[0]?.content?.parts||[])
+    .map((part:any)=>typeof part?.text==='string'?part.text:'')
+    .join('\n')
+  if(!content)throw new TranslationProviderError('gemini',502,'gemini_empty_response')
+  return parseTranslations(content,texts)
+}
+
+async function translateViaGateway(language:TargetLanguage,texts:string[]){
   const oidcToken=await getVercelOidcToken({expirationBufferMs:60_000})
   const gateway=await fetch('https://ai-gateway.vercel.sh/v1/chat/completions',{
     method:'POST',
@@ -62,7 +116,7 @@ async function translateBatch(language:TargetLanguage,texts:string[]){
       'x-title':'3 Kings Dynamic Translation',
     },
     body:JSON.stringify({
-      model:MODEL,
+      model:GATEWAY_MODEL,
       messages:[
         {role:'system',content:systemPrompt(language)},
         {role:'user',content:JSON.stringify({texts})},
@@ -77,23 +131,32 @@ async function translateBatch(language:TargetLanguage,texts:string[]){
       },
     }),
     cache:'no-store',
+    signal:AbortSignal.timeout(22000),
   })
 
+  const json=await gateway.json().catch(()=>null) as any
   if(!gateway.ok){
-    const gatewayError=await gateway.text().catch(()=> '')
-    console.error('i18n gateway request failed',{status:gateway.status,errorType:gatewayError.slice(0,160)})
-    throw new Error(`gateway_${gateway.status}`)
+    throw new TranslationProviderError('vercel',gateway.status,`gateway_${gateway.status}`)
   }
+  const content=json?.choices?.[0]?.message?.content
+  if(typeof content!=='string')throw new TranslationProviderError('vercel',502,'gateway_empty_response')
+  return parseTranslations(content,texts)
+}
 
-  const response=await gateway.json() as any
-  const content=response?.choices?.[0]?.message?.content
-  if(typeof content!=='string')throw new Error('missing_translation_content')
-  const parsed=parseJsonContent(content)
-  const translations=parsed?.translations
-  if(!Array.isArray(translations)||translations.length!==texts.length||translations.some((value:unknown)=>typeof value!=='string'||!value.trim())){
-    throw new Error('invalid_translation_shape')
+async function translateBatch(language:TargetLanguage,texts:string[]){
+  const directConfigured=Boolean(String(process.env.GEMINI_API_KEY||process.env.GOOGLE_API_KEY||'').trim())
+  if(directConfigured){
+    try{return await translateViaGemini(language,texts)}
+    catch(error){
+      console.error('i18n direct Gemini failed',{
+        status:error instanceof TranslationProviderError?error.status:500,
+        errorType:error instanceof Error?error.message:'unknown_error',
+      })
+      try{return await translateViaGateway(language,texts)}
+      catch{return Promise.reject(error)}
+    }
   }
-  return translations as string[]
+  return translateViaGateway(language,texts)
 }
 
 export async function GET(){
