@@ -6,7 +6,10 @@ import { useRouter } from 'next/navigation'
 import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
 import StatusBadge from '@/components/StatusBadge'
+import ScheduleOverrideEditor from '@/components/ScheduleOverrideEditor'
+import useActualAccessRole from '@/components/useActualAccessRole'
 import { getSupabase } from '@/lib/supabase'
+import { canEditSchedule } from '@/lib/accessControl'
 import { pct, dateTH } from '@/lib/format'
 import { sortTasksByNumber } from '@/lib/taskOrder'
 import type { Project, ScheduleTask } from '@/lib/types'
@@ -22,6 +25,8 @@ function dateTimeTH(value:string|null|undefined){
 
 export default function SchedulePlanActualV41(){
   const router=useRouter()
+  const {role:actualRole}=useActualAccessRole()
+  const scheduleEditable=canEditSchedule(actualRole)
   const [projects,setProjects]=useState<Project[]>([])
   const [tasks,setTasks]=useState<ScheduleTask[]>([])
   const [project,setProject]=useState('')
@@ -75,6 +80,10 @@ export default function SchedulePlanActualV41(){
     return {p,plan,actual,delta:actual-plan,delayed:list.filter(t=>(t.delay_days||0)>0&&(t.actual_progress||0)<1).length,blockers:list.filter(t=>Boolean(t.blocker?.trim())&&(t.actual_progress||0)<1).length}
   }).filter(Boolean) as {p:Project;plan:number;actual:number;delta:number;delayed:number;blockers:number}[],[projects,rows])
 
+  const applyWebUpdate=(taskId:string,next:Record<string,unknown>)=>{
+    setTasks(current=>current.map(task=>task.id===taskId?({...task,...next} as ScheduleTask):task))
+  }
+
   const handlePlotClick=(projectId:string)=>{
     if(project===projectId){ router.push(`/projects/${projectId}`); return }
     setProject(projectId)
@@ -121,7 +130,7 @@ export default function SchedulePlanActualV41(){
     </div></div>
 
     {loading?<div className="panel">กำลังโหลดข้อมูล…</div>:<div className="panel schedule-table-panel"><div className="schedule-table-scroll"><table className="schedule-table">
-      <thead><tr><th>Site / Plot</th><th>งาน / แผน</th><th>พื้นที่</th><th>Plan</th><th>Actual</th><th>Variance</th><th>ล่าช้า</th><th>สถานะ</th><th>งานถัดไป</th></tr></thead>
+      <thead><tr><th>Site / Plot</th><th>งาน / แผน</th><th>พื้นที่</th><th>Plan</th><th>Actual</th><th>Variance</th><th>ล่าช้า</th><th>สถานะ</th><th>งานถัดไป</th>{scheduleEditable&&<th>Web Update</th>}</tr></thead>
       <tbody>{rows.map(t=>{
         const plan=Math.round((t.current_plan_progress||0)*100); const actual=Math.round((t.actual_progress||0)*100); const delta=actual-plan; const isDelayed=(t.delay_days||0)>0&&(t.actual_progress||0)<1; const hasBlocker=Boolean(t.blocker?.trim())&&(t.actual_progress||0)<1
         return <tr key={t.id} className={hasBlocker?'row-blocker':isDelayed?'row-delayed':''}>
@@ -133,6 +142,7 @@ export default function SchedulePlanActualV41(){
           <td className={delta<0?'danger-text':delta>0?'good-text':''}><b>{delta>0?'+':''}{delta}%</b></td>
           <td>{isDelayed?<span className="delay-chip">{t.delay_days} วัน</span>:<span className="muted">—</span>}</td><td><StatusBadge value={t.site_status}/></td>
           <td className="schedule-detail-cell">{t.next_action?<small><b>งานถัดไป:</b> {t.next_action}</small>:<span className="muted">—</span>}</td>
+          {scheduleEditable&&<td><ScheduleOverrideEditor task={t as any} editable={scheduleEditable} onSaved={next=>applyWebUpdate(t.id,next)}/></td>}
         </tr>
       })}</tbody>
     </table></div></div>}
