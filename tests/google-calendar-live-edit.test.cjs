@@ -1,0 +1,23 @@
+const fs=require('fs')
+const assert=require('node:assert/strict')
+
+const page=fs.readFileSync('app/calendar/page.tsx','utf8')
+const component=fs.readFileSync('components/GoogleCalendarManager.tsx','utf8')
+
+assert.match(page,/GoogleCalendarManager/)
+assert.doesNotMatch(page,/CalendarEditor/)
+assert.match(component,/https:\/\/www\.googleapis\.com\/calendar\/v3\/calendars\//)
+assert.match(component,/https:\/\/www\.googleapis\.com\/auth\/calendar\.events/)
+assert.match(component,/method:'POST'/)
+assert.match(component,/method:'PATCH'/)
+assert.match(component,/method:'DELETE'/)
+assert.match(component,/canEditCalendar\(role\)/)
+assert.match(component,/google_calendar_event_create/)
+assert.match(component,/google_calendar_event_update/)
+assert.match(component,/google_calendar_event_delete/)
+assert.doesNotMatch(component,/work_calendar_save_event/)
+assert.doesNotMatch(component,/work_calendar_create/)
+assert.match(component,/NEXT_PUBLIC_GOOGLE_OAUTH_CLIENT_ID/)
+assert.match(component,/https:\/\/3kings-site-report\.vercel\.app/)
+
+console.log('Google Calendar live edit regression checks passed')
