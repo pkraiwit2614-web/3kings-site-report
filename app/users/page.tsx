@@ -56,12 +56,8 @@ async function adminAction(action: string, payload: Record<string,unknown> = {})
   return data
 }
 
-async function setProfileAccess(userId:string, role:string, active:boolean){
-  const {error}=await getSupabase().rpc('owner_set_profile_access',{
-    p_user_id:userId,
-    p_role:role,
-    p_active:active,
-  })
+ async function setCanonicalRole(userId:string,role:string){
+  const {error}=await getSupabase().rpc('owner_set_profile_role',{p_user_id:userId,p_role:role})
   if(error)throw error
 }
 
@@ -109,7 +105,7 @@ function UsersContent() {
     setMessage('')
     try {
       const data = await adminAction('create', { username: cleanUsername, full_name: fullName.trim(), role, password })
-      await setProfileAccess(String(data.user?.user_id||''),role,true)
+      await setCanonicalRole(String(data.user?.user_id||''),role)
       setCredentials([{ username: cleanUsername, password, role, full_name: fullName.trim() }])
       setMessage(`สร้าง ${cleanUsername} เรียบร้อย พร้อมนำ Username / Password ส่งให้ผู้ใช้งานได้ทันที`)
       setUsername('')
@@ -210,39 +206,17 @@ function UserRow({ row, onChanged, onCredential, onMessage }: { row: Profile; on
   const [role,setRole] = useState(row.role)
   const [active,setActive] = useState(row.active)
   const [saving,setSaving] = useState(false)
-
-  useEffect(() => {
-    setUsername(row.username || '')
-    setName(row.full_name || '')
-    setRole(row.role)
-    setActive(row.active)
-  }, [row.username, row.full_name, row.role, row.active])
-
   const changed = username !== (row.username || '') || name !== (row.full_name || '') || role !== row.role || active !== row.active
 
   const save = async () => {
     setSaving(true); onMessage('')
-    const accessChanged = role !== row.role || active !== row.active
-    let accessApplied = false
     try {
-      if(accessChanged){
-        await setProfileAccess(row.user_id,role,active)
-        accessApplied = true
-      }
-      await adminAction('update',{
-        user_id:row.user_id,
-        username:username.trim().toUpperCase()||null,
-        full_name:name.trim(),
-      })
+      await adminAction('update',{user_id:row.user_id,username:username.trim().toUpperCase()||null,full_name:name.trim(),role,active})
+      await setCanonicalRole(row.user_id,role)
       onMessage(`อัปเดต ${username || name || row.email || 'ผู้ใช้งาน'} เรียบร้อย`)
       await onChanged()
-    } catch(err:any){
-      if(accessApplied){
-        try{ await setProfileAccess(row.user_id,row.role,row.active) }catch{}
-      }
-      await onChanged()
-      onMessage(err?.message || 'อัปเดตไม่สำเร็จ')
-    } finally{ setSaving(false) }
+    } catch(err:any){ onMessage(err?.message || 'อัปเดตไม่สำเร็จ') }
+    finally{ setSaving(false) }
   }
 
   const resetPassword = async () => {
