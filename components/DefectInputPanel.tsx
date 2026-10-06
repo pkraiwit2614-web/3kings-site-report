@@ -1,6 +1,6 @@
 'use client'
 
-import {useState} from 'react'
+import {useEffect,useState} from 'react'
 import {getSupabase} from '@/lib/supabase'
 import useAccessRole from '@/components/useAccessRole'
 import {canEditDefect} from '@/lib/accessControl'
@@ -13,6 +13,25 @@ export default function DefectInputPanel(){
  const {role,userId}=useAccessRole();const editable=canEditDefect(role)
  const [file,setFile]=useState<File|null>(null);const [uploading,setUploading]=useState(false);const [uploadMsg,setUploadMsg]=useState('')
  const [room,setRoom]=useState('');const [detail,setDetail]=useState('');const [status,setStatus]=useState('');const [statusGroup,setStatusGroup]=useState('');const [nextAction,setNextAction]=useState('');const [manualMsg,setManualMsg]=useState('');const [saving,setSaving]=useState(false)
+
+ useEffect(()=>{
+   if(!editable||!userId)return
+   let alive=true
+   void (async()=>{
+     const s=getSupabase()
+     const {data}=await s.from('defect_file_uploads')
+       .select('id,storage_path')
+       .eq('created_by',userId)
+       .eq('validation_status','rejected')
+       .limit(20)
+     if(!alive||!data?.length)return
+     for(const row of data){
+       const {error}=await s.storage.from('defect-flow-staging').remove([String(row.storage_path)])
+       if(!error)await s.rpc('defect_forget_rejected_upload',{p_id:row.id})
+     }
+   })()
+   return()=>{alive=false}
+ },[editable,userId])
 
  const upload=async()=>{
    if(!editable||!userId||!file)return
