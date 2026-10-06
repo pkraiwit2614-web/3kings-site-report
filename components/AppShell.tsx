@@ -13,31 +13,17 @@ import { logActivity } from '@/lib/activityLog'
 
 type NavItem = [string,string]
 
-const managementNav: NavItem[] = [
+const standardNav: NavItem[] = [
   ['/', 'Dashboard'],
   ['/presentation', 'Executive Presentation'],
   ['/schedule', 'แผนงานที่กำหนด'],
   ['/materials', 'วัสดุ เครื่องมือและผู้รับเหมา'],
   ['/defect-flow', 'Defect Report'],
   ['/reports', 'Site Operations'],
-  ['/reports/labour', 'Labour & Payroll'],
   ['/site-photos', 'รูปภาพหน้างาน'],
   ['/procurement', 'การจัดซื้อ/จัดจ้าง'],
   ['/weekly', 'รายงานการทำงานประจำสัปดาห์'],
   ['/calendar', 'Work Calendar']
-]
-
-const viewerNav: NavItem[] = [
-  ['/', 'Dashboard'],
-  ['/schedule', 'แผนงานที่กำหนด'],
-  ['/site-photos', 'รูปภาพหน้างาน'],
-  ['/defect-flow', 'Defect Report'],
-  ['/reports/labour', 'Labour'],
-  ['/materials', 'วัสดุ เครื่องมือและผู้รับเหมา'],
-  ['/procurement', 'การจัดซื้อ/จัดจ้าง'],
-  ['/weekly', 'รายงานการทำงานประจำสัปดาห์'],
-  ['/calendar', 'Work Calendar'],
-  ['/presentation', 'Executive Presentation']
 ]
 
 const defectContributorNav: NavItem[] = [
@@ -64,7 +50,10 @@ function roleLabel(role:AccessRole|null){
   if(role==='owner') return 'Site Supervisor'
   if(role==='admin') return 'Admin'
   if(role==='viewer') return 'Viewer · ดูข้อมูล'
+  if(role==='viewer_editor') return 'Viewer & Editor · แผนงาน'
   if(role==='defect_contributor') return 'Defect Contributor'
+  if(role==='defect_editor') return 'Defect Contributor Editor'
+  if(role==='purchase') return 'Purchase'
   return 'User'
 }
 
@@ -88,9 +77,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const {previewRole,presentationRole,targets:previewTargets,ready:previewReady,startPreview,exitPreview}=useRolePreview(actualRole)
   const nav = useMemo<NavItem[]>(() => {
     if(presentationRole==='defect_contributor') return defectContributorNav
-    if(presentationRole==='viewer') return viewerNav
-    if(presentationRole==='admin') return managementNav
-    if(presentationRole==='owner') return [...managementNav,['/photo-mapping','Photo Mapping'],['/data-health','Data Health'],['/users','User & Access']]
+    if(presentationRole==='owner') return [...standardNav,['/users','System & Access']]
+    if(presentationRole) return standardNav
     return []
   }, [presentationRole])
   const mobileOrderedNav = useMemo<NavItem[]>(() => {
@@ -230,6 +218,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const extraActive = extraNav.some(([href]) => navIsActive(path,href))
   const isDefectSection = path==='/defect-flow'||path==='/defects'
   const isSiteOperationsSection = path==='/reports'||path==='/reports/labour'
+  const isOwnerToolsSection = actualRole==='owner'&&(path==='/users'||path==='/photo-mapping'||path==='/data-health')
 
   return <div className="app-shell">
     <ActivityTracker userId={userId}/>
@@ -249,8 +238,13 @@ export default function AppShell({ children }: { children: ReactNode }) {
         <Link href="/defects" className={path==='/defects'?'active':''}>Defect Report</Link>
       </nav>}
       {isSiteOperationsSection&&<nav className="defect-section-tabs" aria-label="Site Operations navigation">
-        {presentationRole!=='viewer'&&<Link href="/reports" className={path==='/reports'?'active':''}>Site Operations</Link>}
-        <Link href="/reports/labour" className={path==='/reports/labour'?'active':''}>{canViewPayroll(presentationRole)?'Payroll Verification Record':'Labour'}</Link>
+        <Link href="/reports" className={path==='/reports'?'active':''}>Site Operations</Link>
+        <Link href="/reports/labour" className={path==='/reports/labour'?'active':''}>{canViewPayroll(presentationRole)?'Labour & Payroll':'Labour'}</Link>
+      </nav>}
+      {isOwnerToolsSection&&<nav className="defect-section-tabs" aria-label="System & Access navigation">
+        <Link href="/users" className={path==='/users'?'active':''}>User & Access</Link>
+        <Link href="/photo-mapping" className={path==='/photo-mapping'?'active':''}>Photo Mapping</Link>
+        <Link href="/data-health" className={path==='/data-health'?'active':''}>Data Health</Link>
       </nav>}
       {children}
     </main>
