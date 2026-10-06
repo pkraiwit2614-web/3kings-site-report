@@ -80,7 +80,7 @@ begin
   from private.defect_ingest_config c
   where c.key='server_token';
 
-  v_token_hash:=encode(extensions.digest(coalesce(p_server_token,'')::bytea,'sha256'),'hex');
+  v_token_hash:=encode(extensions.digest(convert_to(coalesce(p_server_token,''),'UTF8'),'sha256'),'hex');
   if v_expected_hash is null or v_token_hash is distinct from v_expected_hash then
     raise exception 'INVALID_DEFECT_INGEST_SERVER_TOKEN';
   end if;
@@ -293,3 +293,21 @@ begin
 
   return v_inserted;
 end $$;
+
+
+create or replace function public.defect_forget_rejected_upload(p_id uuid)
+returns boolean
+language plpgsql security definer set search_path=''
+as $$
+declare v_user uuid := (select auth.uid());
+begin
+  if v_user is null then raise exception 'AUTH_REQUIRED'; end if;
+  delete from public.defect_file_uploads f
+  where f.id=p_id
+    and f.created_by=v_user
+    and f.validation_status='rejected';
+  return found;
+end $$;
+
+revoke all on function public.defect_forget_rejected_upload(uuid) from public,anon;
+grant execute on function public.defect_forget_rejected_upload(uuid) to authenticated;
