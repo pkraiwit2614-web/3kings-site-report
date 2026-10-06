@@ -5,7 +5,7 @@ import {getSupabase} from '@/lib/supabase'
 import {getActivitySessionId} from '@/lib/activityLog'
 
 type ReviewStatus='pending'|'confirmed'|'needs_review'
-type Review={review_status:ReviewStatus;management_note:string|null;updated_at?:string|null}|null
+type Review={review_status:ReviewStatus;management_note:string|null;updated_at:string|null}|null
 
 export default function SiteOperationsReviewEditor({entryId,review,editable,onSaved}:{entryId:string;review:Review;editable:boolean;onSaved:(review:Exclude<Review,null>)=>void}){
   const [open,setOpen]=useState(false)
