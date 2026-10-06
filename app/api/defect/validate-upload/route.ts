@@ -109,7 +109,7 @@ export async function POST(request:NextRequest){
   const {data:{user},error:userError}=await supabase.auth.getUser(accessToken)
   if(userError||!user)return NextResponse.json({ok:false,error:'invalid_auth'},{status:401})
   const {data:profile}=await supabase.from('profiles').select('role,active').eq('user_id',user.id).maybeSingle()
-  if(!profile?.active||!['manager','defect_contributor','defect_editor'].includes(String(profile.role))){
+  if(!profile?.active||!['manager','viewer_editor','defect_contributor','defect_editor'].includes(String(profile.role))){
     return NextResponse.json({ok:false,error:'forbidden'},{status:403})
   }
 

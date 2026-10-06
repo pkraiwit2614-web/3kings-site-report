@@ -164,7 +164,7 @@ function UsersContent() {
         <label>ชื่อแสดงผล<input value={fullName} onChange={e=>setFullName(e.target.value)} placeholder="ชื่อ / ชื่อเล่น" /></label>
         <label>สิทธิ์<select value={role} onChange={e=>setRole(e.target.value)}>
           <option value="viewer">Viewer — ดูได้ทุกหน้า ยกเว้น Payroll / System & Access</option>
-          <option value="viewer_editor">Viewer & Editor — แก้ Calendar / Schedule</option>
+          <option value="viewer_editor">Viewer & Editor — แก้แผนงาน / ปฏิทิน / Defect</option>
           <option value="admin">Admin — จัดการ Site Operations / Labour / Payroll</option>
           <option value="defect_contributor">Defect Contributor — เฉพาะ Defect</option>
           <option value="defect_editor">Defect Contributor Editor — ดูทั่วไป + แก้ Defect</option>

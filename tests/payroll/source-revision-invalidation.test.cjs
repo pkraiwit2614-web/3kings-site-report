@@ -74,5 +74,5 @@ test('UI treats fingerprint mismatch as needs_review before downstream action',(
   assert.match(ui,/verified_source_fingerprint:string\|null/)
   assert.match(ui,/batch\.verified_source_fingerprint!==entry\.source_fingerprint/)
   assert.match(ui,/labourStatusFor\(batch\)!=='verified'/)
-  assert.match(ui,/ข้อมูลต้นทางมีการเปลี่ยนหลังยืนยันทีม/)
+  assert.match(ui,/ข้อมูลต้นทางเปลี่ยนหลังยืนยันทีม/)
 })

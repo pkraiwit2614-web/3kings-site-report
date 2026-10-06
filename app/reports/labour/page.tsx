@@ -42,7 +42,7 @@ function statusLabel(value:string){
   return map[value]||value
 }
 function payrollStatusLabel(value:string){
-  const map:Record<string,string>={pending:'รอตรวจบัตรตอก',draft:'กำลังตรวจ',timecard_checked:'ตรวจบัตรตอกแล้ว',verified:'Verified Payroll',external_verified:'Verified via Excel',needs_review:'ต้องตรวจซ้ำ'}
+  const map:Record<string,string>={pending:'รอตรวจบัตรตอก',draft:'กำลังตรวจ',timecard_checked:'ตรวจบัตรตอกแล้ว',verified:'ยืนยันค่าแรงแล้ว',external_verified:'ยืนยันจาก Excel แล้ว',needs_review:'ต้องตรวจซ้ำ'}
   return map[value]||value
 }
 function attendanceLabel(value:string){
@@ -50,11 +50,11 @@ function attendanceLabel(value:string){
   return map[value]||value
 }
 function headcountBasisLabel(value:string|null|undefined){
-  const map:Record<string,string>={source_total:'Source total',male_female:'ชาย + หญิง',daily_report:'Daily Report',monthly_report:'Monthly Report',company_roster:'Company roster',legacy_verified_roster:'Roster ที่เคยยืนยันแล้ว',contractor_only:'ผู้รับเหมาเท่านั้น',manual_review:'ตรวจไขว้ด้วยคน'}
+  const map:Record<string,string>={source_total:'ยอดรวมจากรายงาน',male_female:'ชาย + หญิง',daily_report:'รายงานประจำวัน',monthly_report:'รายงานประจำเดือน',company_roster:'รายชื่อคนงานบริษัท',legacy_verified_roster:'รายชื่อที่เคยยืนยันแล้ว',contractor_only:'ผู้รับเหมาเท่านั้น',manual_review:'ตรวจไขว้ด้วยคน'}
   return value?map[value]||value:'-'
 }
 function contractorBasisLabel(value:string|null|undefined){
-  const map:Record<string,string>={daily_report:'Daily Report',monthly_report:'Monthly Report',contractor_roster:'Contractor roster',manual_review:'ตรวจไขว้ด้วยคน'}
+  const map:Record<string,string>={daily_report:'รายงานประจำวัน',monthly_report:'รายงานประจำเดือน',contractor_roster:'รายชื่อผู้รับเหมา',manual_review:'ตรวจไขว้ด้วยคน'}
   return value?map[value]||value:'-'
 }
 function isCompanyPayrollWorker(worker:Worker|undefined|null){
@@ -278,7 +278,7 @@ export default function LabourVerificationPage(){
       if(!base){setMessage('แก้ Draft ไม่ได้ เพราะยังไม่มี source/revision ที่เชื่อถือได้');return}
       setDraftBases(prev=>({...prev,[batch.id]:base}))
     }
-    if(!isCompanyPayrollWorker(worker)){setMessage('รายการนี้ไม่ใช่ Worker Payroll • '+(worker?.payroll_eligibility_source||worker?.worker_class||'ไม่ทราบ classification'));return}
+    if(!isCompanyPayrollWorker(worker)){setMessage('รายการนี้ไม่ใช่คนงานบริษัทที่คิดค่าแรง • '+(worker?.payroll_eligibility_source||worker?.worker_class||'ยังไม่ระบุประเภท'));return}
     if(existing.some(x=>x.worker_id===workerId)){setMessage('คนงานคนนี้อยู่ในรายการแล้ว');return}
     const pids=projectIdsByEntry.get(batch.site_operations_entry_id)||[]
     const workingTeam=batch.home_team||''
@@ -317,29 +317,29 @@ export default function LabourVerificationPage(){
   const confirmHeadcount=async(batch:Batch)=>{
     if(!canVerify||saving['headcount-'+batch.id]||!ensureBatchWorkDateUsable(batch))return
     const draft=headcountDrafts[batch.id]||{count:'',basis:'',evidence:''}
-    if(draft.count.trim()===''||!/^\\d+$/.test(draft.count.trim())){setMessage('กรุณาระบุ Confirmed headcount เป็นจำนวนเต็มตั้งแต่ 0 ขึ้นไป');return}
-    if(!draft.basis){setMessage('กรุณาระบุหลักฐานที่ใช้ยืนยัน Headcount');return}
+    if(draft.count.trim()===''||!/^\\d+$/.test(draft.count.trim())){setMessage('กรุณาระบุจำนวนคนที่ยืนยันแล้วเป็นจำนวนเต็มตั้งแต่ 0 ขึ้นไป');return}
+    if(!draft.basis){setMessage('กรุณาระบุแหล่งที่มาที่ใช้ยืนยันจำนวนคน');return}
     const entry=entryById.get(batch.site_operations_entry_id)
     const sourceStatus=entry?headcountSourceStatus(batch,entry):'unknown'
     const needsEvidence=sourceStatus!=='matched'||['daily_report','monthly_report','company_roster','contractor_only','manual_review'].includes(draft.basis)
-    if(needsEvidence&&!draft.evidence.trim()){setMessage('กรณีข้อมูลขัดกัน/ไม่ครบ ต้องใส่หลักฐานหรือเหตุผลที่ใช้ยืนยัน โดยไม่แก้ raw source');return}
+    if(needsEvidence&&!draft.evidence.trim()){setMessage('กรณีข้อมูลขัดกันหรือไม่ครบ ต้องใส่หลักฐานหรือเหตุผลที่ใช้ยืนยัน โดยไม่แก้ข้อมูลต้นทาง');return}
     setSaving(prev=>({...prev,['headcount-'+batch.id]:true}));setMessage('')
     try{
       const {data,error}=await getSupabase().rpc('labour_confirm_headcount',{
         p_batch_id:batch.id,p_confirmed_headcount:Number(draft.count),p_basis:draft.basis,p_evidence_note:draft.evidence||''
       })
       if(error)throw error
-      setMessage('ยืนยัน Headcount แล้ว '+String(data)+' คน • downstream จะใช้ค่านี้แทน raw source')
+      setMessage('ยืนยันจำนวนคนแล้ว '+String(data)+' คน • ระบบจะใช้จำนวนนี้เป็นข้อมูลอ้างอิงสำหรับขั้นตอนถัดไป')
       setHeadcountDrafts(prev=>{const next={...prev};delete next[batch.id];return next})
       setRefreshTick(v=>v+1)
-    }catch(err:any){setMessage(String(err?.message||'ยืนยัน Headcount ไม่สำเร็จ'))}
+    }catch(err:any){setMessage(String(err?.message||'ยืนยันจำนวนคนไม่สำเร็จ'))}
     finally{setSaving(prev=>({...prev,['headcount-'+batch.id]:false}))}
   }
 
 
   const beginContractorEdit=(batch:Batch)=>{
     const base=draftBaseFor(batch)
-    if(!base){setMessage('ยืนยัน Contractor count ไม่ได้ เพราะยังไม่มี source/revision ที่เชื่อถือได้');return}
+    if(!base){setMessage('ยืนยันจำนวนผู้รับเหมาไม่ได้ เพราะข้อมูลต้นทางหรือรุ่นข้อมูลยังไม่พร้อม');return}
     setContractorDrafts(prev=>({...prev,[batch.id]:{
       count:batch.contractor_person_count===null?'':String(batch.contractor_person_count),
       basis:batch.contractor_count_basis||'',
@@ -354,8 +354,8 @@ export default function LabourVerificationPage(){
   const confirmContractorCount=async(batch:Batch)=>{
     if(!canVerify||saving['contractor-'+batch.id]||!ensureBatchWorkDateUsable(batch))return
     const draft=contractorDrafts[batch.id]
-    if(!draft||draft.count.trim()===''||!/^\d+$/.test(draft.count.trim())){setMessage('กรุณาระบุ Contractor / non-payroll people เป็นจำนวนเต็มตั้งแต่ 0 ขึ้นไป');return}
-    if(!draft.basis||!draft.evidence.trim()){setMessage('Contractor count ต้องมีที่มาและหลักฐานแยกจากหมายเหตุทั่วไป');return}
+    if(!draft||draft.count.trim()===''||!/^\d+$/.test(draft.count.trim())){setMessage('กรุณาระบุจำนวนผู้รับเหมา / บุคคลที่ไม่คิดค่าแรงบริษัทเป็นจำนวนเต็มตั้งแต่ 0 ขึ้นไป');return}
+    if(!draft.basis||!draft.evidence.trim()){setMessage('จำนวนผู้รับเหมาต้องมีที่มาและหลักฐานแยกจากหมายเหตุทั่วไป');return}
     setSaving(prev=>({...prev,['contractor-'+batch.id]:true}));setMessage('')
     try{
       const {data,error}=await getSupabase().rpc('labour_confirm_contractor_count',{
@@ -363,12 +363,12 @@ export default function LabourVerificationPage(){
         p_expected_source_fingerprint:draft.source_fingerprint,p_expected_batch_revision:draft.batch_revision
       })
       if(error)throw error
-      setMessage('ยืนยัน Contractor / non-payroll people แล้ว '+String(data)+' คน • ไม่กระทบ raw reported manpower หรือ Confirmed Worker Payroll')
+      setMessage('ยืนยันจำนวนผู้รับเหมา / บุคคลนอกบัญชีค่าแรงแล้ว '+String(data)+' คน • แยกจากจำนวนคนงานบริษัท')
       setContractorDrafts(prev=>{const next={...prev};delete next[batch.id];return next})
       setRefreshTick(v=>v+1)
     }catch(err:any){
       const raw=String(err?.message||'ยืนยัน Contractor count ไม่สำเร็จ')
-      if(raw.includes('STALE_CONTRACTOR_COUNT_RELOAD_REQUIRED')){setMessage('Source/Batch เปลี่ยนหลังเริ่มแก้ Contractor count • ระบบปฏิเสธ stale save และเก็บ Draft ไว้ กรุณาตรวจข้อมูลล่าสุดก่อนบันทึกใหม่');setRefreshTick(v=>v+1)}
+      if(raw.includes('STALE_CONTRACTOR_COUNT_RELOAD_REQUIRED')){setMessage('ข้อมูลต้นทางหรือชุดข้อมูลเปลี่ยนหลังเริ่มแก้จำนวนผู้รับเหมา • ระบบไม่บันทึกทับข้อมูลใหม่ และเก็บฉบับร่างไว้ กรุณาตรวจข้อมูลล่าสุดก่อนบันทึกใหม่');setRefreshTick(v=>v+1)}
       else setMessage(raw)
     }finally{setSaving(prev=>({...prev,['contractor-'+batch.id]:false}))}
   }
@@ -379,8 +379,8 @@ export default function LabourVerificationPage(){
     if(!base){setMessage('Draft นี้ยังไม่มี revision อ้างอิง • กรุณาโหลดรายการเดิมหรือสร้าง Draft ใหม่ก่อนบันทึก');return}
     const rows=draftFor(batch)
     const authority=confirmedHeadcount(batch)
-    if(authority===null){setMessage('ต้องยืนยัน Confirmed headcount ก่อนยืนยันทีมคนงาน');return}
-    if(rows.length!==authority){setMessage('รายชื่อคนงานต้องตรงกับ Confirmed headcount ก่อนยืนยัน • ห้ามใช้หมายเหตุเพื่อข้ามจำนวน');return}
+    if(authority===null){setMessage('ต้องยืนยันจำนวนคนก่อนยืนยันทีมคนงาน');return}
+    if(rows.length!==authority){setMessage('จำนวนรายชื่อคนงานต้องตรงกับจำนวนคนที่ยืนยันแล้วก่อนบันทึก • ห้ามใช้หมายเหตุเพื่อข้ามจำนวน');return}
     setSaving(prev=>({...prev,[batch.id]:true}));setMessage('')
     try{
       const payload=rows.map(x=>({
@@ -397,14 +397,14 @@ export default function LabourVerificationPage(){
         p_expected_source_fingerprint:base.source_fingerprint,p_expected_batch_revision:base.batch_revision
       })
       if(error)throw error
-      setMessage('ยืนยันทีมคนงานแล้ว '+String(data||rows.length)+' คน • เก็บเป็น Verified Labour Dataset')
+      setMessage('ยืนยันทีมคนงานแล้ว '+String(data||rows.length)+' คน • บันทึกเป็นชุดข้อมูลแรงงานที่ยืนยันแล้ว')
       setDraftBases(prev=>({...prev,[batch.id]:{source_fingerprint:base.source_fingerprint,batch_revision:base.batch_revision+1}}))
       setRefreshTick(v=>v+1)
     }catch(err:any){
       const raw=String(err?.message||'ยืนยันไม่สำเร็จ')
-      if(raw.includes('STALE_LABOUR_SAVE_RELOAD_REQUIRED')){setMessage('มีข้อมูล Labour/Source ใหม่กว่าตอนที่เริ่มแก้ • ระบบปฏิเสธการบันทึกเพื่อไม่ให้ทับข้อมูลล่าสุด • Draft ของคุณยังอยู่ กรุณาโหลดข้อมูลล่าสุดและ reconcile ก่อนบันทึกใหม่');setRefreshTick(v=>v+1)}
-      else if(raw.includes('HEADCOUNT_CONFIRMATION_REQUIRED'))setMessage('ยังไม่มี Confirmed headcount • กรุณาตรวจหลักฐานและยืนยันจำนวนก่อน')
-      else if(raw.includes('HEADCOUNT_MISMATCH'))setMessage('จำนวนรายชื่อไม่ตรงกับ Confirmed headcount • ต้องแก้จำนวนหรือรายชื่อให้ตรงกันก่อน')
+      if(raw.includes('STALE_LABOUR_SAVE_RELOAD_REQUIRED')){setMessage('มีข้อมูลแรงงานหรือต้นทางใหม่กว่าตอนที่เริ่มแก้ • ระบบไม่บันทึกทับข้อมูลล่าสุด • ฉบับร่างยังอยู่ กรุณาโหลดข้อมูลล่าสุดและตรวจเทียบก่อนบันทึกใหม่');setRefreshTick(v=>v+1)}
+      else if(raw.includes('HEADCOUNT_CONFIRMATION_REQUIRED'))setMessage('ยังไม่มีจำนวนคนที่ยืนยันแล้ว • กรุณาตรวจหลักฐานและยืนยันจำนวนก่อน')
+      else if(raw.includes('HEADCOUNT_MISMATCH'))setMessage('จำนวนรายชื่อไม่ตรงกับจำนวนคนที่ยืนยันแล้ว • ต้องแก้จำนวนหรือรายชื่อให้ตรงกันก่อน')
       else setMessage(raw)
     }finally{setSaving(prev=>({...prev,[batch.id]:false}))}
   }
@@ -438,7 +438,7 @@ export default function LabourVerificationPage(){
   const startPayrollReview=(batch:Batch)=>{
     const record=payrollRecordByBatch.get(batch.id)
     const base=payrollDraftBaseFor(batch,record)
-    if(!base){setMessage('เริ่ม Payroll Draft ไม่ได้ เพราะยังไม่มี source/revision ที่เชื่อถือได้');return}
+    if(!base){setMessage('เริ่มตรวจค่าแรงไม่ได้ เพราะข้อมูลต้นทางหรือรุ่นข้อมูลยังไม่พร้อม');return}
     setPayrollDraftBases(prev=>({...prev,[batch.id]:base}))
     const saved=record?payrollItemsByRecord.get(record.id)||[]:[]
     const savedByWorker=new Map(saved.map(x=>[x.worker_id,x]))
@@ -507,9 +507,9 @@ export default function LabourVerificationPage(){
   }
   const savePayrollWeb=async(batch:Batch,status:'draft'|'timecard_checked')=>{
     if(!canPayroll||saving['payroll-'+batch.id]||!ensureBatchWorkDateUsable(batch))return
-    if(labourStatusFor(batch)!=='verified'){setMessage('ข้อมูลต้นทางมีการเปลี่ยนหลังยืนยันทีม • ต้องตรวจและยืนยันทีมรายวันใหม่ก่อนตรวจ Payroll');return}
+    if(labourStatusFor(batch)!=='verified'){setMessage('ข้อมูลต้นทางเปลี่ยนหลังยืนยันทีม • ต้องตรวจและยืนยันทีมรายวันใหม่ก่อนตรวจค่าแรง');return}
     const base=payrollDraftBases[batch.id]
-    if(!base){setMessage('Payroll Draft นี้ยังไม่มี revision อ้างอิง • กรุณาเปิดรายการล่าสุดก่อนบันทึก');return}
+    if(!base){setMessage('ฉบับร่างค่าแรงยังไม่มีรุ่นข้อมูลอ้างอิง • กรุณาเปิดรายการล่าสุดก่อนบันทึก');return}
     const rows=payrollDraftFor(batch)
     if(!rows.length){setMessage('ยังไม่มีรายชื่อคนงานสำหรับตรวจบัตรตอก กรุณายืนยันทีมรายวันก่อน');return}
     if(status==='timecard_checked'){
@@ -541,13 +541,13 @@ export default function LabourVerificationPage(){
         throw error
       }
       setMessage(status==='timecard_checked'
-        ?'ตรวจบัตรตอกครบแล้ว • บันทึก Payroll Verification Record • ยอดเงินรอ Rate Master'
-        :'บันทึกฉบับร่าง Payroll Verification Record แล้ว')
+        ?'ตรวจบัตรตอกครบแล้ว • บันทึกรายการตรวจสอบค่าแรง • ยอดเงินรออัตราค่าแรง'
+        :'บันทึกฉบับร่างรายการตรวจสอบค่าแรงแล้ว')
       setPayrollDraftBases(prev=>({...prev,[batch.id]:{...base,payroll_revision:base.payroll_revision+1}}))
       setRefreshTick(v=>v+1)
     }catch(err:any){
       const raw=String(err?.message||'บันทึก Payroll Verification ไม่สำเร็จ')
-      if(raw.includes('STALE_PAYROLL_SAVE_RELOAD_REQUIRED')){setMessage('มีข้อมูล Payroll/Labour ใหม่กว่าตอนที่เริ่มแก้ • ระบบปฏิเสธการบันทึกเพื่อไม่ให้ทับข้อมูลล่าสุด • Draft ของคุณยังอยู่ กรุณาโหลดข้อมูลล่าสุดและ reconcile ก่อนบันทึกใหม่');setRefreshTick(v=>v+1)}
+      if(raw.includes('STALE_PAYROLL_SAVE_RELOAD_REQUIRED')){setMessage('มีข้อมูลค่าแรงหรือแรงงานใหม่กว่าตอนที่เริ่มแก้ • ระบบไม่บันทึกทับข้อมูลล่าสุด • ฉบับร่างยังอยู่ กรุณาโหลดข้อมูลล่าสุดและตรวจเทียบก่อนบันทึกใหม่');setRefreshTick(v=>v+1)}
       else setMessage(raw)
     }
     finally{setSaving(prev=>({...prev,['payroll-'+batch.id]:false}))}
@@ -567,8 +567,8 @@ export default function LabourVerificationPage(){
       })
       if(error)throw error
       setMessage(resolution==='confirmed_duplicate'
-        ?'ยืนยันรายการซ้ำแล้ว • คง raw rows ทุกแถว และใช้เฉพาะ canonical row ใน Site Operations/Labour/Payroll'
-        :'ยืนยันว่าเป็นคนละงานแล้ว • แต่ละ raw row กลับเข้า flow แยกกันตามหลักฐาน')
+        ?'ยืนยันรายการซ้ำแล้ว • คงข้อมูลต้นทางทุกแถว และใช้เฉพาะรายการหลักในการสรุปงาน แรงงาน และค่าแรง'
+        :'ยืนยันว่าเป็นคนละงานแล้ว • แต่ละรายการต้นทางจะถูกใช้แยกกันตามหลักฐาน')
       setDuplicateEvidence(prev=>{const next={...prev};delete next[groupId];return next})
       setRefreshTick(v=>v+1)
     }catch(err:any){setMessage(String(err?.message||'ยืนยัน Duplicate Review ไม่สำเร็จ'))}
@@ -577,25 +577,25 @@ export default function LabourVerificationPage(){
 
   return <AppShell>
     {readSignals.some(x=>x.truncated)&&<div className="panel" role="alert" style={{marginBottom:10}}>โหลดข้อมูลไม่ครบ • {readSignals.filter(x=>x.truncated).map(x=>x.label+' '+x.loaded+'/'+x.count).join(' • ')}</div>}
-    {loadError&&<div className="panel" role="alert" style={{marginBottom:10}}>โหลด Labour Verification ไม่สำเร็จ กรุณาลองใหม่ <button type="button" className="button" onClick={()=>setRefreshTick(v=>v+1)}>ลองใหม่</button></div>}
-    <PageHeader title={canPayroll?'Labour & Payroll Verification':'Labour'} subtitle={canPayroll?'Labour PDF รันอัตโนมัติเหมือนเดิม • หน้านี้ใช้ยืนยันทีมรายวันและตรวจบัตรตอกเพื่อสร้าง Payroll Verification Record':'ดูข้อมูลทีมและแรงงานจาก Site Operations • ไม่มีสิทธิ์เข้าถึงข้อมูล Payroll'} action={<div className="labour-mode"><button type="button" className={mode==='verify'?'active':''} onClick={()=>setMode('verify')}>ยืนยันทีมรายวัน</button>{canPayroll&&<button type="button" className={mode==='payroll'?'active':''} onClick={()=>setMode('payroll')}>Payroll Verification Record</button>}</div>}/>
+    {loadError&&<div className="panel" role="alert" style={{marginBottom:10}}>โหลดข้อมูลตรวจสอบแรงงานไม่สำเร็จ กรุณาลองใหม่ <button type="button" className="button" onClick={()=>setRefreshTick(v=>v+1)}>ลองใหม่</button></div>}
+    <PageHeader title={canPayroll?'ตรวจสอบแรงงานและค่าแรง':'แรงงาน'} subtitle={canPayroll?'ยืนยันทีมคนงานรายวัน ตรวจบัตรตอก และตรวจข้อมูลค่าแรง':'ดูข้อมูลทีมและแรงงานจากรายงานหน้างาน • ไม่มีสิทธิ์ดูข้อมูลค่าแรง'} action={<div className="labour-mode"><button type="button" className={mode==='verify'?'active':''} onClick={()=>setMode('verify')}>ยืนยันทีมรายวัน</button>{canPayroll&&<button type="button" className={mode==='payroll'?'active':''} onClick={()=>setMode('payroll')}>ตรวจสอบค่าแรง</button>}</div>}/>
 
     {message&&<div className="notice" role="status" aria-live="polite" style={{marginBottom:10}}>{message}</div>}
 
     {mode==='verify'?<>
       {duplicateReviewGroups.length>0&&<section className="duplicate-review-stack">
         {duplicateReviewGroups.map(group=><article className="panel duplicate-review-card" key={group.id}>
-          <header><div><b>Suspected duplicate • ต้องตรวจหลักฐานก่อนใช้ downstream</b><small>{group.rows.length} raw rows • ไม่มีการ merge อัตโนมัติ</small></div></header>
+          <header><div><b>พบรายการที่อาจซ้ำ • ต้องตรวจหลักฐานก่อนนำไปใช้งาน</b><small>{group.rows.length} รายการต้นทาง • ระบบไม่รวมรายการให้อัตโนมัติ</small></div></header>
           <div className="duplicate-review-members">
             {group.rows.map(row=>{const entry=entryById.get(row.entry_id);return <div key={row.entry_id}>
-              <div><b>Form row {row.source_row}</b><span>{entry?dateTH(entry.work_date):'-'} • {entry?.supervisor_raw||'-'} • {entry?.project_name_raw||'-'}</span><small>{entry?.work_detail||'-'}</small></div>
-              {canVerify&&<button type="button" className="button" disabled={saving['duplicate-'+group.id]} onClick={()=>resolveDuplicate(group.id,'confirmed_duplicate',row.entry_id)}>ยืนยันซ้ำ → ใช้ row {row.source_row} เป็น canonical</button>}
+              <div><b>แถวข้อมูล {row.source_row}</b><span>{entry?dateTH(entry.work_date):'-'} • {entry?.supervisor_raw||'-'} • {entry?.project_name_raw||'-'}</span><small>{entry?.work_detail||'-'}</small></div>
+              {canVerify&&<button type="button" className="button" disabled={saving['duplicate-'+group.id]} onClick={()=>resolveDuplicate(group.id,'confirmed_duplicate',row.entry_id)}>ยืนยันว่าเป็นรายการซ้ำ → ใช้แถว {row.source_row} เป็นรายการหลัก</button>}
             </div>})}
           </div>
           {canVerify?<div className="duplicate-review-decision">
             <label>หลักฐาน / เหตุผล<input value={duplicateEvidence[group.id]||''} onChange={e=>setDuplicateEvidence(prev=>({...prev,[group.id]:e.target.value}))} placeholder="เช่น ตรวจ Google Form + หน้างานแล้ว เป็นการกดส่งซ้ำ / เป็นคนละกะ"/></label>
             <button type="button" className="button" disabled={saving['duplicate-'+group.id]} onClick={()=>resolveDuplicate(group.id,'confirmed_distinct',null)}>ยืนยันว่าเป็นคนละงาน</button>
-          </div>:<div className="duplicate-review-readonly">รายการนี้ถูกกักจากยอด/การยืนยันจน Admin ตรวจหลักฐาน</div>}
+          </div>:<div className="duplicate-review-readonly">รายการนี้ยังไม่นำไปคำนวณหรือยืนยัน จนกว่าผู้ดูแลจะตรวจหลักฐาน</div>}
         </article>)}
       </section>}
 
@@ -608,14 +608,14 @@ export default function LabourVerificationPage(){
 
       <section className="labour-kpis">
         <div><span>รายการวันนี้</span><b>{visibleBatches.length}</b></div>
-        <div><span>Verified</span><b>{visibleBatches.filter(x=>labourStatusFor(x)==='verified').length}</b></div>
-        <div><span>Pending</span><b>{visibleBatches.filter(x=>labourStatusFor(x)==='pending').length}</b></div>
-        <div><span>Needs review</span><b>{visibleBatches.filter(x=>labourStatusFor(x)==='needs_review').length}</b></div>
+        <div><span>ยืนยันแล้ว</span><b>{visibleBatches.filter(x=>labourStatusFor(x)==='verified').length}</b></div>
+        <div><span>รอยืนยัน</span><b>{visibleBatches.filter(x=>labourStatusFor(x)==='pending').length}</b></div>
+        <div><span>ต้องตรวจสอบ</span><b>{visibleBatches.filter(x=>labourStatusFor(x)==='needs_review').length}</b></div>
       </section>
 
-      {!canVerify&&<div className="panel labour-readonly">บัญชีนี้ดูข้อมูล Labour ได้ แต่การยืนยัน/แก้ทีมคนงานสงวนไว้สำหรับ Admin</div>}
+      {!canVerify&&<div className="panel labour-readonly">บัญชีนี้ดูข้อมูลแรงงานได้ แต่การยืนยันหรือแก้ไขทีมคนงานทำได้เฉพาะผู้ดูแล</div>}
 
-      {loading?<div className="panel">กำลังโหลดข้อมูล…</div>:!visibleBatches.length?<div className="panel labour-empty">ไม่พบรายการตาม Filter</div>:<div className="labour-stack">
+      {loading?<div className="panel">กำลังโหลดข้อมูล…</div>:!visibleBatches.length?<div className="panel labour-empty">ไม่พบรายการตามตัวกรอง</div>:<div className="labour-stack">
         {visibleBatches.map(batch=>{
           const entry=entryById.get(batch.site_operations_entry_id)
           if(!entry)return null
@@ -637,46 +637,46 @@ export default function LabourVerificationPage(){
           const effectiveLabourStatus=labourStatusFor(batch)
           return <article className="panel labour-card" key={batch.id}>
             <header>
-              <div><b>{batch.supervisor_raw||'ไม่ระบุหัวหน้าทีม'}</b><small>{dateTH(batch.work_date)} • Form row {entry.source_row} • {entry.area_raw||entry.project_name_raw||'-'}</small></div>
-              <div><span className={'verify-status '+effectiveLabourStatus}>{statusLabel(effectiveLabourStatus)}</span><strong>{authority===null?'Headcount ยังไม่ยืนยัน':authority+' คน'}</strong></div>
+              <div><b>{batch.supervisor_raw||'ไม่ระบุหัวหน้าทีม'}</b><small>{dateTH(batch.work_date)} • แถวข้อมูล {entry.source_row} • {entry.area_raw||entry.project_name_raw||'-'}</small></div>
+              <div><span className={'verify-status '+effectiveLabourStatus}>{statusLabel(effectiveLabourStatus)}</span><strong>{authority===null?'ยังไม่ยืนยันจำนวนคน':authority+' คน'}</strong></div>
             </header>
 
             <div className="labour-source">
-              <div><span>Daily Report</span><b>{entry.work_detail||'-'}</b></div>
+              <div><span>รายละเอียดงานประจำวัน</span><b>{entry.work_detail||'-'}</b></div>
               {entry.afternoon_detail&&<div><span>ช่วงบ่าย</span><b>{entry.afternoon_detail}</b></div>}
-              {entry.next_plan&&<div><span>Next plan</span><b>{entry.next_plan}</b></div>}
-              <div><span>Reported manpower (raw)</span><b>รวม {countLabel(entry.total_manpower)} • ชาย {countLabel(entry.male_count)} • หญิง {countLabel(entry.female_count)} • ชาย+หญิง {countLabel(sexTotal)}</b><small className={sourceStatus==='mismatch'?'bad-text':''}>Daily Report Form row {entry.source_row} • {sourceStatus==='mismatch'?'Source discrepancy: รวม ≠ ชาย+หญิง':sourceStatus==='unknown'?'Source บางช่องไม่ระบุ — ห้ามตีความเป็น 0':'Raw source สอดคล้องกัน แต่ยังไม่ใช่ Payroll authority'}</small></div>
-              <div><span>Company Payroll workers</span><b>{authority===null?'ยังไม่ยืนยัน':authority+' คน'}</b><small>{authority===null?'ใช้เฉพาะ Confirmed headcount พร้อม evidence':headcountBasisLabel(batch.confirmed_headcount_basis)+' • expected_headcount (compat) '+countLabel(batch.expected_headcount)}</small></div>
-              <div><span>Supervisor role</span><b>{batch.supervisor_worker_id?'1 คน • '+(supervisorPayrollEligible?'มีสิทธิ์อยู่ใน Worker Payroll เมื่ออยู่ใน roster':'แยก/ไม่อยู่ Worker Payroll ตาม classification'):'ยังไม่ resolve'}</b><small>{batch.supervisor_worker_id?(batch.supervisor_worker_id+' • '+(supervisor?.payroll_eligibility_source||'classification ไม่ระบุ')):'supervisor_raw: '+(batch.supervisor_raw||'ไม่ระบุ')}</small></div>
-              <div><span>Contractor / non-payroll</span><b>{batch.contractor_person_count===null?'ยังไม่ยืนยัน':batch.contractor_person_count+' คน'}</b><small>{batch.contractor_person_count===null?'ไม่คำนวณจาก Reported - Company Payroll':contractorBasisLabel(batch.contractor_count_basis)+(batch.contractor_count_evidence?' • '+batch.contractor_count_evidence:'')}</small></div>
-              <div><span>Project</span><b>{linkedProjects.map(p=>p.code).join(' / ')||'ยังไม่ map Project'}</b></div>
-              <div><span>Home team</span><b>{batch.home_team||'ยังไม่ยืนยัน identity ของหัวหน้าทีม'}</b></div>
+              {entry.next_plan&&<div><span>แผนงานถัดไป</span><b>{entry.next_plan}</b></div>}
+              <div><span>จำนวนคนที่รายงานมา</span><b>รวม {countLabel(entry.total_manpower)} • ชาย {countLabel(entry.male_count)} • หญิง {countLabel(entry.female_count)} • ชาย+หญิง {countLabel(sexTotal)}</b><small className={sourceStatus==='mismatch'?'bad-text':''}>รายงานประจำวัน แถว {entry.source_row} • {sourceStatus==='mismatch'?'ยอดรวมไม่ตรงกับ ชาย+หญิง':sourceStatus==='unknown'?'บางช่องไม่มีข้อมูล — ห้ามตีความเป็น 0':'ข้อมูลต้นทางสอดคล้องกัน'}</small></div>
+              <div><span>คนงานบริษัทที่นำไปคิดค่าแรง</span><b>{authority===null?'ยังไม่ยืนยัน':authority+' คน'}</b><small>{authority===null?'ต้องยืนยันจำนวนคนพร้อมหลักฐานก่อน':headcountBasisLabel(batch.confirmed_headcount_basis)}</small></div>
+              <div><span>หัวหน้าทีม / ผู้ควบคุมงาน</span><b>{batch.supervisor_worker_id?'1 คน • '+(supervisorPayrollEligible?'นับเป็นคนงานบริษัทได้เมื่อมีรายชื่อยืนยัน':'ไม่นับในรายชื่อคนงานบริษัทตามข้อมูลที่กำหนด'):'ยังไม่ได้ยืนยันตัวบุคคล'}</b><small>{batch.supervisor_worker_id?(batch.supervisor_worker_id+' • '+(supervisor?.payroll_eligibility_source||'ยังไม่ระบุประเภท')):'ข้อมูลต้นทาง: '+(batch.supervisor_raw||'ไม่ระบุ')}</small></div>
+              <div><span>ผู้รับเหมา / บุคคลที่ไม่คิดค่าแรงบริษัท</span><b>{batch.contractor_person_count===null?'ยังไม่ยืนยัน':batch.contractor_person_count+' คน'}</b><small>{batch.contractor_person_count===null?'ต้องยืนยันแยกจากจำนวนคนงานบริษัท':contractorBasisLabel(batch.contractor_count_basis)+(batch.contractor_count_evidence?' • '+batch.contractor_count_evidence:'')}</small></div>
+              <div><span>โครงการ</span><b>{linkedProjects.map(p=>p.code).join(' / ')||'ยังไม่ได้ระบุโครงการ'}</b></div>
+              <div><span>ทีมประจำ</span><b>{batch.home_team||'ยังไม่ยืนยันหัวหน้าทีม'}</b></div>
             </div>
 
             <div className={'headcount-authority '+(sourceStatus==='mismatch'?'review':sourceStatus==='unknown'?'unknown':'')}>
-              <div className="headcount-authority-title"><b>{sourceStatus==='mismatch'?'ต้องตรวจ Headcount: Source ขัดกัน':sourceStatus==='unknown'?'ต้องตรวจ Headcount: Source ไม่ครบ':'Headcount Source พร้อมให้ยืนยัน'}</b><span>Worker Payroll ใช้เฉพาะ Confirmed headcount • ผู้รับเหมาไม่รวมกับคนงานบริษัท</span></div>
+              <div className="headcount-authority-title"><b>{sourceStatus==='mismatch'?'ต้องตรวจจำนวนคน: ข้อมูลต้นทางไม่ตรงกัน':sourceStatus==='unknown'?'ต้องตรวจจำนวนคน: ข้อมูลต้นทางไม่ครบ':'ข้อมูลจำนวนคนพร้อมให้ยืนยัน'}</b><span>ค่าแรงจะใช้เฉพาะจำนวนคนที่ยืนยันแล้ว • ผู้รับเหมาแยกนับจากคนงานบริษัท</span></div>
               {!editingHeadcount&&authority!==null?<div className="headcount-confirmed">
-                <div><b>✓ Confirmed {authority} คน</b><small>{headcountBasisLabel(batch.confirmed_headcount_basis)}{batch.confirmed_headcount_evidence?' • '+batch.confirmed_headcount_evidence:''}</small></div>
-                <button type="button" className="button" disabled={!canVerify} onClick={()=>beginHeadcountEdit(batch)}>แก้ Headcount</button>
+                <div><b>✓ ยืนยันแล้ว {authority} คน</b><small>{headcountBasisLabel(batch.confirmed_headcount_basis)}{batch.confirmed_headcount_evidence?' • '+batch.confirmed_headcount_evidence:''}</small></div>
+                <button type="button" className="button" disabled={!canVerify} onClick={()=>beginHeadcountEdit(batch)}>แก้จำนวนคน</button>
               </div>:<div className="headcount-confirm-form">
-                <label>Confirmed headcount<input type="number" min="0" step="1" value={headcountDraft.count} onChange={e=>updateHeadcountDraft(batch.id,{count:e.target.value})} placeholder="ไม่กรอก = ยังไม่ยืนยัน" disabled={!canVerify}/></label>
-                <label>หลักฐาน<select value={headcountDraft.basis} onChange={e=>updateHeadcountDraft(batch.id,{basis:e.target.value})} disabled={!canVerify}><option value="">เลือกหลักฐาน</option><option value="source_total">Source total</option><option value="male_female">ชาย + หญิง</option><option value="daily_report">Daily Report</option><option value="monthly_report">Monthly Report</option><option value="company_roster">Company roster / รายชื่อบริษัท</option><option value="contractor_only">ผู้รับเหมาเท่านั้น → Worker Payroll = 0</option><option value="manual_review">ตรวจไขว้ด้วยคน</option></select></label>
-                <label className="headcount-evidence">หลักฐาน/เหตุผล<input value={headcountDraft.evidence} onChange={e=>updateHeadcountDraft(batch.id,{evidence:e.target.value})} placeholder={headcountNeedsEvidence?'จำเป็น: เช่น Monthly C=E+F / บริษัท 5 + ผู้รับเหมา 7':'ถ้ามีข้อมูลประกอบเพิ่มเติม'}/></label>
-                <button type="button" className="button primary" disabled={!canVerify||saving['headcount-'+batch.id]||headcountDraft.count.trim()===''||!headcountDraft.basis||(headcountNeedsEvidence&&!headcountDraft.evidence.trim())} onClick={()=>confirmHeadcount(batch)}>{saving['headcount-'+batch.id]?'กำลังยืนยัน…':'ยืนยัน Headcount'}</button>
+                <label>จำนวนคนที่ยืนยันแล้ว<input type="number" min="0" step="1" value={headcountDraft.count} onChange={e=>updateHeadcountDraft(batch.id,{count:e.target.value})} placeholder="ไม่กรอก = ยังไม่ยืนยัน" disabled={!canVerify}/></label>
+                <label>หลักฐาน<select value={headcountDraft.basis} onChange={e=>updateHeadcountDraft(batch.id,{basis:e.target.value})} disabled={!canVerify}><option value="">เลือกหลักฐาน</option><option value="source_total">ยอดรวมจากรายงาน</option><option value="male_female">ชาย + หญิง</option><option value="daily_report">รายงานประจำวัน</option><option value="monthly_report">รายงานประจำเดือน</option><option value="company_roster">รายชื่อคนงานบริษัท</option><option value="contractor_only">ผู้รับเหมาเท่านั้น → คนงานบริษัท = 0</option><option value="manual_review">ตรวจไขว้ด้วยคน</option></select></label>
+                <label className="headcount-evidence">หลักฐาน/เหตุผล<input value={headcountDraft.evidence} onChange={e=>updateHeadcountDraft(batch.id,{evidence:e.target.value})} placeholder={headcountNeedsEvidence?'จำเป็น: เช่น ยอดรวมในรายงานตรงกับ ชาย+หญิง / บริษัท 5 + ผู้รับเหมา 7':'ถ้ามีข้อมูลประกอบเพิ่มเติม'}/></label>
+                <button type="button" className="button primary" disabled={!canVerify||saving['headcount-'+batch.id]||headcountDraft.count.trim()===''||!headcountDraft.basis||(headcountNeedsEvidence&&!headcountDraft.evidence.trim())} onClick={()=>confirmHeadcount(batch)}>{saving['headcount-'+batch.id]?'กำลังยืนยัน…':'ยืนยันจำนวนคน'}</button>
                 {isHeadcountConfirmed(batch)&&<button type="button" className="button" onClick={()=>setHeadcountDrafts(prev=>{const next={...prev};delete next[batch.id];return next})}>ยกเลิก</button>}
               </div>}
             </div>
 
             <div className="headcount-authority">
-              <div className="headcount-authority-title"><b>Contractor / non-payroll people</b><span>ยืนยันแยกจาก Reported manpower และ Company Payroll • non-person/group ไม่ถูกนับเป็นคน</span></div>
+              <div className="headcount-authority-title"><b>ผู้รับเหมา / บุคคลที่ไม่คิดค่าแรงบริษัท</b><span>ยืนยันจำนวนแยกจากคนงานบริษัท • ไม่คำนวณด้วยการเอายอดรวมมาลบกัน</span></div>
               {!contractorDraft?<div className="headcount-confirmed">
-                <div><b>{batch.contractor_person_count===null?'ยังไม่ยืนยัน Contractor count':'✓ '+batch.contractor_person_count+' คน'}</b><small>{batch.contractor_person_count===null?'ไม่เดาจากส่วนต่างของยอด':contractorBasisLabel(batch.contractor_count_basis)+(batch.contractor_count_evidence?' • '+batch.contractor_count_evidence:'')}</small></div>
+                <div><b>{batch.contractor_person_count===null?'ยังไม่ยืนยันจำนวนผู้รับเหมา':'✓ '+batch.contractor_person_count+' คน'}</b><small>{batch.contractor_person_count===null?'ไม่เดาจากส่วนต่างของยอด':contractorBasisLabel(batch.contractor_count_basis)+(batch.contractor_count_evidence?' • '+batch.contractor_count_evidence:'')}</small></div>
                 <button type="button" className="button" disabled={!canVerify} onClick={()=>beginContractorEdit(batch)}>{batch.contractor_person_count===null?'ยืนยันจำนวน':'แก้จำนวน'}</button>
               </div>:<div className="headcount-confirm-form">
-                <label>Contractor people<input type="number" min="0" step="1" value={contractorDraft.count} onChange={e=>updateContractorDraft(batch.id,{count:e.target.value})} placeholder="จำนวนคน" disabled={!canVerify}/></label>
-                <label>หลักฐาน<select value={contractorDraft.basis} onChange={e=>updateContractorDraft(batch.id,{basis:e.target.value})} disabled={!canVerify}><option value="">เลือกหลักฐาน</option><option value="daily_report">Daily Report</option><option value="monthly_report">Monthly Report</option><option value="contractor_roster">Contractor roster</option><option value="manual_review">ตรวจไขว้ด้วยคน</option></select></label>
-                <label className="headcount-evidence">ที่มา/หลักฐาน<input value={contractorDraft.evidence} onChange={e=>updateContractorDraft(batch.id,{evidence:e.target.value})} placeholder="จำเป็น • ห้ามใช้ note กลบยอดที่ไม่ตรง" disabled={!canVerify}/></label>
-                <button type="button" className="button primary" disabled={!canVerify||saving['contractor-'+batch.id]||contractorDraft.count.trim()===''||!contractorDraft.basis||!contractorDraft.evidence.trim()} onClick={()=>confirmContractorCount(batch)}>{saving['contractor-'+batch.id]?'กำลังยืนยัน…':'ยืนยัน Contractor count'}</button>
+                <label>จำนวนผู้รับเหมา / บุคคลนอกบัญชีค่าแรง<input type="number" min="0" step="1" value={contractorDraft.count} onChange={e=>updateContractorDraft(batch.id,{count:e.target.value})} placeholder="จำนวนคน" disabled={!canVerify}/></label>
+                <label>หลักฐาน<select value={contractorDraft.basis} onChange={e=>updateContractorDraft(batch.id,{basis:e.target.value})} disabled={!canVerify}><option value="">เลือกหลักฐาน</option><option value="daily_report">รายงานประจำวัน</option><option value="monthly_report">รายงานประจำเดือน</option><option value="contractor_roster">รายชื่อผู้รับเหมา</option><option value="manual_review">ตรวจไขว้ด้วยคน</option></select></label>
+                <label className="headcount-evidence">ที่มา/หลักฐาน<input value={contractorDraft.evidence} onChange={e=>updateContractorDraft(batch.id,{evidence:e.target.value})} placeholder="จำเป็น • ระบุที่มาหรือหลักฐานให้ชัดเจน" disabled={!canVerify}/></label>
+                <button type="button" className="button primary" disabled={!canVerify||saving['contractor-'+batch.id]||contractorDraft.count.trim()===''||!contractorDraft.basis||!contractorDraft.evidence.trim()} onClick={()=>confirmContractorCount(batch)}>{saving['contractor-'+batch.id]?'กำลังยืนยัน…':'ยืนยันจำนวน'}</button>
                 <button type="button" className="button" onClick={()=>setContractorDrafts(prev=>{const next={...prev};delete next[batch.id];return next})}>ยกเลิก</button>
               </div>}
             </div>
@@ -686,12 +686,12 @@ export default function LabourVerificationPage(){
               <div>
                 <b>หัวหน้าทีมยืนยันแล้ว</b>
                 <strong>{batch.home_team||supervisor?.nickname||supervisor?.display_label||batch.supervisor_raw||'หัวหน้าทีม'} • {batch.supervisor_worker_id}</strong>
-                <small>{supervisor?.full_name||supervisor?.display_label||batch.supervisor_raw||'-'} • {supervisorPayrollEligible?'Supervisor role + Worker Payroll eligible':'Supervisor role • '+(supervisor?.payroll_eligibility_source||'ไม่อยู่ Worker Payroll')} • ระบบจะใช้ Mapping นี้อัตโนมัติในครั้งถัดไป</small>
+                <small>{supervisor?.full_name||supervisor?.display_label||batch.supervisor_raw||'-'} • {supervisorPayrollEligible?'หัวหน้าทีม • นับเป็นคนงานบริษัทได้':'หัวหน้าทีม • '+(supervisor?.payroll_eligibility_source||'ไม่อยู่ในรายชื่อคนงานบริษัท')} • ระบบจะจดจำการจับคู่นี้ไว้ใช้ครั้งถัดไป</small>
               </div>
             </div>:<div className="supervisor-resolve">
               <b>ยืนยันหัวหน้าทีมก่อนเพื่อเรียก roster เดิม</b>
               <select value={supervisorPick[batch.id]||''} onChange={e=>setSupervisorPick(prev=>({...prev,[batch.id]:e.target.value}))} disabled={!canVerify}>
-                <option value="">เลือกจาก Worker Master</option>
+                <option value="">เลือกจากรายชื่อคนงาน</option>
                 {activeWorkers.map(w=><option key={w.worker_id} value={w.worker_id}>{w.worker_id} — {w.display_label||w.full_name} — {w.default_team||'ไม่ระบุทีม'}</option>)}
               </select>
               <button type="button" className="button" disabled={!canVerify||!supervisorPick[batch.id]||saving[batch.id]} onClick={()=>confirmSupervisor(batch)}>{saving[batch.id]?'กำลังบันทึก…':'ยืนยันหัวหน้าทีม'}</button>
@@ -700,31 +700,31 @@ export default function LabourVerificationPage(){
             <div className="labour-tools">
               <button type="button" className="button" disabled={!canVerify||!batch.home_team} onClick={()=>useHomeTeam(batch)}>ใช้ทีมเดิมทั้งหมด ({homeCandidates.length})</button>
               {existing.length>0&&<button type="button" className="button" disabled={!canVerify} onClick={()=>loadExisting(batch)}>โหลดชุดที่ยืนยันไว้ ({existing.length})</button>}
-              <select value={addWorker[batch.id]||''} onChange={e=>setAddWorker(prev=>({...prev,[batch.id]:e.target.value}))} disabled={!canVerify}><option value="">+ เลือก Worker Payroll</option>{payrollWorkers.map(w=><option key={w.worker_id} value={w.worker_id}>{w.worker_id} — {w.display_label||w.full_name} — {w.default_team||'ไม่ระบุทีม'}</option>)}</select>
+              <select value={addWorker[batch.id]||''} onChange={e=>setAddWorker(prev=>({...prev,[batch.id]:e.target.value}))} disabled={!canVerify}><option value="">+ เลือกคนงานบริษัท</option>{payrollWorkers.map(w=><option key={w.worker_id} value={w.worker_id}>{w.worker_id} — {w.display_label||w.full_name} — {w.default_team||'ไม่ระบุทีม'}</option>)}</select>
               <button type="button" className="button" disabled={!canVerify||!addWorker[batch.id]} onClick={()=>addOneWorker(batch)}>เพิ่มคน</button>
             </div>
 
             {draft.length?<div className="labour-draft">
-              <div className="labour-draft-head"><b>รายชื่อที่จะยืนยัน</b><span className={countMismatch?'bad-text':''}>{draft.length} / {authority===null?'ยังไม่ยืนยัน Headcount':authority+' คน'}{countMismatch?' • จำนวนไม่ตรง Confirmed':''}</span></div>
+              <div className="labour-draft-head"><b>รายชื่อที่จะยืนยัน</b><span className={countMismatch?'bad-text':''}>{draft.length} / {authority===null?'ยังไม่ยืนยันจำนวนคน':authority+' คน'}{countMismatch?' • จำนวนไม่ตรงที่ยืนยันไว้':''}</span></div>
               {draft.map((row,index)=>{
                 const worker=workerById.get(row.worker_id)
                 return <div className="labour-person" key={row.worker_id+'-'+index}>
                   <div className="labour-person-name"><b>{worker?.display_label||worker?.full_name||row.worker_id}</b><small>{row.worker_id} • Home: {worker?.default_team||'-'}</small></div>
-                  <label>ทำงานที่<select value={row.project_id} onChange={e=>updateDraft(batch.id,index,{project_id:e.target.value})}><option value="">ยังไม่ระบุ Project</option>{projects.map(p=><option key={p.id} value={p.id}>{p.code} — {p.name}{p.active?'':' (inactive)'}</option>)}</select></label>
+                  <label>ทำงานที่<select value={row.project_id} onChange={e=>updateDraft(batch.id,index,{project_id:e.target.value})}><option value="">ยังไม่ระบุโครงการ</option>{projects.map(p=><option key={p.id} value={p.id}>{p.code} — {p.name}{p.active?'':' (ปิดใช้งาน)'}</option>)}</select></label>
                   <label>ทีมที่ทำงานจริง<select value={row.working_team} onChange={e=>{const next=e.target.value;updateDraft(batch.id,index,{working_team:next,movement_status:next&&next!==worker?.default_team?'borrowed':'same_team'})}}><option value="">ไม่ระบุ</option>{teamOptions.map(t=><option key={t} value={t}>{t}</option>)}</select></label>
                   <label>การย้ายทีม<select value={row.movement_status} onChange={e=>updateDraft(batch.id,index,{movement_status:e.target.value})}><option value="same_team">ทีมเดิม</option><option value="borrowed">ย้าย/ถูกยืม</option><option value="returned">กลับทีมเดิม</option><option value="other">อื่น ๆ</option></select></label>
                   <label>ชม.จัดสรร<input type="number" min="0" max="24" step="0.5" value={row.allocation_hours} onChange={e=>updateDraft(batch.id,index,{allocation_hours:e.target.value})} placeholder="ถ้ามี"/></label>
                   <button type="button" className="link-danger" onClick={()=>removeDraft(batch.id,index)}>ลบ</button>
                 </div>
               })}
-            </div>:<div className="labour-no-draft">{authority===0?'Confirmed headcount = 0 • ไม่มี Worker Payroll roster สำหรับรายการนี้':'ยังไม่ได้เลือกรายชื่อ • ใช้ “ทีมเดิมทั้งหมด” เพื่อลดการกรอก หรือเพิ่มเฉพาะคนที่ต้องการจาก Worker Master'}</div>}
+            </div>:<div className="labour-no-draft">{authority===0?'จำนวนคนที่ยืนยันแล้ว = 0 • ไม่มีรายชื่อคนงานบริษัทสำหรับรายการนี้':'ยังไม่ได้เลือกรายชื่อ • ใช้ “ทีมเดิมทั้งหมด” เพื่อลดการกรอก หรือเพิ่มเฉพาะคนที่ต้องการจากรายชื่อคนงาน'}</div>}
 
             <div className="labour-confirm">
               <label>หมายเหตุการยืนยัน<input value={notes[batch.id]??batch.note??''} onChange={e=>setNotes(prev=>({...prev,[batch.id]:e.target.value}))} placeholder="เช่น A ย้ายไปช่วยทีมช่างพร 1 วัน"/></label>
               <button type="button" className="primary" disabled={!canVerify||saving[batch.id]||authority===null||draft.length!==authority} onClick={()=>saveBatch(batch)}>{saving[batch.id]?'กำลังยืนยัน…':batch.verification_status==='verified'?'ยืนยันการแก้ไข':'ยืนยันทีมคนงาน'}</button>
             </div>
             {batch.verification_status==='verified'&&batch.verified_at&&<div className="labour-save-state verified">
-              <div><b>✓ ทีมคนงานยืนยันแล้ว</b><span>{existing.length} / {authority===null?'ไม่ทราบ':authority} คน • บันทึกเป็น Verified Labour Dataset</span></div>
+              <div><b>✓ ทีมคนงานยืนยันแล้ว</b><span>{existing.length} / {authority===null?'ไม่ทราบ':authority} คน • บันทึกเป็นชุดข้อมูลแรงงานที่ยืนยันแล้ว</span></div>
               <small>ยืนยันล่าสุด {new Date(batch.verified_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}</small>
             </div>}
             {batch.verification_status==='needs_review'&&batch.verified_at&&<div className="labour-save-state review">
@@ -735,28 +735,28 @@ export default function LabourVerificationPage(){
         })}
       </div>}
     </>:<>
-      {!canPayroll?<div className="panel labour-empty">บัญชีนี้ไม่มีสิทธิ์ดูข้อมูลทางการเงิน Payroll</div>:<>
+      {!canPayroll?<div className="panel labour-empty">บัญชีนี้ไม่มีสิทธิ์ดูข้อมูลค่าแรง</div>:<>
         <section className="panel payroll-intro">
-          <div><b>Payroll Verification Record</b><span>เทียบรายชื่อทีมกับบัตรตอก → ใส่เวลาจริง/OT → ยืนยันความตรงกัน → ระบบเก็บ Audit Record ให้ทันที</span></div>
-          <div className="payroll-rule"><b>หัวหน้าทีม</b><span>แยกจาก Worker Payroll • รูปแบบการจ่ายของหัวหน้าทีมไม่ถูกนำมาคำนวณรวม</span></div>
-          <div className="payroll-rate"><b>Rate Master</b><span>ยังไม่ตั้งอัตราในระบบ จึงไม่คำนวณยอดเงินเองจนกว่าจะนำ Excel สูตรค่าแรงเข้ามา</span></div>
+          <div><b>ตรวจสอบค่าแรง</b><span>เทียบรายชื่อคนงานกับบัตรตอก → กรอกเวลาจริง/OT → ยืนยันข้อมูล</span></div>
+          <div className="payroll-rule"><b>หัวหน้าทีม</b><span>แยกจากรายชื่อคนงานบริษัทที่คิดค่าแรง • ไม่รวมยอดกับคนงานในทีม</span></div>
+          <div className="payroll-rate"><b>อัตราค่าแรง</b><span>ยังไม่ได้ตั้งอัตราในระบบ จึงยังไม่คำนวณยอดเงินจนกว่าจะนำสูตรค่าแรงที่ยืนยันแล้วเข้ามา</span></div>
         </section>
         <section className="panel report-filter payroll-filter">
           <label>จากวันที่<input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></label>
           <label>ถึงวันที่<input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}/></label>
-          <label>สถานะ<select value={payrollStatusFilter} onChange={e=>setPayrollStatusFilter(e.target.value)}><option value="">ทุกสถานะ</option><option value="pending">รอตรวจบัตรตอก</option><option value="draft">กำลังตรวจ</option><option value="timecard_checked">ตรวจบัตรตอกแล้ว</option><option value="external_verified">Verified via Excel</option><option value="verified">Verified Payroll</option><option value="needs_review">ต้องตรวจซ้ำ</option></select></label>
+          <label>สถานะ<select value={payrollStatusFilter} onChange={e=>setPayrollStatusFilter(e.target.value)}><option value="">ทุกสถานะ</option><option value="pending">รอตรวจบัตรตอก</option><option value="draft">กำลังตรวจ</option><option value="timecard_checked">ตรวจบัตรตอกแล้ว</option><option value="external_verified">ยืนยันจาก Excel แล้ว</option><option value="verified">ยืนยันค่าแรงแล้ว</option><option value="needs_review">ต้องตรวจซ้ำ</option></select></label>
           <label className="labour-search">ค้นหา<input value={q} onChange={e=>setQ(e.target.value)} placeholder="หัวหน้าทีม / พื้นที่ / งาน"/></label>
           <button type="button" className="button" onClick={()=>window.print()}>พิมพ์รายการ</button>
         </section>
 
         <section className="labour-kpis payroll-kpis">
-          <div><span>Team-days</span><b>{payrollBatches.length}</b></div>
+          <div><span>รายการทีม / วัน</span><b>{payrollBatches.length}</b></div>
           <div><span>รอตรวจบัตรตอก</span><b>{payrollBatches.filter(x=>payrollStatusFor(x)==='pending').length}</b></div>
           <div><span>ตรวจบัตรตอกแล้ว</span><b>{payrollBatches.filter(x=>payrollStatusFor(x)==='timecard_checked').length}</b></div>
-          <div><span>Verified</span><b>{payrollBatches.filter(x=>['verified','external_verified'].includes(payrollStatusFor(x))).length}</b></div>
+          <div><span>ยืนยันแล้ว</span><b>{payrollBatches.filter(x=>['verified','external_verified'].includes(payrollStatusFor(x))).length}</b></div>
         </section>
 
-        {!payrollBatches.length?<div className="panel labour-empty">ไม่พบ Payroll Verification Record ตามช่วงวันที่และ Filter</div>:<div className="payroll-stack">
+        {!payrollBatches.length?<div className="panel labour-empty">ไม่พบรายการตรวจสอบค่าแรงตามช่วงวันที่และตัวกรอง</div>:<div className="payroll-stack">
           {payrollBatches.map(batch=>{
             const entry=entryById.get(batch.site_operations_entry_id)
             if(!entry)return null
@@ -772,21 +772,21 @@ export default function LabourVerificationPage(){
             const payrollSaving=Boolean(saving['payroll-'+batch.id])
             return <article className="panel payroll-card" key={batch.id}>
               <header>
-                <div><b>{batch.home_team||batch.supervisor_raw||'ไม่ระบุทีม'}</b><small>{dateTH(batch.work_date)} • {entry.area_raw||entry.project_name_raw||'-'} • {linkedProjects.map(p=>p.code).join(' / ')||'ยังไม่ map Project'}</small></div>
+                <div><b>{batch.home_team||batch.supervisor_raw||'ไม่ระบุทีม'}</b><small>{dateTH(batch.work_date)} • {entry.area_raw||entry.project_name_raw||'-'} • {linkedProjects.map(p=>p.code).join(' / ')||'ยังไม่ได้ระบุโครงการ'}</small></div>
                 <div><span className={'payroll-status '+effectiveStatus}>{payrollStatusLabel(effectiveStatus)}</span><strong>{rows.length} คนงาน</strong></div>
               </header>
 
               <div className="payroll-summary-grid">
-                <div><span>หัวหน้าทีม</span><b>{leader?.nickname||leader?.display_label||batch.supervisor_raw||'-'}</b><small>แยกการจ่าย • ไม่รวมใน Worker Payroll</small></div>
+                <div><span>หัวหน้าทีม</span><b>{leader?.nickname||leader?.display_label||batch.supervisor_raw||'-'}</b><small>แยกการจ่าย • ไม่รวมในรายชื่อคนงานบริษัทที่คิดค่าแรง</small></div>
                 <div><span>รายละเอียดงาน</span><b>{entry.work_detail||'-'}</b>{entry.afternoon_detail&&<small>บ่าย: {entry.afternoon_detail}</small>}</div>
-                <div><span>Headcount authority</span><b>{payrollAuthority===null?'ยังไม่ยืนยัน':payrollAuthority+' คนงาน'}</b><small className={countMismatch?'bad-text':''}>Raw {countLabel(entry.total_manpower)} • รายชื่อยืนยัน {rows.length}{countMismatch?' • ไม่ตรง Confirmed headcount':''}</small></div>
-                <div><span>วิธียืนยัน Payroll</span><b>{record?.verification_method==='legacy_excel'?'Legacy Excel':'Web Verification'}</b><small>{record?.external_reference||'Audit trail ในระบบ'}</small></div>
+                <div><span>จำนวนคนอ้างอิง</span><b>{payrollAuthority===null?'ยังไม่ยืนยัน':payrollAuthority+' คนงาน'}</b><small className={countMismatch?'bad-text':''}>รายงานเดิม {countLabel(entry.total_manpower)} • รายชื่อที่ยืนยัน {rows.length}{countMismatch?' • จำนวนไม่ตรงที่ยืนยันไว้':''}</small></div>
+                <div><span>วิธียืนยันค่าแรง</span><b>{record?.verification_method==='legacy_excel'?'ตรวจจาก Excel':'ตรวจในระบบ'}</b><small>{record?.external_reference||'มีประวัติการตรวจสอบในระบบ'}</small></div>
               </div>
 
-              {payrollAuthority===null&&<div className="payroll-warning">Headcount ยังไม่มีผู้ยืนยัน • ห้ามใช้เป็น Worker Payroll downstream จนกว่าจะ Confirmed</div>}
-              {batch.confirmed_headcount_basis==='contractor_only'&&<div className="payroll-warning">รายการนี้ยืนยันว่าเป็นผู้รับเหมาเท่านั้น • ไม่รวมใน Worker Payroll</div>}
+              {payrollAuthority===null&&<div className="payroll-warning">ยังไม่ยืนยันจำนวนคน • กรุณายืนยันจำนวนก่อนตรวจค่าแรง</div>}
+              {batch.confirmed_headcount_basis==='contractor_only'&&<div className="payroll-warning">รายการนี้ยืนยันว่าเป็นผู้รับเหมาเท่านั้น • ไม่รวมในรายชื่อคนงานบริษัทที่คิดค่าแรง</div>}
               {labourStatusFor(batch)!=='verified'&&<div className="payroll-warning">ทีมรายวันนี้ยังไม่ผ่านการยืนยันรายชื่อ • ต้องยืนยันทีมก่อนตรวจบัตรตอก และยังยืนยันยอดเงินไม่ได้จนกว่ากติกาบัญชีจะพร้อม</div>}
-              {effectiveStatus==='needs_review'&&<div className="payroll-warning">ข้อมูลทีมรายวันมีการเปลี่ยนหลังการตรวจ Payroll • ต้องเปิดตรวจบัตรตอกซ้ำก่อนใช้ยอด</div>}
+              {effectiveStatus==='needs_review'&&<div className="payroll-warning">ข้อมูลทีมรายวันมีการเปลี่ยนหลังการตรวจค่าแรง • ต้องเปิดตรวจบัตรตอกซ้ำก่อนใช้ยอด</div>}
 
               <div className="payroll-actions">
                 <button type="button" className="button primary" disabled={!canPayroll||labourStatusFor(batch)!=='verified'||payrollAuthority===null||batch.confirmed_headcount_basis==='contractor_only'||rows.length!==payrollAuthority} onClick={()=>startPayrollReview(batch)}>{draft.length?'โหลดข้อมูลจากระบบใหม่':record?.verification_method==='web'?'เปิดรายการเดิม':'เริ่มตรวจบัตรตอก'}</button>
@@ -806,25 +806,25 @@ export default function LabourVerificationPage(){
                     <td><label className="match-toggle"><input type="checkbox" checked={row.clock_spans_next_day} onChange={e=>updatePayrollDraft(batch.id,index,{clock_spans_next_day:e.target.checked,timecard_match:false})}/><span>ออกวันถัดไป</span></label></td>
                     <td><input type="number" min="0" max="1" step="0.5" value={row.work_units} onChange={e=>updatePayrollDraft(batch.id,index,{work_units:e.target.value,timecard_match:false})}/></td>
                     <td><input type="number" min="0" max="24" step="0.5" value={row.ot_hours} onChange={e=>updatePayrollDraft(batch.id,index,{ot_hours:e.target.value,timecard_match:false})}/></td>
-                    <td><div className="attendance-exception"><label className="match-toggle"><input type="checkbox" checked={row.attendance_exception_requested} onChange={e=>updatePayrollDraft(batch.id,index,{attendance_exception_requested:e.target.checked,timecard_match:false})}/><span>ใช้ข้อยกเว้น</span></label>{row.attendance_exception_requested&&<><input value={row.attendance_exception_reason} onChange={e=>updatePayrollDraft(batch.id,index,{attendance_exception_reason:e.target.value,timecard_match:false})} placeholder="เหตุผล"/><input value={row.attendance_exception_evidence} onChange={e=>updatePayrollDraft(batch.id,index,{attendance_exception_evidence:e.target.value,timecard_match:false})} placeholder="หลักฐาน / reference"/></>}</div></td>
+                    <td><div className="attendance-exception"><label className="match-toggle"><input type="checkbox" checked={row.attendance_exception_requested} onChange={e=>updatePayrollDraft(batch.id,index,{attendance_exception_requested:e.target.checked,timecard_match:false})}/><span>ใช้ข้อยกเว้น</span></label>{row.attendance_exception_requested&&<><input value={row.attendance_exception_reason} onChange={e=>updatePayrollDraft(batch.id,index,{attendance_exception_reason:e.target.value,timecard_match:false})} placeholder="เหตุผล"/><input value={row.attendance_exception_evidence} onChange={e=>updatePayrollDraft(batch.id,index,{attendance_exception_evidence:e.target.value,timecard_match:false})} placeholder="หลักฐาน / เอกสารอ้างอิง"/></>}</div></td>
                     <td><label className={'match-toggle '+(row.timecard_match?'matched':'')} title={attendanceEvidenceIssue(row)||''}><input type="checkbox" checked={row.timecard_match} disabled={Boolean(attendanceEvidenceIssue(row))} onChange={e=>updatePayrollDraft(batch.id,index,{timecard_match:e.target.checked})}/><span>{row.timecard_match?'ตรงแล้ว':attendanceEvidenceIssue(row)?'หลักฐานไม่ครบ':'รอตรวจ'}</span></label></td>
-                    <td><span className={'rate-state '+row.calculation_status}>{row.calculation_status==='rate_pending'?'รอ Rate Master':row.total_pay===null?row.calculation_status:'฿'+Number(row.total_pay).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></td>
+                    <td><span className={'rate-state '+row.calculation_status}>{row.calculation_status==='rate_pending'?'รออัตราค่าแรง':row.total_pay===null?row.calculation_status:'฿'+Number(row.total_pay).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></td>
                     <td><input value={row.note} onChange={e=>updatePayrollDraft(batch.id,index,{note:e.target.value})} placeholder="ถ้ามี"/></td>
                   </tr>
                 })}</tbody>
               </table></div>}
 
               {draft.length>0&&<div className="payroll-confirm">
-                <label>หมายเหตุ Payroll<input value={payrollNotes[batch.id]??record?.note??''} onChange={e=>setPayrollNotes(prev=>({...prev,[batch.id]:e.target.value}))} placeholder="เช่น OT ตามบัตรตอก / ลา / ย้ายทีม"/></label>
+                <label>หมายเหตุค่าแรง<input value={payrollNotes[batch.id]??record?.note??''} onChange={e=>setPayrollNotes(prev=>({...prev,[batch.id]:e.target.value}))} placeholder="เช่น OT ตามบัตรตอก / ลา / ย้ายทีม"/></label>
                 <div><span className={allMatched?'match-ready':'match-wait'}>{draft.filter(x=>x.timecard_match).length}/{draft.length} คนตรงกับบัตรตอก</span><button type="button" className="button" disabled={payrollSaving} onClick={()=>savePayrollWeb(batch,'draft')}>บันทึกร่าง</button><button type="button" className="primary" disabled={payrollSaving||!allMatched} onClick={()=>savePayrollWeb(batch,'timecard_checked')}>{payrollSaving?'กำลังบันทึก…':'ยืนยันตรวจบัตรตอก'}</button></div>
               </div>}
 
               <details className="legacy-payroll">
                 <summary>เอกสาร Excel ประกอบการตรวจ — ยังยืนยันยอดเงินไม่ได้</summary>
-                <div><label>ชื่อไฟล์ / Reference<input disabled value={externalRefs[batch.id]??record?.external_reference??''} onChange={e=>setExternalRefs(prev=>({...prev,[batch.id]:e.target.value}))} placeholder="เช่น Labour Cost Week 40.xlsx"/></label><label>หมายเหตุ<input value={payrollNotes[batch.id]??record?.note??''} onChange={e=>setPayrollNotes(prev=>({...prev,[batch.id]:e.target.value}))} placeholder="ถ้ามี"/></label><button type="button" className="button" disabled title="รออัตรา สูตร และกติกาปัดเศษที่บัญชียืนยัน">รอกติกาบัญชียืนยัน</button></div>
+                <div><label>ชื่อไฟล์ / เอกสารอ้างอิง<input disabled value={externalRefs[batch.id]??record?.external_reference??''} onChange={e=>setExternalRefs(prev=>({...prev,[batch.id]:e.target.value}))} placeholder="เช่น Labour Cost Week 40.xlsx"/></label><label>หมายเหตุ<input value={payrollNotes[batch.id]??record?.note??''} onChange={e=>setPayrollNotes(prev=>({...prev,[batch.id]:e.target.value}))} placeholder="ถ้ามี"/></label><button type="button" className="button" disabled title="รออัตรา สูตร และกติกาปัดเศษที่บัญชียืนยัน">รอกติกาบัญชียืนยัน</button></div>
               </details>
 
-              {record?.verified_at&&<div className="labour-verified-line">Verified ล่าสุด {new Date(record.verified_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})} • {payrollStatusLabel(effectiveStatus)}</div>}
+              {record?.verified_at&&<div className="labour-verified-line">ยืนยันล่าสุด {new Date(record.verified_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})} • {payrollStatusLabel(effectiveStatus)}</div>}
             </article>
           })}
         </div>}

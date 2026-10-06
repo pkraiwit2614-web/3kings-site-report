@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
 import DefectCombineRoomEnhancer from '@/components/DefectCombineRoomEnhancer'
+import DefectInputPanel from '@/components/DefectInputPanel'
 import { getSupabase } from '@/lib/supabase'
 import { createLiveLoader, requireSuccessfulReads } from '@/lib/liveLoader'
 
@@ -223,6 +224,7 @@ export default function DefectDetailPage(){
         <Link href="/?section=defect#dashboard-defect" className="button">← Dashboard</Link>
       </div>}
     />
+    <DefectInputPanel manualOnly />
 
     {loading?<div className="panel">กำลังโหลดข้อมูลห้อง…</div>:<>
       <section className={`selected-status ${active?.tone||'neutral'}`} id="room-list">

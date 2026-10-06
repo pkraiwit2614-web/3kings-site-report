@@ -100,7 +100,7 @@ test('UI snapshots draft base revisions instead of silently adopting background 
   assert.match(ui,/p_expected_source_fingerprint:base\.source_fingerprint/)
   assert.match(ui,/p_expected_batch_revision:base\.batch_revision/)
   assert.match(ui,/p_expected_payroll_revision:base\.payroll_revision/)
-  assert.match(ui,/Draft ของคุณยังอยู่/)
+  assert.match(ui,/ฉบับร่างยังอยู่/)
 })
 
 test('cutover removes legacy non-CAS RPC signatures only',()=>{

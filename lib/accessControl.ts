@@ -56,7 +56,7 @@ export function canEditSchedule(role:AccessRole|null){
 }
 
 export function canEditDefect(role:AccessRole|null){
-  return role==='owner'||role==='defect_contributor'||role==='defect_editor'
+  return role==='owner'||role==='viewer_editor'||role==='defect_contributor'||role==='defect_editor'
 }
 
 export function canEditProcurement(role:AccessRole|null){
