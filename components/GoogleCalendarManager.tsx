@@ -1,7 +1,7 @@
 'use client'
 
 import Script from 'next/script'
-import {useEffect,useMemo,useState} from 'react'
+import {useEffect,useMemo,useState,type ReactElement} from 'react'
 import useAccessRole from '@/components/useAccessRole'
 import {canEditCalendar} from '@/lib/accessControl'
 import {getSupabase} from '@/lib/supabase'
@@ -165,7 +165,7 @@ async function directGoogleFetch<T>(token:string,url:string,init?:RequestInit):P
   return body as T
 }
 
-export default function GoogleCalendarManager(){
+export default function GoogleCalendarManager():ReactElement{
   const {role,userId,ready}=useAccessRole()
   const editable=canEditCalendar(role)
   const [transport,setTransport]=useState<Transport>('checking')
