@@ -13,6 +13,9 @@ const GEMINI_DEFAULT_MODEL = 'gemini-3.5-flash-lite'
 const MAX_TEXTS = 30
 const MAX_TEXT_LENGTH = 5000
 const MAX_TOTAL_CHARS = 14000
+const RATE_WINDOW_MS = 60_000
+const RATE_MAX_REQUESTS = 40
+const rateBuckets = new Map<string,{windowStart:number;count:number}>()
 
 type TargetLanguage = 'en' | 'ru'
 
@@ -47,10 +50,27 @@ async function authenticate(request:NextRequest){
   const header=request.headers.get('authorization')||''
   const token=header.startsWith('Bearer ')?header.slice(7).trim():''
   if(!token)return null
-  const supabase=createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:false,autoRefreshToken:false}})
+  const supabase=createClient(SUPABASE_URL,SUPABASE_KEY,{
+    auth:{persistSession:false,autoRefreshToken:false},
+    global:{headers:{Authorization:`Bearer ${token}`}},
+  })
   const {data,error}=await supabase.auth.getUser(token)
   if(error||!data.user)return null
+  const profile=await supabase.from('profiles').select('active').eq('user_id',data.user.id).maybeSingle()
+  if(profile.error||!profile.data?.active)return null
   return data.user
+}
+
+function withinRateLimit(userId:string){
+  const now=Date.now()
+  const current=rateBuckets.get(userId)
+  if(!current||now-current.windowStart>=RATE_WINDOW_MS){
+    rateBuckets.set(userId,{windowStart:now,count:1})
+    return true
+  }
+  if(current.count>=RATE_MAX_REQUESTS)return false
+  current.count+=1
+  return true
 }
 
 class TranslationProviderError extends Error{
@@ -159,31 +179,11 @@ async function translateBatch(language:TargetLanguage,texts:string[]){
   return translateViaGateway(language,texts)
 }
 
-export async function GET(){
-  if(process.env.VERCEL_ENV!=='preview'){
-    return NextResponse.json({ok:false,error:'not_found'},{status:404})
-  }
-  try{
-    const samples=[
-      'Plot 8 — ช่างอ๊อด ทำโครงหลังคาระเบียง และติดตั้ง FCU ชั้น 2',
-      'A419 เหลือ Floor Drain รอของ • PO PL0000918 ยังต้องติดตาม',
-    ]
-    const [en,ru]=await Promise.all([
-      translateBatch('en',samples),
-      translateBatch('ru',samples),
-    ])
-    const required=['Plot 8','อ๊อด','FCU','A419','Floor Drain','PL0000918']
-    const preserved=required.every(token=>[...en,...ru].some(value=>value.includes(token)))
-    return NextResponse.json({ok:true,preserved,en,ru},{headers:{'Cache-Control':'no-store'}})
-  }catch(error){
-    return NextResponse.json({ok:false,error:error instanceof Error?error.message:'preview_smoke_failed'},{status:502,headers:{'Cache-Control':'no-store'}})
-  }
-}
-
 export async function POST(request:NextRequest){
   try{
     const user=await authenticate(request)
     if(!user)return NextResponse.json({ok:false,error:'unauthorized'},{status:401,headers:{'Cache-Control':'no-store'}})
+    if(!withinRateLimit(user.id))return NextResponse.json({ok:false,error:'rate_limited'},{status:429,headers:{'Cache-Control':'no-store','Retry-After':'60'}})
 
     let body:any
     try{body=await request.json()}catch{return NextResponse.json({ok:false,error:'invalid_json'},{status:400})}
