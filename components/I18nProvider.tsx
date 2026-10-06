@@ -95,7 +95,7 @@ function applyAttribute(element:Element,name:string,language:AppLanguage){
 }
 
 function applyElement(element:Element,language:AppLanguage){
-  if(shouldSkip(element))return
+  if(shouldSkipAttribute(element))return
   for(const name of TRANSLATABLE_ATTRS)applyAttribute(element,name,language)
 }
 
