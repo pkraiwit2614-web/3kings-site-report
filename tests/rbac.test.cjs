@@ -15,7 +15,7 @@ const access=loadTs('lib/accessControl.ts')
 const shell=fs.readFileSync('components/AppShell.tsx','utf8')
 const users=fs.readFileSync('app/users/page.tsx','utf8')
 const roleGuard=fs.readFileSync('components/RolePermissionGuard20260927.tsx','utf8')
-const migration=fs.readFileSync('supabase/migrations/20261006111500_rbac_editor_purchase_and_defect_manual_updates.sql','utf8')
+const migration=fs.readFileSync('supabase/migrations/20261006041021_rbac_editor_purchase_and_web_overlays.sql','utf8')
 const adminUsers=fs.readFileSync('supabase/functions/admin-users/index.ts','utf8')
 
 assert.equal(access.canAccessPath('owner','/users'),true)
