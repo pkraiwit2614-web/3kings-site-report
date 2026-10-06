@@ -32,7 +32,10 @@ const roleLabel: Record<string,string> = {
   manager: 'Owner',
   admin: 'Admin',
   viewer: 'Viewer',
+  viewer_editor: 'Viewer & Editor',
   defect_contributor: 'Defect Contributor',
+  defect_editor: 'Defect Contributor Editor',
+  purchase: 'Purchase',
   engineer: 'Legacy Engineer',
   foreman: 'Legacy Viewer',
   payroll: 'Legacy Payroll',
@@ -55,7 +58,7 @@ async function adminAction(action: string, payload: Record<string,unknown> = {})
 
 function edgeCompatibleRole(role:string){
   if(role==='admin')return 'engineer'
-  if(role==='defect_contributor')return 'viewer'
+  if(role==='defect_contributor'||role==='viewer_editor'||role==='defect_editor'||role==='purchase')return 'viewer'
   return role==='viewer'?role:'viewer'
 }
 
@@ -165,7 +168,14 @@ function UsersContent() {
       <div className="form-grid" style={{marginTop:12}}>
         <label>Username<input value={username} onChange={e=>setUsername(e.target.value.toUpperCase())} placeholder="เช่น USER21" /></label>
         <label>ชื่อแสดงผล<input value={fullName} onChange={e=>setFullName(e.target.value)} placeholder="ชื่อ / ชื่อเล่น" /></label>
-        <label>สิทธิ์<select value={role} onChange={e=>setRole(e.target.value)}><option value="viewer">Viewer — ดูข้อมูล / Labour แต่ไม่เห็น Payroll</option><option value="admin">Admin — จัดการ Site Operations / Labour / Payroll</option><option value="defect_contributor">Defect Contributor — เฉพาะ Defect</option></select></label>
+        <label>สิทธิ์<select value={role} onChange={e=>setRole(e.target.value)}>
+          <option value="viewer">Viewer — ดูข้อมูลทั่วไปอย่างเดียว</option>
+          <option value="viewer_editor">Viewer & Editor — ดูทั่วไป + แก้แผนงาน/ปฏิทิน</option>
+          <option value="admin">Admin — จัดการ Site Operations / Labour / Payroll</option>
+          <option value="defect_contributor">Defect Contributor — เฉพาะ Defect</option>
+          <option value="defect_editor">Defect Contributor Editor — ดูทั่วไป + แก้ Defect</option>
+          <option value="purchase">Purchase — ดูทั่วไป + แก้จัดซื้อ/จัดจ้าง</option>
+        </select></label>
         <label>รหัสผ่าน<div className="row" style={{gap:8}}><input value={password} onChange={e=>setPassword(e.target.value)} /><button type="button" className="button" onClick={()=>setPassword(makePassword(username))}>สุ่มใหม่</button></div></label>
       </div>
       <div className="row" style={{gap:8,marginTop:12}}><button className="button primary" onClick={create} disabled={creating}>{creating?'กำลังสร้าง…':'สร้างบัญชี'}</button><button className="button" onClick={()=>setShowCreate(false)}>ยกเลิก</button></div>
@@ -228,7 +238,7 @@ function UserRow({ row, onChanged, onCredential, onMessage }: { row: Profile; on
   return <tr>
     <td><input value={username} onChange={e=>setUsername(e.target.value.toUpperCase())} disabled={owner || !row.username} placeholder={row.email || '-'} style={{minWidth:112}}/><small>{row.email || (row.username?'บัญชีภายใน':'')}</small></td>
     <td><input value={name} onChange={e=>setName(e.target.value)} disabled={owner} style={{minWidth:120}}/></td>
-    <td><select value={role} onChange={e=>setRole(e.target.value)} disabled={owner}>{owner?<option value="manager">Owner</option>:<>{!['admin','viewer','defect_contributor'].includes(role)&&<option value={role}>{roleLabel[role]||role} — Legacy</option>}<option value="admin">Admin</option><option value="viewer">Viewer</option><option value="defect_contributor">Defect Contributor</option></>}</select></td>
+    <td><select value={role} onChange={e=>setRole(e.target.value)} disabled={owner}>{owner?<option value="manager">Owner</option>:<>{!['admin','viewer','viewer_editor','defect_contributor','defect_editor','purchase'].includes(role)&&<option value={role}>{roleLabel[role]||role} — Legacy</option>}<option value="admin">Admin</option><option value="viewer">Viewer</option><option value="viewer_editor">Viewer & Editor</option><option value="defect_contributor">Defect Contributor</option><option value="defect_editor">Defect Contributor Editor</option><option value="purchase">Purchase</option></>}</select></td>
     <td><label className="inline-toggle"><input type="checkbox" checked={active} onChange={e=>setActive(e.target.checked)} disabled={owner}/><StatusBadge value={active?'Active':'Inactive'}/></label></td>
     <td><div className="row" style={{gap:6,flexWrap:'wrap'}}><button className="button primary" disabled={owner||!changed||saving} onClick={save}>{saving?'Saving…':'Save'}</button><button className="button" disabled={owner} onClick={resetPassword}>Reset Password</button></div></td>
   </tr>
