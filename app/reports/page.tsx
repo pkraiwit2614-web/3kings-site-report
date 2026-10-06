@@ -5,7 +5,10 @@ import { useEffect, useMemo, useState } from 'react'
 import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
 import StatusBadge from '@/components/StatusBadge'
+import SiteOperationsReviewEditor from '@/components/SiteOperationsReviewEditor'
+import useActualAccessRole from '@/components/useActualAccessRole'
 import { getSupabase } from '@/lib/supabase'
+import { canEditSiteOperations } from '@/lib/accessControl'
 import { createLiveLoader } from '@/lib/liveLoader'
 import { readAllPages, requireCompletePagedReads } from '@/lib/pagedRead'
 import { dateTH } from '@/lib/format'
@@ -20,6 +23,7 @@ type LabourBatch={id:string;site_operations_entry_id:string;verification_status:
 type LabourWorker={worker_id:string;full_name:string;display_label:string|null;default_team:string|null}
 type ProcurementRow={id:string;project_id:string|null;vendor:string|null;item_name:string|null;current_status:string|null;procurement_status:string|null;payment_status:string|null;expected_delivery_text:string|null;condition_note:string|null;po_no:string|null;pr_no:string|null}
 type ProcurementLink={procurement_item_id:string;project_id:string}
+type ManagementReview={entry_id:string;review_status:'pending'|'confirmed'|'needs_review';management_note:string|null;updated_at:string|null}
 
 const materialPattern=/(รอวัสดุ|วัสดุ|รอของ|ของไม่เข้า|ของยังไม่เข้า|สั่งของ|จัดซื้อ|สินค้า|อุปกรณ์|รอpo|รอ po|material|procurement|delivery|supplier)/i
 const closedProcurementPattern=/(ส่งมอบเรียบร้อย|รับสินค้าเรียบร้อย|รับสินค้าแล้ว|ติดตั้งเรียบร้อย|ส่งครบ|ปิดงาน|ปิดติดตาม|งานเสร็จ|เสร็จสมบูรณ์|completed|done|closed)/i
@@ -51,6 +55,8 @@ function pct(v:number|null|undefined){return v===null||v===undefined?'-':Math.ro
 function isOpenProcurement(row:ProcurementRow){return !closedProcurementPattern.test([row.current_status,row.procurement_status,row.payment_status].filter(Boolean).join(' '))}
 
 export default function SiteOperationsPage(){
+  const {role:actualRole}=useActualAccessRole()
+  const siteOperationsEditable=canEditSiteOperations(actualRole)
   const [loading,setLoading]=useState(true)
   const [loadError,setLoadError]=useState(false)
   const [entries,setEntries]=useState<SiteEntry[]>([])
@@ -61,6 +67,7 @@ export default function SiteOperationsPage(){
   const [procurementLinks,setProcurementLinks]=useState<ProcurementLink[]>([])
   const [workers,setWorkers]=useState<LabourWorker[]>([])
   const [batches,setBatches]=useState<LabourBatch[]>([])
+  const [managementReviews,setManagementReviews]=useState<ManagementReview[]>([])
   const [canonicalStates,setCanonicalStates]=useState<CanonicalStateRow[]>([])
   const [selectedDate,setSelectedDate]=useState('')
   const [selectedProject,setSelectedProject]=useState('')
@@ -73,7 +80,7 @@ export default function SiteOperationsPage(){
     const s=getSupabase()
     const loader=createLiveLoader({
       load:async(signal)=>{
-        const [e,ep,p,t,pr,pl,w,b]=await Promise.all([
+        const [e,ep,p,t,pr,pl,w,b,mr]=await Promise.all([
           readAllPages<SiteEntry>({label:'site_operations_entries',signal,keyOf:x=>x.id,fetchPage:(from,to)=>
             s.from('site_operations_entries').select('*',{count:'exact'}).order('work_date',{ascending:false}).order('source_row',{ascending:false}).order('id',{ascending:false}).range(from,to).abortSignal(signal)}),
           readAllPages<EntryProject>({label:'site_operations_entry_projects',signal,keyOf:x=>x.entry_id+':'+x.project_id,fetchPage:(from,to)=>
@@ -89,9 +96,11 @@ export default function SiteOperationsPage(){
           readAllPages<LabourWorker>({label:'labour_workers',signal,keyOf:x=>x.worker_id,fetchPage:(from,to)=>
             s.from('labour_workers').select('worker_id,full_name,display_label,default_team',{count:'exact'}).order('worker_id').range(from,to).abortSignal(signal)}),
           readAllPages<LabourBatch>({label:'labour_verification_batches',signal,keyOf:x=>x.id,fetchPage:(from,to)=>
-            s.from('labour_verification_batches').select('*',{count:'exact'}).order('id').range(from,to).abortSignal(signal)})
+            s.from('labour_verification_batches').select('*',{count:'exact'}).order('id').range(from,to).abortSignal(signal)}),
+          readAllPages<ManagementReview>({label:'site_operations_management_reviews',signal,keyOf:x=>x.entry_id,fetchPage:(from,to)=>
+            s.from('site_operations_management_reviews').select('entry_id,review_status,management_note,updated_at',{count:'exact'}).order('entry_id').range(from,to).abortSignal(signal)})
         ])
-        const paged=[e,ep,p,t,pr,pl,w,b]
+        const paged=[e,ep,p,t,pr,pl,w,b,mr]
         setReadSignals(paged.map(({label,loaded,count,truncated})=>({label,loaded,count,truncated})))
         requireCompletePagedReads(paged)
         let nextCanonical:CanonicalStateRow[]=[]
@@ -105,7 +114,7 @@ export default function SiteOperationsPage(){
         setLoadError(false);setEntries(nextEntries);setEntryProjects(ep.data)
         setProjects(p.data);setTasks(t.data)
         setProcurement(pr.data);setProcurementLinks(pl.data)
-        setWorkers(w.data);setBatches(b.data);setCanonicalStates(nextCanonical)
+        setWorkers(w.data);setBatches(b.data);setManagementReviews(mr.data);setCanonicalStates(nextCanonical)
         setSelectedDate(v=>v||latestUsableDate(nextEntries))
       },
       onError:()=>{if(alive)setLoadError(true)},
@@ -118,10 +127,13 @@ export default function SiteOperationsPage(){
     void loader.refresh().catch(()=>{})
     const channel=s.channel('site-operations-source-live')
       .on('postgres_changes',{event:'*',schema:'public',table:'site_operations_entries'},queueLoad)
+      .on('postgres_changes',{event:'*',schema:'public',table:'site_operations_management_reviews'},queueLoad)
       .on('postgres_changes',{event:'*',schema:'public',table:'site_operations_entry_projects'},queueLoad)
       .on('postgres_changes',{event:'*',schema:'public',table:'labour_verification_batches'},queueLoad)
       .on('postgres_changes',{event:'*',schema:'public',table:'procurement_items'},queueLoad)
+      .on('postgres_changes',{event:'*',schema:'public',table:'procurement_item_overrides'},queueLoad)
       .on('postgres_changes',{event:'*',schema:'public',table:'schedule_tasks'},queueLoad)
+      .on('postgres_changes',{event:'*',schema:'public',table:'schedule_task_overrides'},queueLoad)
       .subscribe()
     const onFocus=()=>queueLoad()
     const onVisible=()=>{if(document.visibilityState==='visible')queueLoad()}
@@ -133,6 +145,7 @@ export default function SiteOperationsPage(){
   const projectById=useMemo(()=>new Map(projects.map(x=>[x.id,x])),[projects])
   const workerById=useMemo(()=>new Map(workers.map(x=>[x.worker_id,x])),[workers])
   const batchByEntry=useMemo(()=>new Map(batches.map(x=>[x.site_operations_entry_id,x])),[batches])
+  const reviewByEntry=useMemo(()=>new Map(managementReviews.map(x=>[x.entry_id,x])),[managementReviews])
   const canonicalByEntry=useMemo(()=>new Map(canonicalStates.map(x=>[x.entry_id,x])),[canonicalStates])
   const projectIdsByEntry=useMemo(()=>{
     const map=new Map<string,string[]>()
@@ -263,6 +276,15 @@ export default function SiteOperationsPage(){
             <div><span>Progress evidence</span><b>{entry.status_text||'ไม่ระบุสถานะ'}</b><small>ใช้รายละเอียดงาน + สถานะ + Next plan เป็น evidence</small><small>% Actual ยังคงมาจาก Schedule เท่านั้น</small></div>
             <div><span>Labour</span><b>Raw {countLabel(entry.total_manpower)} • ชาย {countLabel(entry.male_count)} / หญิง {countLabel(entry.female_count)} • ชาย+หญิง {countLabel(sexTotal)}</b><small className={sourceHeadcountStatus==='mismatch'?'warn':''}>{sourceHeadcountStatus==='mismatch'?'Source discrepancy — ต้องตรวจ':sourceHeadcountStatus==='unknown'?'Source ไม่ครบ — Unknown ไม่ใช่ 0':'Raw source สอดคล้อง'}</small><small>{authority===null?'Confirmed headcount: ยังไม่มีผู้ยืนยัน':'Confirmed headcount: '+authority+' คน • ใช้ downstream'}</small><small>{worker?'Home team: '+(worker.default_team||'ยังไม่ระบุ'):'Supervisor identity ยังไม่ยืนยัน'}</small><Link href={'/reports/labour?date='+entry.work_date+'&entry='+entry.id}>เปิด Labour Verification →</Link></div>
           </div>
+          <SiteOperationsReviewEditor
+            entryId={entry.id}
+            review={reviewByEntry.get(entry.id)||null}
+            editable={siteOperationsEditable}
+            onSaved={next=>setManagementReviews(current=>{
+              const rest=current.filter(x=>x.entry_id!==entry.id)
+              return [...rest,{entry_id:entry.id,...next}]
+            })}
+          />
         </article>
       })}
     </div>}
