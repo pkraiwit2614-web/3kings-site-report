@@ -218,31 +218,6 @@ async function translateBatch(language:TargetLanguage,texts:string[]){
   return translateViaGateway(language,texts)
 }
 
-export async function GET(){
-  if(process.env.VERCEL_ENV!=='preview'){
-    return NextResponse.json({ok:false,error:'not_found'},{status:404})
-  }
-  try{
-    const samples=[
-      'Plot 8 — ช่างอ๊อด ทำโครงหลังคาระเบียง และติดตั้ง FCU ชั้น 2',
-      'A419 เหลือ Floor Drain รอของ • PO PL0000918 ยังต้องติดตาม',
-    ]
-    const [en,ru]=await Promise.all([
-      translateBatch('en',samples),
-      translateBatch('ru',samples),
-    ])
-    const preservedTokens=['Plot 8','อ๊อด','FCU','A419','Floor Drain','PL0000918']
-    const preserved=preservedTokens.every(token=>[...en,...ru].some(value=>value.includes(token)))
-    const translated={
-      en:en.every((value,index)=>!needsLanguageRetry(samples[index],value)),
-      ru:ru.every((value,index)=>!needsLanguageRetry(samples[index],value)),
-    }
-    return NextResponse.json({ok:true,preserved,translated,en,ru},{headers:{'Cache-Control':'no-store'}})
-  }catch(error){
-    return NextResponse.json({ok:false,error:error instanceof Error?error.message:'preview_smoke_failed'},{status:502,headers:{'Cache-Control':'no-store'}})
-  }
-}
-
 export async function POST(request:NextRequest){
   try{
     const user=await authenticate(request)
