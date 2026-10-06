@@ -129,6 +129,17 @@ Deno.serve(async (req: Request) => {
       app_metadata: { provisioned_by_admin: true, app_role: role, username },
     })
     if (error || !data.user) return json({ ok: false, error: error?.message || 'create_failed' }, 400)
+
+    const { error: accessError } = await manager.rpc('owner_set_profile_access', {
+      p_user_id: data.user.id,
+      p_role: role,
+      p_active: true,
+    })
+    if (accessError) {
+      await admin.auth.admin.deleteUser(data.user.id)
+      return json({ ok: false, error: accessError.message }, 400)
+    }
+
     return json({ ok: true, user: { user_id: data.user.id, username, full_name: fullName, role, active: true } })
   }
 
@@ -169,11 +180,16 @@ Deno.serve(async (req: Request) => {
       username: username || null,
       full_name: fullName || username || null,
       email: username ? internalEmail(username) : null,
-      role,
-      active,
-      updated_at: new Date().toISOString(),
     }).eq('user_id', target)
     if (profileError) return json({ ok: false, error: profileError.message }, 400)
+
+    const { error: accessError } = await manager.rpc('owner_set_profile_access', {
+      p_user_id: target,
+      p_role: role,
+      p_active: active,
+    })
+    if (accessError) return json({ ok: false, error: accessError.message }, 400)
+
     return json({ ok: true })
   }
 
