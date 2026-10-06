@@ -17,26 +17,26 @@ const managementNav: NavItem[] = [
   ['/', 'Dashboard'],
   ['/presentation', 'Executive Presentation'],
   ['/schedule', 'แผนงานที่กำหนด'],
-  ['/calendar', 'ปฏิทินงาน'],
   ['/materials', 'วัสดุ เครื่องมือและผู้รับเหมา'],
   ['/defect-flow', 'Defect Report'],
   ['/reports', 'Site Operations'],
   ['/reports/labour', 'Labour & Payroll'],
   ['/site-photos', 'รูปภาพหน้างาน'],
   ['/procurement', 'การจัดซื้อ/จัดจ้าง'],
-  ['/weekly', 'รายงานการทำงานประจำสัปดาห์']
+  ['/weekly', 'รายงานการทำงานประจำสัปดาห์'],
+  ['/calendar', 'Work Calendar']
 ]
 
 const viewerNav: NavItem[] = [
   ['/', 'Dashboard'],
   ['/schedule', 'แผนงานที่กำหนด'],
-  ['/calendar', 'ปฏิทินงาน'],
   ['/site-photos', 'รูปภาพหน้างาน'],
   ['/defect-flow', 'Defect Report'],
   ['/reports/labour', 'Labour'],
   ['/materials', 'วัสดุ เครื่องมือและผู้รับเหมา'],
   ['/procurement', 'การจัดซื้อ/จัดจ้าง'],
   ['/weekly', 'รายงานการทำงานประจำสัปดาห์'],
+  ['/calendar', 'Work Calendar'],
   ['/presentation', 'Executive Presentation']
 ]
 
@@ -50,7 +50,7 @@ const mobileLabel: Record<string,string> = {
   '/': 'Dashboard',
   '/presentation': 'Executive',
   '/schedule': 'แผนงาน',
-  '/calendar': 'ปฏิทิน',
+  '/calendar': 'Calendar',
   '/materials': 'วัสดุ',
   '/defect-flow': 'Defect',
   '/site-photos': 'รูปหน้างาน',
