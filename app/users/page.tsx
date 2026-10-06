@@ -56,6 +56,15 @@ async function adminAction(action: string, payload: Record<string,unknown> = {})
   return data
 }
 
+async function setProfileAccess(userId:string, role:string, active:boolean){
+  const {error}=await getSupabase().rpc('owner_set_profile_access',{
+    p_user_id:userId,
+    p_role:role,
+    p_active:active,
+  })
+  if(error)throw error
+}
+
 export default function UsersPage() {
   return <OwnerOnlyGate><AppShell><UsersContent/></AppShell></OwnerOnlyGate>
 }
@@ -100,6 +109,7 @@ function UsersContent() {
     setMessage('')
     try {
       const data = await adminAction('create', { username: cleanUsername, full_name: fullName.trim(), role, password })
+      await setProfileAccess(String(data.user?.user_id||''),role,true)
       setCredentials([{ username: cleanUsername, password, role, full_name: fullName.trim() }])
       setMessage(`สร้าง ${cleanUsername} เรียบร้อย พร้อมนำ Username / Password ส่งให้ผู้ใช้งานได้ทันที`)
       setUsername('')
@@ -212,13 +222,26 @@ function UserRow({ row, onChanged, onCredential, onMessage }: { row: Profile; on
 
   const save = async () => {
     setSaving(true); onMessage('')
+    const accessChanged = role !== row.role || active !== row.active
+    let accessApplied = false
     try {
-      await adminAction('update',{user_id:row.user_id,username:username.trim().toUpperCase()||null,full_name:name.trim(),role,active})
+      if(accessChanged){
+        await setProfileAccess(row.user_id,role,active)
+        accessApplied = true
+      }
+      await adminAction('update',{
+        user_id:row.user_id,
+        username:username.trim().toUpperCase()||null,
+        full_name:name.trim(),
+      })
       onMessage(`อัปเดต ${username || name || row.email || 'ผู้ใช้งาน'} เรียบร้อย`)
       await onChanged()
     } catch(err:any){
-      onMessage(err?.message || 'อัปเดตไม่สำเร็จ')
+      if(accessApplied){
+        try{ await setProfileAccess(row.user_id,row.role,row.active) }catch{}
+      }
       await onChanged()
+      onMessage(err?.message || 'อัปเดตไม่สำเร็จ')
     } finally{ setSaving(false) }
   }
 
