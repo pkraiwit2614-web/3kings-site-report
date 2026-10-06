@@ -86,6 +86,6 @@ assert.match(photoAiRoute,/user\.id!==OWNER_USER_ID\|\|profile\.role!=='manager'
 assert.match(photoAiPolicy,/photo_ai_task_scores_insert_golf_owner/)
 assert.match(photoAiPolicy,/photo_ai_task_scores_update_golf_owner/)
 assert.match(photoAiPolicy,/photo_ai_task_scores_delete_golf_owner/)
-assert.doesNotMatch(photoAiPolicy,/manager_engineer[\s\S]*create policy/)
+assert.doesNotMatch(photoAiPolicy,/create policy[^\n]*manager_engineer/i)
 
 console.log('RBAC and audited Web-edit regression checks passed')
