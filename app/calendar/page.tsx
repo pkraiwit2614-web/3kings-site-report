@@ -94,10 +94,13 @@ export default function WorkCalendarPage(){
   return <AppShell>
     <PageHeader
       title="ปฏิทินงาน"
-      subtitle="รวมแผนงาน หน้างานจริง และกำหนดส่งของจาก Google Calendar"
+      subtitle="เพิ่ม / แก้ไข / ลบปฏิทินงานใน Web App และดูข้อมูล Google Calendar เดิมในหน้าเดียวกัน"
       action={<a className="button" href="https://calendar.google.com/calendar/u/0/r" target="_blank" rel="noreferrer">เปิด Google Calendar</a>}
     />
 
+    <CalendarEditor/>
+
+    <div className="work-calendar-google-head"><b>Google Calendar</b><small>ข้อมูล Google เดิม · อ่านอย่างเดียวจากหน้านี้</small></div>
     <section className="work-calendar-controls panel" aria-label="ตัวเลือกปฏิทินงาน">
       <div className="work-calendar-view-tabs" role="group" aria-label="รูปแบบการแสดงผล">
         <button type="button" className={mode==='MONTH'?'active':''} onClick={()=>setMode('MONTH')}>เดือน</button>
@@ -144,10 +147,8 @@ export default function WorkCalendarPage(){
     <p className="work-calendar-note">
       ปฏิทิน Google ด้านบนอ่านข้อมูลจาก Google Calendar โดยตรง หากรายการไม่แสดง ให้ตรวจว่าบัญชี Google ที่เปิดอยู่ในเบราว์เซอร์มีสิทธิ์ดูปฏิทิน 3 Kings นั้น
     </p>
-    <CalendarEditor/>
-
     <style jsx>{`
-      .work-calendar-controls{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;margin-bottom:12px}
+      .work-calendar-google-head{display:flex;align-items:baseline;gap:8px;margin:16px 2px 8px}.work-calendar-google-head b{font-size:13px;color:#172a43}.work-calendar-google-head small{font-size:10px;color:#7a8795}.work-calendar-controls{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;margin-bottom:12px}
       .work-calendar-view-tabs{display:flex;gap:4px;padding:3px;background:#eef2f6;border-radius:10px}
       .work-calendar-view-tabs button,.work-calendar-selection-actions button{border:0;background:transparent;cursor:pointer;font:inherit}
       .work-calendar-view-tabs button{min-height:34px;padding:6px 13px;border-radius:8px;color:#5f6f82;font-size:12px;font-weight:800}
