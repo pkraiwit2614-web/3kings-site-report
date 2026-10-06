@@ -3,6 +3,7 @@
 import {useEffect,useMemo,useRef,useState} from 'react'
 import {createPortal} from 'react-dom'
 import {getSupabase} from '@/lib/supabase'
+import {OWNER_USER_ID} from '@/lib/accessControl'
 
 type ProjectRow={id:string;code:string;name:string}
 type TaskRow={id:string;project_id:string;source_task_no:string|null;task_name:string;area:string|null}
@@ -98,7 +99,7 @@ export default function ExecutivePhotoReviewSafe20261001(){
       setUserId(user?.id||'')
       if(user){
         const profile=await s.from('profiles').select('role').eq('user_id',user.id).maybeSingle()
-        if(!dead)setEditable(['manager','engineer'].includes(String(profile.data?.role||'')))
+        if(!dead)setEditable(user.id===OWNER_USER_ID&&String(profile.data?.role||'')==='manager')
       }
     }
     void load().catch(()=>{})
