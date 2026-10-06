@@ -9,7 +9,8 @@ export const maxDuration = 25
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://wtqubwdduzedmcvyhbgs.supabase.co'
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_Ruyka15H3QApZKY9q2U-Vg_CjmEuMRX'
 const GATEWAY_MODEL = 'google/gemini-2.5-flash-lite'
-const GEMINI_DEFAULT_MODEL = 'gemini-3.5-flash-lite'
+const GEMINI_EN_MODEL = 'gemini-3.5-flash-lite'
+const GEMINI_RU_MODEL = 'gemini-3.8-flash'
 const MAX_TEXTS = 30
 const MAX_TEXT_LENGTH = 5000
 const MAX_TOTAL_CHARS = 14000
@@ -29,8 +30,11 @@ function parseJsonContent(value:string){
   return JSON.parse(unfenced)
 }
 
-function systemPrompt(language:TargetLanguage){
+function systemPrompt(language:TargetLanguage,strict=false){
   const target=language==='en'?'English':'Russian'
+  const targetRule=language==='ru'
+    ? 'MANDATORY: Translate all operational Thai wording into natural Russian. Thai script may remain only for exact personal names/nicknames. Example: ช่างอ๊อด ทำโครงหลังคาระเบียง → Мастер อ๊อด выполняет монтаж каркаса кровли балкона.'
+    : 'MANDATORY: Translate all operational Thai wording into natural English. Thai script may remain only for exact personal names/nicknames. Example: ช่างอ๊อด ทำโครงหลังคาระเบียง → Technician อ๊อด installs the balcony roof framing.'
   return [
     'You are the Dynamic Translation Engine for the 3 Kings Construction site-management web app.',
     `Translate Thai operational UI and dynamic database text into professional ${target} for construction, procurement, defect, handover, schedule, labour and payroll contexts.`,
@@ -42,8 +46,10 @@ function systemPrompt(language:TargetLanguage){
     'Use these standard terms consistently and keep the English technical term when it is the site standard:',
     'Defect = Defect; Handover = Handover; Skim Coat = Skim Coat; Self Levelling = Self Levelling; FCU = FCU; Floor Drain = Floor Drain; P-Trap = P-Trap; Procurement = Procurement; PO = PO; Material Delivery = Material Delivery; RSE = RSE; VG = VG.',
     'For Russian, keep the listed technical English terms unchanged when site staff normally use them, and translate the surrounding explanation naturally.',
+    targetRule,
+    strict?'STRICT RETRY: The previous attempt left operational Thai untranslated. Do not return the Thai sentence unchanged; translate every non-name Thai phrase into the target language.':'',
     'Do not add commentary, assumptions, completion claims, or facts not present in the source.'
-  ].join('\n')
+  ].filter(Boolean).join('\n')
 }
 
 async function authenticate(request:NextRequest){
@@ -84,8 +90,23 @@ class TranslationProviderError extends Error{
   }
 }
 
-function translationPayload(language:TargetLanguage,texts:string[]){
-  return systemPrompt(language)+'\n\nINPUT_JSON:\n'+JSON.stringify({texts})
+const THAI_CHAR=/[\u0E00-\u0E7F]/g
+const OPERATIONAL_THAI=/(งาน|ติดตั้ง|รอ|เสร็จ|ทำ|เหลือ|เข้า|ส่ง|สั่ง|ตรวจ|แก้|วัสดุ|ของ|ช่าง|ระบบ|กระเบื้อง|สี|ห้อง|อาคาร|บันได|สระ|ประตู|ผนัง|พื้น|ฝ้า|น้ำ|ไฟ|ผู้รับเหมา|กำหนด|ติดตาม|จัดซื้อ|ส่งมอบ|ปิด)/
+
+function translationPayload(language:TargetLanguage,texts:string[],strict=false){
+  return systemPrompt(language,strict)+'\n\nINPUT_JSON:\n'+JSON.stringify({texts})
+}
+
+function thaiCount(value:string){
+  return (value.match(THAI_CHAR)||[]).length
+}
+
+function needsLanguageRetry(source:string,translated:string){
+  const sourceThai=thaiCount(source)
+  if(sourceThai<4||!OPERATIONAL_THAI.test(source))return false
+  const outputThai=thaiCount(translated)
+  if(translated.trim()===source.trim())return true
+  return outputThai>Math.max(4,Math.floor(sourceThai*0.45))
 }
 
 function parseTranslations(content:string,texts:string[]){
@@ -97,15 +118,14 @@ function parseTranslations(content:string,texts:string[]){
   return translations as string[]
 }
 
-async function translateViaGemini(language:TargetLanguage,texts:string[]){
+async function geminiGenerate(model:string,language:TargetLanguage,texts:string[],strict=false){
   const apiKey=String(process.env.GEMINI_API_KEY||process.env.GOOGLE_API_KEY||'').trim()
   if(!apiKey)throw new TranslationProviderError('gemini',503,'gemini_not_configured')
-  const model=String(process.env.GEMINI_TRANSLATION_MODEL||GEMINI_DEFAULT_MODEL).trim()||GEMINI_DEFAULT_MODEL
   const response=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{
     method:'POST',
     headers:{'content-type':'application/json','x-goog-api-key':apiKey},
     body:JSON.stringify({
-      contents:[{role:'user',parts:[{text:translationPayload(language,texts)}]}],
+      contents:[{role:'user',parts:[{text:translationPayload(language,texts,strict)}]}],
       generationConfig:{
         temperature:0,
         responseMimeType:'application/json',
@@ -124,6 +144,25 @@ async function translateViaGemini(language:TargetLanguage,texts:string[]){
     .join('\n')
   if(!content)throw new TranslationProviderError('gemini',502,'gemini_empty_response')
   return parseTranslations(content,texts)
+}
+
+async function translateViaGemini(language:TargetLanguage,texts:string[]){
+  const configured=String(process.env.GEMINI_TRANSLATION_MODEL||'').trim()
+  const model=configured||(language==='ru'?GEMINI_RU_MODEL:GEMINI_EN_MODEL)
+  const first=await geminiGenerate(model,language,texts,false)
+  const retryIndexes:number[]=[]
+  first.forEach((translated,index)=>{
+    if(needsLanguageRetry(texts[index],translated))retryIndexes.push(index)
+  })
+  if(!retryIndexes.length)return first
+
+  const retrySources=retryIndexes.map(index=>texts[index])
+  const retry=await geminiGenerate(model,language,retrySources,true)
+  const merged=[...first]
+  retryIndexes.forEach((index,retryIndex)=>{merged[index]=retry[retryIndex]})
+  const stillInvalid=merged.some((translated,index)=>needsLanguageRetry(texts[index],translated))
+  if(stillInvalid)throw new TranslationProviderError('gemini',422,'gemini_incomplete_translation')
+  return merged
 }
 
 async function translateViaGateway(language:TargetLanguage,texts:string[]){
@@ -177,6 +216,31 @@ async function translateBatch(language:TargetLanguage,texts:string[]){
     }
   }
   return translateViaGateway(language,texts)
+}
+
+export async function GET(){
+  if(process.env.VERCEL_ENV!=='preview'){
+    return NextResponse.json({ok:false,error:'not_found'},{status:404})
+  }
+  try{
+    const samples=[
+      'Plot 8 — ช่างอ๊อด ทำโครงหลังคาระเบียง และติดตั้ง FCU ชั้น 2',
+      'A419 เหลือ Floor Drain รอของ • PO PL0000918 ยังต้องติดตาม',
+    ]
+    const [en,ru]=await Promise.all([
+      translateBatch('en',samples),
+      translateBatch('ru',samples),
+    ])
+    const preservedTokens=['Plot 8','อ๊อด','FCU','A419','Floor Drain','PL0000918']
+    const preserved=preservedTokens.every(token=>[...en,...ru].some(value=>value.includes(token)))
+    const translated={
+      en:en.every((value,index)=>!needsLanguageRetry(samples[index],value)),
+      ru:ru.every((value,index)=>!needsLanguageRetry(samples[index],value)),
+    }
+    return NextResponse.json({ok:true,preserved,translated,en,ru},{headers:{'Cache-Control':'no-store'}})
+  }catch(error){
+    return NextResponse.json({ok:false,error:error instanceof Error?error.message:'preview_smoke_failed'},{status:502,headers:{'Cache-Control':'no-store'}})
+  }
 }
 
 export async function POST(request:NextRequest){
