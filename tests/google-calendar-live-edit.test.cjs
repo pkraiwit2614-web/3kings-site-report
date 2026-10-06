@@ -56,6 +56,6 @@ assert.match(migration,/app_private\.google_calendar_owner_token/)
 assert.match(migration,/bc6ee244-3472-422f-bbf9-d551987ee9a3/)
 assert.match(migration,/revoke all on function public\.google_calendar_owner_token_upsert/)
 assert.match(migration,/grant execute on function public\.google_calendar_owner_token_get\(\) to authenticated/)
-assert.doesNotMatch(migration,/refresh_token text not null/i)
+assert.doesNotMatch(migration,/^\s*refresh_token\s+text/im)
 
 console.log('Google Calendar owner OAuth shared-mode and compact-layout regression checks passed')
