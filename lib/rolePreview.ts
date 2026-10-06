@@ -7,7 +7,10 @@ export const ROLE_PREVIEW_LABELS:Record<AccessRole,string>={
   owner:'Owner',
   admin:'Admin',
   viewer:'Viewer',
+  viewer_editor:'Viewer & Editor',
   defect_contributor:'Defect Contributor',
+  defect_editor:'Defect Contributor Editor',
+  purchase:'Purchase',
 }
 
 export function canUseRolePreview(actualRole:AccessRole|null){
@@ -15,8 +18,8 @@ export function canUseRolePreview(actualRole:AccessRole|null){
 }
 
 export function previewTargetsFor(actualRole:AccessRole|null):AccessRole[]{
-  if(actualRole==='owner')return ['admin','viewer','defect_contributor']
-  if(actualRole==='admin')return ['viewer','defect_contributor']
+  if(actualRole==='owner')return ['admin','viewer','viewer_editor','defect_contributor','defect_editor','purchase']
+  if(actualRole==='admin')return ['viewer','viewer_editor','defect_contributor','defect_editor','purchase']
   return []
 }
 
