@@ -4,10 +4,12 @@ import Script from 'next/script'
 import {useEffect,useMemo,useState} from 'react'
 import useAccessRole from '@/components/useAccessRole'
 import {canEditCalendar} from '@/lib/accessControl'
+import {getSupabase} from '@/lib/supabase'
 import {logActivity} from '@/lib/activityLog'
+import {WORK_CALENDARS,getWorkCalendar} from '@/lib/workCalendars'
 
 type CalendarMode='MONTH'|'WEEK'|'AGENDA'
-type WorkCalendar={id:string;label:string;color:string}
+type Transport='checking'|'shared'|'browser'
 type GoogleEventApi={
   id:string
   summary?:string
@@ -50,22 +52,12 @@ declare global{
   }
 }
 
-export const WORK_CALENDARS:WorkCalendar[]=[
-  {id:'family17900518303332507254@group.calendar.google.com',label:'3 Kings – Construction Plan',color:'#b99aff'},
-  {id:'9fad4dc9a66ea28e8e98f833119dbd8a4978b66574a329f2d9d1bb8d71b7f498@group.calendar.google.com',label:'3 Kings – Site / Actual',color:'#ff7537'},
-  {id:'6cf6a83e431fa95467563ac0e82400d126601d3e6d3c76936ee26de0813e3614@group.calendar.google.com',label:'กำหนดส่ง-ของเข้าหน้างาน',color:'#a47ae2'},
-  {id:'9b7068d0a450c0f2acbc58783d9eabf80c2957b329d99bdbb1078586994ac210@group.calendar.google.com',label:'3K - Above Villa 6',color:'#c2c2c2'},
-  {id:'7ca8d4a9ade6e05b36ec81c9e0dc025d12c567541414a9ceaee1958e344d187c@group.calendar.google.com',label:'3K - Above Villa 7',color:'#ff7537'},
-  {id:'d31b1dafb3231456407795ea8400bdc0daf490553d441449312e01725a7fd379@group.calendar.google.com',label:'3K - Above Villa 8',color:'#cca6ac'},
-  {id:'958f698c143282cd3a24c4d8563e2fbe505a8c1948f91806b3480ea1a25450f9@group.calendar.google.com',label:'3K - Above Villa 9',color:'#b3dc6c'},
-]
-
 const STORAGE_SELECTION='3kings:google-calendar:selected'
 const STORAGE_MODE='3kings:google-calendar:mode'
-const STORAGE_CLIENT_ID='3kings:google-calendar:oauth-client-id'
 const TOKEN_STORAGE='3kings:google-calendar:access-token'
 const TOKEN_EXPIRY_STORAGE='3kings:google-calendar:access-token-expiry'
 const GOOGLE_SCOPE='https://www.googleapis.com/auth/calendar.events'
+const MAX_MONTH_EVENTS=3
 
 function todayBangkok(){
   return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date())
@@ -115,18 +107,17 @@ function bangkokDateTimeInput(value:string){
   return get('year')+'-'+get('month')+'-'+get('day')+'T'+get('hour')+':'+get('minute')
 }
 
-function apiTime(dateKey:string){
-  return dateKey+'T00:00:00+07:00'
-}
-
-function toBangkokRfc3339(value:string){
-  return value.length===16?value+':00+07:00':value+'+07:00'
-}
+function apiTime(dateKey:string){return dateKey+'T00:00:00+07:00'}
+function toBangkokRfc3339(value:string){return value.length===16?value+':00+07:00':value+'+07:00'}
 
 function eventDay(event:WorkEvent){
   if(event.start.date)return event.start.date
   if(event.start.dateTime)return bangkokDateFromDateTime(event.start.dateTime)
   return ''
+}
+
+function eventTime(event:WorkEvent){
+  return event.start.dateTime?bangkokDateTimeInput(event.start.dateTime).slice(11):''
 }
 
 function emptyDraft(calendarId:string,dateKey:string):EventDraft{
@@ -159,16 +150,15 @@ function googleErrorMessage(value:unknown){
   return String(value||'Google Calendar request failed')
 }
 
-async function googleFetch<T>(token:string,url:string,init?:RequestInit):Promise<T>{
+async function directGoogleFetch<T>(token:string,url:string,init?:RequestInit):Promise<T>{
   const headers=new Headers(init?.headers||{})
-  headers.set('Authorization','Bearer '+token)
-  if(init?.body)headers.set('Content-Type','application/json')
+  headers.set('authorization','Bearer '+token)
+  if(init?.body)headers.set('content-type','application/json')
   const response=await fetch(url,{...init,headers})
   if(response.status===204)return null as T
   const body=await response.json().catch(()=>null)
   if(!response.ok){
-    const message=body?.error?.message||body?.error_description||('Google Calendar HTTP '+response.status)
-    const error=new Error(message) as Error&{status?:number}
+    const error=new Error(body?.error?.message||body?.error_description||('Google Calendar HTTP '+response.status)) as Error&{status?:number}
     error.status=response.status
     throw error
   }
@@ -178,12 +168,11 @@ async function googleFetch<T>(token:string,url:string,init?:RequestInit):Promise
 export default function GoogleCalendarManager(){
   const {role,userId,ready}=useAccessRole()
   const editable=canEditCalendar(role)
-  const envClientId=process.env.NEXT_PUBLIC_GOOGLE_OAUTH_CLIENT_ID||''
-  const [clientId,setClientId]=useState(envClientId)
-  const [clientIdInput,setClientIdInput]=useState('')
+  const [transport,setTransport]=useState<Transport>('checking')
+  const [appToken,setAppToken]=useState('')
   const [googleReady,setGoogleReady]=useState(false)
-  const [token,setToken]=useState('')
-  const [tokenExpiry,setTokenExpiry]=useState(0)
+  const [browserToken,setBrowserToken]=useState('')
+  const [browserTokenExpiry,setBrowserTokenExpiry]=useState(0)
   const [selected,setSelected]=useState<string[]>(()=>WORK_CALENDARS.map(row=>row.id))
   const [mode,setMode]=useState<CalendarMode>('MONTH')
   const [focusDate,setFocusDate]=useState(todayBangkok())
@@ -195,8 +184,6 @@ export default function GoogleCalendarManager(){
 
   useEffect(()=>{
     try{
-      const savedClient=window.localStorage.getItem(STORAGE_CLIENT_ID)||''
-      if(!envClientId&&savedClient){setClientId(savedClient);setClientIdInput(savedClient)}
       const savedSelection=window.localStorage.getItem(STORAGE_SELECTION)
       if(savedSelection){
         const parsed=JSON.parse(savedSelection)
@@ -210,15 +197,41 @@ export default function GoogleCalendarManager(){
       if(savedMode==='MONTH'||savedMode==='WEEK'||savedMode==='AGENDA')setMode(savedMode)
       const savedToken=window.sessionStorage.getItem(TOKEN_STORAGE)||''
       const savedExpiry=Number(window.sessionStorage.getItem(TOKEN_EXPIRY_STORAGE)||0)
-      if(savedToken&&savedExpiry>Date.now()+30000){setToken(savedToken);setTokenExpiry(savedExpiry)}
+      if(savedToken&&savedExpiry>Date.now()+30_000){
+        setBrowserToken(savedToken)
+        setBrowserTokenExpiry(savedExpiry)
+      }
     }catch{}
-  },[envClientId])
+  },[])
 
   useEffect(()=>{try{window.localStorage.setItem(STORAGE_SELECTION,JSON.stringify(selected))}catch{}},[selected])
   useEffect(()=>{try{window.localStorage.setItem(STORAGE_MODE,mode)}catch{}},[mode])
 
+  useEffect(()=>{
+    if(!ready)return
+    let cancelled=false
+    void (async()=>{
+      const {data:{session}}=await getSupabase().auth.getSession()
+      if(cancelled)return
+      const token=session?.access_token||''
+      setAppToken(token)
+      if(!token){setTransport('browser');return}
+      try{
+        const response=await fetch('/api/google-calendar/status',{
+          headers:{authorization:'Bearer '+token},
+          cache:'no-store',
+        })
+        const body=await response.json().catch(()=>null)
+        if(cancelled)return
+        setTransport(response.ok&&body?.configured?'shared':'browser')
+      }catch{
+        if(!cancelled)setTransport('browser')
+      }
+    })()
+    return()=>{cancelled=true}
+  },[ready])
+
   const selectedSet=useMemo(()=>new Set(selected),[selected])
-  const calendarMap=useMemo(()=>new Map(WORK_CALENDARS.map(row=>[row.id,row])),[])
   const monthStart=firstOfMonth(focusDate)
   const cells=useMemo(()=>monthCells(monthStart),[monthStart])
   const weekStart=mondayOf(focusDate)
@@ -254,38 +267,78 @@ export default function GoogleCalendarManager(){
   },[events])
 
   const agendaEvents=useMemo(()=>events.slice().sort((a,b)=>(a.start.dateTime||a.start.date||'').localeCompare(b.start.dateTime||b.start.date||'')),[events])
+  const interactive=transport==='shared'||Boolean(browserToken&&browserTokenExpiry>Date.now()+30_000)
 
-  const disconnectGoogle=()=>{
-    setToken('');setTokenExpiry(0);setEvents([]);setDraft(null)
+  const disconnectBrowserGoogle=()=>{
+    setBrowserToken('');setBrowserTokenExpiry(0);setEvents([]);setDraft(null)
     try{window.sessionStorage.removeItem(TOKEN_STORAGE);window.sessionStorage.removeItem(TOKEN_EXPIRY_STORAGE)}catch{}
-    setMessage('ตัดการเชื่อม Google Calendar ในแท็บนี้แล้ว')
+    setMessage('ตัดการเชื่อม Google ของเบราว์เซอร์นี้แล้ว')
   }
 
-  const loadEvents=async(accessToken=token)=>{
-    if(!accessToken||!selected.length)return
+  const sharedFetch=async<T>(path:string,init?:RequestInit):Promise<T>=>{
+    if(!appToken)throw new Error('app_session_missing')
+    const headers=new Headers(init?.headers||{})
+    headers.set('authorization','Bearer '+appToken)
+    if(init?.body)headers.set('content-type','application/json')
+    const response=await fetch(path,{...init,headers,cache:'no-store'})
+    const body=await response.json().catch(()=>null)
+    if(!response.ok){
+      const error=new Error(body?.error||('Calendar API HTTP '+response.status)) as Error&{status?:number}
+      error.status=response.status
+      throw error
+    }
+    return body as T
+  }
+
+  const loadEvents=async()=>{
+    if(!selected.length){setEvents([]);return}
+    if(transport==='checking')return
+    if(transport==='browser'&&!browserToken)return
+
     setLoading(true);setMessage('')
     try{
       const results=await Promise.all(selected.map(async calendarId=>{
-        const calendar=calendarMap.get(calendarId)
-        const url='https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(calendarId)+'/events?singleEvents=true&orderBy=startTime&maxResults=2500&timeMin='+encodeURIComponent(apiTime(fetchWindow.start))+'&timeMax='+encodeURIComponent(apiTime(fetchWindow.end))
-        const data=await googleFetch<{items?:GoogleEventApi[]}>(accessToken,url)
-        return (data.items||[]).filter(item=>item.status!=='cancelled').map(item=>({...item,calendarId,calendarLabel:calendar?.label||calendarId,calendarColor:calendar?.color||'#7b61ff'}))
+        const calendar=getWorkCalendar(calendarId)
+        let data:{items?:GoogleEventApi[]}
+        if(transport==='shared'){
+          const params=new URLSearchParams({
+            calendar_id:calendarId,
+            time_min:apiTime(fetchWindow.start),
+            time_max:apiTime(fetchWindow.end),
+          })
+          data=await sharedFetch('/api/google-calendar/events?'+params.toString())
+        }else{
+          const url='https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(calendarId)+'/events?singleEvents=true&orderBy=startTime&maxResults=2500&timeMin='+encodeURIComponent(apiTime(fetchWindow.start))+'&timeMax='+encodeURIComponent(apiTime(fetchWindow.end))
+          data=await directGoogleFetch(browserToken,url)
+        }
+        return (data.items||[]).filter(item=>item.status!=='cancelled').map(item=>({
+          ...item,
+          calendarId,
+          calendarLabel:calendar?.label||calendarId,
+          calendarColor:calendar?.color||'#7b61ff',
+        }))
       }))
       setEvents(results.flat())
     }catch(error){
       const status=(error as Error&{status?:number})?.status
-      if(status===401){disconnectGoogle();setMessage('สิทธิ์ Google หมดอายุ กรุณาเชื่อม Google Calendar ใหม่')}
-      else setMessage('โหลด Google Calendar ไม่สำเร็จ: '+googleErrorMessage(error))
+      if(transport==='browser'&&status===401){
+        disconnectBrowserGoogle()
+        setMessage('สิทธิ์ Google หมดอายุ กรุณาเชื่อมใหม่')
+      }else if(status===403){
+        setMessage('บัญชีระบบ Google ไม่มีสิทธิ์เข้าถึงปฏิทินบางรายการ')
+      }else{
+        setMessage('โหลดปฏิทินไม่สำเร็จ: '+googleErrorMessage(error))
+      }
     }finally{setLoading(false)}
   }
 
-  useEffect(()=>{if(token&&tokenExpiry>Date.now()+30000)void loadEvents(token)},[token,selected.join('|'),fetchWindow.start,fetchWindow.end])
+  useEffect(()=>{if(transport==='shared'||(transport==='browser'&&browserToken))void loadEvents()},[transport,browserToken,selected.join('|'),fetchWindow.start,fetchWindow.end])
 
-  const connectGoogle=()=>{
+  const connectBrowserGoogle=()=>{
     if(!editable)return
-    if(!clientId){setMessage('ยังไม่ได้ตั้ง Google OAuth Client ID สำหรับ Web App');return}
+    const clientId=process.env.NEXT_PUBLIC_GOOGLE_OAUTH_CLIENT_ID||''
+    if(!clientId){setMessage('ยังไม่ได้ตั้ง Google OAuth Client ID');return}
     if(!googleReady||!window.google?.accounts?.oauth2){setMessage('Google Identity Services ยังโหลดไม่เสร็จ กรุณาลองอีกครั้ง');return}
-    setMessage('')
     const tokenClient=window.google.accounts.oauth2.initTokenClient({
       client_id:clientId,
       scope:GOOGLE_SCOPE,
@@ -296,23 +349,17 @@ export default function GoogleCalendarManager(){
           return
         }
         const expiry=Date.now()+Math.max(60,Number(response.expires_in||3600))*1000
-        setToken(response.access_token);setTokenExpiry(expiry)
-        try{window.sessionStorage.setItem(TOKEN_STORAGE,response.access_token);window.sessionStorage.setItem(TOKEN_EXPIRY_STORAGE,String(expiry))}catch{}
-        setMessage('เชื่อม Google Calendar แล้ว • การเพิ่ม/แก้ไข/ลบจะเขียนกลับ Google จริง')
-        void loadEvents(response.access_token)
+        setBrowserToken(response.access_token)
+        setBrowserTokenExpiry(expiry)
+        try{
+          window.sessionStorage.setItem(TOKEN_STORAGE,response.access_token)
+          window.sessionStorage.setItem(TOKEN_EXPIRY_STORAGE,String(expiry))
+        }catch{}
+        setMessage('เชื่อม Google แล้ว')
       },
       error_callback:()=>setMessage('หน้าต่างเชื่อม Google ถูกปิดหรือถูกบล็อก'),
     })
-    tokenClient.requestAccessToken({prompt:token?'':'consent'})
-  }
-
-  const saveClientId=()=>{
-    if(role!=='owner')return
-    const value=clientIdInput.trim()
-    if(!value){setMessage('กรุณาใส่ Google OAuth Client ID');return}
-    try{window.localStorage.setItem(STORAGE_CLIENT_ID,value)}catch{}
-    setClientId(value)
-    setMessage('บันทึก OAuth Client ID ในเบราว์เซอร์นี้แล้ว กด “เชื่อม Google Calendar” ต่อได้เลย')
+    tokenClient.requestAccessToken({prompt:browserToken?'':'consent'})
   }
 
   const toggleCalendar=(id:string)=>{
@@ -320,13 +367,13 @@ export default function GoogleCalendarManager(){
   }
 
   const openCreate=(dateKey:string)=>{
-    if(!editable||!token)return
+    if(!editable||!interactive)return
     const target=selected[0]||WORK_CALENDARS[0].id
     setDraft(emptyDraft(target,dateKey));setMessage('')
   }
 
   const openEdit=(event:WorkEvent)=>{
-    if(!editable||!token)return
+    if(!editable||!interactive)return
     setDraft(draftFromEvent(event));setMessage('')
   }
 
@@ -342,96 +389,97 @@ export default function GoogleCalendarManager(){
   }
 
   const saveEvent=async()=>{
-    if(!draft||!editable||!token||!draft.title.trim())return
+    if(!draft||!editable||!interactive||!draft.title.trim())return
     setSaving(true);setMessage('')
     try{
       const body=buildEventBody(draft)
-      if(draft.eventId){
-        const url='https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(draft.calendarId)+'/events/'+encodeURIComponent(draft.eventId)
-        await googleFetch(token,url,{method:'PATCH',body:JSON.stringify(body)})
-        await logActivity({userId,eventType:'submit',path:'/calendar',action:'google_calendar_event_update',target:draft.eventId,metadata:{calendar_id:draft.calendarId,start:draft.allDay?draft.startDate:draft.startDateTime}})
-        setMessage(draft.recurring?'แก้ไข Event ใน Google Calendar แล้ว • รายการซ้ำแก้เฉพาะครั้งที่เลือก':'แก้ไข Event ใน Google Calendar แล้ว')
+      if(transport==='shared'){
+        if(draft.eventId){
+          await sharedFetch('/api/google-calendar/events',{
+            method:'PATCH',
+            body:JSON.stringify({calendarId:draft.calendarId,eventId:draft.eventId,event:body}),
+          })
+        }else{
+          await sharedFetch('/api/google-calendar/events',{
+            method:'POST',
+            body:JSON.stringify({calendarId:draft.calendarId,event:body}),
+          })
+        }
       }else{
-        const url='https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(draft.calendarId)+'/events'
-        const created=await googleFetch<GoogleEventApi>(token,url,{method:'POST',body:JSON.stringify(body)})
-        await logActivity({userId,eventType:'submit',path:'/calendar',action:'google_calendar_event_create',target:created.id,metadata:{calendar_id:draft.calendarId,start:draft.allDay?draft.startDate:draft.startDateTime}})
-        setMessage('เพิ่ม Event เข้า Google Calendar จริงแล้ว')
+        if(draft.eventId){
+          const url='https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(draft.calendarId)+'/events/'+encodeURIComponent(draft.eventId)
+          await directGoogleFetch(browserToken,url,{method:'PATCH',body:JSON.stringify(body)})
+        }else{
+          const url='https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(draft.calendarId)+'/events'
+          await directGoogleFetch(browserToken,url,{method:'POST',body:JSON.stringify(body)})
+        }
       }
+
+      await logActivity({
+        userId,eventType:'submit',path:'/calendar',
+        action:draft.eventId?'google_calendar_event_update':'google_calendar_event_create',
+        target:draft.eventId||draft.title,
+        metadata:{calendar_id:draft.calendarId,start:draft.allDay?draft.startDate:draft.startDateTime,transport},
+      })
       setDraft(null)
+      setMessage(draft.eventId?'แก้ไขรายการเรียบร้อย':'เพิ่มรายการเรียบร้อย')
       await loadEvents()
     }catch(error){
       const status=(error as Error&{status?:number})?.status
-      if(status===401){disconnectGoogle();setMessage('สิทธิ์ Google หมดอายุ กรุณาเชื่อมใหม่')}
-      else if(status===403)setMessage('Google ไม่อนุญาตให้แก้ปฏิทินนี้ ตรวจว่าบัญชี Google ที่เชื่อมมีสิทธิ์แก้ไข')
+      if(status===403)setMessage('ไม่มีสิทธิ์แก้ไขปฏิทินนี้')
       else setMessage('บันทึกไม่สำเร็จ: '+googleErrorMessage(error))
     }finally{setSaving(false)}
   }
 
   const deleteEvent=async()=>{
-    if(!draft?.eventId||!editable||!token)return
-    const label=draft.title||'รายการนี้'
-    if(!window.confirm('ลบ “'+label+'” ออกจาก Google Calendar จริงใช่หรือไม่?'))return
+    if(!draft?.eventId||!editable||!interactive)return
+    if(!window.confirm('ลบ “'+(draft.title||'รายการนี้')+'” ออกจาก Google Calendar จริงใช่หรือไม่?'))return
     setSaving(true);setMessage('')
     try{
-      const url='https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(draft.calendarId)+'/events/'+encodeURIComponent(draft.eventId)
-      await googleFetch(token,url,{method:'DELETE'})
-      await logActivity({userId,eventType:'submit',path:'/calendar',action:'google_calendar_event_delete',target:draft.eventId,metadata:{calendar_id:draft.calendarId}})
-      setDraft(null);setMessage(draft.recurring?'ลบรายการครั้งที่เลือกออกจาก Google Calendar แล้ว':'ลบ Event ออกจาก Google Calendar แล้ว')
+      if(transport==='shared'){
+        await sharedFetch('/api/google-calendar/events',{
+          method:'DELETE',
+          body:JSON.stringify({calendarId:draft.calendarId,eventId:draft.eventId}),
+        })
+      }else{
+        const url='https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(draft.calendarId)+'/events/'+encodeURIComponent(draft.eventId)
+        await directGoogleFetch(browserToken,url,{method:'DELETE'})
+      }
+      await logActivity({userId,eventType:'submit',path:'/calendar',action:'google_calendar_event_delete',target:draft.eventId,metadata:{calendar_id:draft.calendarId,transport}})
+      setDraft(null);setMessage('ลบรายการเรียบร้อย')
       await loadEvents()
     }catch(error){
       setMessage('ลบไม่สำเร็จ: '+googleErrorMessage(error))
     }finally{setSaving(false)}
   }
 
-  const goPrevious=()=>{
-    if(mode==='WEEK')setFocusDate(addDays(focusDate,-7))
-    else setFocusDate(shiftMonth(firstOfMonth(focusDate),-1))
-  }
-  const goNext=()=>{
-    if(mode==='WEEK')setFocusDate(addDays(focusDate,7))
-    else setFocusDate(shiftMonth(firstOfMonth(focusDate),1))
-  }
+  const goPrevious=()=>setFocusDate(mode==='WEEK'?addDays(focusDate,-7):shiftMonth(firstOfMonth(focusDate),-1))
+  const goNext=()=>setFocusDate(mode==='WEEK'?addDays(focusDate,7):shiftMonth(firstOfMonth(focusDate),1))
 
-  const renderEvent=(event:WorkEvent)=>(
-    <button type="button" key={event.calendarId+':'+event.id} className="gcal-event" style={{borderLeftColor:event.calendarColor}} onClick={()=>openEdit(event)}>
-      <strong>{event.summary||'(ไม่มีชื่อ)'}</strong>
-      <small>{event.start.dateTime?bangkokDateTimeInput(event.start.dateTime).slice(11):'ทั้งวัน'} • {event.calendarLabel}</small>
+  const renderCompactEvent=(event:WorkEvent)=>(
+    <button type="button" key={event.calendarId+':'+event.id} className="gcal-event" style={{borderLeftColor:event.calendarColor}} onClick={()=>openEdit(event)} title={event.summary||'(ไม่มีชื่อ)'}>
+      {eventTime(event)&&<span className="gcal-event-time">{eventTime(event)}</span>}
+      <span className="gcal-event-title">{event.summary||'(ไม่มีชื่อ)'}</span>
     </button>
   )
 
-  const renderReadOnly=()=>(
-    <div className="gcal-readonly">
-      <div className="gcal-readonly-note">
-        <b>Google Calendar — โหมดดูอย่างเดียว</b>
-        <span>{editable?'เชื่อม Google Calendar เพื่อเปิดการเพิ่ม/แก้ไข/ลบจากหน้านี้':'สิทธิ์ของบัญชีนี้เป็นโหมดดูข้อมูล'}</span>
-      </div>
-      {readOnlyEmbedUrl?<iframe key={readOnlyEmbedUrl} className="gcal-frame" src={readOnlyEmbedUrl} title="3 Kings Google Calendar" loading="eager" referrerPolicy="strict-origin-when-cross-origin"/>:<div className="gcal-empty">เลือกอย่างน้อย 1 ปฏิทิน</div>}
-    </div>
-  )
+  if(!ready)return <section className="panel gcal-loading-card">กำลังตรวจสอบสิทธิ์…</section>
 
-  if(!ready)return <section className="panel gcal-shell">กำลังตรวจสอบสิทธิ์…</section>
+  const showBrowserConnect=transport==='browser'&&editable
+  const showNativeCalendar=transport==='shared'||Boolean(browserToken)
 
   return <section className="gcal-shell">
-    <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" onLoad={()=>setGoogleReady(true)}/>
+    {transport==='browser'&&<Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" onLoad={()=>setGoogleReady(true)}/>}
 
-    <div className="panel gcal-top">
+    {showBrowserConnect&&<div className="panel gcal-connect-fallback">
       <div>
-        <b>Google Calendar</b>
-        <small>Source of truth เดียว • Event ที่เพิ่ม/แก้ไข/ลบจากหน้านี้จะเปลี่ยนใน Google Calendar จริง</small>
+        <b>การเชื่อม Google ยังเป็นแบบเฉพาะเครื่อง</b>
+        <small>เมื่อเปิด Shared Server Mode แล้ว แถบนี้จะหายไปและผู้ใช้ไม่ต้องกดเชื่อมเอง</small>
       </div>
-      <div className="gcal-connect-actions">
-        {editable&&token&&<span className="gcal-connected">เชื่อมแล้ว</span>}
-        {editable&&<button type="button" className="button primary" onClick={connectGoogle}>{token?'ต่ออายุสิทธิ์ Google':'เชื่อม Google Calendar'}</button>}
-        {editable&&token&&<button type="button" className="button" onClick={disconnectGoogle}>ตัดการเชื่อม</button>}
-        <a className="button" href="https://calendar.google.com/calendar/u/0/r" target="_blank" rel="noreferrer">เปิดใน Google</a>
+      <div>
+        <button type="button" className="button primary" onClick={connectBrowserGoogle}>{browserToken?'ต่ออายุสิทธิ์':'เชื่อม Google'}</button>
+        {browserToken&&<button type="button" className="button" onClick={disconnectBrowserGoogle}>ตัดการเชื่อม</button>}
       </div>
-    </div>
-
-    {editable&&!clientId&&role==='owner'&&<div className="panel gcal-oauth-config">
-      <div><b>ตั้งค่า Google OAuth ครั้งเดียว</b><small>ต้องใช้ OAuth Client ID แบบ Web application ของ Google Cloud • Client ID ไม่ใช่รหัสลับ และจะเก็บเฉพาะในเบราว์เซอร์นี้จนกว่าจะย้ายไป Environment Variable</small></div>
-      <input value={clientIdInput} onChange={event=>setClientIdInput(event.target.value)} placeholder="xxxxxxxxxxxx-xxxxxxxx.apps.googleusercontent.com"/>
-      <button type="button" className="button primary" onClick={saveClientId}>บันทึก Client ID</button>
-      <small>Authorized JavaScript origin สำหรับระบบหลัก: https://3kings-site-report.vercel.app</small>
     </div>}
 
     <div className="panel gcal-controls">
@@ -463,30 +511,43 @@ export default function GoogleCalendarManager(){
             <span>{calendar.label}</span>
           </label>)}
         </div>
-        <p>Google Calendar เป็น Source of Truth • ระบบ Web App Calendar เดิมไม่ถูกใช้สร้างข้อมูลใหม่</p>
+        <p>Source: Google Calendar</p>
       </aside>
 
       <main className="panel gcal-stage">
         {message&&<div className="notice gcal-message">{message}</div>}
-        {loading&&<div className="gcal-loading">กำลังโหลด Google Calendar…</div>}
-        {!token?renderReadOnly():<>
+        {loading&&<div className="gcal-loading">กำลังโหลดปฏิทิน…</div>}
+        {transport==='checking'?<div className="gcal-empty">กำลังตรวจสอบการเชื่อมต่อ…</div>:!showNativeCalendar?<>
+          {readOnlyEmbedUrl?<iframe key={readOnlyEmbedUrl} className="gcal-frame" src={readOnlyEmbedUrl} title="3 Kings Google Calendar" loading="eager" referrerPolicy="strict-origin-when-cross-origin"/>:<div className="gcal-empty">เลือกอย่างน้อย 1 ปฏิทิน</div>}
+        </>:<>
           {mode==='MONTH'&&<>
             <div className="gcal-weekdays">{['จ','อ','พ','พฤ','ศ','ส','อา'].map(day=><b key={day}>{day}</b>)}</div>
             <div className="gcal-month-grid">
-              {cells.map(dateKey=><div key={dateKey} className={'gcal-day '+(dateKey.slice(0,7)===focusDate.slice(0,7)?'':'outside')+(dateKey===todayBangkok()?' today':'')} onDoubleClick={()=>openCreate(dateKey)}>
-                <div className="gcal-day-head"><button type="button" onClick={()=>openCreate(dateKey)}>{Number(dateKey.slice(8,10))}</button>{dateKey===todayBangkok()&&<small>วันนี้</small>}</div>
-                <div className="gcal-day-events">{(eventsByDate.get(dateKey)||[]).map(renderEvent)}</div>
-              </div>)}
+              {cells.map(dateKey=>{
+                const dayEvents=eventsByDate.get(dateKey)||[]
+                const visible=dayEvents.slice(0,MAX_MONTH_EVENTS)
+                const hidden=Math.max(0,dayEvents.length-visible.length)
+                return <div key={dateKey} className={'gcal-day '+(dateKey.slice(0,7)===focusDate.slice(0,7)?'':'outside')+(dateKey===todayBangkok()?' today':'')} onDoubleClick={()=>openCreate(dateKey)}>
+                  <div className="gcal-day-head"><button type="button" onClick={()=>openCreate(dateKey)}>{Number(dateKey.slice(8,10))}</button>{dateKey===todayBangkok()&&<small>วันนี้</small>}</div>
+                  <div className="gcal-day-events">{visible.map(renderCompactEvent)}{hidden>0&&<button type="button" className="gcal-more" onClick={()=>{setFocusDate(dateKey);setMode('AGENDA')}}>+{hidden} รายการ</button>}</div>
+                </div>
+              })}
             </div>
           </>}
+
           {mode==='WEEK'&&<div className="gcal-week-grid">
             {weekDays.map(dateKey=><div key={dateKey} className={'gcal-week-day '+(dateKey===todayBangkok()?'today':'')}>
               <div className="gcal-week-head"><b>{dayLabel(dateKey)}</b>{editable&&<button type="button" className="button" onClick={()=>openCreate(dateKey)}>+ เพิ่ม</button>}</div>
-              <div className="gcal-week-events">{(eventsByDate.get(dateKey)||[]).map(renderEvent)}{!(eventsByDate.get(dateKey)||[]).length&&<small className="muted">ไม่มีรายการ</small>}</div>
+              <div className="gcal-week-events">{(eventsByDate.get(dateKey)||[]).map(renderCompactEvent)}{!(eventsByDate.get(dateKey)||[]).length&&<small className="muted">ไม่มีรายการ</small>}</div>
             </div>)}
           </div>}
+
           {mode==='AGENDA'&&<div className="gcal-agenda">
-            {agendaEvents.map(event=><article key={event.calendarId+':'+event.id}><i style={{background:event.calendarColor}}/><div><b>{event.summary||'(ไม่มีชื่อ)'}</b><small>{dayLabel(eventDay(event))} • {event.start.dateTime?bangkokDateTimeInput(event.start.dateTime).slice(11):'ทั้งวัน'} • {event.calendarLabel}</small>{event.description&&<p>{event.description}</p>}</div>{editable&&<button type="button" className="button" onClick={()=>openEdit(event)}>แก้ไข</button>}</article>)}
+            {agendaEvents.map(event=><article key={event.calendarId+':'+event.id}>
+              <i style={{background:event.calendarColor}}/>
+              <div><b>{event.summary||'(ไม่มีชื่อ)'}</b><small>{dayLabel(eventDay(event))}{eventTime(event)?' · '+eventTime(event):' · ทั้งวัน'} · {event.calendarLabel}</small></div>
+              {editable&&<button type="button" className="button" onClick={()=>openEdit(event)}>แก้ไข</button>}
+            </article>)}
             {!agendaEvents.length&&!loading&&<div className="gcal-empty">ไม่มีรายการในช่วงนี้</div>}
           </div>}
         </>}
@@ -495,7 +556,7 @@ export default function GoogleCalendarManager(){
 
     {draft&&<div className="gcal-modal-backdrop" role="presentation" onMouseDown={event=>{if(event.currentTarget===event.target&&!saving)setDraft(null)}}>
       <section className="gcal-modal" role="dialog" aria-modal="true" aria-label={draft.eventId?'แก้ไข Google Calendar Event':'เพิ่ม Google Calendar Event'}>
-        <div className="gcal-modal-head"><div><b>{draft.eventId?'แก้ไข Event':'เพิ่ม Event'}</b><small>{draft.recurring?'รายการนี้เป็น Event ซ้ำ • การแก้ไข/ลบจะมีผลเฉพาะครั้งที่เลือก':'บันทึกตรงไปยัง Google Calendar'}</small></div><button type="button" className="button" disabled={saving} onClick={()=>setDraft(null)}>ปิด</button></div>
+        <div className="gcal-modal-head"><div><b>{draft.eventId?'แก้ไขรายการ':'เพิ่มรายการ'}</b><small>{draft.recurring?'รายการซ้ำ • แก้ไข/ลบเฉพาะครั้งที่เลือก':'บันทึกลง Google Calendar'}</small></div><button type="button" className="button" disabled={saving} onClick={()=>setDraft(null)}>ปิด</button></div>
         <div className="gcal-form">
           <label>ปฏิทิน<select value={draft.calendarId} disabled={!!draft.eventId} onChange={event=>setDraft(current=>current?{...current,calendarId:event.target.value}:current)}>{WORK_CALENDARS.map(calendar=><option key={calendar.id} value={calendar.id}>{calendar.label}</option>)}</select></label>
           <label>รายการ<input value={draft.title} onChange={event=>setDraft(current=>current?{...current,title:event.target.value}:current)} placeholder="ชื่องาน / นัดหมาย"/></label>
@@ -510,24 +571,25 @@ export default function GoogleCalendarManager(){
           </>}
         </div>
         <div className="gcal-modal-actions">
-          {draft.eventId&&<button type="button" className="button danger" disabled={saving} onClick={deleteEvent}>ลบ Event</button>}
-          <div><button type="button" className="button" disabled={saving} onClick={()=>setDraft(null)}>ยกเลิก</button><button type="button" className="button primary" disabled={saving||!draft.title.trim()} onClick={saveEvent}>{saving?'กำลังบันทึก…':'บันทึก Google Calendar'}</button></div>
+          {draft.eventId&&<button type="button" className="button danger" disabled={saving} onClick={deleteEvent}>ลบรายการ</button>}
+          <div><button type="button" className="button" disabled={saving} onClick={()=>setDraft(null)}>ยกเลิก</button><button type="button" className="button primary" disabled={saving||!draft.title.trim()} onClick={saveEvent}>{saving?'กำลังบันทึก…':'บันทึก'}</button></div>
         </div>
       </section>
     </div>}
 
     <style jsx>{`
-      .gcal-shell{display:grid;gap:12px}.gcal-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:12px}.gcal-top>div:first-child{display:grid;gap:3px}.gcal-top b{color:var(--navy);font-size:14px}.gcal-top small{color:var(--muted);font-size:10px}.gcal-connect-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap}.gcal-connected{padding:5px 8px;border-radius:999px;background:#edf8f0;color:#287b3d;font-size:9px;font-weight:800}
-      .gcal-oauth-config{display:grid;grid-template-columns:minmax(260px,1fr) minmax(260px,1.2fr) auto;gap:8px;align-items:end;padding:12px;border-color:#e8c86a;background:#fff9e7}.gcal-oauth-config>div{display:grid;gap:3px}.gcal-oauth-config b{font-size:11px;color:#5d4600}.gcal-oauth-config small{font-size:9px;color:#7b6a31;line-height:1.45}.gcal-oauth-config>small{grid-column:2/-1}.gcal-oauth-config input{min-height:36px;border:1px solid var(--line);border-radius:8px;padding:8px;font:inherit}
-      .gcal-controls{display:grid;grid-template-columns:auto auto minmax(160px,1fr) auto;gap:10px;align-items:center;padding:9px 10px}.gcal-view-tabs{display:flex;gap:4px;padding:3px;background:#eef2f6;border-radius:10px}.gcal-view-tabs button,.gcal-selection-actions button{border:0;background:transparent;cursor:pointer;font:inherit}.gcal-view-tabs button{min-height:32px;padding:6px 12px;border-radius:8px;color:#5f6f82;font-size:11px;font-weight:800}.gcal-view-tabs button.active{background:#172a43;color:#fff}.gcal-nav{display:flex;gap:5px}.gcal-period{text-align:center;color:#172a43;font-size:12px}.gcal-selection-actions{display:flex;justify-content:flex-end;gap:5px}.gcal-selection-actions button{padding:6px 8px;border-radius:7px;color:#294968;font-size:10px;font-weight:700}.gcal-selection-actions button:hover{background:#edf2f7}
-      .gcal-layout{display:grid;grid-template-columns:250px minmax(0,1fr);gap:12px}.gcal-filter{padding:11px;height:fit-content}.gcal-filter>b{display:block;font-size:12px;color:#172a43}.gcal-filter>small{display:block;margin-top:2px;color:var(--muted);font-size:9px}.gcal-filter>div{display:grid;gap:4px;margin-top:9px}.gcal-filter label{display:grid;grid-template-columns:16px 9px minmax(0,1fr);align-items:center;gap:7px;padding:7px;border:1px solid transparent;border-radius:8px;color:#536376;font-size:10.5px;cursor:pointer}.gcal-filter label.selected{background:#f6f8fb;border-color:#dfe6ed;color:#172a43;font-weight:700}.gcal-filter input{width:14px;height:14px;margin:0}.gcal-filter i{width:9px;height:9px;border-radius:50%}.gcal-filter p{margin:10px 0 0;padding-top:9px;border-top:1px solid var(--line);color:var(--muted);font-size:9px;line-height:1.5}
-      .gcal-stage{padding:0;overflow:hidden;min-height:650px}.gcal-message{margin:10px}.gcal-loading{padding:8px 10px;background:#f6f8fb;border-bottom:1px solid var(--line);color:#5d6c7b;font-size:10px}.gcal-readonly-note{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 11px;border-bottom:1px solid var(--line);background:#f8fafc}.gcal-readonly-note b{font-size:10.5px;color:#233f5d}.gcal-readonly-note span{font-size:9px;color:var(--muted)}.gcal-frame{display:block;width:100%;height:72vh;min-height:650px;border:0}.gcal-empty{display:grid;place-items:center;min-height:120px;color:var(--muted);font-size:11px}
-      .gcal-weekdays{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));background:#f5f7fa;border-bottom:1px solid var(--line)}.gcal-weekdays b{text-align:center;padding:7px;font-size:10px;color:#657789;border-right:1px solid var(--line)}.gcal-weekdays b:last-child{border-right:0}.gcal-month-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}.gcal-day{min-height:115px;padding:6px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);background:#fff}.gcal-day:nth-child(7n){border-right:0}.gcal-day.outside{background:#fafbfc}.gcal-day.today{box-shadow:inset 0 0 0 2px #8aa8c7}.gcal-day-head{display:flex;align-items:center;justify-content:space-between;gap:4px;margin-bottom:5px}.gcal-day-head button{width:25px;height:25px;border:0;border-radius:50%;background:transparent;font:inherit;font-size:10px;font-weight:800;cursor:pointer}.gcal-day-head button:hover{background:#edf3f8}.gcal-day-head small{font-size:7.5px;color:#386995}.gcal-day-events{display:grid;gap:3px}.gcal-event{display:block;width:100%;min-width:0;border:1px solid #e1e7ee;border-left:4px solid #7b61ff;border-radius:6px;background:#fbfcfe;text-align:left;padding:5px;cursor:pointer}.gcal-event:hover{background:#f2f6fa}.gcal-event strong,.gcal-event small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gcal-event strong{font-size:9px;color:#253b52}.gcal-event small{margin-top:1px;font-size:7.5px;color:#7a8795}
-      .gcal-week-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));min-height:650px}.gcal-week-day{padding:7px;border-right:1px solid var(--line)}.gcal-week-day:last-child{border-right:0}.gcal-week-day.today{background:#fbfdff}.gcal-week-head{display:grid;gap:5px;margin-bottom:8px}.gcal-week-head b{font-size:10px;color:#314b66}.gcal-week-head .button{font-size:9px}.gcal-week-events{display:grid;gap:5px}.gcal-week-events>.muted{font-size:9px}
-      .gcal-agenda{display:grid}.gcal-agenda article{display:grid;grid-template-columns:8px minmax(0,1fr) auto;gap:9px;align-items:start;padding:10px 11px;border-bottom:1px solid var(--line)}.gcal-agenda article>i{width:8px;height:8px;border-radius:50%;margin-top:4px}.gcal-agenda article b{display:block;font-size:11px;color:#243e59}.gcal-agenda article small{display:block;margin-top:2px;font-size:9px;color:var(--muted)}.gcal-agenda article p{margin:4px 0 0;font-size:9.5px;color:#526273;line-height:1.45}
-      .gcal-modal-backdrop{position:fixed;inset:0;z-index:1100;display:grid;place-items:center;padding:18px;background:rgba(12,27,43,.48)}.gcal-modal{width:min(680px,100%);max-height:92vh;overflow:auto;border-radius:14px;background:#fff;box-shadow:0 24px 70px rgba(0,0,0,.28);padding:14px}.gcal-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.gcal-modal-head>div{display:grid;gap:3px}.gcal-modal-head b{font-size:14px;color:#172a43}.gcal-modal-head small{font-size:9px;color:var(--muted)}.gcal-form{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:12px}.gcal-form label{display:grid;gap:4px;color:#667688;font-size:10px;font-weight:800}.gcal-form input,.gcal-form select,.gcal-form textarea{min-height:36px;border:1px solid var(--line);border-radius:8px;padding:8px;background:#fff;font:inherit}.gcal-form textarea{min-height:78px;resize:vertical}.gcal-wide{grid-column:1/-1}.gcal-checkbox{display:flex!important;grid-column:1/-1;align-items:center;gap:7px}.gcal-checkbox input{width:16px;height:16px;min-height:0}.gcal-modal-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--line)}.gcal-modal-actions>div{display:flex;gap:6px;margin-left:auto}.danger{color:#a53232!important;border-color:#efcccc!important;background:#fff8f8!important}
-      @media(max-width:900px){.gcal-controls{grid-template-columns:1fr 1fr}.gcal-period{grid-row:1;grid-column:1/-1}.gcal-layout{grid-template-columns:1fr}.gcal-filter>div{display:flex;overflow-x:auto;gap:5px}.gcal-filter label{flex:0 0 auto;white-space:nowrap}.gcal-filter p{display:none}.gcal-month-grid,.gcal-weekdays,.gcal-week-grid{min-width:760px}.gcal-stage{overflow-x:auto}.gcal-oauth-config{grid-template-columns:1fr}.gcal-oauth-config>small{grid-column:auto}}
-      @media(max-width:620px){.gcal-top{flex-direction:column}.gcal-connect-actions{justify-content:flex-start}.gcal-controls{grid-template-columns:1fr}.gcal-period{grid-column:auto;grid-row:auto;order:-1}.gcal-nav,.gcal-selection-actions{justify-content:space-between}.gcal-view-tabs button{flex:1}.gcal-weekdays,.gcal-month-grid,.gcal-week-grid{min-width:700px}.gcal-form{grid-template-columns:1fr}.gcal-wide{grid-column:auto}.gcal-modal{padding:12px}.gcal-modal-actions{align-items:stretch;flex-direction:column}.gcal-modal-actions>div{margin-left:0}.gcal-modal-actions button{flex:1}.gcal-readonly-note{align-items:flex-start;flex-direction:column}}
+      .gcal-shell{display:grid;gap:8px}.gcal-loading-card{padding:12px}
+      .gcal-connect-fallback{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-color:#ead59a;background:#fffaf0}.gcal-connect-fallback>div:first-child{display:grid;gap:1px}.gcal-connect-fallback b{font-size:10.5px;color:#5f4b12}.gcal-connect-fallback small{font-size:8.5px;color:#837347}.gcal-connect-fallback>div:last-child{display:flex;gap:5px;flex:0 0 auto}
+      .gcal-controls{display:grid;grid-template-columns:auto auto minmax(130px,1fr) auto;gap:7px;align-items:center;padding:7px 8px}.gcal-view-tabs{display:flex;gap:3px;padding:2px;background:#eef2f6;border-radius:9px}.gcal-view-tabs button,.gcal-selection-actions button{border:0;background:transparent;cursor:pointer;font:inherit}.gcal-view-tabs button{min-height:28px;padding:4px 10px;border-radius:7px;color:#5f6f82;font-size:10px;font-weight:800}.gcal-view-tabs button.active{background:#172a43;color:#fff}.gcal-nav{display:flex;gap:4px}.gcal-nav .button{min-height:30px;padding:5px 9px;font-size:9.5px}.gcal-period{text-align:center;color:#172a43;font-size:11px}.gcal-selection-actions{display:flex;justify-content:flex-end;gap:3px}.gcal-selection-actions button{padding:5px 6px;border-radius:6px;color:#294968;font-size:9px;font-weight:700}.gcal-selection-actions button:hover{background:#edf2f7}
+      .gcal-layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:8px}.gcal-filter{padding:9px;height:fit-content}.gcal-filter>b{display:block;font-size:10.5px;color:#172a43}.gcal-filter>small{display:block;margin-top:1px;color:var(--muted);font-size:8px}.gcal-filter>div{display:grid;gap:3px;margin-top:7px}.gcal-filter label{display:grid;grid-template-columns:15px 8px minmax(0,1fr);align-items:center;gap:6px;padding:5px 6px;border:1px solid transparent;border-radius:7px;color:#536376;font-size:9.5px;line-height:1.25;cursor:pointer}.gcal-filter label.selected{background:#f6f8fb;border-color:#dfe6ed;color:#172a43;font-weight:700}.gcal-filter input{width:13px;height:13px;margin:0}.gcal-filter i{width:8px;height:8px;border-radius:50%}.gcal-filter p{margin:8px 0 0;padding-top:7px;border-top:1px solid var(--line);color:var(--muted);font-size:8px}
+      .gcal-stage{padding:0;overflow:hidden;min-height:560px}.gcal-message{margin:7px;font-size:9px}.gcal-loading{padding:6px 8px;background:#f6f8fb;border-bottom:1px solid var(--line);color:#5d6c7b;font-size:9px}.gcal-frame{display:block;width:100%;height:68vh;min-height:560px;border:0}.gcal-empty{display:grid;place-items:center;min-height:100px;color:var(--muted);font-size:10px}
+      .gcal-weekdays{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));background:#f5f7fa;border-bottom:1px solid var(--line)}.gcal-weekdays b{text-align:center;padding:5px;font-size:8.5px;color:#657789;border-right:1px solid var(--line)}.gcal-weekdays b:last-child{border-right:0}.gcal-month-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}.gcal-day{min-height:94px;padding:4px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);background:#fff;overflow:hidden}.gcal-day:nth-child(7n){border-right:0}.gcal-day.outside{background:#fafbfc}.gcal-day.today{box-shadow:inset 0 0 0 1.5px #8aa8c7}.gcal-day-head{display:flex;align-items:center;justify-content:space-between;gap:3px;margin-bottom:3px}.gcal-day-head button{width:21px;height:21px;border:0;border-radius:50%;background:transparent;font:inherit;font-size:9px;font-weight:800;cursor:pointer}.gcal-day-head button:hover{background:#edf3f8}.gcal-day-head small{font-size:7px;color:#386995}.gcal-day-events{display:grid;gap:2px}
+      .gcal-event{display:grid!important;grid-template-columns:auto minmax(0,1fr);align-items:start;gap:3px;width:100%;min-width:0;max-height:32px!important;border:1px solid #e4e9ee!important;border-left:2px solid #7b61ff!important;border-radius:4px!important;background:#fbfcfe!important;text-align:left!important;padding:2px 3px!important;margin:0!important;cursor:pointer!important;overflow:hidden!important;box-shadow:none!important}.gcal-event:hover{background:#f1f5f9!important}.gcal-event-time{font-size:7.5px!important;line-height:1.25!important;color:#738294!important;font-weight:700!important;white-space:nowrap!important}.gcal-event-title{min-width:0;font-size:8.5px!important;line-height:1.2!important;color:#263b50!important;font-weight:700!important;display:-webkit-box!important;-webkit-box-orient:vertical!important;-webkit-line-clamp:2!important;overflow:hidden!important;white-space:normal!important;word-break:break-word!important}.gcal-more{border:0;background:transparent;color:#5b7188;text-align:left;padding:1px 3px;font:inherit;font-size:7.5px;font-weight:800;cursor:pointer}
+      .gcal-week-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));min-height:560px}.gcal-week-day{padding:5px;border-right:1px solid var(--line);overflow:hidden}.gcal-week-day:last-child{border-right:0}.gcal-week-day.today{background:#fbfdff}.gcal-week-head{display:grid;gap:4px;margin-bottom:6px}.gcal-week-head b{font-size:9px;color:#314b66}.gcal-week-head .button{font-size:8px;min-height:25px;padding:3px 5px}.gcal-week-events{display:grid;gap:3px}.gcal-week-events>.muted{font-size:8px}
+      .gcal-agenda{display:grid}.gcal-agenda article{display:grid;grid-template-columns:7px minmax(0,1fr) auto;gap:7px;align-items:start;padding:7px 8px;border-bottom:1px solid var(--line)}.gcal-agenda article>i{width:7px;height:7px;border-radius:50%;margin-top:3px}.gcal-agenda article b{display:block;font-size:9.5px;line-height:1.3;color:#243e59}.gcal-agenda article small{display:block;margin-top:1px;font-size:8px;color:var(--muted)}.gcal-agenda .button{min-height:27px;padding:4px 7px;font-size:8.5px}
+      .gcal-modal-backdrop{position:fixed;inset:0;z-index:1100;display:grid;place-items:center;padding:18px;background:rgba(12,27,43,.48)}.gcal-modal{width:min(620px,100%);max-height:92vh;overflow:auto;border-radius:13px;background:#fff;box-shadow:0 24px 70px rgba(0,0,0,.28);padding:12px}.gcal-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:9px}.gcal-modal-head>div{display:grid;gap:2px}.gcal-modal-head b{font-size:12px;color:#172a43}.gcal-modal-head small{font-size:8px;color:var(--muted)}.gcal-form{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:9px}.gcal-form label{display:grid;gap:3px;color:#667688;font-size:9px;font-weight:800}.gcal-form input,.gcal-form select,.gcal-form textarea{min-height:33px;border:1px solid var(--line);border-radius:7px;padding:7px;background:#fff;font:inherit;font-size:10px}.gcal-form textarea{min-height:70px;resize:vertical}.gcal-wide{grid-column:1/-1}.gcal-checkbox{display:flex!important;grid-column:1/-1;align-items:center;gap:6px}.gcal-checkbox input{width:15px;height:15px;min-height:0}.gcal-modal-actions{display:flex;align-items:center;justify-content:space-between;gap:7px;margin-top:9px;padding-top:8px;border-top:1px solid var(--line)}.gcal-modal-actions>div{display:flex;gap:5px;margin-left:auto}.danger{color:#a53232!important;border-color:#efcccc!important;background:#fff8f8!important}
+      @media(max-width:900px){.gcal-controls{grid-template-columns:1fr 1fr}.gcal-period{grid-row:1;grid-column:1/-1}.gcal-layout{grid-template-columns:1fr}.gcal-filter>div{display:flex;overflow-x:auto;gap:4px}.gcal-filter label{flex:0 0 auto;white-space:nowrap}.gcal-filter p{display:none}.gcal-month-grid,.gcal-weekdays,.gcal-week-grid{min-width:700px}.gcal-stage{overflow-x:auto}.gcal-connect-fallback{align-items:flex-start;flex-direction:column}}
+      @media(max-width:620px){.gcal-controls{grid-template-columns:1fr}.gcal-period{grid-column:auto;grid-row:auto;order:-1}.gcal-nav,.gcal-selection-actions{justify-content:space-between}.gcal-view-tabs button{flex:1}.gcal-weekdays,.gcal-month-grid,.gcal-week-grid{min-width:650px}.gcal-form{grid-template-columns:1fr}.gcal-wide{grid-column:auto}.gcal-modal{padding:10px}.gcal-modal-actions{align-items:stretch;flex-direction:column}.gcal-modal-actions>div{margin-left:0}.gcal-modal-actions button{flex:1}}
     `}</style>
   </section>
 }
