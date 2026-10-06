@@ -36,11 +36,11 @@ grant select on public.work_calendars, public.work_calendar_events to authentica
 
 drop policy if exists work_calendars_read_active on public.work_calendars;
 create policy work_calendars_read_active on public.work_calendars for select to authenticated
-using (exists(select 1 from public.profiles p where p.user_id=(select auth.uid()) and p.active=true));
+using ((select private.is_active_user()));
 
 drop policy if exists work_calendar_events_read_active on public.work_calendar_events;
 create policy work_calendar_events_read_active on public.work_calendar_events for select to authenticated
-using (exists(select 1 from public.profiles p where p.user_id=(select auth.uid()) and p.active=true));
+using ((select private.is_active_user()));
 
 create or replace function public.work_calendar_create(
   p_name text,p_color text,p_client_session_id uuid,p_user_agent text
