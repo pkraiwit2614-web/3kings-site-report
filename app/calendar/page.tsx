@@ -1,4 +1,4 @@
-'use client'
+'use client'\n\n// Deployment parity marker: Calendar owner OAuth shared mode
 
 import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
