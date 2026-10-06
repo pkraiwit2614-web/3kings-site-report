@@ -10,6 +10,7 @@ import { getSupabase } from '@/lib/supabase'
 import { pct, dateTH } from '@/lib/format'
 import { sortTasksByNumber } from '@/lib/taskOrder'
 import type { Project, ScheduleTask } from '@/lib/types'
+import ScheduleEditPanel from '@/components/ScheduleEditPanel'
 
 type StatusFilter = 'all' | 'delayed' | 'blockers' | 'in_progress' | 'completed'
 
@@ -90,6 +91,7 @@ export default function SchedulePlanActualV41(){
       <span className="small muted">ข้อมูล Schedule จาก Drive Sync</span><b className="small">อัปเดตข้อมูลล่าสุด: {dateTimeTH(latestSyncAt)}</b>
     </div>
 
+    <ScheduleEditPanel/>
     <section className="schedule-summary-grid">
       <div className="schedule-summary-card"><span>Plan</span><b>{pct(avgPlan)}</b><small>ค่าเฉลี่ยตามแผนของรายการที่กำลังดู</small></div>
       <div className="schedule-summary-card actual"><span>Actual</span><b>{pct(avgActual)}</b><small>ความคืบหน้าหน้างานจริงล่าสุด</small></div>

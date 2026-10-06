@@ -34,6 +34,7 @@ const eventLabel: Record<string, string> = {
   click: 'คลิก',
   submit: 'Submit',
   control_change: 'เปลี่ยนตัวเลือก',
+  data_change: 'แก้ไข / ยืนยันข้อมูล',
 }
 
 function formatBangkok(value: string) {

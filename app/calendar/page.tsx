@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
+import CalendarEditor from '@/components/CalendarEditor'
 
 type CalendarMode = 'MONTH' | 'WEEK' | 'AGENDA'
 
@@ -141,8 +142,9 @@ export default function WorkCalendarPage(){
     </div>
 
     <p className="work-calendar-note">
-      ปฏิทินนี้อ่านข้อมูลจาก Google Calendar โดยตรงและไม่บันทึก Event ซ้ำในฐานข้อมูล Web App หากรายการไม่แสดง ให้ตรวจว่าบัญชี Google ที่เปิดอยู่ในเบราว์เซอร์มีสิทธิ์ดูปฏิทิน 3 Kings นั้น
+      ปฏิทิน Google ด้านบนอ่านข้อมูลจาก Google Calendar โดยตรง หากรายการไม่แสดง ให้ตรวจว่าบัญชี Google ที่เปิดอยู่ในเบราว์เซอร์มีสิทธิ์ดูปฏิทิน 3 Kings นั้น
     </p>
+    <CalendarEditor/>
 
     <style jsx>{`
       .work-calendar-controls{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;margin-bottom:12px}

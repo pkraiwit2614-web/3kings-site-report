@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import AppShell from '@/components/AppShell'
+import SiteOperationsReviewEditor from '@/components/SiteOperationsReviewEditor'
 import PageHeader from '@/components/PageHeader'
 import StatusBadge from '@/components/StatusBadge'
 import { getSupabase } from '@/lib/supabase'
@@ -263,6 +264,7 @@ export default function SiteOperationsPage(){
             <div><span>Progress evidence</span><b>{entry.status_text||'ไม่ระบุสถานะ'}</b><small>ใช้รายละเอียดงาน + สถานะ + Next plan เป็น evidence</small><small>% Actual ยังคงมาจาก Schedule เท่านั้น</small></div>
             <div><span>Labour</span><b>Raw {countLabel(entry.total_manpower)} • ชาย {countLabel(entry.male_count)} / หญิง {countLabel(entry.female_count)} • ชาย+หญิง {countLabel(sexTotal)}</b><small className={sourceHeadcountStatus==='mismatch'?'warn':''}>{sourceHeadcountStatus==='mismatch'?'Source discrepancy — ต้องตรวจ':sourceHeadcountStatus==='unknown'?'Source ไม่ครบ — Unknown ไม่ใช่ 0':'Raw source สอดคล้อง'}</small><small>{authority===null?'Confirmed headcount: ยังไม่มีผู้ยืนยัน':'Confirmed headcount: '+authority+' คน • ใช้ downstream'}</small><small>{worker?'Home team: '+(worker.default_team||'ยังไม่ระบุ'):'Supervisor identity ยังไม่ยืนยัน'}</small><Link href={'/reports/labour?date='+entry.work_date+'&entry='+entry.id}>เปิด Labour Verification →</Link></div>
           </div>
+          <SiteOperationsReviewEditor entryId={entry.id}/>
         </article>
       })}
     </div>}
