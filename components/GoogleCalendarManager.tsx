@@ -275,7 +275,7 @@ export const GoogleCalendarManager=()=>{
     setMessage('ตัดการเชื่อม Google ของเบราว์เซอร์นี้แล้ว')
   }
 
-  const sharedFetch=async<T>(path:string,init?:RequestInit):Promise<T>=>{
+  const sharedFetch=async<T,>(path:string,init?:RequestInit):Promise<T>=>{
     if(!appToken)throw new Error('app_session_missing')
     const headers=new Headers(init?.headers||{})
     headers.set('authorization','Bearer '+appToken)
