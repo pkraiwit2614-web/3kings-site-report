@@ -9,6 +9,7 @@ import {canViewPayroll,resolveAccessRole,type AccessRole} from '@/lib/accessCont
 import useRolePreview from '@/components/useRolePreview'
 import {ROLE_PREVIEW_LABELS} from '@/lib/rolePreview'
 import ActivityTracker from '@/components/ActivityTracker'
+import LanguageSelector from '@/components/LanguageSelector'
 import { logActivity } from '@/lib/activityLog'
 
 type NavItem = [string,string]
@@ -234,9 +235,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
   return <div className="app-shell">
     <ActivityTracker userId={userId}/>
     <aside className="sidebar">
-      <div className="brand"><BrandLogo className="brand-logo"/><div><b>3 Kings Construction</b><small>Site Report V3.4</small></div></div>
+      <div className="brand" data-i18n-skip><BrandLogo className="brand-logo"/><div><b>3 Kings Construction</b><small>Site Report V3.4</small></div></div>
       <nav>{nav.map(([href,label]) => <Link key={href} className={navIsActive(path,href)?'active':''} href={href}>{label}</Link>)}</nav>
-      <div className="userbox"><b>{userName}</b><span>{displayRole}</span>{renderPreviewControl()}<button onClick={signOut}>ออกจากระบบ</button></div>
+      <div className="userbox"><b data-i18n-skip>{userName}</b><span>{displayRole}</span>{renderPreviewControl()}<LanguageSelector/><button onClick={signOut}>ออกจากระบบ</button></div>
     </aside>
 
     <main className="main">
@@ -260,10 +261,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
       <section id="mobile-more-menu" className="mobile-more-sheet" aria-label="เมนูเพิ่มเติม">
         <div className="mobile-more-handle" />
         <div className="mobile-more-user">
-          <div><b>{userName}</b><span>{displayRole}</span></div>
+          <div><b data-i18n-skip>{userName}</b><span>{displayRole}</span></div>
           <button type="button" onClick={()=>setMobileMore(false)}>ปิด</button>
         </div>
         {previewTargets.length>0&&<div className="mobile-preview-control">{renderPreviewControl()}</div>}
+        <div className="mobile-language-control"><LanguageSelector compact/></div>
         <div className="mobile-more-links">
           {extraNav.map(([href,label]) => <Link key={href} className={navIsActive(path,href)?'active':''} href={href}>{label}<span>›</span></Link>)}
         </div>
