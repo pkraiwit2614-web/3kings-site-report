@@ -60,7 +60,7 @@ export function canEditDefect(role:AccessRole|null){
 }
 
 export function canEditProcurement(role:AccessRole|null){
-  return role==='owner'||role==='purchase'
+  return role==='purchase'
 }
 
 export function canManageLabour(role:AccessRole|null){
