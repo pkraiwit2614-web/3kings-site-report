@@ -141,6 +141,9 @@ begin
 end $$;
 
 revoke all on function public.defect_register_file_upload(text,text,text,bigint,uuid,text) from public,anon,authenticated;
+revoke execute on function public.defect_register_file_upload(text,text,text,bigint,uuid,text) from public;
+revoke execute on function public.defect_register_file_upload(text,text,text,bigint,uuid,text) from anon;
+revoke execute on function public.defect_register_file_upload(text,text,text,bigint,uuid,text) from authenticated;
 revoke all on function public.defect_register_validated_file(text,text,text,text,bigint,text,text[],text,uuid,text) from public,anon;
 grant execute on function public.defect_register_validated_file(text,text,text,text,bigint,text,text[],text,uuid,text) to authenticated;
 
