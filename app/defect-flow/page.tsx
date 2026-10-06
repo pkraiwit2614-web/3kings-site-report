@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
+import DefectManualUpdatePanel from '@/components/DefectManualUpdatePanel'
 import { getSupabase } from '@/lib/supabase'
 
 type FlowRow={
@@ -302,6 +303,7 @@ export default function DefectFlowPage(){
         <button type="button" className="button report-print-button flow-print-button" onClick={()=>window.print()} disabled={loading||!!error}>🖨️ Print</button>
       </div>}/>
     </div>
+    <DefectManualUpdatePanel />
 
     {loading?<div className="panel flow-loading">กำลังโหลด Handover / Defect Flow…</div>:error?<div className="panel flow-error">โหลดข้อมูลไม่ได้: {error}</div>:<section className="flow-stage panel">
       <svg ref={svgRef} className="flow-svg" viewBox="0 0 1920 1080" role="img" aria-label="Live Handover Defect Flow Building A and B" xmlns="http://www.w3.org/2000/svg">
