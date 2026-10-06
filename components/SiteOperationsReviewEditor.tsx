@@ -1,0 +1,11 @@
+'use client'
+import {useEffect,useState} from 'react'
+import {getSupabase} from '@/lib/supabase'
+import useAccessRole from '@/components/useAccessRole'
+import {canEditSiteOperations} from '@/lib/accessControl'
+import {getActivitySessionId} from '@/lib/activityLog'
+export default function SiteOperationsReviewEditor({entryId}:{entryId:string}){const {role}=useAccessRole();const editable=canEditSiteOperations(role);const [status,setStatus]=useState('pending');const [note,setNote]=useState('');const [msg,setMsg]=useState('');
+ useEffect(()=>{if(!editable)return;getSupabase().from('site_operations_management_reviews').select('review_status,management_note').eq('entry_id',entryId).maybeSingle().then(({data})=>{if(data){setStatus(data.review_status||'pending');setNote(data.management_note||'')}})},[editable,entryId])
+ const save=async()=>{const {error}=await getSupabase().rpc('site_operations_save_management_review',{p_entry_id:entryId,p_review_status:status,p_management_note:note||null,p_client_session_id:getActivitySessionId(),p_user_agent:navigator.userAgent});setMsg(error?error.message:'บันทึกแล้ว')};if(!editable)return null;
+ return <div className="siteops-review-editor"><select value={status} onChange={e=>setStatus(e.target.value)}><option value="pending">Pending</option><option value="confirmed">Confirmed</option><option value="needs_review">Needs review</option></select><input value={note} onChange={e=>setNote(e.target.value)} placeholder="Management note / รายละเอียดเพิ่มเติม"/><button type="button" className="button" onClick={save}>บันทึก / ยืนยัน</button>{msg&&<small>{msg}</small>}<style jsx>{`.siteops-review-editor{display:grid;grid-template-columns:130px minmax(220px,1fr) auto auto;gap:6px;align-items:center;padding:8px 13px;border-top:1px solid var(--line);background:#f8fafc}.siteops-review-editor select,.siteops-review-editor input{min-height:34px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:#fff;font:inherit;font-size:10px}.siteops-review-editor small{font-size:9px;color:var(--muted)}@media(max-width:760px){.siteops-review-editor{grid-template-columns:1fr}}`}</style></div>
+}
