@@ -330,9 +330,22 @@ export function GoogleCalendarManager(){
   const goPrevious=()=>setFocusDate(mode==='WEEK'?addDays(focusDate,-7):shiftMonth(firstOfMonth(focusDate),-1))
   const goNext=()=>setFocusDate(mode==='WEEK'?addDays(focusDate,7):shiftMonth(firstOfMonth(focusDate),1))
   const renderCompactEvent=(event:WorkEvent)=>(
-    <button type="button" key={event.calendarId+':'+event.id} className="gcal-event" style={{borderLeftColor:event.calendarColor}} onClick={()=>openEdit(event)} title={event.summary||'(ไม่มีชื่อ)'}>
-      {eventTime(event)&&<span className="gcal-event-time">{eventTime(event)}</span>}
-      <span className="gcal-event-title">{event.summary||'(ไม่มีชื่อ)'}</span>
+    <button
+      type="button"
+      key={event.calendarId+':'+event.id}
+      className="gcal-event"
+      style={{
+        borderLeftColor:event.calendarColor,
+        maxHeight:'36px',
+        padding:'3px 4px',
+        fontSize:'9.5px',
+        lineHeight:1.2,
+      }}
+      onClick={()=>openEdit(event)}
+      title={event.summary||'(ไม่มีชื่อ)'}
+    >
+      {eventTime(event)&&<span className="gcal-event-time" style={{fontSize:'8px',lineHeight:1.2}}>{eventTime(event)}</span>}
+      <span className="gcal-event-title" style={{fontSize:'9.5px',lineHeight:1.2}}>{event.summary||'(ไม่มีชื่อ)'}</span>
     </button>
   )
 
