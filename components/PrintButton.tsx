@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect } from 'react'
+import { useI18n } from '@/components/I18nProvider'
+import type { AppLanguage } from '@/lib/i18n'
 
 function cleanDefaultLabel(text:string){
   return text
@@ -41,15 +43,21 @@ function collectPrintFilters(){
   return Array.from(new Set(parts))
 }
 
-function preparePrint(reportTitle:string){
+function printLocale(language:AppLanguage){
+  if(language==='en')return 'en-GB'
+  if(language==='ru')return 'ru-RU'
+  return 'th-TH'
+}
+
+function preparePrint(reportTitle:string,language:AppLanguage){
   document.body.classList.add('report-print-mode')
   document.body.setAttribute('data-print-report',reportTitle)
 
-  const now=new Intl.DateTimeFormat('th-TH',{
+  const now=new Intl.DateTimeFormat(printLocale(language),{
     timeZone:'Asia/Bangkok',
     day:'2-digit',month:'2-digit',year:'numeric',
     hour:'2-digit',minute:'2-digit',hour12:false
-  }).format(new Date())+' น.'
+  }).format(new Date())+(language==='th'?' น.':'')
 
   const generated=document.querySelector('.report-print-generated-at')
   if(generated)generated.textContent=now
@@ -60,8 +68,9 @@ function preparePrint(reportTitle:string){
 }
 
 export default function PrintButton({reportTitle}:{reportTitle:string}){
+  const {language}=useI18n()
   useEffect(()=>{
-    const before=()=>preparePrint(reportTitle)
+    const before=()=>preparePrint(reportTitle,language)
     const after=()=>{
       document.body.classList.remove('report-print-mode')
       document.body.removeAttribute('data-print-report')
@@ -72,10 +81,10 @@ export default function PrintButton({reportTitle}:{reportTitle:string}){
       window.removeEventListener('beforeprint',before)
       window.removeEventListener('afterprint',after)
     }
-  },[reportTitle])
+  },[language,reportTitle])
 
   const print=()=>{
-    preparePrint(reportTitle)
+    preparePrint(reportTitle,language)
     window.requestAnimationFrame(()=>window.print())
   }
 
