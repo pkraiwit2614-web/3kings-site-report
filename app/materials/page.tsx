@@ -65,7 +65,7 @@ export default function MaterialsPage(){
     const loader=createLiveLoader({
       load:async(signal)=>{
         const [p,m,pr,prLinks,t,sync]=await Promise.all([
-          s.from('projects').select('*').eq('active',true).order('sort_order').abortSignal(signal),
+          s.from('projects').select('*').or('active.eq.true,code.eq.AV-P3').order('sort_order').abortSignal(signal),
           s.from('materials').select('*').order('project_id').order('source_row').abortSignal(signal),
           s.from('procurement_items').select('*').order('source_updated_at',{ascending:false}).order('source_row').abortSignal(signal),
           s.from('procurement_item_projects').select('procurement_item_id,project_id').abortSignal(signal),
@@ -195,7 +195,7 @@ export default function MaterialsPage(){
             onChange={e=>setQ(e.target.value)}
             style={{minWidth:260,padding:'7px 9px',fontSize:12,borderRadius:9}}
           />
-          <select value={project} onChange={e=>setProject(e.target.value)} style={{minWidth:130,maxWidth:180,padding:'7px 9px',fontSize:12,borderRadius:9}}><option value="">ทุก Plot</option>{projects.filter(p=>/^AV-P[6-9]$/.test(p.code)).map(p=><option key={p.id} value={p.id}>{p.code} — {p.name}</option>)}</select>
+          <select value={project} onChange={e=>setProject(e.target.value)} style={{minWidth:130,maxWidth:180,padding:'7px 9px',fontSize:12,borderRadius:9}}><option value="">ทุก Plot</option>{projects.filter(p=>/^AV-P(?:3|[6-9])$/.test(p.code)).map(p=><option key={p.id} value={p.id}>{p.code} — {p.name}</option>)}</select>
           <select value={orderStatus} onChange={e=>setOrderStatus(e.target.value)} style={{minWidth:150,maxWidth:190,padding:'7px 9px',fontSize:12,borderRadius:9}}>
             <option value="">ทุกสถานะการสั่งซื้อ</option>
             <option value="สั่งแล้ว">สั่งแล้ว</option>
