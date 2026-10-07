@@ -10,6 +10,7 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://wtqubwdduz
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_Ruyka15H3QApZKY9q2U-Vg_CjmEuMRX'
 const GATEWAY_MODEL = 'google/gemini-2.5-flash-lite'
 const GEMINI_EN_MODEL = 'gemini-3.5-flash-lite'
+const GEMINI_FALLBACK_MODEL = 'gemini-3.6-flash'
 const GEMINI_RU_MODEL = 'gemini-3.8-flash'
 const MAX_TEXTS = 30
 const MAX_TEXT_LENGTH = 5000
@@ -42,7 +43,9 @@ function systemPrompt(language:TargetLanguage,strict=false){
     'Return only JSON matching exactly: {"translations":["..."]}. Keep the same array length and order.',
     'Preserve dates, numbers, percentages, units, punctuation and line breaks wherever practical.',
     'DO NOT translate or alter codes/IDs/PO No./PR No./Room No./Plot No., model numbers, file names, URLs, phone numbers, or technical abbreviations.',
-    'Preserve personal names and nicknames exactly in their original script. Translate only the surrounding job role or sentence.',
+    'Preserve exact personal names, company names, supplier names and nicknames in their original script. Translate the surrounding role, status, action and description.',
+    'Do not leave Thai operational/UI wording untranslated. Thai script may remain only inside an actual proper name, company name, supplier name or nickname.',
+    'Words and phrases such as งาน, ติดตั้ง, รอ, เสร็จ, ทำ, เหลือ, ระบบ, วัสดุ, รายการ, รายละเอียด, หมายเหตุ, สถานะ, ผู้รับผิดชอบ, ยังไม่, ค้าง, ตรวจรับ, จัดส่ง, แผนงาน and ความคืบหน้า must be translated.',
     'Use these standard terms consistently and keep the English technical term when it is the site standard:',
     'Defect = Defect; Handover = Handover; Skim Coat = Skim Coat; Self Levelling = Self Levelling; FCU = FCU; Floor Drain = Floor Drain; P-Trap = P-Trap; Procurement = Procurement; PO = PO; Material Delivery = Material Delivery; RSE = RSE; VG = VG.',
     'For Russian, keep the listed technical English terms unchanged when site staff normally use them, and translate the surrounding explanation naturally.',
@@ -91,7 +94,9 @@ class TranslationProviderError extends Error{
 }
 
 const THAI_CHAR=/[\u0E00-\u0E7F]/g
-const OPERATIONAL_THAI=/(งาน|ติดตั้ง|รอ|เสร็จ|ทำ|เหลือ|เข้า|ส่ง|สั่ง|ตรวจ|แก้|วัสดุ|ของ|ช่าง|ระบบ|กระเบื้อง|สี|ห้อง|อาคาร|บันได|สระ|ประตู|ผนัง|พื้น|ฝ้า|น้ำ|ไฟ|ผู้รับเหมา|กำหนด|ติดตาม|จัดซื้อ|ส่งมอบ|ปิด)/
+const UNTRANSLATED_THAI=/(งาน|ติดตั้ง|รอ|เสร็จ|ทำ|เหลือ|เข้า|ส่ง|สั่ง|ตรวจ|แก้|วัสดุ|ของ|ระบบ|กระเบื้อง|สี|ห้อง|อาคาร|บันได|สระ|ประตู|ผนัง|พื้น|ฝ้า|น้ำ|ไฟ|ผู้รับเหมา|กำหนด|ติดตาม|จัดซื้อ|จัดจ้าง|ส่งมอบ|ปิด|เปิด|ขน|เตรียม|เท|ปรับ|เก็บ|ล้าง|ซ่อม|รื้อ|เจาะ|เดินท่อ|ทดสอบ|ทำความสะอาด|ยังไม่|เรียบร้อย|รอของ|นัด|ทั้งหมด|ล่าสุด|วันนี้|เมื่อวาน|พรุ่งนี้|รายการ|รายละเอียด|หมายเหตุ|สถานะ|ผู้รับผิดชอบ|ค้นหา|เลือก|เพิ่ม|ลบ|บันทึก|ยืนยัน|ยกเลิก|ลองใหม่|กำลังโหลด|ไม่สำเร็จ|ไม่มี|ค้าง|จำนวน|วันที่|เวลา|หน้างาน|ความคืบหน้า|เป้าหมาย|แผนงาน|แรงงาน|ค่าแรง|จัดส่ง|รับของ|ตรวจรับ|อนุมัติ|ประมาณ|คาดว่า|แล้วเสร็จ|เริ่ม|สิ้นสุด)/
+const THAI_ROLE=/ช่าง/
+const PROTECTED_NAME_HINT=/(บริษัท|หจก|จำกัด|การช่าง|ก่อสร้าง|คอนสตรัคชั่น|construction|supplier|vendor)/i
 
 function translationPayload(language:TargetLanguage,texts:string[],strict=false){
   return systemPrompt(language,strict)+'\n\nINPUT_JSON:\n'+JSON.stringify({texts})
@@ -101,12 +106,26 @@ function thaiCount(value:string){
   return (value.match(THAI_CHAR)||[]).length
 }
 
+function isLikelyProtectedName(value:string){
+  return PROTECTED_NAME_HINT.test(value)&&!/(ติดตั้ง|รอ|เสร็จ|ทำ|เหลือ|ส่ง|สั่ง|ตรวจ|แก้|ระบบ|กำหนด|ติดตาม|จัดซื้อ|จัดจ้าง|ส่งมอบ|ขน|เตรียม|เท|ปรับ|เก็บ|ล้าง|ซ่อม|รื้อ|เจาะ|ทดสอบ|ทำความสะอาด|ยังไม่|ค้าง)/.test(value)
+}
+
+function hasUntranslatedThai(value:string){
+  const withoutProtectedCompanyTerm=value.replace(/การช่าง/g,'')
+  return UNTRANSLATED_THAI.test(value)||THAI_ROLE.test(withoutProtectedCompanyTerm)
+}
+
 function needsLanguageRetry(source:string,translated:string){
   const sourceThai=thaiCount(source)
-  if(sourceThai<4||!OPERATIONAL_THAI.test(source))return false
-  const outputThai=thaiCount(translated)
-  if(translated.trim()===source.trim())return true
-  return outputThai>Math.max(4,Math.floor(sourceThai*0.45))
+  if(!sourceThai)return false
+  const sourceTrim=source.trim()
+  const translatedTrim=translated.trim()
+  if(!translatedTrim)return true
+  if(translatedTrim===sourceTrim){
+    if(isLikelyProtectedName(sourceTrim))return false
+    return hasUntranslatedThai(sourceTrim)
+  }
+  return hasUntranslatedThai(translatedTrim)
 }
 
 function parseTranslations(content:string,texts:string[]){
@@ -127,13 +146,13 @@ async function geminiGenerate(model:string,language:TargetLanguage,texts:string[
     body:JSON.stringify({
       contents:[{role:'user',parts:[{text:translationPayload(language,texts,strict)}]}],
       generationConfig:{
-        temperature:0,
         responseMimeType:'application/json',
-        maxOutputTokens:12000,
+        maxOutputTokens:8000,
+        thinkingConfig:{thinkingLevel:'low'},
       },
     }),
     cache:'no-store',
-    signal:AbortSignal.timeout(22000),
+    signal:AbortSignal.timeout(4500),
   })
   const json=await response.json().catch(()=>null) as any
   if(!response.ok){
@@ -146,9 +165,7 @@ async function geminiGenerate(model:string,language:TargetLanguage,texts:string[
   return parseTranslations(content,texts)
 }
 
-async function translateViaGemini(language:TargetLanguage,texts:string[]){
-  const configured=String(process.env.GEMINI_TRANSLATION_MODEL||'').trim()
-  const model=configured||(language==='ru'?GEMINI_RU_MODEL:GEMINI_EN_MODEL)
+async function translateWithGeminiModel(model:string,language:TargetLanguage,texts:string[]){
   const first=await geminiGenerate(model,language,texts,false)
   const retryIndexes:number[]=[]
   first.forEach((translated,index)=>{
@@ -163,6 +180,31 @@ async function translateViaGemini(language:TargetLanguage,texts:string[]){
   const stillInvalid=merged.some((translated,index)=>needsLanguageRetry(texts[index],translated))
   if(stillInvalid)throw new TranslationProviderError('gemini',422,'gemini_incomplete_translation')
   return merged
+}
+
+async function translateViaGemini(language:TargetLanguage,texts:string[]){
+  const configured=String(process.env.GEMINI_TRANSLATION_MODEL||'').trim()
+  const preferred=language==='ru'
+    ? [configured,GEMINI_FALLBACK_MODEL,GEMINI_RU_MODEL]
+    : [configured,GEMINI_EN_MODEL,GEMINI_FALLBACK_MODEL]
+  const models=Array.from(new Set(preferred.filter(Boolean)))
+  let lastError:unknown=null
+
+  for(const model of models){
+    try{
+      return await translateWithGeminiModel(model,language,texts)
+    }catch(error){
+      lastError=error
+      console.warn('i18n Gemini model attempt failed',{
+        model,
+        status:error instanceof TranslationProviderError?error.status:500,
+        errorType:error instanceof Error?error.message:'unknown_error',
+      })
+    }
+  }
+
+  if(lastError instanceof Error)throw lastError
+  throw new TranslationProviderError('gemini',502,'gemini_all_models_failed')
 }
 
 async function translateViaGateway(language:TargetLanguage,texts:string[]){
@@ -182,7 +224,7 @@ async function translateViaGateway(language:TargetLanguage,texts:string[]){
       ],
       temperature:0,
       stream:false,
-      max_tokens:12000,
+      max_tokens:8000,
       providerOptions:{
         gateway:{
           disallowPromptTraining:true,
@@ -190,7 +232,7 @@ async function translateViaGateway(language:TargetLanguage,texts:string[]){
       },
     }),
     cache:'no-store',
-    signal:AbortSignal.timeout(22000),
+    signal:AbortSignal.timeout(4000),
   })
 
   const json=await gateway.json().catch(()=>null) as any
