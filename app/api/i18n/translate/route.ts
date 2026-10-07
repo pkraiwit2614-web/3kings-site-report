@@ -146,13 +146,13 @@ async function geminiGenerate(model:string,language:TargetLanguage,texts:string[
     body:JSON.stringify({
       contents:[{role:'user',parts:[{text:translationPayload(language,texts,strict)}]}],
       generationConfig:{
-        temperature:0,
         responseMimeType:'application/json',
-        maxOutputTokens:12000,
+        maxOutputTokens:8000,
+        thinkingConfig:{thinkingLevel:'low'},
       },
     }),
     cache:'no-store',
-    signal:AbortSignal.timeout(22000),
+    signal:AbortSignal.timeout(5500),
   })
   const json=await response.json().catch(()=>null) as any
   if(!response.ok){
@@ -185,8 +185,8 @@ async function translateWithGeminiModel(model:string,language:TargetLanguage,tex
 async function translateViaGemini(language:TargetLanguage,texts:string[]){
   const configured=String(process.env.GEMINI_TRANSLATION_MODEL||'').trim()
   const preferred=language==='ru'
-    ? [configured,GEMINI_RU_MODEL,GEMINI_FALLBACK_MODEL,GEMINI_EN_MODEL]
-    : [configured,GEMINI_EN_MODEL,GEMINI_FALLBACK_MODEL,GEMINI_RU_MODEL]
+    ? [configured,GEMINI_FALLBACK_MODEL,GEMINI_RU_MODEL]
+    : [configured,GEMINI_EN_MODEL,GEMINI_FALLBACK_MODEL]
   const models=Array.from(new Set(preferred.filter(Boolean)))
   let lastError:unknown=null
 
