@@ -260,6 +260,22 @@ async function translateBatch(language:TargetLanguage,texts:string[]){
   return translateViaGateway(language,texts)
 }
 
+export async function GET(){
+  if(process.env.VERCEL_ENV!=='preview')return NextResponse.json({ok:false,error:'not_found'},{status:404})
+  const texts=[
+    'Plot 8 — ช่างอ๊อด ทำโครงหลังคาระเบียง และติดตั้ง FCU ชั้น 2',
+    'A419 เหลือ Floor Drain รอของ • PO PL0000918 ยังต้องติดตาม',
+    'สถานะวัสดุ: ยังไม่สั่ง • ผู้รับผิดชอบ พี่ไก่',
+    'หมายเหตุ: นัดตรวจรับวันที่ 8/10/2026',
+  ]
+  try{
+    const [en,ru]=await Promise.all([translateBatch('en',texts),translateBatch('ru',texts)])
+    return NextResponse.json({ok:true,texts,en,ru},{headers:{'Cache-Control':'no-store'}})
+  }catch(error){
+    return NextResponse.json({ok:false,error:error instanceof Error?error.message:'translation_failed'},{status:500,headers:{'Cache-Control':'no-store'}})
+  }
+}
+
 export async function POST(request:NextRequest){
   try{
     const user=await authenticate(request)
