@@ -10,6 +10,7 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://wtqubwdduz
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_Ruyka15H3QApZKY9q2U-Vg_CjmEuMRX'
 const GATEWAY_MODEL = 'google/gemini-2.5-flash-lite'
 const GEMINI_EN_MODEL = 'gemini-3.5-flash-lite'
+const GEMINI_FALLBACK_MODEL = 'gemini-3.6-flash'
 const GEMINI_RU_MODEL = 'gemini-3.8-flash'
 const MAX_TEXTS = 30
 const MAX_TEXT_LENGTH = 5000
@@ -164,9 +165,7 @@ async function geminiGenerate(model:string,language:TargetLanguage,texts:string[
   return parseTranslations(content,texts)
 }
 
-async function translateViaGemini(language:TargetLanguage,texts:string[]){
-  const configured=String(process.env.GEMINI_TRANSLATION_MODEL||'').trim()
-  const model=configured||(language==='ru'?GEMINI_RU_MODEL:GEMINI_EN_MODEL)
+async function translateWithGeminiModel(model:string,language:TargetLanguage,texts:string[]){
   const first=await geminiGenerate(model,language,texts,false)
   const retryIndexes:number[]=[]
   first.forEach((translated,index)=>{
@@ -181,6 +180,31 @@ async function translateViaGemini(language:TargetLanguage,texts:string[]){
   const stillInvalid=merged.some((translated,index)=>needsLanguageRetry(texts[index],translated))
   if(stillInvalid)throw new TranslationProviderError('gemini',422,'gemini_incomplete_translation')
   return merged
+}
+
+async function translateViaGemini(language:TargetLanguage,texts:string[]){
+  const configured=String(process.env.GEMINI_TRANSLATION_MODEL||'').trim()
+  const preferred=language==='ru'
+    ? [configured,GEMINI_RU_MODEL,GEMINI_FALLBACK_MODEL,GEMINI_EN_MODEL]
+    : [configured,GEMINI_EN_MODEL,GEMINI_FALLBACK_MODEL,GEMINI_RU_MODEL]
+  const models=Array.from(new Set(preferred.filter(Boolean)))
+  let lastError:unknown=null
+
+  for(const model of models){
+    try{
+      return await translateWithGeminiModel(model,language,texts)
+    }catch(error){
+      lastError=error
+      console.warn('i18n Gemini model attempt failed',{
+        model,
+        status:error instanceof TranslationProviderError?error.status:500,
+        errorType:error instanceof Error?error.message:'unknown_error',
+      })
+    }
+  }
+
+  if(lastError instanceof Error)throw lastError
+  throw new TranslationProviderError('gemini',502,'gemini_all_models_failed')
 }
 
 async function translateViaGateway(language:TargetLanguage,texts:string[]){
