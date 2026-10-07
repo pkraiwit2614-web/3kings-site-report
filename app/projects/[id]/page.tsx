@@ -13,6 +13,7 @@ import type{Project,ScheduleTask} from '@/lib/types'
 type TaskView='all'|'delayed'|'blockers'|'completed'
 
 const pictureProgressFolders:Record<string,string>={
+  'AV-P3':'https://drive.google.com/drive/folders/16VSm6UTJpZ7vZMHwedQzaKa6xbAAEDBc',
   'AV-P6':'https://drive.google.com/drive/folders/18WfplWKvZ7DWfjVgO7oVHA4dtlbuuzfr',
   'AV-P7':'https://drive.google.com/drive/folders/1ZmlxctN0yAXamSmXTNzjx0t3GJu_aLiI',
   'AV-P8':'https://drive.google.com/drive/folders/1T1eWjtfuNhtI8hrm-Jac5tKeZNfbJaXY',
@@ -122,7 +123,7 @@ export default function ProjectPage(){
   return <AppShell>
     <PageHeader
       title={p?`${p.code} — ${p.name}`:'รายละเอียด Plot'}
-      subtitle={`เป้าส่งมอบ: ${dateTH(p?.target_handover)} • แผน ${pct(avgPlan)} • หน้างานจริง ${pct(avgActual)}`}
+      subtitle={workTasks.length?`เป้าส่งมอบ: ${dateTH(p?.target_handover)} • แผน ${pct(avgPlan)} • หน้างานจริง ${pct(avgActual)}`:`เป้าส่งมอบ: ${dateTH(p?.target_handover)} • ยังไม่มี Schedule ที่ยืนยัน`}
       action={<div className="row">
         <Link className="button" href="/weekly">← รายงานประจำสัปดาห์</Link>
         {drivePhotoUrl&&<Link className="button" href={drivePhotoUrl} target="_blank" rel="noreferrer">รูปความคืบหน้า (Drive) ↗</Link>}
