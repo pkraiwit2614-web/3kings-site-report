@@ -42,7 +42,9 @@ function systemPrompt(language:TargetLanguage,strict=false){
     'Return only JSON matching exactly: {"translations":["..."]}. Keep the same array length and order.',
     'Preserve dates, numbers, percentages, units, punctuation and line breaks wherever practical.',
     'DO NOT translate or alter codes/IDs/PO No./PR No./Room No./Plot No., model numbers, file names, URLs, phone numbers, or technical abbreviations.',
-    'Preserve personal names and nicknames exactly in their original script. Translate only the surrounding job role or sentence.',
+    'Preserve exact personal names, company names, supplier names and nicknames in their original script. Translate the surrounding role, status, action and description.',
+    'Do not leave Thai operational/UI wording untranslated. Thai script may remain only inside an actual proper name, company name, supplier name or nickname.',
+    'Words and phrases such as งาน, ติดตั้ง, รอ, เสร็จ, ทำ, เหลือ, ระบบ, วัสดุ, รายการ, รายละเอียด, หมายเหตุ, สถานะ, ผู้รับผิดชอบ, ยังไม่, ค้าง, ตรวจรับ, จัดส่ง, แผนงาน and ความคืบหน้า must be translated.',
     'Use these standard terms consistently and keep the English technical term when it is the site standard:',
     'Defect = Defect; Handover = Handover; Skim Coat = Skim Coat; Self Levelling = Self Levelling; FCU = FCU; Floor Drain = Floor Drain; P-Trap = P-Trap; Procurement = Procurement; PO = PO; Material Delivery = Material Delivery; RSE = RSE; VG = VG.',
     'For Russian, keep the listed technical English terms unchanged when site staff normally use them, and translate the surrounding explanation naturally.',
@@ -91,7 +93,8 @@ class TranslationProviderError extends Error{
 }
 
 const THAI_CHAR=/[\u0E00-\u0E7F]/g
-const OPERATIONAL_THAI=/(งาน|ติดตั้ง|รอ|เสร็จ|ทำ|เหลือ|เข้า|ส่ง|สั่ง|ตรวจ|แก้|วัสดุ|ของ|ช่าง|ระบบ|กระเบื้อง|สี|ห้อง|อาคาร|บันได|สระ|ประตู|ผนัง|พื้น|ฝ้า|น้ำ|ไฟ|ผู้รับเหมา|กำหนด|ติดตาม|จัดซื้อ|ส่งมอบ|ปิด)/
+const UNTRANSLATED_THAI=/(^|[\\s—,:;(\\[\\/])ช่าง|งาน|ติดตั้ง|รอ|เสร็จ|ทำ|เหลือ|เข้า|ส่ง|สั่ง|ตรวจ|แก้|วัสดุ|ของ|ระบบ|กระเบื้อง|สี|ห้อง|อาคาร|บันได|สระ|ประตู|ผนัง|พื้น|ฝ้า|น้ำ|ไฟ|ผู้รับเหมา|กำหนด|ติดตาม|จัดซื้อ|จัดจ้าง|ส่งมอบ|ปิด|เปิด|ขน|เตรียม|เท|ปรับ|เก็บ|ล้าง|ซ่อม|รื้อ|เจาะ|เดินท่อ|ทดสอบ|ทำความสะอาด|ยังไม่|เรียบร้อย|รอของ|นัด|ทั้งหมด|ล่าสุด|วันนี้|เมื่อวาน|พรุ่งนี้|รายการ|รายละเอียด|หมายเหตุ|สถานะ|ผู้รับผิดชอบ|ค้นหา|เลือก|เพิ่ม|ลบ|บันทึก|ยืนยัน|ยกเลิก|ลองใหม่|กำลังโหลด|ไม่สำเร็จ|ไม่มี|ค้าง|จำนวน|วันที่|เวลา|หน้างาน|ความคืบหน้า|เป้าหมาย|แผนงาน|แรงงาน|ค่าแรง|จัดส่ง|รับของ|ตรวจรับ|อนุมัติ|ประมาณ|คาดว่า|แล้วเสร็จ|เริ่ม|สิ้นสุด)/
+const PROTECTED_NAME_HINT=/(บริษัท|หจก\\.?|จำกัด|การช่าง|ก่อสร้าง|คอนสตรัคชั่น|construction|co\\.?\\s*ltd|supplier|vendor)/i
 
 function translationPayload(language:TargetLanguage,texts:string[],strict=false){
   return systemPrompt(language,strict)+'\n\nINPUT_JSON:\n'+JSON.stringify({texts})
@@ -101,12 +104,21 @@ function thaiCount(value:string){
   return (value.match(THAI_CHAR)||[]).length
 }
 
+function isLikelyProtectedName(value:string){
+  return PROTECTED_NAME_HINT.test(value)&&!/(ติดตั้ง|รอ|เสร็จ|ทำ|เหลือ|ส่ง|สั่ง|ตรวจ|แก้|ระบบ|กำหนด|ติดตาม|จัดซื้อ|จัดจ้าง|ส่งมอบ|ขน|เตรียม|เท|ปรับ|เก็บ|ล้าง|ซ่อม|รื้อ|เจาะ|ทดสอบ|ทำความสะอาด|ยังไม่|ค้าง)/.test(value)
+}
+
 function needsLanguageRetry(source:string,translated:string){
   const sourceThai=thaiCount(source)
-  if(sourceThai<4||!OPERATIONAL_THAI.test(source))return false
-  const outputThai=thaiCount(translated)
-  if(translated.trim()===source.trim())return true
-  return outputThai>Math.max(4,Math.floor(sourceThai*0.45))
+  if(!sourceThai)return false
+  const sourceTrim=source.trim()
+  const translatedTrim=translated.trim()
+  if(!translatedTrim)return true
+  if(translatedTrim===sourceTrim){
+    if(isLikelyProtectedName(sourceTrim))return false
+    return UNTRANSLATED_THAI.test(sourceTrim)
+  }
+  return UNTRANSLATED_THAI.test(translatedTrim)
 }
 
 function parseTranslations(content:string,texts:string[]){
