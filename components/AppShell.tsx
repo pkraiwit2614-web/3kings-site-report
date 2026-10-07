@@ -18,11 +18,10 @@ const standardNav: NavItem[] = [
   ['/', 'Dashboard'],
   ['/presentation', 'Executive Presentation'],
   ['/schedule', 'แผนงานที่กำหนด'],
-  ['/materials', 'วัสดุ เครื่องมือและผู้รับเหมา'],
+  ['/materials', 'วัสดุ / เครื่องมือ / จัดซื้อจัดจ้าง'],
   ['/defect-flow', 'Defect Report'],
   ['/reports', 'Site Operations'],
   ['/site-photos', 'รูปภาพหน้างาน'],
-  ['/procurement', 'การจัดซื้อ/จัดจ้าง'],
   ['/weekly', 'รายงานการทำงานประจำสัปดาห์'],
   ['/calendar', 'Work Calendar']
 ]
@@ -59,6 +58,7 @@ function roleLabel(role:AccessRole|null){
 }
 
 function navIsActive(path:string,href:string){
+  if(href==='/materials') return path==='/materials'||path==='/procurement'
   if(href==='/defect-flow') return path==='/defect-flow'||path==='/defects'
   if(href==='/reports/labour') return path==='/reports/labour'
   if(href==='/reports') return path==='/reports'||(path.startsWith('/reports/')&&path!=='/reports/labour')
@@ -217,6 +217,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   if (!ready || (actualRole!==null&&!previewReady)) return <div className="loading-screen">{accessError ? <div role="alert"><p>ตรวจสอบสิทธิ์ไม่สำเร็จ กรุณาตรวจการเชื่อมต่อแล้วลองใหม่</p><button type="button" onClick={() => setAccessAttempt(v => v + 1)}>ลองใหม่</button></div> : 'กำลังโหลดระบบ…'}</div>
 
   const extraActive = extraNav.some(([href]) => navIsActive(path,href))
+  const isMaterialsProcurementSection = path==='/materials'||path==='/procurement'
   const isDefectSection = path==='/defect-flow'||path==='/defects'
   const isSiteOperationsSection = path==='/reports'||path==='/reports/labour'
   const isOwnerToolsSection = actualRole==='owner'&&(path==='/users'||path==='/photo-mapping'||path==='/data-health')
@@ -234,6 +235,10 @@ export default function AppShell({ children }: { children: ReactNode }) {
         <div><b>Previewing as: {ROLE_PREVIEW_LABELS[previewRole]}</b><span>UI preview only · Actual access remains {actualRole?ROLE_PREVIEW_LABELS[actualRole]:'Unknown'}</span></div>
         <button type="button" onClick={exitPreview}>Exit Preview</button>
       </div>}
+      {isMaterialsProcurementSection&&<nav className="defect-section-tabs" aria-label="Materials and procurement navigation">
+        <Link href="/materials" className={path==='/materials'?'active':''}>วัสดุ เครื่องมือและผู้รับเหมา</Link>
+        <Link href="/procurement" className={path==='/procurement'?'active':''}>การจัดซื้อ/จัดจ้าง</Link>
+      </nav>}
       {isDefectSection&&<nav className="defect-section-tabs" aria-label="Defect navigation">
         <Link href="/defect-flow" className={path==='/defect-flow'?'active':''}>Live Handover / Defect Flow</Link>
         <Link href="/defects" className={path==='/defects'?'active':''}>Defect Report</Link>
