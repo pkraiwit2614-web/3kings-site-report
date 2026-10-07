@@ -31,6 +31,10 @@ const EXACT: Record<string, TranslationPair> = {
     "en": "Materials, Equipment & Contractors",
     "ru": "Материалы, оборудование и подрядчики"
   },
+  "วัสดุ / เครื่องมือ / จัดซื้อจัดจ้าง": {
+    "en": "Materials / Equipment / Procurement",
+    "ru": "Материалы / оборудование / закупки"
+  },
   "Defect Report": {
     "en": "Defect Report",
     "ru": "Отчёт по дефектам"
