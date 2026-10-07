@@ -108,6 +108,7 @@ function sourceIdentity(projectCode: string, category: string | null, taskName: 
 
 function mapProjectFromLocation(location: unknown): string | null {
   const s = String(location ?? '')
+  if (/Plot\s*3/i.test(s)) return 'AV-P3'
   if (/Plot\s*6/i.test(s)) return 'AV-P6'
   if (/Plot\s*7/i.test(s)) return 'AV-P7'
   if (/Plot\s*8/i.test(s)) return 'AV-P8'
@@ -119,7 +120,7 @@ function mapProjectsFromLocation(location: unknown): string[] {
   const s = String(location ?? '').normalize('NFKC').replace(/\s+/g, ' ').trim()
   const codes = new Set<string>()
 
-  for (const match of s.matchAll(/Plot\s*([6-9])/gi)) codes.add(`AV-P${match[1]}`)
+  for (const match of s.matchAll(/Plot\s*(3|[6-9])/gi)) codes.add(`AV-P${match[1]}`)
   if (/Above\s*Condo\s*A\b|Condo\s*Building\s*A\b/i.test(s)) codes.add('CONDO-A')
   if (/Above\s*Condo\s*B\b|Condo\s*Building\s*B\b/i.test(s)) codes.add('CONDO-B')
   if (/\bMirage\b/i.test(s)) codes.add('MIRAGE')
