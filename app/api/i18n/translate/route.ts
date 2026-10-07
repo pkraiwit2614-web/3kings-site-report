@@ -94,8 +94,8 @@ class TranslationProviderError extends Error{
 
 const THAI_CHAR=/[\u0E00-\u0E7F]/g
 const UNTRANSLATED_THAI=/(งาน|ติดตั้ง|รอ|เสร็จ|ทำ|เหลือ|เข้า|ส่ง|สั่ง|ตรวจ|แก้|วัสดุ|ของ|ระบบ|กระเบื้อง|สี|ห้อง|อาคาร|บันได|สระ|ประตู|ผนัง|พื้น|ฝ้า|น้ำ|ไฟ|ผู้รับเหมา|กำหนด|ติดตาม|จัดซื้อ|จัดจ้าง|ส่งมอบ|ปิด|เปิด|ขน|เตรียม|เท|ปรับ|เก็บ|ล้าง|ซ่อม|รื้อ|เจาะ|เดินท่อ|ทดสอบ|ทำความสะอาด|ยังไม่|เรียบร้อย|รอของ|นัด|ทั้งหมด|ล่าสุด|วันนี้|เมื่อวาน|พรุ่งนี้|รายการ|รายละเอียด|หมายเหตุ|สถานะ|ผู้รับผิดชอบ|ค้นหา|เลือก|เพิ่ม|ลบ|บันทึก|ยืนยัน|ยกเลิก|ลองใหม่|กำลังโหลด|ไม่สำเร็จ|ไม่มี|ค้าง|จำนวน|วันที่|เวลา|หน้างาน|ความคืบหน้า|เป้าหมาย|แผนงาน|แรงงาน|ค่าแรง|จัดส่ง|รับของ|ตรวจรับ|อนุมัติ|ประมาณ|คาดว่า|แล้วเสร็จ|เริ่ม|สิ้นสุด)/
-const THAI_ROLE=/(^|\\s|—|,|:|;|\\(|\\/)ช่าง/
-const PROTECTED_NAME_HINT=/(บริษัท|หจก\\.?|จำกัด|การช่าง|ก่อสร้าง|คอนสตรัคชั่น|construction|co\\.?\\s*ltd|supplier|vendor)/i
+const THAI_ROLE=/ช่าง/
+const PROTECTED_NAME_HINT=/(บริษัท|หจก|จำกัด|การช่าง|ก่อสร้าง|คอนสตรัคชั่น|construction|supplier|vendor)/i
 
 function translationPayload(language:TargetLanguage,texts:string[],strict=false){
   return systemPrompt(language,strict)+'\n\nINPUT_JSON:\n'+JSON.stringify({texts})
@@ -109,6 +109,11 @@ function isLikelyProtectedName(value:string){
   return PROTECTED_NAME_HINT.test(value)&&!/(ติดตั้ง|รอ|เสร็จ|ทำ|เหลือ|ส่ง|สั่ง|ตรวจ|แก้|ระบบ|กำหนด|ติดตาม|จัดซื้อ|จัดจ้าง|ส่งมอบ|ขน|เตรียม|เท|ปรับ|เก็บ|ล้าง|ซ่อม|รื้อ|เจาะ|ทดสอบ|ทำความสะอาด|ยังไม่|ค้าง)/.test(value)
 }
 
+function hasUntranslatedThai(value:string){
+  const withoutProtectedCompanyTerm=value.replace(/การช่าง/g,'')
+  return UNTRANSLATED_THAI.test(value)||THAI_ROLE.test(withoutProtectedCompanyTerm)
+}
+
 function needsLanguageRetry(source:string,translated:string){
   const sourceThai=thaiCount(source)
   if(!sourceThai)return false
@@ -117,9 +122,9 @@ function needsLanguageRetry(source:string,translated:string){
   if(!translatedTrim)return true
   if(translatedTrim===sourceTrim){
     if(isLikelyProtectedName(sourceTrim))return false
-    return UNTRANSLATED_THAI.test(sourceTrim)||THAI_ROLE.test(sourceTrim)
+    return hasUntranslatedThai(sourceTrim)
   }
-  return UNTRANSLATED_THAI.test(translatedTrim)||THAI_ROLE.test(translatedTrim)
+  return hasUntranslatedThai(translatedTrim)
 }
 
 function parseTranslations(content:string,texts:string[]){
