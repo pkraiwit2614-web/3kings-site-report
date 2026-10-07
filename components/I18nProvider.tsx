@@ -24,8 +24,8 @@ const TEXT_SKIP_SELECTOR='script,style,noscript,textarea,code,pre,[data-i18n-ski
 const ATTR_SKIP_SELECTOR='script,style,noscript,code,pre,[data-i18n-skip]'
 const THAI_RE=/[\u0E00-\u0E7F]/
 const UNTRANSLATED_THAI_RE=/(งาน|ติดตั้ง|รอ|เสร็จ|ทำ|เหลือ|เข้า|ส่ง|สั่ง|ตรวจ|แก้|วัสดุ|ของ|ระบบ|กระเบื้อง|สี|ห้อง|อาคาร|บันได|สระ|ประตู|ผนัง|พื้น|ฝ้า|น้ำ|ไฟ|ผู้รับเหมา|กำหนด|ติดตาม|จัดซื้อ|จัดจ้าง|ส่งมอบ|ปิด|เปิด|ขน|เตรียม|เท|ปรับ|เก็บ|ล้าง|ซ่อม|รื้อ|เจาะ|เดินท่อ|ทดสอบ|ทำความสะอาด|ยังไม่|เรียบร้อย|รอของ|นัด|ทั้งหมด|ล่าสุด|วันนี้|เมื่อวาน|พรุ่งนี้|รายการ|รายละเอียด|หมายเหตุ|สถานะ|ผู้รับผิดชอบ|ค้นหา|เลือก|เพิ่ม|ลบ|บันทึก|ยืนยัน|ยกเลิก|ลองใหม่|กำลังโหลด|ไม่สำเร็จ|ไม่มี|ค้าง|จำนวน|วันที่|เวลา|หน้างาน|ความคืบหน้า|เป้าหมาย|แผนงาน|แรงงาน|ค่าแรง|จัดส่ง|รับของ|ตรวจรับ|อนุมัติ|ประมาณ|คาดว่า|แล้วเสร็จ|เริ่ม|สิ้นสุด)/
-const THAI_ROLE_RE=/(^|\\s|—|,|:|;|\\(|\\/)ช่าง/
-const PROTECTED_NAME_HINT_RE=/(บริษัท|หจก\\.?|จำกัด|การช่าง|ก่อสร้าง|คอนสตรัคชั่น|construction|co\\.?\\s*ltd|supplier|vendor)/i
+const THAI_ROLE_RE=/ช่าง/
+const PROTECTED_NAME_HINT_RE=/(บริษัท|หจก|จำกัด|การช่าง|ก่อสร้าง|คอนสตรัคชั่น|construction|supplier|vendor)/i
 const CACHE_VERSION='v3-complete-language'
 const MAX_CACHE_ENTRIES=320
 const MAX_CACHE_CHARS=360000
@@ -43,7 +43,8 @@ function preserveOuterWhitespace(original:string,translated:string){
 }
 
 function containsUntranslatedThai(value:string){
-  return THAI_RE.test(value)&&(UNTRANSLATED_THAI_RE.test(value)||THAI_ROLE_RE.test(value))
+  const withoutProtectedCompanyTerm=value.replace(/การช่าง/g,'')
+  return THAI_RE.test(value)&&(UNTRANSLATED_THAI_RE.test(value)||THAI_ROLE_RE.test(withoutProtectedCompanyTerm))
 }
 
 function isLikelyProtectedName(value:string){
