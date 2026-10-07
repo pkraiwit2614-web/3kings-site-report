@@ -10,6 +10,7 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://wtqubwdduz
 const SUPABASE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_Ruyka15H3QApZKY9q2U-Vg_CjmEuMRX'
 
 const PROJECT_SHEETS: Record<string, { sheet: string }> = {
+  'AV-P3': { sheet: 'ติดตามความคืบหน้าP3' },
   'AV-P6': { sheet: 'ติดตามความคืบหน้าP6' },
   'AV-P7': { sheet: 'ติดตามความคืบหน้าP7' },
   'AV-P8': { sheet: 'ติดตามความคืบหน้าP8' },
