@@ -194,9 +194,9 @@ export default function ProcurementPage(){
 
   return <AppShell>
     {loadError&&<div className="panel" role="alert">โหลดข้อมูลไม่สำเร็จ ข้อมูลที่แสดงอาจเป็นข้อมูลเดิม กรุณาลองใหม่ <button type="button" className="button" onClick={()=>window.dispatchEvent(new Event('focus'))}>ลองใหม่</button></div>}
-    <PageHeader title="การจัดซื้อ/จัดจ้าง" subtitle="ค้นหาจากวัสดุ งาน ผู้ขาย ผู้รับเหมา เลข PO หรือสถานะ เพื่อดูว่าตอนนี้ติดอยู่ขั้นตอนไหนและต้องตามอะไรต่อ" action={<div className="header-actions">
-      <div className="update-meta"><span>ข้อมูลอัปเดต</span><b>{dateTimeTH(latestSyncAt)}</b></div>
-      <Link href="/?section=purchasing-followup#dashboard-purchasing" className="button">← Dashboard</Link>
+    <PageHeader title="การจัดซื้อ/จัดจ้าง" subtitle="ค้นหาจากวัสดุ งาน ผู้ขาย ผู้รับเหมา เลข PO หรือสถานะ เพื่อดูว่าตอนนี้ติดอยู่ขั้นตอนไหนและต้องตามอะไรต่อ" action={<div className="management-action-grid management-printable-actions">
+      <div className="management-action-meta"><span>ข้อมูลอัปเดต</span><b>{dateTimeTH(latestSyncAt)}</b></div>
+      <Link href="/?section=purchasing-followup#dashboard-purchasing" className="button management-action-dashboard">← Dashboard</Link>
     </div>}/>
     <ProcurementEditPanel/>
 
