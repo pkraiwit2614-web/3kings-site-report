@@ -152,7 +152,7 @@ async function geminiGenerate(model:string,language:TargetLanguage,texts:string[
       },
     }),
     cache:'no-store',
-    signal:AbortSignal.timeout(5500),
+    signal:AbortSignal.timeout(4500),
   })
   const json=await response.json().catch(()=>null) as any
   if(!response.ok){
@@ -224,7 +224,7 @@ async function translateViaGateway(language:TargetLanguage,texts:string[]){
       ],
       temperature:0,
       stream:false,
-      max_tokens:12000,
+      max_tokens:8000,
       providerOptions:{
         gateway:{
           disallowPromptTraining:true,
@@ -232,7 +232,7 @@ async function translateViaGateway(language:TargetLanguage,texts:string[]){
       },
     }),
     cache:'no-store',
-    signal:AbortSignal.timeout(22000),
+    signal:AbortSignal.timeout(4000),
   })
 
   const json=await gateway.json().catch(()=>null) as any
