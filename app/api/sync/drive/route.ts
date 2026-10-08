@@ -107,21 +107,31 @@ function sourceIdentity(projectCode: string, category: string | null, taskName: 
   return createHash('sha256').update(raw, 'utf8').digest('hex')
 }
 
+function plotCodesFromLocation(location: unknown): string[] {
+  const s = String(location ?? '').normalize('NFKC').replace(/\s+/g, ' ').trim()
+  const codes = new Set<string>()
+  // Read the entire numeric token: Plot 30 must never become Plot 3.
+  for (const match of s.matchAll(/\b(?:Plot\s*|AV-P\s*|P\s*)(\d+)(?:\s*[/,+&]\s*(?:Plot\s*|AV-P\s*|P\s*)?\d+)*(?![\w])/gi)) {
+    for (const number of match[0].match(/\d+/g) || []) {
+      if (['3','6','7','8','9'].includes(number)) codes.add(`AV-P${number}`)
+    }
+  }
+  // Keep existing non-P3 shorthand semantics unchanged in this scoped fix.
+  if (!codes.has('AV-P3')) {
+    return Array.from(new Set(Array.from(s.matchAll(/\bPlot\s*([6-9])\b/gi), match => `AV-P${match[1]}`)))
+  }
+  return Array.from(codes)
+}
+
 function mapProjectFromLocation(location: unknown): string | null {
-  const s = String(location ?? '')
-  if (/Plot\s*3/i.test(s)) return 'AV-P3'
-  if (/Plot\s*6/i.test(s)) return 'AV-P6'
-  if (/Plot\s*7/i.test(s)) return 'AV-P7'
-  if (/Plot\s*8/i.test(s)) return 'AV-P8'
-  if (/Plot\s*9/i.test(s)) return 'AV-P9'
-  return null
+  const codes = plotCodesFromLocation(location)
+  return ['AV-P3','AV-P6','AV-P7','AV-P8','AV-P9'].find(code => codes.includes(code)) || null
 }
 
 function mapProjectsFromLocation(location: unknown): string[] {
   const s = String(location ?? '').normalize('NFKC').replace(/\s+/g, ' ').trim()
-  const codes = new Set<string>()
+  const codes = new Set<string>(plotCodesFromLocation(s))
 
-  for (const match of s.matchAll(/Plot\s*(3|[6-9])/gi)) codes.add(`AV-P${match[1]}`)
   if (/Above\s*Condo\s*A\b|Condo\s*Building\s*A\b/i.test(s)) codes.add('CONDO-A')
   if (/Above\s*Condo\s*B\b|Condo\s*Building\s*B\b/i.test(s)) codes.add('CONDO-B')
   if (/\bMirage\b/i.test(s)) codes.add('MIRAGE')
@@ -359,7 +369,13 @@ async function parseMaterials(buffer: Buffer) {
 
   for (let i = h + 1; i < rows.length; i++) {
     const r = rows[i] as unknown[]
-    const projectCode = mapProjectFromLocation(valueByHeader(r, headers, 'สถานที่/หลัง'))
+    const location = valueByHeader(r, headers, 'สถานที่/หลัง')
+    const relatedPlots = mapProjectsFromLocation(location).filter(code => code.startsWith('AV-P'))
+    // A master-material row has one project_id. Never silently move a shared row to Plot 3.
+    if (relatedPlots.includes('AV-P3') && relatedPlots.length > 1) {
+      throw new Error(`Ambiguous shared Plot 3 material at row ${i + 1}; use separate source rows or the shared Purchasing sheet`)
+    }
+    const projectCode = mapProjectFromLocation(location)
     if (!projectCode) continue
     const itemName = text(valueByHeader(r, headers, 'รายการวัสดุ/งาน'))
     if (!itemName) continue
@@ -479,6 +495,14 @@ export async function POST(request: NextRequest) {
     if (!syncKey) return NextResponse.json({ ok: false, error: 'missing_sync_key' }, { status: 401 })
     if (kind !== 'schedule' && kind !== 'materials' && kind !== 'defects') {
       return NextResponse.json({ ok: false, error: 'invalid_kind' }, { status: 400 })
+    }
+
+    // Only defects has a transactional dry-run RPC. Fail closed for other kinds.
+    if (dryRun && kind !== 'defects') {
+      return NextResponse.json({ ok: false, error: 'dry_run_not_supported', writes_performed: false }, { status: 400 })
+    }
+    if (kind === 'materials' && sourceFile && /REFERENCE[ _-]*ONLY|PR[ _-]*Plot[ _-]*3[ _-]*Working/i.test(sourceFile)) {
+      return NextResponse.json({ ok: false, error: 'reference_or_working_pr_not_materials_master' }, { status: 422 })
     }
 
     const arrayBuffer = await request.arrayBuffer()

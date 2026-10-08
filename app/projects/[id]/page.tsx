@@ -35,6 +35,8 @@ function TaskFollowUp({task,compact=false}:{task:ScheduleTask,compact?:boolean})
 export default function ProjectPage(){
   const{id}=useParams<{id:string}>()
   const[p,setP]=useState<Project|null>(null)
+  const[loading,setLoading]=useState(true)
+  const[loadError,setLoadError]=useState(false)
   const[tasks,setTasks]=useState<ScheduleTask[]>([])
   const[reports,setReports]=useState<any[]>([])
   const[taskView,setTaskView]=useState<TaskView>('all')
@@ -55,16 +57,25 @@ export default function ProjectPage(){
 
   useEffect(()=>{
     const s=getSupabase()
+    let alive=true
+    setLoading(true)
+    setLoadError(false)
+    setP(null)
+    setTasks([])
+    setReports([])
     const since=new Date(Date.now()-7*86400000).toISOString().slice(0,10)
     Promise.all([
       s.from('projects').select('*').eq('id',id).single(),
       s.from('v_schedule_tasks').select('*').eq('project_id',id).order('planned_start'),
       s.from('daily_reports').select('id,report_date,total_manpower,summary,status,report_items(id,schedule_task_id,work_item,actual_progress,manpower,status,blocker,next_action,target_date,remarks)').eq('project_id',id).gte('report_date',since).order('report_date',{ascending:false})
     ]).then(([pr,t,r])=>{
+      if(!alive)return
+      if(pr.error||t.error||r.error){setLoadError(true);return}
       setP(pr.data as Project)
       setTasks((t.data||[])as ScheduleTask[])
       setReports(r.data||[])
-    })
+    }).catch(()=>{if(alive)setLoadError(true)}).finally(()=>{if(alive)setLoading(false)})
+    return()=>{alive=false}
   },[id])
 
   const workTasks=useMemo(()=>tasks.filter(t=>!isPlotSummaryTask(t)),[tasks])
@@ -123,7 +134,7 @@ export default function ProjectPage(){
   return <AppShell>
     <PageHeader
       title={p?`${p.code} — ${p.name}`:'รายละเอียด Plot'}
-      subtitle={workTasks.length?`เป้าส่งมอบ: ${dateTH(p?.target_handover)} • แผน ${pct(avgPlan)} • หน้างานจริง ${pct(avgActual)}`:`เป้าส่งมอบ: ${dateTH(p?.target_handover)} • ยังไม่มี Schedule ที่ยืนยัน`}
+      subtitle={loading?'กำลังโหลดข้อมูล…':loadError?'โหลดข้อมูลไม่สำเร็จ กรุณาลองใหม่':workTasks.length?`เป้าส่งมอบ: ${dateTH(p?.target_handover)} • แผน ${pct(avgPlan)} • หน้างานจริง ${pct(avgActual)}`:`เป้าส่งมอบ: ${dateTH(p?.target_handover)} • ยังไม่มีข้อมูลความคืบหน้าในระบบ`}
       action={<div className="row">
         <Link className="button" href="/weekly">← รายงานประจำสัปดาห์</Link>
         {drivePhotoUrl&&<Link className="button" href={drivePhotoUrl} target="_blank" rel="noreferrer">รูปความคืบหน้า (Drive) ↗</Link>}
@@ -131,7 +142,14 @@ export default function ProjectPage(){
       </div>}
     />
 
-    <section className="kpi-grid plot-kpi-grid">
+    {loadError&&<p role="alert" className="panel">โหลดข้อมูลโครงการไม่สำเร็จ กรุณารีเฟรชเพื่อลองใหม่</p>}
+    {!loading&&!loadError&&p?.code==='AV-P3'&&!workTasks.length&&<section className="panel">
+      <h2>แผนงาน Plot 3</h2>
+      <p>Master Schedule Rev.1 ลงวันที่ 28/09/2569 ระบุเป้าหมายเริ่มงานโครงสร้าง 15/10/2569</p>
+      <p>ยังไม่มีข้อมูล Schedule ที่ซิงก์เข้าระบบ จึงยังสรุปความคืบหน้าจริงหรือความล่าช้าไม่ได้</p>
+      <Link className="button" href="https://drive.google.com/file/d/1xpW4swPbe1KVsKMYDoHLDMDtcq9Ld2ml/view" target="_blank" rel="noreferrer">ดูแผนต้นฉบับ (Drive) ↗</Link>
+    </section>}
+    {!loading&&!loadError&&<section className="kpi-grid plot-kpi-grid">
       <button type="button" className={`kpi kpi-link kpi-all ${taskView==='all'?'active':''}`} onClick={()=>openTaskView('all')}>
         <span>งานทั้งหมด</span><b>{workTasks.length} <em>งาน</em></b><small>คลิกเพื่อดูรายละเอียดงานทั้งหมด</small>
       </button>
@@ -144,9 +162,9 @@ export default function ProjectPage(){
       <button type="button" className={`kpi kpi-link kpi-complete ${taskView==='completed'?'active':''}`} onClick={()=>openTaskView('completed')}>
         <span>งานเสร็จแล้ว</span><b>{completedTasks.length} <em>งาน</em></b><small>Actual Progress = 100%</small>
       </button>
-    </section>
+    </section>}
 
-    <section className="panel weekly-section" id="task-detail">
+    {!loading&&!loadError&&<section className="panel weekly-section" id="task-detail">
       <div className="schedule-sticky-tools" style={{marginBottom:8}}>
         <div className="panel-head" style={{background:'var(--surface)',border:'1px solid var(--line)',borderBottom:0,borderRadius:'12px 12px 0 0',padding:'10px 12px'}}>
           <div><h2>รายละเอียด — {viewMeta.title}</h2><span className="muted">{viewMeta.desc}</span></div><span className="pill">{filteredTasks.length} งาน</span>
@@ -171,9 +189,9 @@ export default function ProjectPage(){
         </div>
       </div>
       {!filteredTasks.length&&<p className="muted" style={{padding:'12px 0 0'}}>ไม่พบงานที่ตรงกับคำค้นหา / หมวดที่เลือก</p>}
-    </section>
+    </section>}
 
-    <section className="panel weekly-section" id="weekly">
+    {!loading&&!loadError&&<section className="panel weekly-section" id="weekly">
       <div className="panel-head"><div><h2>กิจกรรม 7 วันล่าสุด</h2><span className="muted">ดึงจาก Daily Report ของ Plot นี้โดยตรง</span></div><div className="weekly-kpis"><b>{reports.length}<small>รายงาน</small></b><b>{weeklyItems.length}<small>รายการงาน</small></b><b>{weeklyMan}<small>คน-วัน*</small></b></div></div>
       {reports.length?reports.map((r:any)=><div key={r.id} className="work-card">
         <div className="row between"><div><b>{dateTH(r.report_date)}</b><p>{r.summary||'Daily Report'}</p></div><div className="right"><StatusBadge value={r.status}/><small>{r.total_manpower||0} คน</small></div></div>
@@ -183,6 +201,6 @@ export default function ProjectPage(){
         </div>)}</div>:<p className="muted">ไม่มีรายการงานในรายงานนี้</p>}
       </div>):<p className="muted">ยังไม่มี Daily Report ใน 7 วันล่าสุด</p>}
       <p className="muted small">* คน-วัน = ผลรวม manpower ที่รายงานในแต่ละวัน ไม่ใช่จำนวนคนแบบไม่ซ้ำ</p>
-    </section>
+    </section>}
   </AppShell>
 }

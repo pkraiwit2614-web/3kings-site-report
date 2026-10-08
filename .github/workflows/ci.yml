@@ -25,6 +25,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Plot 3 sync safety regression
+        run: node tests/plot3-sync.test.cjs
+
       - name: Stability regression tests
         run: node tests/stability.test.cjs
 
