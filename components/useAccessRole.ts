@@ -3,6 +3,7 @@
 import {useEffect,useState} from 'react'
 import {getSupabase} from '@/lib/supabase'
 import {resolveAccessRole,type AccessRole} from '@/lib/accessControl'
+import useRolePreview from '@/components/useRolePreview'
 
 export default function useAccessRole(){
   const [role,setRole]=useState<AccessRole|null>(null)
@@ -25,5 +26,14 @@ export default function useAccessRole(){
     return()=>{alive=false}
   },[])
 
-  return {role,userId,ready}
+  const {presentationRole,ready:previewReady}=useRolePreview(role)
+
+  // Editors must follow the same preview as navigation. Server authorization
+  // continues to use the real profile/session; preview never changes either.
+  return {
+    role:ready&&previewReady?presentationRole:null,
+    actualRole:role,
+    userId,
+    ready:ready&&(!role||previewReady),
+  }
 }
