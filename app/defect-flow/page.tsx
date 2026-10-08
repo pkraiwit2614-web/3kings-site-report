@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
+import useAccessRole from '@/components/useAccessRole'
+import {canAccessPath} from '@/lib/accessControl'
 import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
 import DefectInputPanel from '@/components/DefectInputPanel'
@@ -214,6 +216,8 @@ function BuildingFlow({top,building,data}:{top:number;building:'A'|'B';data:Retu
 }
 
 export default function DefectFlowPage(){
+  const {role}=useAccessRole()
+  const showDashboard=role!==null&&canAccessPath(role,'/')
   const [rows,setRows]=useState<FlowRow[]>([])
   const [loading,setLoading]=useState(true)
   const [error,setError]=useState('')
@@ -298,7 +302,7 @@ export default function DefectFlowPage(){
     <div className="flow-page-header">
       <PageHeader title="Live Handover / Defect Flow" subtitle="Above Condo A + B" action={<div className="flow-toolbar">
         <div className="sync-meta"><span>Sync ล่าสุด</span><b>{dateTimeTH(synced)}</b></div>
-        <Link href="/?section=defect#dashboard-defect" className="button flow-dashboard-button" data-defect-flow-dashboard="true" aria-label="กลับไปที่ข้อมูล Defect ใน Dashboard">← Dashboard</Link>
+        {showDashboard&&<Link href="/?section=defect#dashboard-defect" className="button flow-dashboard-button" data-defect-flow-dashboard="true" aria-label="กลับไปที่ข้อมูล Defect ใน Dashboard">← Dashboard</Link>}
         <button type="button" className="button flow-export-button" onClick={exportPng} disabled={loading||!!error}>Export PNG</button>
         <button type="button" className="button report-print-button flow-print-button" onClick={()=>window.print()} disabled={loading||!!error}>🖨️ Print</button>
       </div>}/>

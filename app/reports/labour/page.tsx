@@ -436,6 +436,7 @@ export default function LabourVerificationPage(){
   },[usableBatches,dateFrom,dateTo,payrollStatusFilter,q,entryById,payrollRecordByBatch])
   const payrollDraftFor=(batch:Batch)=>payrollDrafts[batch.id]||[]
   const startPayrollReview=(batch:Batch)=>{
+    if(!canPayroll)return
     const record=payrollRecordByBatch.get(batch.id)
     const base=payrollDraftBaseFor(batch,record)
     if(!base){setMessage('เริ่มตรวจค่าแรงไม่ได้ เพราะข้อมูลต้นทางหรือรุ่นข้อมูลยังไม่พร้อม');return}
@@ -506,7 +507,7 @@ export default function LabourVerificationPage(){
     setPayrollDrafts(prev=>({...prev,[batch.id]:(prev[batch.id]||[]).map(x=>Number(x.ot_hours||0)===0?x:{...x,ot_hours:'0',timecard_match:false})}))
   }
   const savePayrollWeb=async(batch:Batch,status:'draft'|'timecard_checked')=>{
-    if(!canPayroll||saving['payroll-'+batch.id]||!ensureBatchWorkDateUsable(batch))return
+    if(!canVerify||saving['payroll-'+batch.id]||!ensureBatchWorkDateUsable(batch))return
     if(labourStatusFor(batch)!=='verified'){setMessage('ข้อมูลต้นทางเปลี่ยนหลังยืนยันทีม • ต้องตรวจและยืนยันทีมรายวันใหม่ก่อนตรวจค่าแรง');return}
     const base=payrollDraftBases[batch.id]
     if(!base){setMessage('ฉบับร่างค่าแรงยังไม่มีรุ่นข้อมูลอ้างอิง • กรุณาเปิดรายการล่าสุดก่อนบันทึก');return}
@@ -720,7 +721,7 @@ export default function LabourVerificationPage(){
             </div>:<div className="labour-no-draft">{authority===0?'จำนวนคนที่ยืนยันแล้ว = 0 • ไม่มีรายชื่อคนงานบริษัทสำหรับรายการนี้':'ยังไม่ได้เลือกรายชื่อ • ใช้ “ทีมเดิมทั้งหมด” เพื่อลดการกรอก หรือเพิ่มเฉพาะคนที่ต้องการจากรายชื่อคนงาน'}</div>}
 
             <div className="labour-confirm">
-              <label>หมายเหตุการยืนยัน<input value={notes[batch.id]??batch.note??''} onChange={e=>setNotes(prev=>({...prev,[batch.id]:e.target.value}))} placeholder="เช่น A ย้ายไปช่วยทีมช่างพร 1 วัน"/></label>
+              <label>หมายเหตุการยืนยัน<input disabled={!canVerify} value={notes[batch.id]??batch.note??''} onChange={e=>setNotes(prev=>({...prev,[batch.id]:e.target.value}))} placeholder="เช่น A ย้ายไปช่วยทีมช่างพร 1 วัน"/></label>
               <button type="button" className="primary" disabled={!canVerify||saving[batch.id]||authority===null||draft.length!==authority} onClick={()=>saveBatch(batch)}>{saving[batch.id]?'กำลังยืนยัน…':batch.verification_status==='verified'?'ยืนยันการแก้ไข':'ยืนยันทีมคนงาน'}</button>
             </div>
             {batch.verification_status==='verified'&&batch.verified_at&&<div className="labour-save-state verified">
@@ -789,12 +790,12 @@ export default function LabourVerificationPage(){
               {effectiveStatus==='needs_review'&&<div className="payroll-warning">ข้อมูลทีมรายวันมีการเปลี่ยนหลังการตรวจค่าแรง • ต้องเปิดตรวจบัตรตอกซ้ำก่อนใช้ยอด</div>}
 
               <div className="payroll-actions">
-                <button type="button" className="button primary" disabled={!canPayroll||labourStatusFor(batch)!=='verified'||payrollAuthority===null||batch.confirmed_headcount_basis==='contractor_only'||rows.length!==payrollAuthority} onClick={()=>startPayrollReview(batch)}>{draft.length?'โหลดข้อมูลจากระบบใหม่':record?.verification_method==='web'?'เปิดรายการเดิม':'เริ่มตรวจบัตรตอก'}</button>
-                {draft.length>0&&<><button type="button" className="button" onClick={()=>markAllTimecards(batch,true)}>✓ ติ๊กเฉพาะหลักฐานครบ</button><button type="button" className="button" onClick={()=>clearAllOt(batch)}>OT = 0 ทั้งทีม</button></>}
+                <button type="button" className="button primary" disabled={!canPayroll||(canVerify&&(labourStatusFor(batch)!=='verified'||payrollAuthority===null||batch.confirmed_headcount_basis==='contractor_only'||rows.length!==payrollAuthority))} onClick={()=>startPayrollReview(batch)}>{!canVerify?'ดูรายละเอียดค่าแรง':draft.length?'โหลดข้อมูลจากระบบใหม่':record?.verification_method==='web'?'เปิดรายการเดิม':'เริ่มตรวจบัตรตอก'}</button>
+                {canVerify&&draft.length>0&&<><button type="button" className="button" onClick={()=>markAllTimecards(batch,true)}>✓ ติ๊กเฉพาะหลักฐานครบ</button><button type="button" className="button" onClick={()=>clearAllOt(batch)}>OT = 0 ทั้งทีม</button></>}
                 {record?.timecard_checked_at&&<span className="payroll-audit">ตรวจบัตรล่าสุด {new Date(record.timecard_checked_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}</span>}
               </div>
 
-              {draft.length>0&&<div className="payroll-worker-table"><table>
+              {draft.length>0&&<fieldset disabled={!canVerify} style={{border:0,padding:0,margin:0,minWidth:0}}><div className="payroll-worker-table"><table>
                 <thead><tr><th>คนงาน</th><th>สถานะ</th><th>เข้า</th><th>ออก</th><th>ข้ามวัน</th><th>วันทำงาน</th><th>OT ชม.</th><th>ข้อยกเว้น</th><th>บัตรตอก</th><th>ค่าแรง</th><th>หมายเหตุ</th></tr></thead>
                 <tbody>{draft.map((row,index)=>{
                   const worker=workerById.get(row.worker_id)
@@ -812,16 +813,16 @@ export default function LabourVerificationPage(){
                     <td><input value={row.note} onChange={e=>updatePayrollDraft(batch.id,index,{note:e.target.value})} placeholder="ถ้ามี"/></td>
                   </tr>
                 })}</tbody>
-              </table></div>}
+              </table></div></fieldset>}
 
-              {draft.length>0&&<div className="payroll-confirm">
-                <label>หมายเหตุค่าแรง<input value={payrollNotes[batch.id]??record?.note??''} onChange={e=>setPayrollNotes(prev=>({...prev,[batch.id]:e.target.value}))} placeholder="เช่น OT ตามบัตรตอก / ลา / ย้ายทีม"/></label>
+              {canVerify&&draft.length>0&&<div className="payroll-confirm">
+                <label>หมายเหตุค่าแรง<input disabled={!canVerify} value={payrollNotes[batch.id]??record?.note??''} onChange={e=>setPayrollNotes(prev=>({...prev,[batch.id]:e.target.value}))} placeholder="เช่น OT ตามบัตรตอก / ลา / ย้ายทีม"/></label>
                 <div><span className={allMatched?'match-ready':'match-wait'}>{draft.filter(x=>x.timecard_match).length}/{draft.length} คนตรงกับบัตรตอก</span><button type="button" className="button" disabled={payrollSaving} onClick={()=>savePayrollWeb(batch,'draft')}>บันทึกร่าง</button><button type="button" className="primary" disabled={payrollSaving||!allMatched} onClick={()=>savePayrollWeb(batch,'timecard_checked')}>{payrollSaving?'กำลังบันทึก…':'ยืนยันตรวจบัตรตอก'}</button></div>
               </div>}
 
               <details className="legacy-payroll">
                 <summary>เอกสาร Excel ประกอบการตรวจ — ยังยืนยันยอดเงินไม่ได้</summary>
-                <div><label>ชื่อไฟล์ / เอกสารอ้างอิง<input disabled value={externalRefs[batch.id]??record?.external_reference??''} onChange={e=>setExternalRefs(prev=>({...prev,[batch.id]:e.target.value}))} placeholder="เช่น Labour Cost Week 40.xlsx"/></label><label>หมายเหตุ<input value={payrollNotes[batch.id]??record?.note??''} onChange={e=>setPayrollNotes(prev=>({...prev,[batch.id]:e.target.value}))} placeholder="ถ้ามี"/></label><button type="button" className="button" disabled title="รออัตรา สูตร และกติกาปัดเศษที่บัญชียืนยัน">รอกติกาบัญชียืนยัน</button></div>
+                <div><label>ชื่อไฟล์ / เอกสารอ้างอิง<input disabled value={externalRefs[batch.id]??record?.external_reference??''} onChange={e=>setExternalRefs(prev=>({...prev,[batch.id]:e.target.value}))} placeholder="เช่น Labour Cost Week 40.xlsx"/></label><label>หมายเหตุ<input disabled={!canVerify} value={payrollNotes[batch.id]??record?.note??''} onChange={e=>setPayrollNotes(prev=>({...prev,[batch.id]:e.target.value}))} placeholder="ถ้ามี"/></label><button type="button" className="button" disabled title="รออัตรา สูตร และกติกาปัดเศษที่บัญชียืนยัน">รอกติกาบัญชียืนยัน</button></div>
               </details>
 
               {record?.verified_at&&<div className="labour-verified-line">ยืนยันล่าสุด {new Date(record.verified_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})} • {payrollStatusLabel(effectiveStatus)}</div>}
