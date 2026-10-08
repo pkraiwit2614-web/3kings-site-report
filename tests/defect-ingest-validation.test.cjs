@@ -14,7 +14,7 @@ assert.match(route,/defect_register_validated_file/)
 assert.match(route,/storage\.from\('defect-flow-staging'\)\.remove/)
 assert.match(route,/status:'duplicate'/)
 assert.match(route,/status:'rejected'/)
-assert.match(route,/viewer_editor/)
+assert.match(route,/canEditDefect\(resolveAccessRole\(profile.role,user.id\)\)/)
 assert.match(panel,/\/api\/defect\/validate-upload/)
 assert.doesNotMatch(panel,/rpc\('defect_register_file_upload'/)
 

@@ -1,3 +1,4 @@
+import {canEditDefect,resolveAccessRole} from '@/lib/accessControl'
 import {NextRequest,NextResponse} from 'next/server'
 import {createClient} from '@supabase/supabase-js'
 import {createHash} from 'node:crypto'
@@ -109,7 +110,7 @@ export async function POST(request:NextRequest){
   const {data:{user},error:userError}=await supabase.auth.getUser(accessToken)
   if(userError||!user)return NextResponse.json({ok:false,error:'invalid_auth'},{status:401})
   const {data:profile}=await supabase.from('profiles').select('role,active').eq('user_id',user.id).maybeSingle()
-  if(!profile?.active||!['manager','viewer_editor','defect_contributor','defect_editor'].includes(String(profile.role))){
+  if(!profile?.active||!canEditDefect(resolveAccessRole(profile.role,user.id))){
     return NextResponse.json({ok:false,error:'forbidden'},{status:403})
   }
 

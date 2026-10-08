@@ -50,7 +50,7 @@ function roleLabel(role:AccessRole|null){
   if(role==='owner') return 'Site Supervisor'
   if(role==='admin') return 'Admin'
   if(role==='viewer') return 'Viewer · ดูข้อมูล'
-  if(role==='viewer_editor') return 'Viewer & Editor · แผนงาน / Defect'
+  if(role==='viewer_editor') return 'Viewer Editor · แผนงาน / ปฏิทิน'
   if(role==='defect_contributor') return 'Defect Contributor'
   if(role==='defect_editor') return 'Defect Contributor Editor'
   if(role==='purchase') return 'Purchase'
@@ -77,7 +77,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const actualRole=useMemo(()=>resolveAccessRole(role,userId),[role,userId])
   const {previewRole,presentationRole,targets:previewTargets,ready:previewReady,startPreview,exitPreview}=useRolePreview(actualRole)
   const nav = useMemo<NavItem[]>(() => {
-    if(presentationRole==='defect_contributor') return defectContributorNav
+    if(presentationRole==='defect_contributor'||presentationRole==='defect_editor') return defectContributorNav
     if(presentationRole==='owner') return [...standardNav,['/users','System & Access']]
     if(presentationRole) return standardNav
     return []

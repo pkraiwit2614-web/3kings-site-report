@@ -1,6 +1,8 @@
 'use client'
 
 import Link from 'next/link'
+import useAccessRole from '@/components/useAccessRole'
+import {canAccessPath} from '@/lib/accessControl'
 import { useEffect, useMemo, useState } from 'react'
 import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
@@ -136,6 +138,8 @@ function statusLabel(r:RoomRow){
 }
 
 export default function DefectDetailPage(){
+  const {role}=useAccessRole()
+  const showDashboard=role!==null&&canAccessPath(role,'/')
   const [loadError,setLoadError]=useState(false)
   const [rows,setRows]=useState<RoomRow[]>([])
   const [loading,setLoading]=useState(true)
@@ -221,7 +225,7 @@ export default function DefectDetailPage(){
       action={<div className="header-actions">
         <div className="update-meta"><span>ข้อมูลอัปเดต</span><b>{dateTimeTH(sourceDate)}</b></div>
         <a className="button drive-button" href={DEFECT_DONE_FOLDER} target="_blank" rel="noreferrer">📷 Picture - Defect Done</a>
-        <Link href="/?section=defect#dashboard-defect" className="button">← Dashboard</Link>
+        {showDashboard&&<Link href="/?section=defect#dashboard-defect" className="button">← Dashboard</Link>}
       </div>}
     />
     <DefectInputPanel manualOnly />

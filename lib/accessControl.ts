@@ -32,7 +32,7 @@ export function resolveAccessRole(profileRole:string|undefined|null,userId:strin
 export function canAccessPath(role:AccessRole,path:string){
   const value=cleanPath(path)
   if(role==='owner')return true
-  if(role==='defect_contributor'){
+  if(role==='defect_contributor'||role==='defect_editor'){
     return value==='/defect-flow'||value==='/defects'||value.startsWith('/defects/')
   }
   if(OWNER_ONLY_PREFIXES.some(prefix=>value===prefix||value.startsWith(prefix+'/')))return false
@@ -40,7 +40,7 @@ export function canAccessPath(role:AccessRole,path:string){
 }
 
 export function defaultPathForRole(role:AccessRole){
-  return role==='defect_contributor'?'/defect-flow':'/'
+  return role==='defect_contributor'||role==='defect_editor'?'/defect-flow':'/'
 }
 
 export function canEditSiteOperations(role:AccessRole|null){
@@ -56,7 +56,7 @@ export function canEditSchedule(role:AccessRole|null){
 }
 
 export function canEditDefect(role:AccessRole|null){
-  return role==='owner'||role==='viewer_editor'||role==='defect_contributor'||role==='defect_editor'
+  return role==='owner'||role==='defect_editor'
 }
 
 export function canEditProcurement(role:AccessRole|null){
@@ -68,7 +68,7 @@ export function canManageLabour(role:AccessRole|null){
 }
 
 export function canViewPayroll(role:AccessRole|null){
-  return role==='owner'||role==='admin'
+  return role!==null&&['owner','admin','viewer','viewer_editor','purchase'].includes(role)
 }
 
 export function isOwnerOnlyPath(path:string){
