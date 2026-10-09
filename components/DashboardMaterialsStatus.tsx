@@ -17,7 +17,8 @@ function dateTimeTH(value:string|null|undefined){
 export default function DashboardMaterialsStatus(){
   const [projects,setProjects]=useState<Project[]>([])
   const [rows,setRows]=useState<any[]>([])
-  const [latestSyncAt,setLatestSyncAt]=useState<string|null>(null)
+  const [latestCheckAt,setLatestCheckAt]=useState<string|null>(null)
+  const [latestImportAt,setLatestImportAt]=useState<string|null>(null)
   const [loading,setLoading]=useState(true)
   const [portalTarget,setPortalTarget]=useState<HTMLElement|null>(null)
 
@@ -25,15 +26,17 @@ export default function DashboardMaterialsStatus(){
     let cancelled=false
     const load=async()=>{
       const s=getSupabase()
-      const [p,m,sync]=await Promise.all([
+      const [p,m,checked,imported]=await Promise.all([
         s.from('projects').select('id,code,name,active,sort_order').eq('active',true).order('sort_order'),
         s.from('materials').select('id,project_id,status'),
-        s.from('drive_sync_runs').select('created_at').eq('status','success').eq('sync_type','materials').order('created_at',{ascending:false}).limit(1).maybeSingle(),
+        s.from('drive_sync_runs').select('created_at').eq('sync_type','materials').order('created_at',{ascending:false}).limit(1).maybeSingle(),
+        s.from('drive_sync_runs').select('created_at').eq('status','success').eq('sync_type','materials').gt('rows_written',0).order('created_at',{ascending:false}).limit(1).maybeSingle(),
       ])
       if(cancelled) return
       setProjects((p.data||[]) as Project[])
       setRows(m.data||[])
-      setLatestSyncAt(sync.data?.created_at||null)
+      setLatestCheckAt(checked.data?.created_at||null)
+      setLatestImportAt(imported.data?.created_at||null)
       setLoading(false)
     }
     load().catch(()=>setLoading(false))
@@ -72,7 +75,8 @@ export default function DashboardMaterialsStatus(){
         <Link href="/materials">เปิด Materials →</Link>
       </div>
       <div className="materials-meta">
-        <span><b>อัปเดตล่าสุด</b> {dateTimeTH(latestSyncAt)}</span>
+        <span><b>ตรวจสอบล่าสุด</b> {dateTimeTH(latestCheckAt)}</span>
+        <span><b>นำเข้าข้อมูลล่าสุด</b> {dateTimeTH(latestImportAt)}</span>
         <span>กดสถานะเพื่อเปิดรายการที่กรองไว้แล้ว</span>
       </div>
       {loading?<p className="muted" style={{padding:14}}>กำลังโหลด Materials Status…</p>:<>
