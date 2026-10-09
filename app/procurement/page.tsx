@@ -68,7 +68,8 @@ export default function ProcurementPage(){
   const [updateFilter,setUpdateFilter]=useState('')
   const [followUpOnly,setFollowUpOnly]=useState(false)
   const [q,setQ]=useState('')
-  const [latestSyncAt,setLatestSyncAt]=useState<string|null>(null)
+  const [latestCheckAt,setLatestCheckAt]=useState<string|null>(null)
+  const [latestImportAt,setLatestImportAt]=useState<string|null>(null)
 
   useEffect(()=>{
     const params=new URLSearchParams(window.location.search)
@@ -82,19 +83,21 @@ export default function ProcurementPage(){
     const s=getSupabase()
     const loader=createLiveLoader({
       load:async(signal)=>{
-        const [r,links,p,sync]=await Promise.all([
+        const [r,links,p,checked,imported]=await Promise.all([
           s.from('procurement_items').select('*').abortSignal(signal),
           s.from('procurement_item_projects').select('procurement_item_id,project_id').abortSignal(signal),
           s.from('projects').select('*').abortSignal(signal),
-          s.from('drive_sync_runs').select('created_at').eq('status','success').eq('sync_type','materials').order('created_at',{ascending:false}).limit(1).abortSignal(signal).maybeSingle()
+          s.from('drive_sync_runs').select('created_at').eq('sync_type','materials').order('created_at',{ascending:false}).limit(1).abortSignal(signal).maybeSingle(),
+          s.from('drive_sync_runs').select('created_at').eq('status','success').eq('sync_type','materials').gt('rows_written',0).order('created_at',{ascending:false}).limit(1).abortSignal(signal).maybeSingle()
         ])
-        requireSuccessfulReads([r,links,p,sync])
+        requireSuccessfulReads([r,links,p,checked,imported])
         if(!alive||signal.aborted)return
         setLoadError(false)
         setRows(r.data||[])
         setProcurementLinks(links.data||[])
         setProjects((p.data||[]) as Project[])
-        setLatestSyncAt(sync.data?.created_at||null)
+        setLatestCheckAt(checked.data?.created_at||null)
+        setLatestImportAt(imported.data?.created_at||null)
       },
       onError:()=>{if(alive)setLoadError(true)},
     })
@@ -195,7 +198,8 @@ export default function ProcurementPage(){
   return <AppShell>
     {loadError&&<div className="panel" role="alert">โหลดข้อมูลไม่สำเร็จ ข้อมูลที่แสดงอาจเป็นข้อมูลเดิม กรุณาลองใหม่ <button type="button" className="button" onClick={()=>window.dispatchEvent(new Event('focus'))}>ลองใหม่</button></div>}
     <PageHeader title="การจัดซื้อ/จัดจ้าง" subtitle="ค้นหาจากวัสดุ งาน ผู้ขาย ผู้รับเหมา เลข PO หรือสถานะ เพื่อดูว่าตอนนี้ติดอยู่ขั้นตอนไหนและต้องตามอะไรต่อ" action={<div className="management-action-grid management-printable-actions">
-      <div className="management-action-meta"><span>ข้อมูลอัปเดต</span><b>{dateTimeTH(latestSyncAt)}</b></div>
+      <div className="management-action-meta"><span>ตรวจสอบล่าสุด</span><b>{dateTimeTH(latestCheckAt)}</b></div>
+      <div className="management-action-meta"><span>นำเข้าข้อมูลล่าสุด</span><b>{dateTimeTH(latestImportAt)}</b></div>
       <Link href="/?section=purchasing-followup#dashboard-purchasing" className="button management-action-dashboard">← Dashboard</Link>
     </div>}/>
     <ProcurementEditPanel/>
