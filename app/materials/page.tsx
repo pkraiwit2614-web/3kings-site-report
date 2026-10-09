@@ -46,7 +46,8 @@ export default function MaterialsPage(){
   const [toolCategory,setToolCategory]=useState('')
   const [toolLocation,setToolLocation]=useState('')
   const [toolQ,setToolQ]=useState('')
-  const [latestSyncAt,setLatestSyncAt]=useState<string|null>(null)
+  const [latestCheckAt,setLatestCheckAt]=useState<string|null>(null)
+  const [latestImportAt,setLatestImportAt]=useState<string|null>(null)
 
   useEffect(()=>{
     const params=new URLSearchParams(window.location.search)
@@ -64,15 +65,16 @@ export default function MaterialsPage(){
     const s=getSupabase()
     const loader=createLiveLoader({
       load:async(signal)=>{
-        const [p,m,pr,prLinks,t,sync]=await Promise.all([
+        const [p,m,pr,prLinks,t,checked,imported]=await Promise.all([
           s.from('projects').select('*').or('active.eq.true,code.eq.AV-P3').order('sort_order').abortSignal(signal),
           s.from('materials').select('*').order('project_id').order('source_row').abortSignal(signal),
           s.from('procurement_items').select('*').order('source_updated_at',{ascending:false}).order('source_row').abortSignal(signal),
           s.from('procurement_item_projects').select('procurement_item_id,project_id').abortSignal(signal),
           s.from('tool_machine').select('*').order('item_no').abortSignal(signal),
-          s.from('drive_sync_runs').select('created_at').eq('status','success').eq('sync_type','materials').order('created_at',{ascending:false}).limit(1).abortSignal(signal).maybeSingle()
+          s.from('drive_sync_runs').select('created_at').eq('sync_type','materials').order('created_at',{ascending:false}).limit(1).abortSignal(signal).maybeSingle(),
+          s.from('drive_sync_runs').select('created_at').eq('status','success').eq('sync_type','materials').gt('rows_written',0).order('created_at',{ascending:false}).limit(1).abortSignal(signal).maybeSingle()
         ])
-        requireSuccessfulReads([p,m,pr,prLinks,t,sync])
+        requireSuccessfulReads([p,m,pr,prLinks,t,checked,imported])
         if(!alive||signal.aborted)return
         setLoadError(false)
         setProjects((p.data||[]) as Project[])
@@ -80,7 +82,8 @@ export default function MaterialsPage(){
         setProcurement(pr.data||[])
         setProcurementLinks(prLinks.data||[])
         setTools(t.data||[])
-        setLatestSyncAt(sync.data?.created_at||null)
+        setLatestCheckAt(checked.data?.created_at||null)
+        setLatestImportAt(imported.data?.created_at||null)
       },
       onError:()=>{if(alive)setLoadError(true)},
     })
@@ -174,7 +177,8 @@ export default function MaterialsPage(){
   return <AppShell>
     {loadError&&<div className="panel" role="alert">โหลดข้อมูลไม่สำเร็จ ข้อมูลที่แสดงอาจเป็นข้อมูลเดิม กรุณาลองใหม่ <button type="button" className="button" onClick={()=>window.dispatchEvent(new Event('focus'))}>ลองใหม่</button></div>}
     <PageHeader title="วัสดุ เครื่องมือและผู้รับเหมา" subtitle={`ค้นหาวัสดุ งาน ผู้ขาย ผู้รับเหมา หรือเลข PO ได้จากหน้าเดียว • วัสดุ/งาน ${rows.length} รายการ • จัดซื้อ/จัดจ้าง ${procurement.length} รายการ • เครื่องมือ ${tools.length} รายการ`} action={<div className="management-action-grid management-printable-actions">
-      <div className="management-action-meta"><span>ข้อมูลอัปเดต</span><b>{dateTimeTH(latestSyncAt)}</b></div>
+      <div className="management-action-meta"><span>ตรวจสอบล่าสุด</span><b>{dateTimeTH(latestCheckAt)}</b></div>
+      <div className="management-action-meta"><span>นำเข้าข้อมูลล่าสุด</span><b>{dateTimeTH(latestImportAt)}</b></div>
       <Link href="/?section=materials#dashboard-materials" className="button management-action-dashboard">← Dashboard</Link>
     </div>}/>
 
@@ -205,7 +209,7 @@ export default function MaterialsPage(){
             <option value="ไม่เกี่ยวข้อง">ไม่เกี่ยวข้อง</option>
           </select>
           {(project||orderStatus||q)&&<button type="button" className="button" style={{padding:'7px 10px',fontSize:12,borderRadius:9}} onClick={()=>{setProject('');setOrderStatus('');setQ('')}}>ล้าง</button>}
-          <span className="small muted" style={{marginLeft:'auto',whiteSpace:'nowrap'}}>Drive Sync • ล่าสุด {dateTimeTH(latestSyncAt)}</span>
+          <span className="small muted" style={{marginLeft:'auto',whiteSpace:'nowrap'}}>Drive Sync • ตรวจสอบ {dateTimeTH(latestCheckAt)} • นำเข้าข้อมูล {dateTimeTH(latestImportAt)}</span>
         </div>
       </div>
       <div className="panel table-wrap" style={{maxHeight:560,overflow:'auto'}}>
