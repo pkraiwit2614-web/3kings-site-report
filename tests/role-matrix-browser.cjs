@@ -19,7 +19,7 @@ const origin='http://127.0.0.1:3010'
  return route.fulfill({headers:{'content-range':`0-${Math.max(0,rows.length-1)}/${rows.length}`},json:req.headers().accept?.includes('vnd.pgrst.object')?(rows[0]||null):rows})
  });await context.routeWebSocket('**/realtime/**',ws=>ws.close());const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message))
  await page.goto(origin+'/defect-flow');await page.locator('nav').first().waitFor();await page.waitForTimeout(350)
- assert.equal(await page.locator('input[type=file]').count(),role==='defect_editor'?1:0,role+' defect upload')
+ assert.equal(await page.locator('input[type=file]').count(),['defect_editor','viewer_editor'].includes(role)?1:0,role+' defect upload')
  const restricted=role.startsWith('defect_');assert.equal(await page.locator('a[href="/?section=defect#dashboard-defect"]').count(),restricted?0:1,role+' dashboard shortcut')
  assert.equal(await page.locator('a[href="/users"]').count(),0,role+' system menu')
  for(const [path,selector,editor] of [['/schedule','.editor-box','viewer_editor'],['/procurement','.procurement-editor','purchase']]){
