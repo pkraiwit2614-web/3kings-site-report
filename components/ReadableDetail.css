@@ -1,0 +1,62 @@
+/* Read-only compact notes for Materials and Procurement tables. */
+.readable-detail {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+  min-width: 0;
+  width: 100%;
+  max-width: 360px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.readable-detail-line {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
+  padding: 4px 7px 4px 10px;
+  border-left: 2px solid #94a3b8;
+  background: rgba(148, 163, 184, .08);
+  border-radius: 2px 5px 5px 2px;
+}
+.readable-detail:not(.is-expanded) .readable-detail-hidden {
+  display: none;
+}
+.readable-detail-gap {
+  font-size: 11px;
+  line-height: 1.4;
+  opacity: .74;
+}
+.readable-detail.is-expanded .readable-detail-gap {
+  display: none;
+}
+.readable-detail-toggle {
+  align-self: flex-start;
+  padding: 3px 0;
+  background: none;
+  border: none;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.readable-detail-toggle:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+@media print {
+  .readable-detail { max-width: none !important; font-size: inherit !important; }
+  .readable-detail .readable-detail-hidden { display: block !important; }
+  .readable-detail .readable-detail-gap,
+  .readable-detail .readable-detail-toggle { display: none !important; }
+  .readable-detail-line {
+    border-left-width: 1px !important;
+    padding: 2px 4px !important;
+    background: transparent !important;
+  }
+}
