@@ -5,6 +5,7 @@ import Link from 'next/link'
 import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
 import StatusBadge from '@/components/StatusBadge'
+import ReadableDetail from '@/components/ReadableDetail'
 import { getSupabase } from '@/lib/supabase'
 import { createLiveLoader, requireSuccessfulReads } from '@/lib/liveLoader'
 import { dateTH } from '@/lib/format'
@@ -253,7 +254,7 @@ export default function ProcurementPage(){
             <td>{x.payment_status||x.procurement_status||'-'}</td>
             <td style={{width:180,minWidth:180,maxWidth:180,whiteSpace:'normal',overflowWrap:'anywhere'}}><StatusBadge value={x.current_status} multiline/></td>
             <td><b>{x.expected_delivery_text||'ยังไม่ระบุ'}</b></td>
-            <td>{x.condition_note||'-'}</td>
+            <td><ReadableDetail parts={[x.condition_note]}/></td>
             <td>{dateTH(x.source_updated_at)}</td>
           </tr>})}</tbody>
         </table>
