@@ -1,0 +1,32 @@
+name: Presentation scoped QA (temporary)
+on:
+  push:
+    branches:
+      - fix/presentation-photo-review-filename-20261012
+jobs:
+  isolated-regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - name: Run unaffected system regressions independently
+        run: |
+          failed=0
+          run_case() { echo "QA: $*"; "$@" || failed=1; }
+          run_case node --test tests/prompt23/labour-payroll.test.cjs
+          run_case node tests/headcount-reconciliation.test.cjs
+          run_case node --test tests/payroll/source-revision-invalidation.test.cjs
+          run_case node --test tests/payroll/optimistic-concurrency.test.cjs
+          run_case node tests/prompt5-manpower-reconciliation.test.cjs
+          run_case node --test tests/prompt13-canonical-duplicates.test.cjs
+          run_case node --test tests/payroll/attendance-evidence.test.cjs
+          run_case node tests/rbac.test.cjs
+          run_case node tests/role-preview.test.cjs
+          run_case node tests/activity-log.test.cjs
+          run_case node tests/defect-ingest-validation.test.cjs
+          run_case node tests/google-calendar-live-edit.test.cjs
+          exit "$failed"
