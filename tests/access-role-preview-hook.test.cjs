@@ -17,7 +17,7 @@ const useAccessRole=load('components/useAccessRole.ts').default
 const access=modules['@/lib/accessControl'],preview=modules['@/lib/rolePreview']
 let latest,root
 function Probe(){latest=useAccessRole();return null}
-const matrix={admin:[false,true,false,false,false],purchase:[false,false,false,true,false],viewer:[false,false,false,false,false],viewer_editor:[true,false,false,false,true],defect_contributor:[false,false,false,false,false],defect_editor:[false,false,true,false,false],owner:[true,true,true,true,true]}
+const matrix={admin:[false,true,false,false,false],purchase:[false,false,false,true,false],viewer:[false,false,false,false,false],viewer_editor:[true,false,true,false,true],defect_contributor:[false,false,false,false,false],defect_editor:[false,false,true,false,false],owner:[true,true,true,true,true]}
 const checks=['canEditSchedule','canEditSiteOperations','canEditDefect','canEditProcurement','canEditCalendar']
 function expectRole(role){assert.equal(latest.role,role);assert.equal(latest.ready,true);checks.forEach((fn,i)=>assert.equal(access[fn](latest.role),matrix[role][i],role+' '+fn))}
 ;(async()=>{

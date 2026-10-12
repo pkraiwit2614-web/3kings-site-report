@@ -30,7 +30,7 @@ begin
   checks:=checks+4;
   for r in select * from matrix_rpc loop
    expected:= c.role='manager' or
-    (r.proname like 'defect_%' and c.role='defect_editor') or
+    (r.proname like 'defect_%' and c.role in ('defect_editor','viewer_editor')) or
     ((r.proname like 'schedule_%' or r.proname like 'work_calendar_%') and c.role='viewer_editor') or
     (r.proname like 'procurement_%' and c.role='purchase') or
     ((r.proname like 'site_operations_%' or r.proname like 'labour_%' or r.proname like 'payroll_%') and c.role='admin');

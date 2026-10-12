@@ -2,7 +2,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict'),ts=require('typ
 const m={exports:{}}
 vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/accessControl.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module:m,exports:m.exports})
 const a=m.exports
-const matrix={viewer:[false,false,false,false,false],viewer_editor:[true,false,false,false,true],purchase:[false,false,false,true,false],admin:[false,true,false,false,false],defect_contributor:[false,false,false,false,false],defect_editor:[false,false,true,false,false],owner:[true,true,true,true,true]}
+const matrix={viewer:[false,false,false,false,false],viewer_editor:[true,false,true,false,true],purchase:[false,false,false,true,false],admin:[false,true,false,false,false],defect_contributor:[false,false,false,false,false],defect_editor:[false,false,true,false,false],owner:[true,true,true,true,true]}
 const fns=['canEditSchedule','canEditSiteOperations','canEditDefect','canEditProcurement','canEditCalendar']
 let checks=0
 for(const [role,expected] of Object.entries(matrix)){
