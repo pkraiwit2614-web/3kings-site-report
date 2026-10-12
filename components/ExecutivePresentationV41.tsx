@@ -10,6 +10,29 @@ import { sortTasksByNumber } from '@/lib/taskOrder'
 import type { Project, ScheduleTask } from '@/lib/types'
 
 type PhotoMode = 'latest' | 'before_after'
+type PresentationFeedbackStatus = 'approved' | 'rejected'
+type PresentationFeedbackRow = { photo_id:string; task_id:string; status:PresentationFeedbackStatus }
+
+// Rank photo filenames for the current task only. This never updates Photo Mapping.
+function normalizedPhotoText(value:string){
+  return String(value||'').toLocaleLowerCase().replace(/\.[a-z0-9]{2,5}$/i,'')
+    .replace(/งาน/g,'').replace(/[^a-z0-9ก-๙]+/g,'')
+}
+function filenameTaskScore(fileName:string,taskName:string,area:string|null|undefined){
+  const file=normalizedPhotoText(fileName)
+  const task=normalizedPhotoText(taskName)
+  if(!file||task.length<4)return 0
+  if(file.includes(task))return 100
+  const grams=new Set<string>()
+  for(let i=0;i<=task.length-4;i++){
+    const gram=task.slice(i,i+4)
+    if(!/^\d+$/.test(gram))grams.add(gram)
+  }
+  if(!grams.size)return 0
+  const matched=[...grams].filter(gram=>file.includes(gram)).length
+  const areaText=normalizedPhotoText(area||'')
+  return Math.min(100,Math.round(100*matched/grams.size)+(areaText.length>=3&&file.includes(areaText)?8:0))
+}
 type PresentationTask = ScheduleTask & {
   notes?: string | null
   source_updated_at?: string | null
@@ -163,6 +186,7 @@ export default function ExecutivePresentationV41(){
   const [projects,setProjects]=useState<Project[]>([])
   const [tasks,setTasks]=useState<PresentationTask[]>([])
   const [photos,setPhotos]=useState<PresentationPhoto[]>([])
+  const [photoFeedback,setPhotoFeedback]=useState<Map<string,PresentationFeedbackStatus>>(()=>new Map())
   const [condoRooms,setCondoRooms]=useState<CondoRoomRow[]>([])
   const [projectFilter,setProjectFilter]=useState('')
   const [startDate,setStartDate]=useState(bounds.start)
@@ -181,7 +205,7 @@ export default function ExecutivePresentationV41(){
     let cancelled=false
     const load=async()=>{
       const s=getSupabase()
-      const [p,t,r,i,rp,dp,cr,ss,ps]=await Promise.all([
+      const [p,t,r,i,rp,dp,cr,ss,ps,pf]=await Promise.all([
         s.from('projects').select('*').eq('active',true).order('sort_order'),
         s.from('v_schedule_tasks').select('*').order('planned_start'),
         s.from('daily_reports').select('id,project_id,report_date').order('report_date',{ascending:false}),
@@ -191,6 +215,7 @@ export default function ExecutivePresentationV41(){
         s.from('condo_room_status').select('room_no,building,customer_status,hotel_participation,current_status,status_group,next_action,source_modified_at').order('room_no'),
         s.from('drive_sync_runs').select('created_at').eq('status','success').eq('sync_type','schedule').order('created_at',{ascending:false}).limit(1).maybeSingle(),
         s.from('drive_sync_runs').select('created_at').eq('status','success').eq('sync_type','photos').order('created_at',{ascending:false}).limit(1).maybeSingle(),
+        s.from('photo_task_feedback').select('photo_id,task_id,status'),
       ])
       if(cancelled) return
       const projectRows=(p.data||[]) as Project[]
@@ -210,9 +235,25 @@ export default function ExecutivePresentationV41(){
         room_no:extractRoomNo(photo.file_name,photo.drive_folder_name),folder_name:photo.drive_folder_name,
       }))
       setProjects(projectRows); setTasks(taskRows); setPhotos([...sitePhotos,...drivePhotos]); setCondoRooms((cr.data||[]) as CondoRoomRow[])
+      if(!pf.error)setPhotoFeedback(new Map(((pf.data||[]) as PresentationFeedbackRow[]).map(x=>[`drive-${x.photo_id}|${x.task_id}`,x.status])))
       setLatestScheduleSync(ss.data?.created_at||null); setLatestPhotoSync(ps.data?.created_at||null); setLoading(false)
     }
     load().catch(()=>setLoading(false)); return()=>{cancelled=true}
+  },[])
+
+  // The review toolbar emits this event only after Supabase confirms the write.
+  useEffect(()=>{
+    const onFeedback=(event:Event)=>{
+      const detail=(event as CustomEvent<{photoId:string;taskId:string;status:PresentationFeedbackStatus}>).detail
+      if(!detail||!['approved','rejected'].includes(detail.status)||!detail.photoId||!detail.taskId)return
+      setPhotoFeedback(prev=>{
+        const next=new Map(prev)
+        next.set(`drive-${detail.photoId}|${detail.taskId}`,detail.status)
+        return next
+      })
+    }
+    window.addEventListener('3kings:presentation-photo-feedback',onFeedback)
+    return()=>window.removeEventListener('3kings:presentation-photo-feedback',onFeedback)
   },[])
 
   const periodTasks=useMemo(()=>tasks.filter(t=>overlaps(t,startDate,endDate)),[tasks,startDate,endDate])
@@ -240,9 +281,22 @@ export default function ExecutivePresentationV41(){
 
   const pickPhotos=(projectId:string,taskId?:string)=>{
     const projectPhotos=photosInPeriod.filter(p=>p.project_id===projectId)
-    const direct=taskId?projectPhotos.filter(p=>p.task_id===taskId).slice().sort(sortEvidenceLatest):[]
-    const fallback=taskId?projectPhotos.filter(p=>!p.task_id).slice().sort((a,b)=>b.report_date.localeCompare(a.report_date)||b.id.localeCompare(a.id)):[]
-    const pool=(taskId?[...direct,...fallback]:projectPhotos.slice().sort(sortEvidenceLatest))
+    const task=taskId?tasks.find(t=>t.id===taskId&&t.project_id===projectId):undefined
+    const status=(p:PresentationPhoto)=>taskId?photoFeedback.get(`${p.id}|${taskId}`):undefined
+    // Rejections belong to (photo,task), not the photo globally: other slides stay untouched.
+    const eligible=taskId?projectPhotos.filter(p=>status(p)!=='rejected'):projectPhotos
+    const recent=(a:PresentationPhoto,b:PresentationPhoto)=>b.report_date.localeCompare(a.report_date)||b.id.localeCompare(a.id)
+    const score=(p:PresentationPhoto)=>task&&p.source==='drive'?filenameTaskScore(p.caption,task.task_name,task.area):0
+    const approved=taskId?eligible.filter(p=>status(p)==='approved').sort(recent):[]
+    const other=eligible.filter(p=>!approved.some(x=>x.id===p.id))
+    const direct=taskId?other.filter(p=>p.task_id===taskId).sort(sortEvidenceLatest):[]
+    const filenameMatches=task?other.filter(p=>!p.task_id&&p.source==='drive'&&score(p)>=28)
+      .sort((a,b)=>score(b)-score(a)||recent(a,b)):[]
+    // A strongly matching filename can be offered for review without modifying its original mapping.
+    const otherTaskMatches=task?other.filter(p=>p.task_id&&p.task_id!==taskId&&p.source==='drive'&&score(p)>=65)
+      .sort((a,b)=>score(b)-score(a)||recent(a,b)):[]
+    const fallback=taskId?other.filter(p=>!p.task_id&&!filenameMatches.some(x=>x.id===p.id)).sort(recent):[]
+    const pool=(taskId?[...approved,...direct,...filenameMatches,...otherTaskMatches,...fallback]:eligible.slice().sort(sortEvidenceLatest))
     if(photoMode==='latest') return pool.slice(0,4)
     const before=pool.find(p=>p.phase==='before'); const after=pool.find(p=>p.phase==='after')
     const chosen:PresentationPhoto[]=[]
@@ -395,7 +449,7 @@ export default function ExecutivePresentationV41(){
           </div>
         </article>
       </>:currentTask&&selectedProject?<><div className="ep-stage-controls"><div><button className="button" onClick={()=>setSlideIndex(i=>Math.max(0,i-1))} disabled={slideIndex===0}>← Previous</button><span>{slideIndex+1} / {selectedTasks.length}</span><button className="button" onClick={()=>setSlideIndex(i=>Math.min(selectedTasks.length-1,i+1))} disabled={slideIndex>=selectedTasks.length-1}>Next →</button></div><button className="button" onClick={toggleFullscreen}>⛶ Fullscreen</button></div>
-        <article className="ep-slide"><header><div><span className="ep-eyebrow">{selectedProject.code} • {currentTask.category||'งานก่อสร้าง'}</span><h2>{currentTask.task_name}</h2><p>{currentTask.area||'-'} • Plan {dateTH(currentTask.planned_start)} → {dateTH(currentTask.planned_end)}</p></div><StatusBadge value={currentTask.site_status}/></header><div className="ep-slide-body"><section className="ep-task-info"><div className="ep-progress"><span>ACTUAL PROGRESS</span><b>{pct(currentTask.actual_progress)}</b><i><em style={{width:`${Math.max(0,Math.min(100,Math.round((currentTask.actual_progress||0)*100)))}%`}}/></i></div><div className="ep-info-grid"><div><span>Plan</span><b>{pct(currentTask.current_plan_progress)}</b></div><div><span>Variance</span><b className={(currentTask.current_variance||0)<0?'danger-text':''}>{(currentTask.current_variance||0)>0?'+':''}{Math.round((currentTask.current_variance||0)*100)}%</b></div><div><span>Delay</span><b>{(currentTask.delay_days||0)>0?`${currentTask.delay_days} วัน`:'—'}</b></div><div><span>อัปเดต</span><b>{dateTH(currentTask.source_updated_at)}</b></div></div><div className="ep-note"><span>หมายเหตุ / งานถัดไป</span><p>{shortNote(currentTask)}</p></div>{(currentTask.contractor||currentTask.responsible_person)&&<div className="ep-owner">ผู้รับผิดชอบ: <b>{currentTask.contractor||currentTask.responsible_person}</b></div>}</section>
+        <article className="ep-slide"><header><div><span className="ep-eyebrow">{selectedProject.code} • {currentTask.category||'งานก่อสร้าง'}</span><h2>{currentTask.task_name}</h2><p>{currentTask.area||'-'} • Plan {dateTH(currentTask.planned_start)} → {dateTH(currentTask.planned_end)}</p></div><StatusBadge value={currentTask.site_status}/></header><div className="ep-slide-body"><section className="ep-task-info"><div className="ep-progress"><span>ACTUAL PROGRESS</span><b>{pct(currentTask.actual_progress)}</b><i><em style={{width:`${Math.max(0,Math.min(100,Math.round((currentTask.actual_progress||0)*100)))}%`}}/></i></div><div className="ep-plan-pair"><div className="ep-plan-card"><span>เริ่มในแผน</span><time>{dateTH(currentTask.planned_start)}</time></div><div className="ep-plan-card"><span>จบในแผน</span><time>{dateTH(currentTask.planned_end)}</time></div></div><div className="ep-info-grid"><div><span>Plan</span><b>{pct(currentTask.current_plan_progress)}</b></div><div><span>Variance</span><b className={(currentTask.current_variance||0)<0?'danger-text':''}>{(currentTask.current_variance||0)>0?'+':''}{Math.round((currentTask.current_variance||0)*100)}%</b></div><div><span>Delay</span><b>{(currentTask.delay_days||0)>0?`${currentTask.delay_days} วัน`:'—'}</b></div><div><span>อัปเดต</span><b>{dateTH(currentTask.source_updated_at)}</b></div></div><div className="ep-note"><span>หมายเหตุ / งานถัดไป</span><p>{shortNote(currentTask)}</p></div>{(currentTask.contractor||currentTask.responsible_person)&&<div className="ep-owner">ผู้รับผิดชอบ: <b>{currentTask.contractor||currentTask.responsible_person}</b></div>}</section>
         <section className="ep-photo-section"><div className="ep-photo-head"><div><b>{photoMode==='latest'?'รูปล่าสุด':'Before–After'}</b><span>วันที่รูปล่าสุด: {imageDateLabel(currentPhotos[0]?.report_date)} • Verified {currentVerifiedCount} รูป</span></div>{currentDriveUrl&&<a href={currentDriveUrl} target="_blank" rel="noreferrer">เปิด Picture Progress ↗</a>}</div>{currentFallbackCount>0&&<div className="ep-fallback-note">{currentDirectCount>0?`รูปตรง Task มี ${currentDirectCount} รูป — เติมรูปภาพรวมระดับ Plot ที่ยังไม่ผูก Task อีก ${currentFallbackCount} รูป`:'ยังไม่มีรูปที่จับคู่ตรง Task นี้ — แสดงเฉพาะรูปภาพรวมระดับ Plot ที่ยังไม่ผูกกับ Task เป็น fallback'}</div>}{currentPhotos.length?<div className={`ep-photo-grid count-${currentPhotos.length}`}>{currentPhotos.map(photo=><figure key={photo.id}><img src={photo.image_url} alt={photo.caption}/><figcaption><div><b>{phaseLabel(photo.phase,photo.task_id===currentTask.id)}</b><span>{evidenceLabel(photo,currentTask.id)}</span></div><span>{imageDateLabel(photo.report_date)}</span></figcaption></figure>)}</div>:<div className="ep-photo-empty"><b>ยังไม่มีรูปประกอบในช่วงที่เลือก</b><span>Photo Index จะเติมรูปจาก Picture Progress เมื่อ Sync เข้ามา</span></div>}</section></div></article></>:<div className="panel">ไม่มีงานในช่วงวันที่ที่เลือก</div>}
     </div>}
 
