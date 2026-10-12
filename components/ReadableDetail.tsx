@@ -28,6 +28,7 @@ export default function ReadableDetail({ parts }: ReadableDetailProps) {
 
   // Show the first source fact and the three most recently appended details.
   const hiddenCount = Math.max(0, lines.length - 4)
+  const hasLongLine = lines.some(line => line.length > 170)
 
   return (
     <div className={`readable-detail${expanded ? ' is-expanded' : ''}`}>
@@ -38,19 +39,19 @@ export default function ReadableDetail({ parts }: ReadableDetailProps) {
               ซ่อนอีก {hiddenCount} ประเด็น — เปิดดูรายละเอียดทั้งหมดได้
             </div>
           )}
-          <div className={`readable-detail-line${hiddenCount > 0 && index > 0 && index < lines.length - 3 ? ' readable-detail-hidden' : ''}`}>
+          <div className={`readable-detail-line${hiddenCount > 0 && index > 0 && index < lines.length - 3 ? ' readable-detail-hidden' : ''}${line.length > 170 ? ' readable-detail-long-line' : ''}`}>
             {line}
           </div>
         </Fragment>
       ))}
-      {hiddenCount > 0 && (
+      {(hiddenCount > 0 || hasLongLine) && (
         <button
           type="button"
           className="readable-detail-toggle"
           aria-expanded={expanded}
           onClick={() => setExpanded(value => !value)}
         >
-          {expanded ? 'ย่อรายละเอียด' : `ดูรายละเอียดทั้งหมด (${lines.length} ประเด็น)`}
+          {expanded ? 'ย่อรายละเอียด' : hiddenCount > 0 ? `ดูรายละเอียดทั้งหมด (${lines.length} ประเด็น)` : 'ดูข้อความทั้งหมด'}
         </button>
       )}
     </div>
