@@ -19,6 +19,8 @@ export default function DashboardMaterialsStatus(){
   const [rows,setRows]=useState<any[]>([])
   const [latestCheckAt,setLatestCheckAt]=useState<string|null>(null)
   const [latestImportAt,setLatestImportAt]=useState<string|null>(null)
+  const [latestSyncStatus,setLatestSyncStatus]=useState<string|null>(null)
+  const [latestSyncWritten,setLatestSyncWritten]=useState<number|null>(null)
   const [loading,setLoading]=useState(true)
   const [portalTarget,setPortalTarget]=useState<HTMLElement|null>(null)
 
@@ -29,13 +31,15 @@ export default function DashboardMaterialsStatus(){
       const [p,m,checked,imported]=await Promise.all([
         s.from('projects').select('id,code,name,active,sort_order').eq('active',true).order('sort_order'),
         s.from('materials').select('id,project_id,status'),
-        s.from('drive_sync_runs').select('created_at').eq('sync_type','materials').order('created_at',{ascending:false}).limit(1).maybeSingle(),
+        s.from('drive_sync_runs').select('created_at,status,rows_written').eq('sync_type','materials').order('created_at',{ascending:false}).limit(1).maybeSingle(),
         s.from('drive_sync_runs').select('created_at').eq('status','success').eq('sync_type','materials').gt('rows_written',0).order('created_at',{ascending:false}).limit(1).maybeSingle(),
       ])
       if(cancelled) return
       setProjects((p.data||[]) as Project[])
       setRows(m.data||[])
       setLatestCheckAt(checked.data?.created_at||null)
+      setLatestSyncStatus(checked.data?.status||null)
+      setLatestSyncWritten(typeof checked.data?.rows_written==='number'?checked.data.rows_written:null)
       setLatestImportAt(imported.data?.created_at||null)
       setLoading(false)
     }
@@ -77,8 +81,10 @@ export default function DashboardMaterialsStatus(){
       <div className="materials-meta">
         <span><b>ตรวจสอบล่าสุด</b> {dateTimeTH(latestCheckAt)}</span>
         <span><b>นำเข้าข้อมูลล่าสุด</b> {dateTimeTH(latestImportAt)}</span>
+        <span><b>ผลตรวจล่าสุด</b> {latestSyncStatus==='error'?'พบข้อผิดพลาด — ข้อมูลล่าสุดอาจยังไม่ถูกนำเข้า':latestSyncStatus==='success'?(latestSyncWritten===0?'ตรวจแล้ว (ไม่มีรายการนำเข้า)':'สำเร็จ'):'ยังไม่ทราบ'}</span>
         <span>กดสถานะเพื่อเปิดรายการที่กรองไว้แล้ว</span>
       </div>
+      {latestSyncStatus==='error'&&<div role="alert" style={{padding:'10px 14px',borderBottom:'1px solid #c2410c',fontWeight:600}}>Materials Sync ล่าสุดล้มเหลว — ตัวเลขอาจไม่สะท้อนการแก้ไขจากไฟล์ต้นทางล่าสุด โปรดตรวจสอบ Error ก่อนใช้ติดตามจัดซื้อ</div>}
       {loading?<p className="muted" style={{padding:14}}>กำลังโหลด Materials Status…</p>:<>
         <div className="materials-kpis">
           <div className="good"><span>สั่งแล้ว</span><b>{totals.ordered}</b><small>จาก {totals.total} รายการ</small></div>

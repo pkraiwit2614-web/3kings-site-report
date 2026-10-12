@@ -27,6 +27,10 @@ function uniqueText(rows:any[],key:string){
   return Array.from(new Set(rows.map(x=>`${x?.[key]||''}`.trim()).filter(Boolean))).sort((a,b)=>a.localeCompare(b,'th'))
 }
 
+function normalizeItemIdentity(value:unknown){
+  return String(value??'').replace(/\s+/g,' ').trim().toLocaleLowerCase('th-TH')
+}
+
 function textSearch(values:unknown[],needle:string){
   if(!needle) return true
   return values.map(v=>String(v??'')).join(' ').toLowerCase().includes(needle)
@@ -48,6 +52,7 @@ export default function MaterialsPage(){
   const [toolQ,setToolQ]=useState('')
   const [latestCheckAt,setLatestCheckAt]=useState<string|null>(null)
   const [latestImportAt,setLatestImportAt]=useState<string|null>(null)
+  const [latestSyncStatus,setLatestSyncStatus]=useState<string|null>(null)
 
   useEffect(()=>{
     const params=new URLSearchParams(window.location.search)
@@ -71,7 +76,7 @@ export default function MaterialsPage(){
           s.from('procurement_items').select('*').order('source_updated_at',{ascending:false}).order('source_row').abortSignal(signal),
           s.from('procurement_item_projects').select('procurement_item_id,project_id').abortSignal(signal),
           s.from('tool_machine').select('*').order('item_no').abortSignal(signal),
-          s.from('drive_sync_runs').select('created_at').eq('sync_type','materials').order('created_at',{ascending:false}).limit(1).abortSignal(signal).maybeSingle(),
+          s.from('drive_sync_runs').select('created_at,status').eq('sync_type','materials').order('created_at',{ascending:false}).limit(1).abortSignal(signal).maybeSingle(),
           s.from('drive_sync_runs').select('created_at').eq('status','success').eq('sync_type','materials').gt('rows_written',0).order('created_at',{ascending:false}).limit(1).abortSignal(signal).maybeSingle()
         ])
         requireSuccessfulReads([p,m,pr,prLinks,t,checked,imported])
@@ -83,6 +88,7 @@ export default function MaterialsPage(){
         setProcurementLinks(prLinks.data||[])
         setTools(t.data||[])
         setLatestCheckAt(checked.data?.created_at||null)
+        setLatestSyncStatus(checked.data?.status||null)
         setLatestImportAt(imported.data?.created_at||null)
       },
       onError:()=>{if(alive)setLoadError(true)},
@@ -140,29 +146,75 @@ export default function MaterialsPage(){
     const ids=procurementProjectIdsByItem.get(String(item.id))||[]
     return ids.map(id=>projectById.get(id)?.code).filter(Boolean).join(' / ')||'-'
   }
+  // Exact source-item matching only: same Plot + name + specification + unit.
+  // Ambiguous or incomplete matches remain separate; never transfer a PR/PO state by name alone.
+  const procurementByMaterial=useMemo(()=>{
+    const materialCounts=new Map<string,number>()
+    const keyForMaterial=(m:any)=>{
+      const text=[m.item_name,m.model_spec].filter(Boolean).join(' ')+(m.quantity_unit?' — '+m.quantity_unit:'')
+      return String(m.project_id||'')+'|'+normalizeItemIdentity(text)
+    }
+    for(const m of rows){
+      const key=keyForMaterial(m)
+      materialCounts.set(key,(materialCounts.get(key)||0)+1)
+    }
+    const purchaseBuckets=new Map<string,any[]>()
+    for(const item of procurement){
+      const name=normalizeItemIdentity(item.item_name)
+      if(!name)continue
+      for(const projectId of procurementProjectIdsByItem.get(String(item.id))||[]){
+        const key=projectId+'|'+name
+        const list=purchaseBuckets.get(key)||[]
+        list.push(item)
+        purchaseBuckets.set(key,list)
+      }
+    }
+    const matched=new Map<string,any>()
+    for(const m of rows){
+      const key=keyForMaterial(m)
+      const candidates=purchaseBuckets.get(key)||[]
+      if(materialCounts.get(key)===1&&candidates.length===1)matched.set(String(m.id),candidates[0])
+    }
+    return matched
+  },[rows,procurement,procurementProjectIdsByItem])
+
+  const matchingProcurementProjectKeys=useMemo(()=>{
+    const pairs=new Set<string>()
+    for(const m of rows){
+      const related=procurementByMaterial.get(String(m.id))
+      if(related)pairs.add(String(related.id)+'|'+String(m.project_id))
+    }
+    return pairs
+  },[rows,procurementByMaterial])
+
   const needle=q.trim().toLowerCase()
 
   const filtered=useMemo(()=>rows.filter(x=>{
     const p=projectById.get(x.project_id)
     return (!project||x.project_id===project)&&
       (!orderStatus||x.status===orderStatus)&&
-      textSearch([
-        p?.code,p?.name,x.data_group,x.source_item_no,x.category,x.item_name,x.status,x.status_detail,
-        x.brand,x.model_spec,x.quantity_unit,x.contact_name,x.contact_phone,x.notes
-      ],needle)
-  }),[rows,project,orderStatus,needle,projectById])
+      textSearch((()=>{
+        const linked=procurementByMaterial.get(String(x.id))
+        return [p?.code,p?.name,x.data_group,x.source_item_no,x.category,x.item_name,x.status,x.status_detail,
+          x.brand,x.model_spec,x.quantity_unit,x.contact_name,x.contact_phone,x.notes,
+          linked?.vendor,linked?.procurement_status,linked?.current_status,linked?.pr_no,linked?.po_no,linked?.condition_note]
+      })(),needle)
+  }),[rows,project,orderStatus,needle,projectById,procurementByMaterial])
 
   const filteredProcurement=useMemo(()=>{
     if(!needle&&!project) return []
     return procurement.filter(x=>{
       const relatedIds=procurementProjectIdsByItem.get(String(x.id))||[]
       const related=relatedIds.map(id=>projectById.get(id)).filter(Boolean) as Project[]
-      return (!project||relatedIds.includes(project))&&textSearch([
+      const alreadyShownInMaterials=project
+        ?matchingProcurementProjectKeys.has(String(x.id)+'|'+project)
+        :relatedIds.length>0&&relatedIds.every(id=>matchingProcurementProjectKeys.has(String(x.id)+'|'+id))
+      return !alreadyShownInMaterials&&(!project||relatedIds.includes(project))&&textSearch([
         ...related.flatMap(p=>[p.code,p.name]),x.vendor,x.item_name,x.procurement_status,x.payment_status,x.current_status,
         x.pr_no,x.po_no,x.expected_delivery_text,x.condition_note,x.source_updated_at
       ],needle)
     })
-  },[procurement,project,needle,projectById,procurementProjectIdsByItem])
+  },[procurement,project,needle,projectById,procurementProjectIdsByItem,matchingProcurementProjectKeys])
 
   const toolStatuses=useMemo(()=>uniqueText(tools,'status'),[tools])
   const toolCategories=useMemo(()=>uniqueText(tools,'category'),[tools])
@@ -176,6 +228,7 @@ export default function MaterialsPage(){
 
   return <AppShell>
     {loadError&&<div className="panel" role="alert">โหลดข้อมูลไม่สำเร็จ ข้อมูลที่แสดงอาจเป็นข้อมูลเดิม กรุณาลองใหม่ <button type="button" className="button" onClick={()=>window.dispatchEvent(new Event('focus'))}>ลองใหม่</button></div>}
+    {latestSyncStatus==='error'&&<div className="panel" role="alert" style={{border:'1px solid #c2410c',padding:12,marginBottom:10}}><b>การซิงก์ Materials ล่าสุดล้มเหลว</b> — ข้อมูลจาก Drive อาจยังไม่ครบหรือไม่เป็นปัจจุบัน (ตรวจพบ {dateTimeTH(latestCheckAt)}). ต้องแก้ปัญหาจับคู่ข้อมูลต้นทางก่อนนำเข้าใหม่; ระบบไม่ได้ยืนยันว่าซิงก์สำเร็จ</div>}
     <PageHeader title="วัสดุ เครื่องมือและผู้รับเหมา" subtitle={`ค้นหาวัสดุ งาน ผู้ขาย ผู้รับเหมา หรือเลข PO ได้จากหน้าเดียว • วัสดุ/งาน ${rows.length} รายการ • จัดซื้อ/จัดจ้าง ${procurement.length} รายการ • เครื่องมือ ${tools.length} รายการ`} action={<div className="management-action-grid management-printable-actions">
       <div className="management-action-meta"><span>ตรวจสอบล่าสุด</span><b>{dateTimeTH(latestCheckAt)}</b></div>
       <div className="management-action-meta"><span>นำเข้าข้อมูลล่าสุด</span><b>{dateTimeTH(latestImportAt)}</b></div>
@@ -186,7 +239,7 @@ export default function MaterialsPage(){
       <div style={{display:'flex',justifyContent:'space-between',gap:12,alignItems:'end',flexWrap:'wrap',marginBottom:8}}>
         <div>
           <h2 id="materials-status-title" style={{margin:'0 0 3px'}}>Materials Status</h2>
-          <div className="small muted">ค้นหาคำเดียวแล้วตรวจได้ทั้งสถานะวัสดุ รายละเอียดล่าสุด และ PO/ผู้รับเหมาที่เกี่ยวข้อง</div>
+          <div className="small muted">รวมข้อมูลสถานะวัสดุและเอกสาร PR/PO เมื่อจับคู่ Plot + รายการ + สเปก + หน่วยได้แน่นอน • อนุมัติ PR ไม่เท่ากับสั่งซื้อ/ออก PO</div>
         </div>
         <b className="small">แสดง {filtered.length} / {rows.length} รายการ</b>
       </div>
@@ -215,19 +268,21 @@ export default function MaterialsPage(){
       <div className="panel table-wrap" style={{maxHeight:560,overflow:'auto'}}>
         <table className="materials-print-table materials-status-print-table" style={{minWidth:1180}}>
           <thead>
-            <tr className="materials-print-repeat-title"><th colSpan={7}>3 Kings Construction — วัสดุ เครื่องมือและผู้รับเหมา · Materials Status</th></tr>
-            <tr><th>Plot</th><th>หมวด</th><th>วัสดุ / งาน</th><th>ยี่ห้อ / รุ่น / สเปก</th><th>สถานะ</th><th>รายละเอียดล่าสุด</th><th>ผู้ติดต่อ</th></tr>
+            <tr className="materials-print-repeat-title"><th colSpan={8}>3 Kings Construction — วัสดุ เครื่องมือและผู้รับเหมา · Materials Status</th></tr>
+            <tr><th>Plot</th><th>หมวด</th><th>วัสดุ / งาน</th><th>ยี่ห้อ / รุ่น / สเปก</th><th>สถานะวัสดุ / PO</th><th>หลักฐาน PR / PO</th><th>รายละเอียดล่าสุด</th><th>ผู้ติดต่อ</th></tr>
           </thead>
           <tbody>{filtered.map(x=>{
             const detail=[x.status_detail,x.notes].filter(Boolean).filter((v:string,i:number,a:string[])=>a.indexOf(v)===i)
+            const related=procurementByMaterial.get(String(x.id))
             return <tr key={x.id}>
               <td><b>{projectById.get(x.project_id)?.code||'-'}</b></td>
               <td>{x.category||'-'}</td>
               <td><b>{x.item_name}</b><small>{x.quantity_unit||'ยังไม่ระบุปริมาณ/หน่วย'}</small></td>
               <td>{[x.brand,x.model_spec].filter(Boolean).join(' / ')||'-'}</td>
               <td><StatusBadge value={x.status}/></td>
-              <td>{detail.length?detail.map((v:string,i:number)=><div key={`${x.id}-d-${i}`} style={{marginBottom:i<detail.length-1?4:0}}>{v}</div>):'-'}</td>
-              <td>{x.contact_name||x.contact_phone?<><b>{x.contact_name||'-'}</b><small>{x.contact_phone||''}</small></>:'-'}</td>
+              <td>{related?<><b>{related.procurement_status||'-'}</b><small>{related.current_status||'-'}</small>{(related.po_no||related.pr_no)&&<small>{[related.pr_no,related.po_no].filter(Boolean).join(' / ')}</small>}{related.payment_status&&<small>ชำระเงิน: {related.payment_status}</small>}{related.expected_delivery_text&&<small>กำหนดส่ง: {related.expected_delivery_text}</small>}</>:<span className="muted">ยังไม่มีรายการจัดซื้อที่จับคู่ได้แน่นอน</span>}</td>
+              <td>{[...detail,related?.condition_note].filter(Boolean).map((v:string,i:number)=><div key={`${x.id}-d-${i}`} style={{marginBottom:4}}>{v}</div>)}{related?.source_updated_at&&<small>ทะเบียนจัดซื้ออัปเดต {dateTH(related.source_updated_at)}</small>}{!detail.length&&!related?.condition_note&&!related?.source_updated_at&&'-'}</td>
+              <td>{x.contact_name||x.contact_phone||related?.vendor?<><b>{x.contact_name||related?.vendor||'-'}</b><small>{x.contact_phone||''}</small></>:'-'}</td>
             </tr>
           })}</tbody>
         </table>
@@ -239,7 +294,7 @@ export default function MaterialsPage(){
       <div style={{display:'flex',justifyContent:'space-between',gap:12,alignItems:'end',flexWrap:'wrap',marginBottom:10}}>
         <div>
           <h2 id="material-procurement-title" style={{margin:'0 0 3px'}}>PO / จัดซื้อจัดจ้างที่เกี่ยวข้อง</h2>
-          <div className="small muted">ใช้คำค้นและ Plot เดียวกับด้านบน เพื่อดูว่า PO เซ็นแล้วหรือยัง ติดขั้นตอนไหน และต้องตามอะไรต่อ</div>
+          <div className="small muted">แสดงรายการที่ยังจับคู่กับ Materials ไม่ได้อย่างแน่นอน เพื่อป้องกันการรวมรายการคนละสเปกหรือคนละ Plot</div>
         </div>
         <b className="small">พบ {filteredProcurement.length} รายการ</b>
       </div>
