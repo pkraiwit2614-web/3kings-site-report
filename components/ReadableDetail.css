@@ -23,6 +23,12 @@
 .readable-detail:not(.is-expanded) .readable-detail-hidden {
   display: none;
 }
+.readable-detail:not(.is-expanded) .readable-detail-long-line {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
 .readable-detail-gap {
   font-size: 11px;
   line-height: 1.4;
@@ -52,6 +58,11 @@
 @media print {
   .readable-detail { max-width: none !important; font-size: inherit !important; }
   .readable-detail .readable-detail-hidden { display: block !important; }
+  .readable-detail .readable-detail-long-line {
+    display: block !important;
+    -webkit-line-clamp: unset !important;
+    overflow: visible !important;
+  }
   .readable-detail .readable-detail-gap,
   .readable-detail .readable-detail-toggle { display: none !important; }
   .readable-detail-line {
