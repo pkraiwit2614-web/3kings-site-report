@@ -5,6 +5,7 @@ import Link from 'next/link'
 import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
 import StatusBadge from '@/components/StatusBadge'
+import ReadableDetail from '@/components/ReadableDetail'
 import { getSupabase } from '@/lib/supabase'
 import { createLiveLoader, requireSuccessfulReads } from '@/lib/liveLoader'
 import type { Project } from '@/lib/types'
@@ -281,7 +282,7 @@ export default function MaterialsPage(){
               <td>{[x.brand,x.model_spec].filter(Boolean).join(' / ')||'-'}</td>
               <td><StatusBadge value={x.status}/></td>
               <td>{related?<><b>{related.procurement_status||'-'}</b><small>{related.current_status||'-'}</small>{(related.po_no||related.pr_no)&&<small>{[related.pr_no,related.po_no].filter(Boolean).join(' / ')}</small>}{related.payment_status&&<small>ชำระเงิน: {related.payment_status}</small>}{related.expected_delivery_text&&<small>กำหนดส่ง: {related.expected_delivery_text}</small>}</>:<span className="muted">ยังไม่มีรายการจัดซื้อที่จับคู่ได้แน่นอน</span>}</td>
-              <td>{[...detail,related?.condition_note].filter(Boolean).map((v:string,i:number)=><div key={`${x.id}-d-${i}`} style={{marginBottom:4}}>{v}</div>)}{related?.source_updated_at&&<small>ทะเบียนจัดซื้ออัปเดต {dateTH(related.source_updated_at)}</small>}{!detail.length&&!related?.condition_note&&!related?.source_updated_at&&'-'}</td>
+              <td><ReadableDetail parts={[...detail,related?.condition_note]}/>{related?.source_updated_at&&<small>ทะเบียนจัดซื้ออัปเดต {dateTH(related.source_updated_at)}</small>}</td>
               <td>{x.contact_name||x.contact_phone||related?.vendor?<><b>{x.contact_name||related?.vendor||'-'}</b><small>{x.contact_phone||''}</small></>:'-'}</td>
             </tr>
           })}</tbody>
@@ -312,7 +313,7 @@ export default function MaterialsPage(){
             <td>{x.payment_status||x.procurement_status||'-'}</td>
             <td><StatusBadge value={x.current_status} multiline/></td>
             <td><b>{x.expected_delivery_text||'ยังไม่ระบุ'}</b></td>
-            <td>{x.condition_note||'-'}</td>
+            <td><ReadableDetail parts={[x.condition_note]}/></td>
             <td>{dateTH(x.source_updated_at)}</td>
           </tr>)}</tbody>
         </table>
