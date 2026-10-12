@@ -87,7 +87,34 @@ export default function ExecutivePlanDateCardsSafe20261001(){
     .ep-task-info[data-plan-start]>.ep-note{grid-column:1 / -1!important;order:4!important}
     .ep-task-info[data-plan-start]>.ep-owner{grid-column:1 / -1!important;order:5!important}
 
+    /* Scoped to the Presentation task slides: render heading and date at distinct sizes.
+       The legacy pseudo-cards are suppressed only where the real cards are present. */
+    .ep-task-info:has(>.ep-plan-pair){
+      grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;
+    }
+    .ep-task-info:has(>.ep-plan-pair)::before,
+    .ep-task-info:has(>.ep-plan-pair)::after{content:none!important;display:none!important}
+    .ep-task-info>.ep-plan-pair{
+      grid-column:1 / -1!important;order:2!important;
+      display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;min-width:0;
+    }
+    .ep-task-info .ep-plan-card{
+      display:flex;flex-direction:column;justify-content:center;gap:3px;
+      min-width:0;min-height:58px;box-sizing:border-box;
+      padding:9px 11px;border:1px solid #e5cc8e;border-left:4px solid #b8872e;
+      border-radius:10px;background:#fff8e8;color:#17243a;
+    }
+    .ep-task-info .ep-plan-card>span{
+      display:block;font-size:12px;line-height:1.25;font-weight:900;
+    }
+    .ep-task-info .ep-plan-card>time{
+      display:block;font-size:11px;line-height:1.3;font-weight:700;overflow-wrap:anywhere;
+    }
+
     @media(max-width:620px){
+      .ep-task-info .ep-plan-card{min-height:52px;padding:8px 9px}
+      .ep-task-info .ep-plan-card>span{font-size:11.5px}
+      .ep-task-info .ep-plan-card>time{font-size:10.5px}
       .ep-task-info[data-plan-start]::before,
       .ep-task-info[data-plan-start]::after{
         min-height:58px;
