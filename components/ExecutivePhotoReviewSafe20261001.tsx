@@ -195,7 +195,10 @@ export default function ExecutivePhotoReviewSafe20261001(){
         next.set(key,{photo_id:photoId,task_id:taskId,status,note:row.note,reviewed_by:userId,reviewed_at:now})
         return next
       })
-      setToast(status==='approved'?'บันทึกแล้ว ✓ ใช้รูปนี้กับงานนี้':'บันทึกแล้ว ✕ รูปนี้ไม่ตรงกับงานนี้')
+      // Refresh the live slide immediately after a confirmed write, and persist the choice across reloads.
+      // For a rejection the next eligible filename-ranked image replaces this one.
+      window.dispatchEvent(new CustomEvent('3kings:presentation-photo-feedback',{detail:{photoId,taskId,status}}))
+      setToast(status==='approved'?'บันทึกแล้ว ✓ เก็บรูปนี้ไว้ และตรวจรูปอื่นต่อได้':'บันทึกแล้ว ✕ ข้ามรูปนี้และแสดงรูปถัดไป')
       window.setTimeout(()=>setToast(''),1800)
     }catch(error){
       setToast(`บันทึกไม่สำเร็จ: ${error instanceof Error?error.message:'unknown error'}`)
