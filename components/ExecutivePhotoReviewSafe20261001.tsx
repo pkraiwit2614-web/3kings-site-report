@@ -134,7 +134,10 @@ export default function ExecutivePhotoReviewSafe20261001(){
         const slide=document.querySelector<HTMLElement>('.ep-stage .ep-slide:not(.condo-slide)')
         if(slide){
           const project=projectByCode.get(codeFromSlide(slide))
-          const task=project?taskFromSlide(slide,project,taskRows):null
+          const exactTaskId=slide.dataset.presentationTaskId
+          const task=project?(exactTaskId
+            ? taskRows.find(t=>t.id===exactTaskId&&t.project_id===project.id)||null
+            : taskFromSlide(slide,project,taskRows)):null
           if(task){
             slide.querySelectorAll<HTMLElement>('.ep-photo-grid figure').forEach(figure=>{
               const img=figure.querySelector<HTMLImageElement>('img')
