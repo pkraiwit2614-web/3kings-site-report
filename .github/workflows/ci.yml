@@ -49,6 +49,9 @@ jobs:
       - name: Complete role matrix regression tests
         run: node tests/role-matrix.test.cjs
 
+      - name: Read-only Permission Matrix UI regression
+        run: node tests/role-permission-matrix-ui.test.cjs
+
       - name: RBAC regression tests
         run: node tests/rbac.test.cjs
 
