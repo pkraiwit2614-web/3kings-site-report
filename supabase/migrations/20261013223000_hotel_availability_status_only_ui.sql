@@ -66,7 +66,7 @@ BEGIN
     )
     ON CONFLICT(room_no) DO UPDATE SET
       availability_status=EXCLUDED.availability_status,start_date=EXCLUDED.start_date,
-      end_date=EXCLUDED.end_date,reason=EXCLUDED.reason,
+      end_date=EXCLUDED.end_date,reason=public.hotel_room_availability.reason,
       updated_by=EXCLUDED.updated_by,updated_by_name=EXCLUDED.updated_by_name,
       updated_at=now(),revision=public.hotel_room_availability.revision+1,
       source_sync_state='pending',source_writeback_last_error=null
