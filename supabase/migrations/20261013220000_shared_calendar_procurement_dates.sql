@@ -123,6 +123,8 @@ create or replace view public.v_procurement_items as
      LEFT JOIN procurement_item_overrides o ON o.source_identity = p.source_identity
      LEFT JOIN procurement_calendar_delivery d ON d.source_identity = p.source_identity;
 
+alter view public.v_procurement_items set (security_invoker = true);
+
 -- Extend five existing *calendar-only* RPCs to Purchase without touching payroll,
 -- Defect, schedule, procurement or Site Operations permissions. Fail if signature differs.
 do $$
