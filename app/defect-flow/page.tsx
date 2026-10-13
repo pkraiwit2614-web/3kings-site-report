@@ -6,7 +6,6 @@ import useAccessRole from '@/components/useAccessRole'
 import {canAccessPath} from '@/lib/accessControl'
 import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
-import DefectInputPanel from '@/components/DefectInputPanel'
 import { getSupabase } from '@/lib/supabase'
 
 type FlowRow={
@@ -221,6 +220,7 @@ export default function DefectFlowPage(){
   const [rows,setRows]=useState<FlowRow[]>([])
   const [loading,setLoading]=useState(true)
   const [error,setError]=useState('')
+  const [roomSearch,setRoomSearch]=useState('')
   const svgRef=useRef<SVGSVGElement|null>(null)
 
   useEffect(()=>{
@@ -307,7 +307,10 @@ export default function DefectFlowPage(){
         <button type="button" className="button report-print-button flow-print-button" onClick={()=>window.print()} disabled={loading||!!error}>🖨️ Print</button>
       </div>}/>
     </div>
-    <DefectInputPanel/>
+    <form className="panel" onSubmit={e=>{e.preventDefault();if(roomSearch.trim())window.location.assign('/defects?q='+encodeURIComponent(roomSearch.trim())+'#room-list')}} style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',marginBottom:12,padding:10}}>
+      <input value={roomSearch} onChange={e=>setRoomSearch(e.target.value)} placeholder="ค้นหาเลขห้อง / Combine เช่น A313, A314, Good01" aria-label="ค้นหาห้องใน Defect Flow" style={{flex:'1 1 260px',minHeight:36}}/>
+      <button className="button primary" type="submit" disabled={!roomSearch.trim()}>ค้นหา → Defect Detail</button>
+    </form>
 
     {loading?<div className="panel flow-loading">กำลังโหลด Handover / Defect Flow…</div>:error?<div className="panel flow-error">โหลดข้อมูลไม่ได้: {error}</div>:<section className="flow-stage panel">
       <svg ref={svgRef} className="flow-svg" viewBox="0 0 1920 1080" role="img" aria-label="Live Handover Defect Flow Building A and B" xmlns="http://www.w3.org/2000/svg">
