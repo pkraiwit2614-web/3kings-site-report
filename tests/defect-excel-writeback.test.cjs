@@ -15,6 +15,14 @@ assert.match(worker,/Utilities\.unzip/);
 assert.match(worker,/Utilities\.zip/);
 assert.match(worker,/writeback.*Excel|Excel.*writeback|Drive upload/);
 assert.match(worker,/defectWbVerifyXml_/);
+// Google Apps Script rejects changing a ZIP Blob's ContentType to XLSX.
+// Dry Run must return before creating the ZIP, while Drive upload retains the XLSX content type.
+assert.doesNotMatch(worker,/Utilities\\.zip\\([\\s\\S]*?\\)\\s*\\.setContentType\\(DEFECT_WB\\.XLSX_MIME\\)/);
+const dryRunBranch=worker.indexOf('if(dryRun) {',worker.indexOf('function defectWbPrepare_'));
+const zipStep=worker.indexOf('const output=Utilities.zip',worker.indexOf('function defectWbPrepare_'));
+const uploadStep=worker.indexOf("UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files/", zipStep);
+assert.ok(dryRunBranch >= 0 && zipStep > dryRunBranch && uploadStep > zipStep);
+assert.match(worker,/method:'patch',contentType:DEFECT_WB\\.XLSX_MIME/);
 assert.match(worker,/\.getLastUpdated\(\)/);
 assert.match(worker,/1MEeB1E7D_35MTndRPi1aBTlVfI2aR0Wj/);
 assert.match(worker,/16JuK26rn7HGPDtSlnMMS2aljYGWyn0Y3/);
