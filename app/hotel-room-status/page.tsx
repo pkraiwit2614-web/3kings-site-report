@@ -92,7 +92,6 @@ export default function HotelRoomStatusPage(){
   }
   const save=async()=>{
     if(!chosen||!canEdit)return
-    if(!chosen.inHotel&&role!=='owner'){setMessage('ห้องนี้ไม่อยู่ในโครงการโรงแรม');return}
     if(formStatus!=='AVAILABLE'&&(!fromDate||!reason.trim())){setMessage('กรุณาระบุวันที่เริ่มและเหตุผล');return}
     if(toDate&&fromDate&&toDate<fromDate){setMessage('วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่ม');return}
     if(!window.confirm('ยืนยันบันทึก '+chosen.members.map(r=>r.room_no).join(' + ')+' เป็น '+formStatus+' โดยไม่เปลี่ยนสถานะ Defect?'))return
@@ -164,8 +163,7 @@ export default function HotelRoomStatusPage(){
           {currentlyPending.map(r=><p key={r.room_no}><b>{r.room_no}</b> — {r.defect_detail||r.current_status||r.status_group||'รอดำเนินการ'}{r.next_action?' • ต้องทำต่อ: '+r.next_action:''}</p>)}
         </div>:<div className="hotel-pending">ไม่พบกลุ่มสถานะ Defect ค้างตามข้อมูลล่าสุด (ไม่ใช่การยืนยันว่าห้องพร้อมบริการ)</div>}
         <p><Link href={'/defects?q='+encodeURIComponent(chosen.members.map(r=>r.room_no).join(','))+'#room-list'} className="button">ดู Defect Detail ทั้งชุดห้อง</Link></p>
-        {canEdit&&(!chosen.inHotel&&role!=='owner'?<p>ห้องนี้ไม่ร่วมโรงแรม จึงแก้สถานะ OOO/OOS ไม่ได้</p>:
-          <div className="hotel-editor">
+        {canEdit&&<div className="hotel-editor">
             <label>สถานะห้อง<select value={formStatus} onChange={e=>setFormStatus(e.target.value as 'AVAILABLE'|'OOO'|'OOS')}>
               <option value="AVAILABLE">พร้อมให้บริการ</option><option value="OOO">Out of Order (OOO)</option><option value="OOS">Out of Service (OOS)</option>
             </select></label>
@@ -173,7 +171,7 @@ export default function HotelRoomStatusPage(){
             <label>วันที่คาดว่าจะสิ้นสุด<input type="date" value={toDate} disabled={formStatus==='AVAILABLE'} onChange={e=>setToDate(e.target.value)}/></label>
             <label className="full">สาเหตุ / รายละเอียด<textarea value={reason} maxLength={2000} onChange={e=>setReason(e.target.value)} rows={3}/></label>
             <button className="button primary" type="button" onClick={save} disabled={busy}>{busy?'กำลังบันทึก…':'ตรวจสอบและบันทึกสถานะทั้งชุดห้อง'}</button>
-          </div>)}
+          </div>}
         {message&&<p role="status" style={{marginTop:10}}>{message}</p>}
       </section>}
     </>}
