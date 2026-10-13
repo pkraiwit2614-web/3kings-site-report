@@ -535,8 +535,8 @@ export function GoogleCalendarManager(){
               <button type="button" className="button danger" disabled={saving} onClick={()=>void calendarAction('delete')}>ลบ</button>
             </div>
           </div>}
-        </>
-        <p>Source: Google Calendar</p>
+        </>}
+        <p>Source: Google Calendar / Web App</p>
       </aside>
 
       <main className="panel gcal-stage">
