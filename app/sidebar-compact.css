@@ -44,3 +44,20 @@
     margin-left:0!important;
   }
 }
+
+/* Keep navigation readable while making the desktop profile/controls a smaller tier.
+   Scoped to the sidebar: mobile menu, page forms, and access logic are unchanged. */
+@media (min-width:761px){
+  .sidebar nav{gap:4px}
+  .sidebar nav a{padding:8px 8px;font-size:12.5px;line-height:1.35}
+  .sidebar .userbox{margin-top:8px;padding-top:10px;gap:3px}
+  .sidebar .userbox>b{font-size:11px;line-height:1.3;overflow-wrap:anywhere}
+  .sidebar .userbox>span{font-size:9.5px;line-height:1.3}
+  .sidebar .userbox .role-preview-control,
+  .sidebar .userbox .language-selector{gap:3px;margin-top:5px}
+  .sidebar .userbox .role-preview-control>span,
+  .sidebar .userbox .language-selector>span{font-size:8px;line-height:1.2}
+  .sidebar .userbox .role-preview-control select,
+  .sidebar .userbox .language-selector select{min-height:29px;padding:4px 7px;font-size:9px;line-height:1.25}
+  .sidebar .userbox>button{font-size:10px;line-height:1.3;padding:4px 0}
+}
