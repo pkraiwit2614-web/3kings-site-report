@@ -135,6 +135,9 @@ begin
        'work_calendar_save_event','work_calendar_delete_event')
   loop
     v_sql:=pg_get_functiondef(rec.oid);
+    if position('p.role in (''manager'',''viewer_editor'',''purchase'')' in v_sql)>0 then
+      continue; -- already updated by the canonical role-matrix migration
+    end if;
     if position('p.role in (''manager'',''viewer_editor'')' in v_sql)=0 then
       raise exception 'Calendar authorization function changed: %',rec.proname;
     end if;
