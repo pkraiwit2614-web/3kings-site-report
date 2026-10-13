@@ -20,6 +20,12 @@ const DEFECT_WB = Object.freeze({
   XLSX_MIME: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 });
 function runDefectWritebackDryRun() {
+  // Always verify both existing workbook schemas, even if the queue is empty.
+  const fixture={room_no:'A212',revision:'DRY_RUN',current_status:'DRY RUN',
+    status_group:'Hotel - Incomplete',next_action:'Dry run & verification',
+    latest_source:'DRY_RUN',source_note:'No actual file modification',
+    defect_detail:'Test-only; never uploaded'};
+  DEFECT_WB.FILES.forEach(function(meta){defectWbPrepare_(meta,fixture,true);});
   return defectWbRun_(true);
 }
 function runDefectWritebackScheduled() {
