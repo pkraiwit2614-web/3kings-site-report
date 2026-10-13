@@ -28,6 +28,9 @@ jobs:
       - name: Hotel OOO/OOS room mapping and security regression
         run: node tests/hotel-room-availability.test.cjs
 
+      - name: Combine room save, search, print, and role regression
+        run: node tests/combine-room-group-edit.test.cjs
+
       - name: Hotel Excel OOO/OOS pinned source safety
         run: node --test tests/hotel-ooo-excel-source.test.cjs
 
