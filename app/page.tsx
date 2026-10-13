@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
+import useAccessRole from '@/components/useAccessRole'
+import {canAccessPath} from '@/lib/accessControl'
 import PrintButton from '@/components/PrintButton'
 import StatusBadge from '@/components/StatusBadge'
 import DashboardMaterialsStatus from '@/components/DashboardMaterialsStatus'
@@ -91,6 +93,8 @@ function siteStatusOf(x:{variance:number}){
 }
 
 export default function DashboardPage() {
+  const {role}=useAccessRole()
+  const canViewSiteOperations=role!==null&&canAccessPath(role,'/reports')
   const [loadError,setLoadError]=useState(false)
   const [projects,setProjects]=useState<Project[]>([])
   const [tasks,setTasks]=useState<ScheduleTask[]>([])
@@ -291,11 +295,10 @@ export default function DashboardPage() {
     {loadError&&<div className="panel" role="alert">โหลดข้อมูลไม่สำเร็จ ข้อมูลที่แสดงอาจเป็นข้อมูลเดิม กรุณาลองใหม่ <button type="button" className="button" onClick={()=>window.dispatchEvent(new Event('focus'))}>ลองใหม่</button></div>}
     <PageHeader title="Management Dashboard" subtitle="Construction supervision overview — เห็นความคืบหน้า ความเสี่ยง ทรัพยากร และรายการต้องติดตามจากหน้าเดียว" action={<div className="management-action-grid management-dashboard-actions">
       <div className="management-action-meta"><span>ข้อมูลอัปเดต</span><b>{dateTimeTH(latestDataSyncAt)}</b></div>
-      <Link href="/reports/new" className="button primary management-action-primary">+ รายงานประจำวัน</Link>
+      {canViewSiteOperations&&<Link href="/reports" className="button primary management-action-primary">Site Operations</Link>}
       <Link href="/site-photos" className="button management-action-secondary">📷 รูปภาพหน้างาน</Link>
       <PrintButton reportTitle="Management Dashboard"/>
     </div>} />
-    <div className="panel" style={{padding:'10px 14px',marginBottom:14,display:'flex',justifyContent:'space-between',gap:10,alignItems:'center',flexWrap:'wrap'}}><span className="small muted">ข้อมูล Dashboard จาก Schedule / Materials / Site Operations (Daily Site Report)</span><b className="small">อัปเดตข้อมูลล่าสุด: {dateTimeTH(latestDataSyncAt)}</b></div>
     {loading?<div className="panel">กำลังโหลดข้อมูล…</div>:<>
       <section className="executive-section">
         <div className="executive-section-title"><span>1</span><div><b>PROJECT KPI SUMMARY</b><small>ภาพรวมโครงการจาก Schedule และข้อมูลหน้างานล่าสุด</small></div></div>
