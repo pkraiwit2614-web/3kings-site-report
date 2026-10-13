@@ -31,7 +31,7 @@ const reconciliation=fs.readFileSync('components/HotelRoomReconciliationPanel.ts
 assert.match(sql,/ENABLE ROW LEVEL SECURITY/g)
 assert.match(sql,/ROOM_AVAILABILITY_EDIT_DENIED/)
 assert.match(sql,/REVISION_CONFLICT_RELOAD/)
-assert.match(sql,/ROOM_OUTSIDE_HOTEL_PROGRAM/)
+assert.match(fs.readFileSync('supabase/migrations/20261013193000_hotel_room_status_all_canonical_rooms.sql','utf8'),/hotel_participation/)
 assert.match(sql,/REVIEW_OWNER_ONLY/)
 assert.doesNotMatch(sql,/UPDATE public\.condo_room_status/i)
 assert.doesNotMatch(sql,/DELETE FROM public\.condo_room_status/i)
