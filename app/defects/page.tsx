@@ -208,10 +208,11 @@ export default function DefectDetailPage(){
       if(building!=='ALL'&&r.building!==building)return false
       if(customerFilter==='CUSTOMER'&&r.customer_status!=='มีลูกค้า')return false
       if(customerFilter==='NO_CUSTOMER'&&r.customer_status!=='ไม่มีลูกค้า')return false
-      if(active&&!active.predicate(r))return false
+      const paired=rows.filter(other=>hotelRoomMembers(r.room_no).includes(other.room_no))
+      if(active&&!paired.some(active.predicate))return false
       if(!needles.length)return true
-      const searchable=[r.room_no,r.owner_name,r.customer_status,r.hotel_participation,r.defect_detail,statusLabel(r),r.next_action,r.follow_up].filter(Boolean).join(' ').toLowerCase()
-      return needles.some(needle=>searchable.includes(needle)||hotelRoomMembers(r.room_no).some(member=>member.toLowerCase().includes(needle)))
+      const searchable=paired.flatMap(other=>[other.room_no,other.owner_name,other.customer_status,other.hotel_participation,other.defect_detail,statusLabel(other),other.next_action,other.follow_up]).filter(Boolean).join(' ').toLowerCase()
+      return needles.some(needle=>searchable.includes(needle))
     })
   },[rows,building,customerFilter,active,q])
 
@@ -229,6 +230,15 @@ export default function DefectDetailPage(){
         {showDashboard&&<Link href="/?section=defect#dashboard-defect" className="button">← Dashboard</Link>}
       </div>}
     />
+    <section className="panel filter-panel compact-filter-shell">
+        <div className="toolbar detail-toolbar compact-filter">
+          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="ค้นหาหลายรายการได้ เช่น A521, A522, รอตรวจรับ" aria-label="ค้นหาเลขห้อง ชื่อเจ้าของ สถานะ หรือรายละเอียดงาน หลายคำคั่นด้วย comma"/>
+          <select value={building} onChange={e=>setBuilding(e.target.value)} aria-label="กรองอาคาร"><option value="ALL">ตึก A + B</option><option value="A">ตึก A</option><option value="B">ตึก B</option></select>
+          <select value={filter} onChange={e=>setFilter(e.target.value)} aria-label="กรองสถานะ"><option value="">ทุกสถานะ</option>{categories.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</select>
+          {(q||building!=='ALL'||filter||customerFilter!=='ALL')&&<button type="button" className="button" onClick={()=>{setQ('');setBuilding('ALL');setFilter('');setCustomerFilter('ALL')}}>ล้างตัวกรอง</button>}
+        </div>
+      </section>
+
     <DefectInputPanel />
 
     {loading?<div className="panel">กำลังโหลดข้อมูลห้อง…</div>:<>
@@ -244,15 +254,6 @@ export default function DefectDetailPage(){
           <button type="button" onClick={()=>setBuilding('A')} className={`break-card building ${building==='A'?'active':''}`}><span>ตึก A</span><b>{aCount}</b><small>ห้อง</small></button>
           <button type="button" onClick={()=>setBuilding('B')} className={`break-card building ${building==='B'?'active':''}`}><span>ตึก B</span><b>{bCount}</b><small>ห้อง</small></button>
           <button type="button" onClick={()=>{setBuilding('ALL');setCustomerFilter('ALL')}} className={`break-card total ${building==='ALL'&&customerFilter==='ALL'?'active':''}`}><span>รวม</span><b>{totalCount}</b><small>ห้อง</small></button>
-        </div>
-      </section>
-
-      <section className="panel filter-panel">
-        <div className="toolbar detail-toolbar">
-          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="ค้นหาหลายรายการได้ เช่น A521, A522, รอตรวจรับ" aria-label="ค้นหาเลขห้อง ชื่อเจ้าของ สถานะ หรือรายละเอียดงาน หลายคำคั่นด้วย comma"/>
-          <select value={building} onChange={e=>setBuilding(e.target.value)} aria-label="กรองอาคาร"><option value="ALL">ตึก A + B</option><option value="A">ตึก A</option><option value="B">ตึก B</option></select>
-          <select value={filter} onChange={e=>setFilter(e.target.value)} aria-label="กรองสถานะ"><option value="">ทุกสถานะ</option>{categories.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</select>
-          {(q||building!=='ALL'||filter||customerFilter!=='ALL')&&<button type="button" className="button" onClick={()=>{setQ('');setBuilding('ALL');setFilter('');setCustomerFilter('ALL')}}>ล้างตัวกรอง</button>}
         </div>
       </section>
 
