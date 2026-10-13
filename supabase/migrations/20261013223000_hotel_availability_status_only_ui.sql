@@ -61,7 +61,7 @@ BEGIN
       updated_at,revision,source_sync_state,source_writeback_last_error
     ) VALUES (
       v_member,p_status,p_start_date,p_end_date,
-      nullif(btrim(coalesce(p_reason,'')),''),v_uid,coalesce(v_name,'ผู้ใช้'),
+      NULL,v_uid,coalesce(v_name,'ผู้ใช้'),
       now(),1,'pending',null
     )
     ON CONFLICT(room_no) DO UPDATE SET
