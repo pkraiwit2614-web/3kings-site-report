@@ -28,6 +28,9 @@ jobs:
       - name: Defect canonical source contract
         run: node tests/defect-canonical-source.test.cjs
 
+      - name: Defect Excel writeback XML and queue safety
+        run: node tests/defect-excel-writeback.test.cjs
+
       - name: Stability regression tests
         run: node tests/stability.test.cjs
 
