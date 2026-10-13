@@ -34,7 +34,7 @@ export function canAccessPath(role:AccessRole,path:string){
   if(role==='owner')return true
   if(value===PAYROLL_RECORD_PREFIX||value.startsWith(PAYROLL_RECORD_PREFIX+'/'))return canViewPayroll(role)
   if(role==='defect_contributor'||role==='defect_editor'){
-    return value==='/defect-flow'||value==='/defects'||value.startsWith('/defects/')
+    return value==='/defect-flow'||value==='/defects'||value.startsWith('/defects/')||value==='/hotel-room-status'
   }
   if(OWNER_ONLY_PREFIXES.some(prefix=>value===prefix||value.startsWith(prefix+'/')))return false
   return ['admin','viewer','viewer_editor','defect_editor','purchase'].includes(role)
