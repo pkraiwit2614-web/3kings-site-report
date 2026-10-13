@@ -1,0 +1,119 @@
+/* Scoped to /materials only: no change to shared tables, print layout, data or editing. */
+.headerActions{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  flex-wrap:wrap;
+  gap:10px;
+  min-width:0;
+}
+.latestUpdate{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-end;
+  gap:3px;
+  color:var(--muted);
+  font-size:11px;
+  line-height:1.3;
+  white-space:nowrap;
+}
+.latestUpdate b{
+  color:var(--navy-2);
+  font-size:12.5px;
+  font-weight:750;
+  font-variant-numeric:tabular-nums;
+}
+@media screen{
+  .statusSection{
+    min-width:0;
+  }
+  .statusSection h2{
+    font-size:20px;
+    font-weight:800;
+    line-height:1.3;
+    letter-spacing:-.02em;
+    color:var(--navy);
+  }
+  .statusSection > div:first-child :global(.small){
+    font-size:12px;
+    line-height:1.45;
+  }
+  .statusSection :global(.materials-status-print-table){
+    min-width:1040px;
+    table-layout:fixed;
+  }
+  .statusSection :global(.materials-status-print-table) thead tr:last-child th{
+    padding:10px 9px;
+    font-size:11.5px;
+    line-height:1.3;
+    font-weight:750;
+    letter-spacing:0;
+    text-transform:none;
+    white-space:normal;
+    overflow-wrap:anywhere;
+  }
+  .statusSection :global(.materials-status-print-table) tbody td{
+    padding:8px 9px;
+    font-size:12px;
+    line-height:1.45;
+    overflow-wrap:anywhere;
+    word-break:normal;
+    vertical-align:top;
+  }
+  .statusSection :global(.materials-status-print-table) tbody td > b{
+    font-weight:750;
+    color:var(--navy-2);
+  }
+  .statusSection :global(.materials-status-print-table) tbody td:nth-child(3) > b{
+    font-size:13.5px;
+    line-height:1.35;
+    display:block;
+  }
+  .statusSection :global(.materials-status-print-table) tbody td:nth-child(6) > b{
+    font-size:12.5px;
+    display:block;
+    margin-top:2px;
+  }
+  .statusSection :global(.materials-status-print-table) td small{
+    font-size:11px;
+    line-height:1.35;
+    margin-top:3px;
+  }
+  .statusSection :global(.materials-status-print-table) tbody tr:nth-child(even) td{
+    background:#fafbfc;
+  }
+  .statusSection :global(.materials-status-print-table) tbody tr:hover td{
+    background:#f1f6fb;
+  }
+  .statusSection :global(.materials-status-print-table) :global(.readable-detail){
+    width:100%;
+    max-width:none;
+    gap:3px;
+    font-size:11.75px;
+    line-height:1.4;
+  }
+  .statusSection :global(.materials-status-print-table) :global(.readable-detail-line){
+    padding:4px 6px 4px 8px;
+  }
+  .statusSection :global(.materials-status-print-table) :global(.readable-detail-toggle),
+  .statusSection :global(.materials-status-print-table) :global(.readable-detail-gap){
+    font-size:11px;
+  }
+  .statusSection :global(.materials-status-print-table) :global(.material-web-edit-button){
+    padding:4px 8px;
+    font-size:11px;
+    line-height:1.3;
+  }
+  .statusSection :global(.materials-status-print-table) thead tr:last-child th:nth-child(1){width:7%}
+  .statusSection :global(.materials-status-print-table) thead tr:last-child th:nth-child(2){width:8%}
+  .statusSection :global(.materials-status-print-table) thead tr:last-child th:nth-child(3){width:17%}
+  .statusSection :global(.materials-status-print-table) thead tr:last-child th:nth-child(4){width:14%}
+  .statusSection :global(.materials-status-print-table) thead tr:last-child th:nth-child(5){width:10%}
+  .statusSection :global(.materials-status-print-table) thead tr:last-child th:nth-child(6){width:15%}
+  .statusSection :global(.materials-status-print-table) thead tr:last-child th:nth-child(7){width:22%}
+  .statusSection :global(.materials-status-print-table) thead tr:last-child th:nth-child(8){width:7%}
+}
+@media screen and (max-width:680px){
+  .headerActions{justify-content:flex-start}
+  .latestUpdate{align-items:flex-start}
+}
