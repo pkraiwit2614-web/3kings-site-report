@@ -32,6 +32,7 @@ export function resolveAccessRole(profileRole:string|undefined|null,userId:strin
 export function canAccessPath(role:AccessRole,path:string){
   const value=cleanPath(path)
   if(role==='owner')return true
+  if(value===PAYROLL_RECORD_PREFIX||value.startsWith(PAYROLL_RECORD_PREFIX+'/'))return canViewPayroll(role)
   if(role==='defect_contributor'||role==='defect_editor'){
     return value==='/defect-flow'||value==='/defects'||value.startsWith('/defects/')
   }
@@ -68,7 +69,7 @@ export function canManageLabour(role:AccessRole|null){
 }
 
 export function canViewPayroll(role:AccessRole|null){
-  return role!==null&&['owner','admin','viewer','viewer_editor','purchase'].includes(role)
+  return role!==null&&['owner','admin','purchase'].includes(role)
 }
 
 export function isOwnerOnlyPath(path:string){
