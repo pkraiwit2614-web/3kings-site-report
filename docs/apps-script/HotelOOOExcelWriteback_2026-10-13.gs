@@ -231,6 +231,36 @@ function hotelOOORun_(dryRun){
     return {ok:false,error:String(err)};
   } finally{lock.releaseLock()}
 }
+function hotelOOOReadinessCheck(){
+  // Read-only preflight. Validates the pinned workbook even when writeback queue is empty.
+  const f=DriveApp.getFileById(HOTEL_OOO_WB.FILE_ID);
+  if(f.getMimeType()!==HOTEL_OOO_WB.MIME||!HOTEL_OOO_WB.NAME_RE.test(f.getName()))
+    throw Error('Hotel source workbook file ID/name/MIME mismatch');
+  const map={};Utilities.unzip(f.getBlob()).forEach(b=>map[b.getName()]=b);
+  if(!map[HOTEL_OOO_WB.SHEET_MASTER]||!map[HOTEL_OOO_WB.SHEET_SCHEDULE])
+    throw Error('Missing pinned Hotel OOO sheet paths');
+  const ss=hotelOOOShared_(map['xl/sharedStrings.xml']);
+  const master=map[HOTEL_OOO_WB.SHEET_MASTER].getDataAsString();
+  const schedule=map[HOTEL_OOO_WB.SHEET_SCHEDULE].getDataAsString();
+  const seen={},totals={rooms:0,OOO:0,OOS:0,AVAILABLE:0,unstated:0};
+  for(let row=5;row<=267;row++){
+    const room=hotelOOORead_(master,'A'+row,ss);
+    const status=hotelOOORead_(master,'B'+row,ss);
+    const sr=Number(hotelOOORead_(master,'H'+row,ss));
+    if(!/^[AB][0-9]{3}$/.test(room)||seen[room]||!Number.isInteger(sr)||sr<5||sr>271)
+      throw Error('Master source identity invalid at row '+row);
+    seen[room]=true;totals.rooms++;
+    if(!['OOO','OOS','AVAILABLE',''].includes(status))throw Error('Invalid Hotel OOO status at '+room);
+    totals[status||'unstated']++;
+    if(hotelOOONormalize_(hotelOOORead_(schedule,'F'+sr,ss))!==room)
+      throw Error('Schedule / master Room ID mismatch: '+room);
+    if(hotelOOORead_(schedule,'H'+sr,ss)!==status)
+      throw Error('Schedule / master OOO mismatch: '+room);
+  }
+  if(totals.rooms!==263)throw Error('Expected 263 actual rooms');
+  const outcome={ok:true,fileId:HOTEL_OOO_WB.FILE_ID,fileName:f.getName(),totals:totals};
+  console.log(JSON.stringify(outcome));return outcome;
+}
 function hotelOOODryRun(){return hotelOOORun_(true)}
 function hotelOOOExecuteWriteback(){return hotelOOORun_(false)}
 function hotelOOOInstallTrigger(){
