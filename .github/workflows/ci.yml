@@ -85,7 +85,7 @@ jobs:
       - name: Google Calendar live edit regression
         run: node tests/google-calendar-live-edit.test.cjs
 
-      # Baseline materials table colSpan assertion differs from current main; run it LAST so all other regressions are checked.
+      # Validate live Materials print table columns, repeating headers and page-width allocation.
       - name: Materials print pagination regression
         run: node tests/materials-print-layout.test.cjs
 
