@@ -11,6 +11,7 @@ import { createLiveLoader, requireSuccessfulReads } from '@/lib/liveLoader'
 import type { Project } from '@/lib/types'
 import useAccessRole from '@/components/useAccessRole'
 import MaterialToolEditPanel from '@/components/MaterialToolEditPanel'
+import styles from './materials-screen.module.css'
 import {canManageMaterialsTools} from '@/lib/accessControl'
 
 function dateTimeTH(value:string|null|undefined){
@@ -248,14 +249,13 @@ export default function MaterialsPage(){
   return <AppShell>
     {loadError&&<div className="panel" role="alert">โหลดข้อมูลไม่สำเร็จ ข้อมูลที่แสดงอาจเป็นข้อมูลเดิม กรุณาลองใหม่ <button type="button" className="button" onClick={()=>window.dispatchEvent(new Event('focus'))}>ลองใหม่</button></div>}
     {latestSyncStatus==='error'&&<div className="panel" role="alert" style={{border:'1px solid #c2410c',padding:12,marginBottom:10}}><b>การซิงก์ Materials ล่าสุดล้มเหลว</b> — ข้อมูลจาก Drive อาจยังไม่ครบหรือไม่เป็นปัจจุบัน (ตรวจพบ {dateTimeTH(latestCheckAt)}). ต้องแก้ปัญหาจับคู่ข้อมูลต้นทางก่อนนำเข้าใหม่; ระบบไม่ได้ยืนยันว่าซิงก์สำเร็จ</div>}
-    <PageHeader title="วัสดุ เครื่องมือและผู้รับเหมา" subtitle={`ค้นหาวัสดุ งาน ผู้ขาย ผู้รับเหมา หรือเลข PO ได้จากหน้าเดียว • วัสดุ/งาน ${rows.length} รายการ • จัดซื้อ/จัดจ้าง ${procurement.length} รายการ • เครื่องมือ ${tools.length} รายการ`} action={<div className="management-action-grid management-printable-actions">
-      <div className="management-action-meta"><span>ตรวจสอบล่าสุด</span><b>{dateTimeTH(latestCheckAt)}</b></div>
-      <div className="management-action-meta"><span>นำเข้าข้อมูลล่าสุด</span><b>{dateTimeTH(latestImportAt)}</b></div>
+    <PageHeader title="วัสดุ เครื่องมือและผู้รับเหมา" subtitle={`ค้นหาวัสดุ งาน ผู้ขาย ผู้รับเหมา หรือเลข PO ได้จากหน้าเดียว • วัสดุ/งาน ${rows.length} รายการ • จัดซื้อ/จัดจ้าง ${procurement.length} รายการ • เครื่องมือ ${tools.length} รายการ`} action={<div className={`management-action-grid management-printable-actions ${styles.headerActions}`}>
+      <div className={styles.latestUpdate}><span>อัพเดทล่าสุด</span><b>{dateTimeTH(latestImportAt)}</b></div>
       <Link href="/?section=materials#dashboard-materials" className="button management-action-dashboard">← Dashboard</Link>
     </div>}/>
 
     {editTarget&&<MaterialToolEditPanel key={editTarget.type+String(editTarget.item.id)+String(editTarget.item.__override_updated_at||"")} target={editTarget} onClose={()=>setEditTarget(null)} onSaved={()=>{setEditTarget(null);window.dispatchEvent(new Event("focus"))}}/>}
-    <section aria-labelledby="materials-status-title">
+    <section aria-labelledby="materials-status-title" className={styles.statusSection}>
       <div style={{display:'flex',justifyContent:'space-between',gap:12,alignItems:'end',flexWrap:'wrap',marginBottom:8}}>
         <div>
           <h2 id="materials-status-title" style={{margin:'0 0 3px'}}>Materials Status</h2>
@@ -282,11 +282,10 @@ export default function MaterialsPage(){
             <option value="ไม่เกี่ยวข้อง">ไม่เกี่ยวข้อง</option>
           </select>
           {(project||orderStatus||q)&&<button type="button" className="button" style={{padding:'7px 10px',fontSize:12,borderRadius:9}} onClick={()=>{setProject('');setOrderStatus('');setQ('')}}>ล้าง</button>}
-          <span className="small muted" style={{marginLeft:'auto',whiteSpace:'nowrap'}}>Drive Sync • ตรวจสอบ {dateTimeTH(latestCheckAt)} • นำเข้าข้อมูล {dateTimeTH(latestImportAt)}</span>
         </div>
       </div>
       <div className="panel table-wrap" style={{maxHeight:560,overflow:'auto'}}>
-        <table className="materials-print-table materials-status-print-table" style={{minWidth:1180}}>
+        <table className="materials-print-table materials-status-print-table" style={{minWidth:1040}}>
           <thead>
             <tr className="materials-print-repeat-title"><th colSpan={8}>3 Kings Construction — วัสดุ เครื่องมือและผู้รับเหมา · Materials Status</th></tr>
             <tr><th>Plot</th><th>หมวด</th><th>วัสดุ / งาน</th><th>ยี่ห้อ / รุ่น / สเปก</th><th>สถานะวัสดุ / PO</th><th>หลักฐาน PR / PO</th><th>รายละเอียดล่าสุด</th><th>ผู้ติดต่อ</th></tr>
