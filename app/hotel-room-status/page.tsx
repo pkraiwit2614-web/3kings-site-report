@@ -24,7 +24,7 @@ const pending=(r:Room)=>(
   ['Hotel - Incomplete','Hotel - Awaiting Check','Hotel - Awaiting Room Inspection','Non-Hotel - Pending Handover'].includes(r.status_group||'')
 )
 const dateTH=(value:string|null)=>value?new Intl.DateTimeFormat('th-TH',{timeZone:'Asia/Bangkok',dateStyle:'medium',timeStyle:'short'}).format(new Date(value)):'—'
-const statusText=(s:HotelStatus|null)=>!s||s.availability_status==='UNKNOWN'?'ยังไม่ระบุ':s.availability_status==='AVAILABLE'?'พร้อมให้บริการ':s.availability_status
+const statusText=(s:HotelStatus|null)=>!s||s.availability_status==='UNKNOWN'?'รอตรวจสอบ':s.availability_status==='AVAILABLE'?'พร้อมให้บริการ':s.availability_status
 
 export default function HotelRoomStatusPage(){
   const {role,ready}=useAccessRole()
@@ -102,7 +102,7 @@ export default function HotelRoomStatusPage(){
     if((formStatus==='OOO'||formStatus==='OOS')&&!fromDate){setMessage('กรุณาระบุวันที่เริ่มใช้สถานะ');return}
     if(toDate&&!fromDate){setMessage('กรุณาระบุวันที่เริ่มก่อนกำหนดวันที่สิ้นสุด');return}
     if(toDate&&fromDate&&toDate<fromDate){setMessage('วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่ม');return}
-    if(!window.confirm('ยืนยันบันทึก '+hotelRoomMembers(chosen.key).join(' + ')+' เป็น '+(formStatus==='AVAILABLE'?'พร้อมให้บริการ':formStatus==='UNKNOWN'?'ไม่ระบุ':formStatus)+' ทั้งชุด Combine?\\nไม่เปลี่ยนข้อมูล Defect'))return
+    if(!window.confirm('ยืนยันบันทึก '+hotelRoomMembers(chosen.key).join(' + ')+' เป็น '+(formStatus==='AVAILABLE'?'พร้อมให้บริการ':formStatus==='UNKNOWN'?'รอตรวจสอบ':formStatus)+' ทั้งชุด Combine?\\nไม่เปลี่ยนข้อมูล Defect'))return
     setBusy(true);setMessage('')
     const {error:saveError}=await getSupabase().rpc('hotel_room_availability_save',{
       p_room_no:chosen.key,p_status:formStatus,
@@ -121,7 +121,7 @@ export default function HotelRoomStatusPage(){
       action={<div className="hotel-header-actions"><div className="hotel-update-meta"><span>ข้อมูลอัปเดต</span><b>{dateTH(lastUpdated)}</b></div><PrintButton reportTitle="Room Status | OOO/OOS"/><Link className="button" href="/defects">เปิด Defect Detail</Link></div>}/>
     <section className="panel" style={{padding:14,marginBottom:12}}>
       <div className="hotel-kpis">
-        {([['AVAILABLE','พร้อมให้บริการ'],['OOO','Out of Order'],['OOS','Out of Service'],['UNKNOWN','ยังไม่ระบุ']] as const)
+        {([['AVAILABLE','พร้อมให้บริการ'],['OOO','Out of Order'],['OOS','Out of Service'],['UNKNOWN','รอตรวจสอบ']] as const)
           .map(([key,label])=><button key={key} className={'hotel-kpi status-'+key.toLowerCase()+' '+(stateFilter===key?'chosen':'')} onClick={()=>setStateFilter(stateFilter===key?'ALL':key)}
             type="button"><span>{label}</span><b>{count(key)}</b><small>ชุดห้อง</small></button>)}
       </div>
@@ -132,11 +132,11 @@ export default function HotelRoomStatusPage(){
           <option value="ALL">อาคาร A+B</option><option value="A">อาคาร A</option><option value="B">อาคาร B</option>
         </select>
         <select aria-label="สถานะห้อง" value={stateFilter} onChange={e=>setStateFilter(e.target.value)}>
-          <option value="ALL">ทุกสถานะ</option><option value="AVAILABLE">พร้อมให้บริการ</option><option value="OOO">OOO</option><option value="OOS">OOS</option><option value="UNKNOWN">ยังไม่ระบุ</option>
+          <option value="ALL">ทุกสถานะ</option><option value="AVAILABLE">พร้อมให้บริการ</option><option value="OOO">OOO</option><option value="OOS">OOS</option><option value="UNKNOWN">รอตรวจสอบ</option>
         </select>
         <button type="button" className="button" onClick={()=>{setQuery('');setBuilding('ALL');setStateFilter('ALL')}}>ล้างตัวกรอง</button>
       </div>
-      <p className="small muted" style={{marginTop:8}}>สถานะที่ยังไม่ระบุไม่ใช่ห้องพร้อมให้บริการ • หนึ่งรายการต่อหนึ่ง Room ID (263 ห้อง) • ค้นหาห้องใดจะแสดงสมาชิก Combine ทั้งชุด • สถานะที่อ้างอิงคู่ยังไม่ใช่ข้อมูลที่บันทึกแล้ว • ความขัดแย้งเก่าต้องตรวจสอบ Data Reconciliation</p>
+      <p className="small muted" style={{marginTop:8}}>สถานะรอตรวจสอบไม่ใช่การยืนยันว่าห้องพร้อมให้บริการ • หนึ่งรายการต่อหนึ่ง Room ID (263 ห้อง) • ค้นหาห้องใดจะแสดงสมาชิก Combine ทั้งชุด • สถานะที่อ้างอิงคู่ยังไม่ใช่ข้อมูลที่บันทึกแล้ว • ความขัดแย้งเก่าต้องตรวจสอบ Data Reconciliation</p>
     </section>
     {error&&<div className="panel" role="alert" style={{color:'#a63329',marginBottom:12}}>โหลดข้อมูลล้มเหลว: {error}</div>}
     {loading?<div className="panel">กำลังโหลดสถานะห้อง…</div>:!error&&<>
@@ -173,7 +173,7 @@ export default function HotelRoomStatusPage(){
         <p><Link href={'/defects?q='+encodeURIComponent(hotelRoomMembers(chosen.key).join(','))+'#room-list'} className="button">ดู Defect Detail ทั้งชุด Combine</Link></p>
         {canEdit&&<div className="hotel-editor">
             <label>สถานะห้อง<select value={formStatus} onChange={e=>setFormStatus(e.target.value as 'AVAILABLE'|'OOO'|'OOS'|'UNKNOWN')}>
-              <option value="AVAILABLE">พร้อมให้บริการ</option><option value="OOO">Out of Order (OOO)</option><option value="OOS">Out of Service (OOS)</option><option value="UNKNOWN">ไม่ระบุ</option>
+              <option value="AVAILABLE">พร้อมให้บริการ</option><option value="OOO">Out of Order (OOO)</option><option value="OOS">Out of Service (OOS)</option><option value="UNKNOWN">รอตรวจสอบ</option>
             </select></label>
             <label>วันที่เริ่มใช้สถานะ<input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)}/></label>
             <label>วันที่สิ้นสุด (ถ้ามี)<input type="date" value={toDate} min={fromDate||undefined} onChange={e=>setToDate(e.target.value)}/></label>
