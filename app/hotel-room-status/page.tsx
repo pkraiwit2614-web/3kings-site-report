@@ -93,15 +93,16 @@ export default function HotelRoomStatusPage(){
   const currentlyPending=chosen?.members.filter(pending)||[]
   const count=(status:string)=>groups.filter(g=>(g.hotel?.availability_status||'UNKNOWN')===status).length
   const choose=(g:RoomGroup)=>{
-    setSelected(g.key);setFormStatus(g.hotel?.availability_status||'OOS')
+    setSelected(g.key);setFormStatus(g.hotel?.availability_status||'UNKNOWN')
     setFromDate(g.hotel?.start_date||'');setToDate(g.hotel?.end_date||'')
     setMessage('')
   }
   const save=async()=>{
     if(!chosen||!canEdit)return
     if((formStatus==='OOO'||formStatus==='OOS')&&!fromDate){setMessage('กรุณาระบุวันที่เริ่มใช้สถานะ');return}
+    if(toDate&&!fromDate){setMessage('กรุณาระบุวันที่เริ่มก่อนกำหนดวันที่สิ้นสุด');return}
     if(toDate&&fromDate&&toDate<fromDate){setMessage('วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่ม');return}
-    if(!window.confirm('ยืนยันบันทึก '+hotelRoomMembers(chosen.key).join(' + ')+' เป็น '+formStatus+' ทั้งชุด Combine?\\nไม่เปลี่ยนข้อมูล Defect'))return
+    if(!window.confirm('ยืนยันบันทึก '+hotelRoomMembers(chosen.key).join(' + ')+' เป็น '+(formStatus==='AVAILABLE'?'พร้อมให้บริการ':formStatus==='UNKNOWN'?'ไม่ระบุ':formStatus)+' ทั้งชุด Combine?\\nไม่เปลี่ยนข้อมูล Defect'))return
     setBusy(true);setMessage('')
     const {error:saveError}=await getSupabase().rpc('hotel_room_availability_save',{
       p_room_no:chosen.key,p_status:formStatus,
