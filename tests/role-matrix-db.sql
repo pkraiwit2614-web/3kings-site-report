@@ -26,7 +26,7 @@ begin
   select count(*) into n from public.site_operations_entries;
   if (n>0) is distinct from (c.role not in ('defect_contributor','defect_editor')) then raise exception 'site ops leak/denial %',c.role; end if;
   select count(*) into n from public.payroll_verification_records;
-  if n <> (case when c.role in ('defect_contributor','defect_editor') then 0 else (select payroll_count from matrix_baseline) end) then raise exception 'payroll leak/denial %',c.role; end if;
+  if n <> (case when c.role in ('defect_contributor','defect_editor','viewer','viewer_editor') then 0 else (select payroll_count from matrix_baseline) end) then raise exception 'payroll leak/denial %',c.role; end if;
   checks:=checks+4;
   for r in select * from matrix_rpc loop
    expected:= c.role='manager' or

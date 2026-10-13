@@ -3,6 +3,8 @@
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import AppShell from '@/components/AppShell'
+import useAccessRole from '@/components/useAccessRole'
+import {canViewPayroll} from '@/lib/accessControl'
 import SiteOperationsReviewEditor from '@/components/SiteOperationsReviewEditor'
 import PageHeader from '@/components/PageHeader'
 import StatusBadge from '@/components/StatusBadge'
@@ -52,6 +54,8 @@ function pct(v:number|null|undefined){return v===null||v===undefined?'-':Math.ro
 function isOpenProcurement(row:ProcurementRow){return !closedProcurementPattern.test([row.current_status,row.procurement_status,row.payment_status].filter(Boolean).join(' '))}
 
 export default function SiteOperationsPage(){
+  const {role:accessRole}=useAccessRole()
+  const showLabour=canViewPayroll(accessRole)
   const [loading,setLoading]=useState(true)
   const [loadError,setLoadError]=useState(false)
   const [entries,setEntries]=useState<SiteEntry[]>([])
@@ -209,7 +213,7 @@ export default function SiteOperationsPage(){
   return <AppShell>
     {readSignals.some(x=>x.truncated)&&<div className="panel" role="alert" style={{marginBottom:10}}>โหลดข้อมูลไม่ครบ • {readSignals.filter(x=>x.truncated).map(x=>x.label+' '+x.loaded+'/'+x.count).join(' • ')}</div>}
     {loadError&&<div className="panel" role="alert" style={{marginBottom:10}}>โหลดข้อมูล Site Operations ไม่สำเร็จบางส่วน • ระบบคงข้อมูลเดิมไว้ก่อน <button type="button" className="button" style={{marginLeft:8}} onClick={()=>window.dispatchEvent(new Event('focus'))}>ลองใหม่</button></div>}
-    <PageHeader title="Site Operations" subtitle="ข้อมูลจาก Google Form / Daily Site Report แบบ Read-only • ใช้ข้อมูลที่หน้างานรายงานแล้วต่อยอดทันทีโดยไม่กรอกซ้ำ" action={<div className="siteops-actions"><span><small>Source Sync ล่าสุด</small><b>{dateTimeTH(latestSynced)}</b></span><Link href="/reports/labour" className="button">Labour Verification</Link><Link href="/#dashboard-site-operations" className="button">← Dashboard</Link></div>}/>
+    <PageHeader title="Site Operations" subtitle="ข้อมูลจาก Google Form / Daily Site Report แบบ Read-only • ใช้ข้อมูลที่หน้างานรายงานแล้วต่อยอดทันทีโดยไม่กรอกซ้ำ" action={<div className="siteops-actions"><span><small>Source Sync ล่าสุด</small><b>{dateTimeTH(latestSynced)}</b></span>{showLabour&&<Link href="/reports/labour" className="button">Labour Verification</Link>}<Link href="/#dashboard-site-operations" className="button">← Dashboard</Link></div>}/>
 
     <section className="panel siteops-filter">
       <label>วันที่<select value={selectedDate} onChange={e=>setSelectedDate(e.target.value)}><option value="">ทุกวันที่</option>{availableDates.map(d=><option key={d} value={d}>{dateTH(d)}</option>)}</select></label>
@@ -229,7 +233,7 @@ export default function SiteOperationsPage(){
       <article className="panel siteops-cross"><b>Daily Report × Schedule</b><strong>{scheduleReadyCount}</strong><p>Schedule candidate จาก Project + รายละเอียดงาน ใช้ช่วยตรวจเท่านั้น ไม่เขียน Task ID หรือ Actual อัตโนมัติ</p><Link href="/schedule">เปิด Schedule →</Link></article>
       <article className="panel siteops-cross"><b>Daily Report × Procurement</b><strong>{materialSignalCount}</strong><p>จับคำรอของ / รอวัสดุ / PO แล้วเทียบ Procurement ที่ยังเปิดอยู่ของ Project เดียวกัน</p><Link href="/procurement">เปิด Procurement →</Link></article>
       <article className="panel siteops-cross"><b>Daily Report × Progress</b><strong>{scheduleReadyCount}</strong><p>Daily Report เป็น evidence ของกิจกรรม/สถานะ/Next plan ส่วน % Actual ยังยึด Schedule Source of Truth</p><Link href="/schedule">ตรวจ Plan vs Actual →</Link></article>
-      <article className="panel siteops-cross"><b>Daily Report × Labour</b><strong>{needsReviewCount}</strong><p>รายการที่ยังต้องตรวจ identity หรือทีมคนงานก่อนใช้เป็น Labour Cost • ยืนยันแล้ว {verifiedCount}</p><Link href="/reports/labour">ยืนยันทีมคนงาน →</Link></article>
+      {showLabour&&<article className="panel siteops-cross"><b>Daily Report × Labour</b><strong>{needsReviewCount}</strong><p>รายการที่ยังต้องตรวจ identity หรือทีมคนงานก่อนใช้เป็น Labour Cost • ยืนยันแล้ว {verifiedCount}</p><Link href="/reports/labour">ยืนยันทีมคนงาน →</Link></article>}
     </section>
 
     <div className="siteops-source-note"><b>Data lineage:</b> Google Form → Daily Site Report → Site Operations Raw Dataset → Cross-check • Labour Cost อ่านเฉพาะข้อมูลที่ผ่าน Labour Verification แล้ว</div>
@@ -238,7 +242,7 @@ export default function SiteOperationsPage(){
       <b>Duplicate candidates รอตรวจ {duplicateReviewEntries.length} raw rows</b>
       <p>รายการเหล่านี้ยังคง raw evidence ครบ แต่ถูกกักออกจาก Site Operations totals / Labour / Payroll จนกว่าจะมีหลักฐานยืนยันว่าเป็นรายการซ้ำหรือเป็นงานคนละรายการ</p>
       <div>{duplicateReviewEntries.map(entry=><span key={entry.id}>Form row {entry.source_row} • {dateTH(entry.work_date)} • {entry.supervisor_raw||'-'} • {entry.project_name_raw||'-'} • {entry.work_detail||'-'}</span>)}</div>
-      <Link href="/reports/labour" className="button">เปิด Duplicate Review →</Link>
+      {showLabour&&<Link href="/reports/labour" className="button">เปิด Duplicate Review →</Link>}
     </section>}
 
     {loading?<div className="panel">กำลังโหลด Site Operations…</div>:!filtered.length?<div className="panel siteops-empty"><b>ไม่พบรายงานตาม Filter</b><span>ข้อมูลใหม่จะเข้าหน้านี้จากระบบ Sync โดยไม่ต้องกรอกใน Web App ซ้ำ</span></div>:<div className="siteops-list">
