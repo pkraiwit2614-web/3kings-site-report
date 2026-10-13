@@ -87,7 +87,8 @@ function hotelOOOVerifyChange_(change,master,schedule,shared){
   const room=String(change.room_no);
   if(hotelOOORead_(master,'A'+row,shared)!==room ||
      hotelOOONormalize_(hotelOOORead_(schedule,'F'+source,shared))!==room ||
-     hotelOOONormalize_(String(change.original_room_no))!==room)
+     hotelOOONormalize_(String(change.original_room_no))!==room ||
+     Number(hotelOOORead_(master,'H'+row,shared))!==source)
     throw Error('Room identity conflict '+room);
   const expected=[
    ['B'+row,change.source_synced_status||''],
@@ -98,8 +99,10 @@ function hotelOOOVerifyChange_(change,master,schedule,shared){
    ['K'+row,String(change.source_synced_revision??0)]
   ];
   expected.forEach(([cell,v])=>{
-    if(hotelOOORead_(master,cell,shared)!==String(v))
-      throw Error('Excel changed outside Web: '+room+' '+cell+'; Data Reconciliation required');
+    const current=hotelOOORead_(master,cell,shared);
+    // Excel serializes numeric cells as 1.0 / 0.0; do not mistake them for conflicts.
+    const same=cell.charAt(0)==='K'?Number(current)===Number(v):current===String(v);
+    if(!same)throw Error('Excel changed outside Web: '+room+' '+cell+'; Data Reconciliation required');
   });
   const priorPeriod=hotelOOOPeriod_(change.source_synced_start,change.source_synced_end);
   [['H'+source,change.source_synced_status||''],
