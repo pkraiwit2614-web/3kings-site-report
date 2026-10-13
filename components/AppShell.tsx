@@ -51,8 +51,8 @@ function roleLabel(role:AccessRole|null){
   if(role==='admin') return 'Admin'
   if(role==='viewer') return 'Viewer · ดูข้อมูล'
   if(role==='viewer_editor') return 'Viewer & Editor · แผนงาน / ปฏิทิน / Defect'
-  if(role==='defect_contributor') return 'Defect Contributor'
-  if(role==='defect_editor') return 'Defect Contributor Editor'
+  if(role==='defect_contributor') return 'Defect Viewer'
+  if(role==='defect_editor') return 'Defect Contributor'
   if(role==='purchase') return 'Purchase'
   return 'User'
 }

@@ -49,7 +49,7 @@ export function canEditSiteOperations(role:AccessRole|null){
 }
 
 export function canEditCalendar(role:AccessRole|null){
-  return role==='owner'||role==='viewer_editor'
+  return role==='owner'||role==='viewer_editor'||role==='purchase'
 }
 
 export function canEditSchedule(role:AccessRole|null){
@@ -64,12 +64,16 @@ export function canEditProcurement(role:AccessRole|null){
   return role==='owner'||role==='purchase'
 }
 
+export function canManageMaterialsTools(role:AccessRole|null){
+  return role==='owner'||role==='purchase'
+}
+
 export function canManageLabour(role:AccessRole|null){
   return role==='owner'||role==='admin'
 }
 
 export function canViewPayroll(role:AccessRole|null){
-  return role!==null&&['owner','admin','purchase'].includes(role)
+  return role!==null&&['owner','admin'].includes(role)
 }
 
 export function isOwnerOnlyPath(path:string){

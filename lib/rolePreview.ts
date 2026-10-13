@@ -8,8 +8,8 @@ export const ROLE_PREVIEW_LABELS:Record<AccessRole,string>={
   admin:'Admin',
   viewer:'Viewer',
   viewer_editor:'Viewer & Editor',
-  defect_contributor:'Defect Contributor',
-  defect_editor:'Defect Contributor Editor',
+  defect_contributor:'Defect Viewer',
+  defect_editor:'Defect Contributor',
   purchase:'Purchase',
 }
 

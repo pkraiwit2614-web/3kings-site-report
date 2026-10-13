@@ -103,6 +103,7 @@ const EXACT: Record<string, TranslationPair> = {
     "en": "Viewer",
     "ru": "Viewer"
   },
+  "Defect Viewer": {"en":"Defect Viewer","ru":"Просмотр дефектов"},
   "Defect Contributor": {
     "en": "Defect Contributor",
     "ru": "Исполнитель Defect"

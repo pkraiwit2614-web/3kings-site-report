@@ -2,7 +2,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict'),ts=require('typ
 const m={exports:{}}
 vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/accessControl.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module:m,exports:m.exports})
 const a=m.exports
-const matrix={viewer:[false,false,false,false,false],viewer_editor:[true,false,true,false,true],purchase:[false,false,false,true,false],admin:[false,true,false,false,false],defect_contributor:[false,false,false,false,false],defect_editor:[false,false,true,false,false],owner:[true,true,true,true,true]}
+const matrix={viewer:[false,false,false,false,false],viewer_editor:[true,false,true,false,true],purchase:[false,false,false,true,true],admin:[false,true,false,false,false],defect_contributor:[false,false,false,false,false],defect_editor:[false,false,true,false,false],owner:[true,true,true,true,true]}
 const fns=['canEditSchedule','canEditSiteOperations','canEditDefect','canEditProcurement','canEditCalendar']
 let checks=0
 for(const [role,expected] of Object.entries(matrix)){
@@ -12,7 +12,8 @@ for(const [role,expected] of Object.entries(matrix)){
  for(const path of ['/defect-flow','/defects','/defects/A101']){assert.equal(a.canAccessPath(role,path),true);checks++}
  for(const path of ['/users','/users?tab=activity','/photo-mapping','/data-health','/data-house']){assert.equal(a.canAccessPath(role,path),role==='owner');checks++}
  assert.equal(a.defaultPathForRole(role),restricted?'/defect-flow':'/');checks++
- assert.equal(a.canViewPayroll(role),['owner','admin','purchase'].includes(role));checks++
+ assert.equal(a.canManageMaterialsTools(role),['owner','purchase'].includes(role));checks++
+ assert.equal(a.canViewPayroll(role),['owner','admin'].includes(role));checks++
  assert.equal(a.canManageLabour(role),role==='owner'||role==='admin');checks++
 }
 assert.equal(a.resolveAccessRole('manager',a.OWNER_USER_ID),'owner')

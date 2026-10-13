@@ -33,8 +33,8 @@ const roleLabel: Record<string,string> = {
   admin: 'Admin',
   viewer: 'Viewer',
   viewer_editor: 'Viewer & Editor',
-  defect_contributor: 'Defect Contributor',
-  defect_editor: 'Defect Contributor Editor',
+  defect_contributor: 'Defect Viewer',
+  defect_editor: 'Defect Contributor',
   purchase: 'Purchase',
   engineer: 'Legacy Engineer',
   foreman: 'Legacy Viewer',
@@ -166,8 +166,8 @@ function UsersContent() {
           <option value="viewer">Viewer — ดูได้ทุกหน้า ยกเว้น Payroll / System & Access</option>
           <option value="viewer_editor">Viewer & Editor — แก้แผนงาน / ปฏิทิน / Defect (ใช้บัญชีรายบุคคล)</option>
           <option value="admin">Admin — จัดการ Site Operations / Labour / Payroll</option>
-          <option value="defect_contributor">Defect Contributor — ดูเฉพาะ Defect ห้ามแก้ไข</option>
-          <option value="defect_editor">Defect Contributor Editor — ดูและแก้เฉพาะ Defect (ใช้บัญชีรายบุคคล)</option>
+          <option value="defect_contributor">Defect Viewer — ดูเฉพาะ Defect ห้ามแก้ไข</option>
+          <option value="defect_editor">Defect Contributor — ดูและแก้เฉพาะ Defect (ใช้บัญชีรายบุคคล)</option>
           <option value="purchase">Purchase — ดูทั่วไป + แก้ Procurement</option>
         </select></label>
         <label>รหัสผ่าน<div className="row" style={{gap:8}}><input value={password} onChange={e=>setPassword(e.target.value)} /><button type="button" className="button" onClick={()=>setPassword(makePassword(username))}>สุ่มใหม่</button></div></label>
