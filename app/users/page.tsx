@@ -6,6 +6,7 @@ import OwnerOnlyGate from '@/components/OwnerOnlyGate'
 import PageHeader from '@/components/PageHeader'
 import StatusBadge from '@/components/StatusBadge'
 import ActivityLogPanel from '@/components/ActivityLogPanel'
+import RolePermissionMatrix from '@/components/RolePermissionMatrix'
 import { getSupabase } from '@/lib/supabase'
 import { OWNER_USER_ID } from '@/lib/accessControl'
 
@@ -76,7 +77,7 @@ function UsersContent() {
   const [fullName, setFullName] = useState('')
   const [role, setRole] = useState('viewer')
   const [password, setPassword] = useState(makePassword())
-  const [activeTab, setActiveTab] = useState<'users'|'activity'>('users')
+  const [activeTab, setActiveTab] = useState<'users'|'matrix'|'activity'>('users')
 
   const load = async () => {
     setLoading(true)
@@ -137,6 +138,7 @@ function UsersContent() {
 
     <nav className="user-access-tabs" aria-label="User & Access navigation">
       <button type="button" className={activeTab==='users'?'active':''} onClick={()=>setActiveTab('users')}>ผู้ใช้งานและสิทธิ์</button>
+      <button type="button" className={activeTab==='matrix'?'active':''} onClick={()=>setActiveTab('matrix')}>Permission Matrix</button>
       <button type="button" className={activeTab==='activity'?'active':''} onClick={()=>setActiveTab('activity')}>Activity Log</button>
     </nav>
 
@@ -168,7 +170,7 @@ function UsersContent() {
           <option value="admin">Admin — จัดการ Site Operations / Labour / Payroll</option>
           <option value="defect_contributor">Defect Viewer — ดูเฉพาะ Defect ห้ามแก้ไข</option>
           <option value="defect_editor">Defect Contributor — ดูและแก้เฉพาะ Defect (ใช้บัญชีรายบุคคล)</option>
-          <option value="purchase">Purchase — ดูทั่วไป + แก้ Procurement</option>
+          <option value="purchase">Purchase — จัดการวัสดุ / เครื่องมือ / Procurement / ปฏิทิน (ไม่เห็น Payroll)</option>
         </select></label>
         <label>รหัสผ่าน<div className="row" style={{gap:8}}><input value={password} onChange={e=>setPassword(e.target.value)} /><button type="button" className="button" onClick={()=>setPassword(makePassword(username))}>สุ่มใหม่</button></div></label>
       </div>
@@ -187,13 +189,13 @@ function UsersContent() {
       <tbody>{rows.map(row => <UserRow key={row.user_id} row={row} onChanged={load} onCredential={(c)=>setCredentials([c])} onMessage={setMessage}/>)}</tbody>
     </table></div>}
     <p className="muted small" style={{lineHeight:1.65}}>บัญชีที่สร้างจากหน้านี้เข้าใช้งานด้วย Username + Password ได้ทันที ไม่มีขั้นตอนยืนยันอีเมล • สิทธิ์ถูกบังคับทั้ง Route และฐานข้อมูล ไม่ใช่เพียงซ่อนเมนู</p>
-    </> : <ActivityLogPanel profiles={rows}/>}
+    </> : activeTab==='matrix' ? <RolePermissionMatrix/> : <ActivityLogPanel profiles={rows}/>}
     <style jsx>{`
       .user-access-tabs{display:inline-flex;align-items:center;gap:4px;padding:4px;margin:0 0 14px;border:1px solid #d9e0e7;border-radius:12px;background:#f4f7fa;box-shadow:0 3px 10px rgba(23,42,67,.05)}
       .user-access-tabs button{display:flex;align-items:center;justify-content:center;min-height:34px;padding:7px 12px;border:0;border-radius:9px;background:transparent;color:#617083;font:inherit;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap}
       .user-access-tabs button:hover{background:#e9eef4;color:#213d5e}
       .user-access-tabs button.active{background:#172a43;color:#fff;box-shadow:0 3px 8px rgba(23,42,67,.18)}
-      @media(max-width:760px){.user-access-tabs{display:flex;width:100%}.user-access-tabs button{flex:1}}
+      @media(max-width:760px){.user-access-tabs{display:flex;width:100%;flex-wrap:wrap}.user-access-tabs button{flex:1 1 auto}}
       @media print{.user-access-tabs{display:none!important}}
     `}</style>
   </>
@@ -232,7 +234,7 @@ function UserRow({ row, onChanged, onCredential, onMessage }: { row: Profile; on
   return <tr>
     <td><input value={username} onChange={e=>setUsername(e.target.value.toUpperCase())} disabled={owner || !row.username} placeholder={row.email || '-'} style={{minWidth:112}}/><small>{row.email || (row.username?'บัญชีภายใน':'')}</small></td>
     <td><input value={name} onChange={e=>setName(e.target.value)} disabled={owner} style={{minWidth:120}}/></td>
-    <td><select value={role} onChange={e=>setRole(e.target.value)} disabled={owner}>{owner?<option value="manager">Owner</option>:<>{!['admin','viewer','viewer_editor','defect_contributor','defect_editor','purchase'].includes(role)&&<option value={role}>{roleLabel[role]||role} — Legacy</option>}<option value="admin">Admin</option><option value="viewer">Viewer</option><option value="viewer_editor">Viewer & Editor</option><option value="defect_contributor">Defect Contributor</option><option value="defect_editor">Defect Contributor Editor</option><option value="purchase">Purchase</option></>}</select></td>
+    <td><select value={role} onChange={e=>setRole(e.target.value)} disabled={owner}>{owner?<option value="manager">Owner</option>:<>{!['admin','viewer','viewer_editor','defect_contributor','defect_editor','purchase'].includes(role)&&<option value={role}>{roleLabel[role]||role} — Legacy</option>}<option value="admin">Admin</option><option value="viewer">Viewer</option><option value="viewer_editor">Viewer & Editor</option><option value="defect_contributor">Defect Viewer</option><option value="defect_editor">Defect Contributor</option><option value="purchase">Purchase</option></>}</select></td>
     <td><label className="inline-toggle"><input type="checkbox" checked={active} onChange={e=>setActive(e.target.checked)} disabled={owner}/><StatusBadge value={active?'Active':'Inactive'}/></label></td>
     <td><div className="row" style={{gap:6,flexWrap:'wrap'}}><button className="button primary" disabled={owner||!changed||saving} onClick={save}>{saving?'Saving…':'Save'}</button><button className="button" disabled={owner} onClick={resetPassword}>Reset Password</button></div></td>
   </tr>
