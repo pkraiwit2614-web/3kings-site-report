@@ -8,7 +8,7 @@ export default function WorkCalendarPage(){
   return <AppShell>
     <PageHeader
       title="ปฏิทินงาน"
-      subtitle="Google Calendar เป็น Source of Truth เดียว • ผู้ใช้ทำงานผ่านหน้า 3Kings ตามสิทธิ์ที่ได้รับ"
+      subtitle="Google Calendar ส่วนกลาง + ปฏิทิน Web App • เพิ่มและแก้ไขได้ตามสิทธิ์ โดยไม่ต้องเชื่อมบัญชี Google ส่วนตัว"
     />
     <GoogleCalendarManager/>
   </AppShell>
