@@ -9,6 +9,9 @@ import ReadableDetail from '@/components/ReadableDetail'
 import { getSupabase } from '@/lib/supabase'
 import { createLiveLoader, requireSuccessfulReads } from '@/lib/liveLoader'
 import type { Project } from '@/lib/types'
+import useAccessRole from '@/components/useAccessRole'
+import MaterialToolEditPanel from '@/components/MaterialToolEditPanel'
+import {canManageMaterialsTools} from '@/lib/accessControl'
 
 function dateTimeTH(value:string|null|undefined){
   if(!value)return '-'
@@ -38,6 +41,9 @@ function textSearch(values:unknown[],needle:string){
 }
 
 export default function MaterialsPage(){
+  const {role}=useAccessRole()
+  const canManage=canManageMaterialsTools(role)
+  const [editTarget,setEditTarget]=useState<{type:'material'|'tool';item:any}|null>(null)
   const [loadError,setLoadError]=useState(false)
   const [projects,setProjects]=useState<Project[]>([])
   const [rows,setRows]=useState<any[]>([])
@@ -71,23 +77,32 @@ export default function MaterialsPage(){
     const s=getSupabase()
     const loader=createLiveLoader({
       load:async(signal)=>{
-        const [p,m,pr,prLinks,t,checked,imported]=await Promise.all([
+        const [p,m,pr,prLinks,t,overrides,checked,imported]=await Promise.all([
           s.from('projects').select('*').or('active.eq.true,code.eq.AV-P3').order('sort_order').abortSignal(signal),
           s.from('materials').select('*').order('project_id').order('source_row').abortSignal(signal),
           s.from('procurement_items').select('*').order('source_updated_at',{ascending:false}).order('source_row').abortSignal(signal),
           s.from('procurement_item_projects').select('procurement_item_id,project_id').abortSignal(signal),
           s.from('tool_machine').select('*').order('item_no').abortSignal(signal),
+          s.from('material_tool_web_overrides').select('*').abortSignal(signal),
           s.from('drive_sync_runs').select('created_at,status').eq('sync_type','materials').order('created_at',{ascending:false}).limit(1).abortSignal(signal).maybeSingle(),
           s.from('drive_sync_runs').select('created_at').eq('status','success').eq('sync_type','materials').gt('rows_written',0).order('created_at',{ascending:false}).limit(1).abortSignal(signal).maybeSingle()
         ])
-        requireSuccessfulReads([p,m,pr,prLinks,t,checked,imported])
+        requireSuccessfulReads([p,m,pr,prLinks,t,overrides,checked,imported])
         if(!alive||signal.aborted)return
         setLoadError(false)
         setProjects((p.data||[]) as Project[])
-        setRows(m.data||[])
+        const overrideMap=new Map((overrides.data||[]).map((o:any)=>[String(o.item_type)+':'+String(o.item_id),o]))
+        const merge=(row:any,type:'material'|'tool')=>{
+          const o:any=overrideMap.get(type+':'+String(row.id));if(!o)return row
+          const newRow={...row,__override_updated_at:o.updated_at}
+          const fields=type==='material'?['status','status_detail','notes']:['status','location','responsible_person','notes']
+          for(const field of fields)if(o[field]!==null&&o[field]!==undefined)newRow[field]=o[field]
+          return newRow
+        }
+        setRows((m.data||[]).map((row:any)=>merge(row,'material')))
         setProcurement(pr.data||[])
         setProcurementLinks(prLinks.data||[])
-        setTools(t.data||[])
+        setTools((t.data||[]).map((row:any)=>merge(row,'tool')))
         setLatestCheckAt(checked.data?.created_at||null)
         setLatestSyncStatus(checked.data?.status||null)
         setLatestImportAt(imported.data?.created_at||null)
@@ -106,6 +121,7 @@ export default function MaterialsPage(){
       .on('postgres_changes',{event:'*',schema:'public',table:'procurement_items'},queueLoad)
       .on('postgres_changes',{event:'*',schema:'public',table:'procurement_item_projects'},queueLoad)
       .on('postgres_changes',{event:'*',schema:'public',table:'tool_machine'},queueLoad)
+      .on('postgres_changes',{event:'*',schema:'public',table:'material_tool_web_overrides'},queueLoad)
       .on('postgres_changes',{event:'*',schema:'public',table:'drive_sync_runs'},queueLoad)
       .subscribe()
     const refresh=()=>queueLoad()
@@ -237,6 +253,7 @@ export default function MaterialsPage(){
       <Link href="/?section=materials#dashboard-materials" className="button management-action-dashboard">← Dashboard</Link>
     </div>}/>
 
+    {editTarget&&<MaterialToolEditPanel key={editTarget.type+String(editTarget.item.id)+String(editTarget.item.__override_updated_at||"")} target={editTarget} onClose={()=>setEditTarget(null)} onSaved={()=>{setEditTarget(null);window.dispatchEvent(new Event("focus"))}}/>}
     <section aria-labelledby="materials-status-title">
       <div style={{display:'flex',justifyContent:'space-between',gap:12,alignItems:'end',flexWrap:'wrap',marginBottom:8}}>
         <div>
@@ -281,7 +298,7 @@ export default function MaterialsPage(){
               <td>{x.category||'-'}</td>
               <td><b>{x.item_name}</b><small>{x.quantity_unit||'ยังไม่ระบุปริมาณ/หน่วย'}</small></td>
               <td>{[x.brand,x.model_spec].filter(Boolean).join(' / ')||'-'}</td>
-              <td><StatusBadge value={x.status}/></td>
+              <td><StatusBadge value={x.status}/>{x.__override_updated_at&&<small>Web App update</small>}{canManage&&<button type="button" className="button material-web-edit-button" style={{display:'block',marginTop:5}} onClick={()=>setEditTarget({type:'material',item:x})}>แก้ไข</button>}</td>
               <td>{related?<>{related.po_no&&<small><b>สั่งแล้ว (มีเลขใบสั่ง)</b></small>}<b>{related.procurement_status||'-'}</b><small>{related.current_status||'-'}</small>{(related.po_no||related.pr_no)&&<small>{[related.pr_no,related.po_no].filter(Boolean).join(' / ')}</small>}{related.payment_status&&<small>ชำระเงิน: {related.payment_status}</small>}{related.expected_delivery_text&&<small>กำหนดส่ง: {related.expected_delivery_text}</small>}</>:<span className="muted">ยังไม่มีรายการจัดซื้อที่จับคู่ได้แน่นอน</span>}</td>
               <td><ReadableDetail parts={[...detail,related?.condition_note]}/>{related?.source_updated_at&&<small>ทะเบียนจัดซื้ออัปเดต {dateTH(related.source_updated_at)}</small>}</td>
               <td>{x.contact_name||x.contact_phone||related?.vendor?<><b>{x.contact_name||related?.vendor||'-'}</b><small>{x.contact_phone||''}</small></>:'-'}</td>
@@ -364,7 +381,8 @@ export default function MaterialsPage(){
           <span className="small muted" style={{marginLeft:'auto',whiteSpace:'nowrap'}}>ข้อมูลทะเบียนจาก Drive Sync</span>
         </div>
       </div>
-      <div className="panel table-wrap" style={{maxHeight:600,overflow:'auto'}}><table className="materials-print-table tools-print-table"><thead><tr className="materials-print-repeat-title"><th colSpan={10}>3 Kings Construction — วัสดุ เครื่องมือและผู้รับเหมา · Tool &amp; Machine</th></tr><tr><th>รหัส</th><th>หมวด</th><th>เครื่องมือ / เครื่องจักร</th><th>ยี่ห้อ / รุ่น</th><th>จำนวน</th><th>สถานะ</th><th>สถานที่ล่าสุด</th><th>ผู้รับผิดชอบ</th><th>วันที่อัปเดต</th><th>หมายเหตุ</th></tr></thead><tbody>{filteredTools.map(x=><tr key={x.id}><td><b>{x.item_code||'-'}</b></td><td>{x.category||'-'}</td><td><b>{x.item_name||'-'}</b></td><td>{[x.brand,x.model_spec].filter(Boolean).join(' / ')||'-'}</td><td>{x.quantity??'-'} {x.unit||''}</td><td><StatusBadge value={x.status}/></td><td>{x.location||'-'}</td><td>{x.responsible_person||'-'}</td><td>{dateTH(x.source_updated_at)}</td><td>{x.notes||'-'}</td></tr>)}</tbody></table></div>
+      <div className="panel table-wrap" style={{maxHeight:600,overflow:'auto'}}><table className="materials-print-table tools-print-table"><thead><tr className="materials-print-repeat-title"><th colSpan={10}>3 Kings Construction — วัสดุ เครื่องมือและผู้รับเหมา · Tool &amp; Machine</th></tr><tr><th>รหัส</th><th>หมวด</th><th>เครื่องมือ / เครื่องจักร</th><th>ยี่ห้อ / รุ่น</th><th>จำนวน</th><th>สถานะ</th><th>สถานที่ล่าสุด</th><th>ผู้รับผิดชอบ</th><th>วันที่อัปเดต</th><th>หมายเหตุ</th></tr></thead><tbody>{filteredTools.map(x=><tr key={x.id}><td><b>{x.item_code||'-'}</b></td><td>{x.category||'-'}</td><td><b>{x.item_name||'-'}</b></td><td>{[x.brand,x.model_spec].filter(Boolean).join(' / ')||'-'}</td><td>{x.quantity??'-'} {x.unit||''}</td><td><StatusBadge value={x.status}/>{x.__override_updated_at&&<small>Web App update</small>}{canManage&&<button type="button" className="button material-web-edit-button" style={{display:'block',marginTop:5}} onClick={()=>setEditTarget({type:'tool',item:x})}>แก้ไข</button>}</td><td>{x.location||'-'}</td><td>{x.responsible_person||'-'}</td><td>{dateTH(x.source_updated_at)}</td><td>{x.notes||'-'}</td></tr>)}</tbody></table></div>
     </section>
+    <style jsx global>{`@media print{.material-web-edit-button{display:none!important}}`}</style>
   </AppShell>
 }
