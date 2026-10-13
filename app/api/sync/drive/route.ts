@@ -355,13 +355,16 @@ async function parseMaterials(buffer: Buffer) {
 
   for (let i = h + 1; i < rows.length; i++) {
     const r = rows[i] as unknown[]
-    const projectCode = mapProjectFromLocation(valueByHeader(r, headers, 'สถานที่/หลัง'))
-    if (!projectCode) continue
+    const sourceLocation = text(valueByHeader(r, headers, 'สถานที่/หลัง'))
+    if (!sourceLocation) continue
+    // Preserve every source-site row, including sites without a project entry yet.
+    const projectCode = mapProjectFromLocation(sourceLocation)
     const itemName = text(valueByHeader(r, headers, 'รายการวัสดุ/งาน'))
     if (!itemName) continue
 
     materials.push({
       project_code: projectCode,
+      source_location: sourceLocation,
       data_group: text(valueByHeader(r, headers, 'กลุ่มข้อมูล')),
       source_item_no: text(valueByHeader(r, headers, 'ลำดับเดิม')),
       category: text(valueByHeader(r, headers, 'หมวดหมู่')),
