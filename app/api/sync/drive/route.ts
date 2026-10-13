@@ -108,13 +108,9 @@ function sourceIdentity(projectCode: string, category: string | null, taskName: 
 }
 
 function mapProjectFromLocation(location: unknown): string | null {
-  const s = String(location ?? '')
-  if (/Plot\s*3/i.test(s)) return 'AV-P3'
-  if (/Plot\s*6/i.test(s)) return 'AV-P6'
-  if (/Plot\s*7/i.test(s)) return 'AV-P7'
-  if (/Plot\s*8/i.test(s)) return 'AV-P8'
-  if (/Plot\s*9/i.test(s)) return 'AV-P9'
-  return null
+  // Use the same site aliases as procurement; reject ambiguous multi-site materials.
+  const projectCodes = mapProjectsFromLocation(location)
+  return projectCodes.length === 1 ? projectCodes[0] : null
 }
 
 function mapProjectsFromLocation(location: unknown): string[] {
