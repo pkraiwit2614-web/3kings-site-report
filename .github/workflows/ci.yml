@@ -61,6 +61,9 @@ jobs:
       - name: RBAC regression tests
         run: node tests/rbac.test.cjs
 
+      - name: Complete role matrix regression tests
+        run: node tests/role-matrix.test.cjs
+
       - name: Admin role preview regression tests
         run: node tests/role-preview.test.cjs
 
