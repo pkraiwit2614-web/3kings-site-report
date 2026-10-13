@@ -16,7 +16,8 @@ type Room={
 type HotelStatus={
   room_no:string;availability_status:'AVAILABLE'|'OOO'|'OOS';
   start_date:string|null;end_date:string|null;reason:string|null;
-  updated_by_name:string;updated_at:string;revision:number
+  updated_by_name:string;updated_at:string;revision:number;hotel_remark:string|null;
+  source_sync_state:'pending'|'synced';source_synced_revision:number
 }
 type RoomGroup={key:string;members:Room[];hotel:HotelStatus|null;inHotel:boolean}
 const pending=(r:Room)=>(
@@ -47,7 +48,7 @@ export default function HotelRoomStatusPage(){
     const s=getSupabase()
     const [a,b]=await Promise.all([
       s.from('condo_room_status').select('room_no,building,floor,hotel_participation,defect_detail,status_group,current_status,next_action').order('room_no'),
-      s.from('hotel_room_availability').select('room_no,availability_status,start_date,end_date,reason,updated_by_name,updated_at,revision').order('room_no')
+      s.from('hotel_room_availability').select('room_no,availability_status,start_date,end_date,reason,hotel_remark,updated_by_name,updated_at,revision,source_sync_state,source_synced_revision').order('room_no')
     ])
     if(a.error||b.error)throw new Error(a.error?.message||b.error?.message||'โหลดสถานะห้องไม่สำเร็จ')
     setRooms((a.data||[]) as Room[]);setStatuses((b.data||[]) as HotelStatus[])
@@ -64,12 +65,13 @@ export default function HotelRoomStatusPage(){
   },[refresh])
 
   const groups=useMemo(()=>{
-    const lookup=new Map<string,Room[]>()
-    for(const room of rooms){const key=hotelRoomKey(room.room_no);lookup.set(key,[...(lookup.get(key)||[]),room])}
+    // OOO/OOS is a physical-room fact. Combine groups are navigation only:
+    // A213 can be OOO while A214 remains not stated in the hotel's Excel.
     const statusMap=new Map(statuses.map(row=>[row.room_no,row]))
-    return [...lookup.entries()].map(([key,members]):RoomGroup=>({
-      key,members:members.sort((a,b)=>a.room_no.localeCompare(b.room_no)),
-      hotel:statusMap.get(key)||null,inHotel:members.some(x=>x.hotel_participation==='ร่วมโรงแรม')
+    return rooms.map((room):RoomGroup=>({
+      key:room.room_no,members:[room],
+      hotel:statusMap.get(room.room_no)||null,
+      inHotel:room.hotel_participation==='ร่วมโรงแรม'
     })).sort((a,b)=>a.key.localeCompare(b.key))
   },[rooms,statuses])
   const filtered=useMemo(()=>{
@@ -78,7 +80,7 @@ export default function HotelRoomStatusPage(){
       (building==='ALL'||g.members.some(r=>r.building===building)) &&
       (stateFilter==='ALL'||(g.hotel?.availability_status||'UNKNOWN')===stateFilter) &&
       (!terms.length||terms.some(t=>g.members.some(r=>r.room_no.includes(t))||
-        hotelRoomMembers(g.key).some(r=>r.includes(t))||
+        hotelRoomMembers(g.key).some(r=>r.includes(t))||hotelRoomKey(g.key).includes(t)||
         (g.hotel?.reason||'').toUpperCase().includes(t)))
     )
   },[groups,query,building,stateFilter])
@@ -94,7 +96,7 @@ export default function HotelRoomStatusPage(){
     if(!chosen||!canEdit)return
     if(formStatus!=='AVAILABLE'&&(!fromDate||!reason.trim())){setMessage('กรุณาระบุวันที่เริ่มและเหตุผล');return}
     if(toDate&&fromDate&&toDate<fromDate){setMessage('วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่ม');return}
-    if(!window.confirm('ยืนยันบันทึก '+chosen.members.map(r=>r.room_no).join(' + ')+' เป็น '+formStatus+' โดยไม่เปลี่ยนสถานะ Defect?'))return
+    if(!window.confirm('ยืนยันบันทึก '+chosen.key+' เป็น '+formStatus+' (เฉพาะห้องนี้ ไม่เปลี่ยนห้อง Combine อื่น หรือ Defect)?'))return
     setBusy(true);setMessage('')
     const {error:saveError}=await getSupabase().rpc('hotel_room_availability_save',{
       p_room_no:chosen.key,p_status:formStatus,
@@ -103,13 +105,13 @@ export default function HotelRoomStatusPage(){
       p_reason:reason.trim()||null,p_expected_revision:chosen.hotel?.revision??null
     })
     if(saveError){setMessage(saveError.message);setBusy(false);return}
-    try{await refresh();setMessage('บันทึกสถานะโรงแรมเรียบร้อย • รอตรวจสอบใน Data Reconciliation')}
+    try{await refresh();setMessage('บันทึกใน Supabase แล้ว • รอเขียนกลับ Excel โรงแรมเฉพาะ OOO/OOS • ตรวจรับใน Data Reconciliation')}
     catch(e){setMessage('บันทึกแล้ว แต่โหลดผลล่าสุดไม่สำเร็จ: '+String(e))}
     setBusy(false)
   }
 
   return <AppShell>
-    <PageHeader title="Room Status | OOO/OOS" subtitle="สถานะความพร้อมให้บริการของโรงแรม • แยกจาก Defect และ Handover Flow"
+    <PageHeader title="Room Status | OOO/OOS" subtitle="โรงแรม: ไฟล์ Excel ต้นทางแยกจาก Defect • แก้ไขเฉพาะห้องจริง / ไม่กระจายสถานะไปห้อง Combine"
       action={<Link className="button" href="/defects">เปิด Defect Detail</Link>}/>
     <section className="panel" style={{padding:14,marginBottom:12}}>
       <div className="hotel-kpis">
@@ -128,25 +130,25 @@ export default function HotelRoomStatusPage(){
         </select>
         <button type="button" className="button" onClick={()=>{setQuery('');setBuilding('ALL');setStateFilter('ALL')}}>ล้างตัวกรอง</button>
       </div>
-      <p className="small muted" style={{marginTop:8}}>สถานะที่ยังไม่ระบุไม่ใช่ห้องพร้อมให้บริการ • แสดงหนึ่งรายการต่อหนึ่งชุด Combine และใช้ Room ID เดิมทั้งหมด</p>
+      <p className="small muted" style={{marginTop:8}}>สถานะที่ยังไม่ระบุไม่ใช่ห้องพร้อมให้บริการ • แสดงหนึ่งรายการต่อหนึ่ง Room ID (263 ห้อง) • Combine ใช้ค้นหาห้องคู่ ไม่บังคับสถานะให้เหมือนกัน</p>
     </section>
     {error&&<div className="panel" role="alert" style={{color:'#a63329',marginBottom:12}}>โหลดข้อมูลล้มเหลว: {error}</div>}
     {loading?<div className="panel">กำลังโหลดสถานะห้อง…</div>:!error&&<>
       <section className="panel" style={{padding:12}}>
-        <h2>รายการสถานะห้องพัก • {filtered.length} ชุดห้อง</h2>
+        <h2>รายการสถานะห้องพัก • {filtered.length} ห้อง</h2>
         <div className="table-wrap"><table><thead><tr>
           <th>ห้อง / Combine</th><th>สถานะ Hotel</th><th>ช่วงวันที่</th><th>สาเหตุ</th><th>Defect ค้าง / รอตรวจรับ</th><th>แก้ไขล่าสุด</th><th>จัดการ</th>
         </tr></thead><tbody>
           {filtered.map(g=><tr key={g.key}>
             <td><b>{g.members.map(r=>r.room_no).join(' + ')}</b>
-              {g.members.length>1&&<small>⌁ Combine • แก้ไขร่วมกัน {g.members.length} ห้อง</small>}
+              {hotelRoomMembers(g.key).length>1&&<small>⌁ ห้อง Combine: {hotelRoomMembers(g.key).filter(r=>r!==g.key).join(', ')} (สถานะแยกรายห้อง)</small>}
               {!g.inHotel&&<small>ไม่ร่วมโรงแรม</small>}
               {g.members.some(r=>['B101','B102','B103','B104','B105'].includes(r.room_no))&&<small>{g.members.map(r=>r.room_no.replace(/^B10([1-5])$/,'Good0$1')).join(' / ')}</small>}</td>
             <td><b>{statusText(g.hotel)}</b></td>
             <td>{g.hotel?.start_date||'—'}{g.hotel?.end_date?' ถึง '+g.hotel.end_date:''}</td>
-            <td>{g.hotel?.reason||'—'}</td>
+            <td>{g.hotel?.reason||'—'}{g.hotel?.hotel_remark&&<small>Hotel Remark: {g.hotel.hotel_remark}</small>}</td>
             <td>{g.members.filter(pending).length?g.members.filter(pending).map(r=>r.room_no).join(', '):'—'}</td>
-            <td>{g.hotel? <>{g.hotel.updated_by_name}<small>{dateTH(g.hotel.updated_at)}</small></>:'—'}</td>
+            <td>{g.hotel? <>{g.hotel.updated_by_name}<small>{dateTH(g.hotel.updated_at)}</small><small>{g.hotel.source_sync_state==='pending'?'รอบันทึก Excel':'Excel ตรงกับ Revision '+g.hotel.source_synced_revision}</small></>:'—'}</td>
             <td><button type="button" className="button" onClick={()=>choose(g)}>ดู{canEdit?' / แก้ไข':''}</button></td>
           </tr>)}
           {!filtered.length&&<tr><td colSpan={7} style={{textAlign:'center'}}>ไม่พบห้องตามเงื่อนไข</td></tr>}
@@ -154,15 +156,15 @@ export default function HotelRoomStatusPage(){
       </section>
       {chosen&&<section className="panel" style={{padding:16,marginTop:12}} aria-label="รายละเอียดสถานะห้องที่เลือก">
         <div style={{display:'flex',justifyContent:'space-between',gap:8,flexWrap:'wrap',alignItems:'center'}}>
-          <h2>ชุดห้อง {chosen.members.map(x=>x.room_no).join(' + ')} {chosen.members.length>1?'⌁ Combine':''}</h2>
+          <h2>ห้อง {chosen.key} {hotelRoomMembers(chosen.key).length>1?'⌁ คู่ Combine: '+hotelRoomMembers(chosen.key).filter(r=>r!==chosen.key).join(', '):''}</h2>
           <button type="button" className="button" onClick={()=>setSelected('')}>ปิด</button>
         </div>
-        <p className="muted small">สถานะห้องโรงแรมแยกอิสระจากงานซ่อม • เปลี่ยนแล้วไม่ทำให้ Defect เป็น Done หรือแก้ไขประวัติ 3 Kings</p>
+        <p className="muted small">แก้เฉพาะ OOO/OOS ของห้องนี้ • ไม่กระทบห้อง Combine, Defect, Joined/Non-Join หรือประวัติ 3 Kings • File ID โรงแรมคงที่</p>
         {currentlyPending.length>0?<div className="hotel-pending">
           <b>Defect ที่ยังค้างหรือรอตรวจรับ ({currentlyPending.length} ห้อง)</b>
           {currentlyPending.map(r=><p key={r.room_no}><b>{r.room_no}</b> — {r.defect_detail||r.current_status||r.status_group||'รอดำเนินการ'}{r.next_action?' • ต้องทำต่อ: '+r.next_action:''}</p>)}
         </div>:<div className="hotel-pending">ไม่พบกลุ่มสถานะ Defect ค้างตามข้อมูลล่าสุด (ไม่ใช่การยืนยันว่าห้องพร้อมบริการ)</div>}
-        <p><Link href={'/defects?q='+encodeURIComponent(chosen.members.map(r=>r.room_no).join(','))+'#room-list'} className="button">ดู Defect Detail ทั้งชุดห้อง</Link></p>
+        <p><Link href={'/defects?q='+encodeURIComponent(hotelRoomMembers(chosen.key).join(','))+'#room-list'} className="button">ดู Defect Detail ทั้งชุด Combine</Link></p>
         {canEdit&&<div className="hotel-editor">
             <label>สถานะห้อง<select value={formStatus} onChange={e=>setFormStatus(e.target.value as 'AVAILABLE'|'OOO'|'OOS')}>
               <option value="AVAILABLE">พร้อมให้บริการ</option><option value="OOO">Out of Order (OOO)</option><option value="OOS">Out of Service (OOS)</option>
