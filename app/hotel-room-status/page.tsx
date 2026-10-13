@@ -107,7 +107,7 @@ export default function HotelRoomStatusPage(){
       p_room_no:chosen.key,p_status:formStatus,
       p_start_date:fromDate||null,
       p_end_date:toDate||null,
-      p_reason:chosen.ownHotel?.reason||null,p_expected_revision:chosen.ownHotel?.revision??null
+      p_reason:null,p_expected_revision:chosen.ownHotel?.revision??null
     })
     if(saveError){setMessage(saveError.message);setBusy(false);return}
     try{await refresh();setMessage('บันทึกสถานะครบทุกห้องในชุด Combine แล้ว • รอเขียนกลับ Excel โรงแรมทุก Room ID • ตรวจสอบสถานะ Sync / Data Reconciliation')}
