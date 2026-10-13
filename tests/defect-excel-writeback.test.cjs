@@ -22,7 +22,7 @@ const dryRunBranch=worker.indexOf('if(dryRun) {',worker.indexOf('function defect
 const zipStep=worker.indexOf('const output=Utilities.zip',worker.indexOf('function defectWbPrepare_'));
 const uploadStep=worker.indexOf("UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files/", zipStep);
 assert.ok(dryRunBranch >= 0 && zipStep > dryRunBranch && uploadStep > zipStep);
-assert.match(worker,/method:'patch',contentType:DEFECT_WB\\.XLSX_MIME/);
+assert.ok(worker.includes("method:'patch',contentType:DEFECT_WB.XLSX_MIME"));
 assert.match(worker,/\.getLastUpdated\(\)/);
 assert.match(worker,/1MEeB1E7D_35MTndRPi1aBTlVfI2aR0Wj/);
 assert.match(worker,/16JuK26rn7HGPDtSlnMMS2aljYGWyn0Y3/);
