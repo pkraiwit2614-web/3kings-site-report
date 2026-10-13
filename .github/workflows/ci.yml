@@ -49,9 +49,6 @@ jobs:
       - name: Defect ingest validation regression
         run: node tests/defect-ingest-validation.test.cjs
 
-      - name: Materials print pagination regression
-        run: node tests/materials-print-layout.test.cjs
-
       - name: Prompt 23 labour/payroll QA
         run: node --test tests/prompt23/labour-payroll.test.cjs
 
@@ -78,3 +75,8 @@ jobs:
 
       - name: Google Calendar live edit regression
         run: node tests/google-calendar-live-edit.test.cjs
+
+      # Baseline materials table colSpan assertion differs from current main; run it LAST so all other regressions are checked.
+      - name: Materials print pagination regression
+        run: node tests/materials-print-layout.test.cjs
+
