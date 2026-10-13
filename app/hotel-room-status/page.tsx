@@ -84,7 +84,7 @@ export default function HotelRoomStatusPage(){
     const terms=query.split(/[,，]+/).map(normalizeHotelRoom).filter(Boolean)
     return groups.filter(g=>
       (building==='ALL'||g.members.some(r=>r.building===building)) &&
-      (stateFilter==='ALL'||(g.hotel?.availability_status||'UNKNOWN')===stateFilter) &&
+      (stateFilter==='ALL'||g.members.some(member=>(groups.find(other=>other.key===member.room_no)?.hotel?.availability_status||'UNKNOWN')===stateFilter)) &&
       (!terms.length||terms.some(t=>g.members.some(r=>r.room_no.includes(t))||
         hotelRoomMembers(g.key).some(r=>r.includes(t))||hotelRoomKey(g.key).includes(t)||
         g.members.some(r=>[r.owner_name,r.customer_status,r.hotel_participation,r.defect_detail,r.current_status,r.next_action,r.follow_up].filter(Boolean).join(' ').toUpperCase().includes(t))||
