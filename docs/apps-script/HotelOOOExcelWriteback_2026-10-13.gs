@@ -60,8 +60,17 @@ function hotelOOOShared_(blob) {
   return matches.map(si=>(si.match(/<t(?:\s[^>]*)?>([\s\S]*?)<\/t>/g)||[])
     .map(t=>hotelOOOUnescape_(t.replace(/^<t[^>]*>/,'').replace(/<\/t>$/,''))).join(''));
 }
+/**
+ * Match exactly one XLSX cell. Empty Excel cells are self-closing (<c .../>).
+ * The old greedy regex could consume the next row's cell, causing false
+ * OOO mismatches (e.g. A201) and unsafe replacements.
+ */
+function hotelOOOCellPattern_(addr){
+  if(!/^[A-Z]{1,3}[1-9][0-9]*$/.test(addr))throw Error('INVALID_EXCEL_CELL_ADDRESS');
+  return new RegExp('<c\\b(?=[^>]*\\br="'+addr+'"(?=[\\s/>]))[^>]*?(?:\\/\\s*>|(?<!\\/)>(?:[\\s\\S]*?)<\\/c>)');
+}
 function hotelOOORead_(xml,cell,shared){
-  const m=xml.match(new RegExp('<c\\b[^>]*\\br="'+cell+'"[^>]*(?:\\/>|>[\\s\\S]*?<\\/c>)'));
+  const m=xml.match(hotelOOOCellPattern_(cell));
   if(!m)return '';
   const s=m[0],type=(s.match(/\bt="([^"]+)"/)||[])[1]||'';
   if(type==='inlineStr')return hotelOOOUnescape_((s.match(/<t[^>]*>([\s\S]*?)<\/t>/)||[])[1]||'');
@@ -72,7 +81,7 @@ function hotelOOOPut_(xml,addr,value){
   const n=(addr.match(/\d+/)||[])[0];
   const rp=new RegExp('(<row\\b[^>]*\\br="'+n+'"[^>]*>)([\\s\\S]*?)(<\\/row>)');
   const match=xml.match(rp);if(!match)throw Error('XLSX row missing '+addr);
-  const cp=new RegExp('<c\\b[^>]*\\br="'+addr+'"[^>]*(?:\\/>|>[\\s\\S]*?<\\/c>)');
+  const cp=hotelOOOCellPattern_(addr);
   const old=match[2].match(cp);if(old&&/<f(?:\s|>)/.test(old[0]))throw Error('Refuse formula overwrite '+addr);
   const style=old?(old[0].match(/\bs="(\d+)"/)||[])[1]:null;
   const cell='<c r="'+addr+'"'+(style?' s="'+style+'"':'')+' t="inlineStr"><is><t xml:space="preserve">'+
