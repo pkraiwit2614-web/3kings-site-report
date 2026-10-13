@@ -37,6 +37,15 @@ jobs:
       - name: Complete role matrix regression tests
         run: node tests/role-matrix.test.cjs
 
+      - name: RBAC regression tests
+        run: node tests/rbac.test.cjs
+
+      - name: Activity Log security regression tests
+        run: node tests/activity-log.test.cjs
+
+      - name: Defect ingest validation regression
+        run: node tests/defect-ingest-validation.test.cjs
+
       - name: Materials print pagination regression
         run: node tests/materials-print-layout.test.cjs
 
@@ -61,17 +70,8 @@ jobs:
       - name: Prompt 15 attendance evidence tests
         run: node --test tests/payroll/attendance-evidence.test.cjs
 
-      - name: RBAC regression tests
-        run: node tests/rbac.test.cjs
-
       - name: Admin role preview regression tests
         run: node tests/role-preview.test.cjs
-
-      - name: Activity Log security regression tests
-        run: node tests/activity-log.test.cjs
-
-      - name: Defect ingest validation regression
-        run: node tests/defect-ingest-validation.test.cjs
 
       - name: Google Calendar live edit regression
         run: node tests/google-calendar-live-edit.test.cjs
