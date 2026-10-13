@@ -23,6 +23,9 @@ const PROCUREMENT_SHEETS = ['04 Purchasing ค้างส่ง','12 Purchasing
 const TOOL_MACHINE_SHEET = '06-Tools & Machine'
 
 const DEFECT_MASTER_SHEET = 'ข้อมูลจำแนก'
+// Only this workbook may update the canonical condo Defect room status.
+const DEFECT_SOURCE_FILE = 'Handover_Defect_Summary_Updated_28-09-2026.xlsx'
+const DEFECT_SOURCE_FILE_ID = '1MEeB1E7D_35MTndRPi1aBTlVfI2aR0Wj'
 const DEFECT_EXPECTED_ROOMS = 263
 const DEFECT_EXPECTED_A = 162
 const DEFECT_EXPECTED_B = 101
@@ -508,8 +511,11 @@ export async function POST(request: NextRequest) {
     }
 
     if (kind === 'defects') {
+      if (sourceFile !== DEFECT_SOURCE_FILE || sourceFileId !== DEFECT_SOURCE_FILE_ID) {
+        return NextResponse.json({ ok: false, error: 'unapproved_defect_source' }, { status: 422 })
+      }
       const parsed = await parseDefects(buffer)
-      const actualSourceFile = sourceFile || 'Handover_Defect_Summary.xlsx'
+      const actualSourceFile = DEFECT_SOURCE_FILE
       const { data, error } = await supabase.rpc('drive_sync_apply_condo_defects', {
         p_sync_key: syncKey,
         p_source_file: actualSourceFile,
