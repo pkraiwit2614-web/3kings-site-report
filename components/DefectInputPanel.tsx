@@ -5,6 +5,7 @@ import {getSupabase} from '@/lib/supabase'
 import useAccessRole from '@/components/useAccessRole'
 import {canEditDefect} from '@/lib/accessControl'
 import {getActivitySessionId} from '@/lib/activityLog'
+import {hotelRoomMembers} from '@/lib/hotelRoomGroups'
 
 function cleanFileName(value:string){return value.normalize('NFKC').replace(/[^A-Za-z0-9._-]+/g,'-').replace(/-+/g,'-').slice(0,120)||'defect.pdf'}
 function todayBangkok(){return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date())}
@@ -129,12 +130,14 @@ export default function DefectInputPanel({manualOnly=false}:{manualOnly?:boolean
      if(!window.confirm('ห้อง '+room.trim().toUpperCase()+'\nเสนอเปลี่ยนกลุ่มสถานะเป็น '+nextLabel+'\nยังไม่ถือว่าตรวจรับแล้ว\nกด OK เพื่อยืนยันก่อนบันทึก')){setSaving(false);setManualMsg('ยกเลิก ไม่ได้บันทึกข้อมูล');return}
      if(!proposedStatus)proposedStatus=nextLabel
    }
+   const combineMembers=hotelRoomMembers(target)
+   if(combineMembers.length>1&&!window.confirm('ยืนยันอัปเดตข้อมูล Defect และสถานะให้ห้อง Combine ทั้งชุด: '+combineMembers.join(' + ')+'\\nยังคงแยก Room ID และประวัติแต่ละห้อง')){setSaving(false);setManualMsg('ยกเลิก ไม่ได้บันทึกข้อมูล');return}
    const {error}=await getSupabase().rpc('defect_manual_update_apply_checked',{p_room_no:room.trim(),p_detail_text:detail.trim(),p_current_status:proposedStatus||null,p_status_group:proposedGroup||null,p_next_action:nextAction.trim()||null,p_client_session_id:getActivitySessionId(),p_user_agent:navigator.userAgent,p_expected_source_modified_at:loadedRoom.stamp})
    setSaving(false)
    if(error){setManualMsg(error.message.includes('DEFECT_REVISION_CONFLICT')?'ห้องนี้ถูกแก้ไขจากผู้ใช้อื่นแล้ว กรุณาตรวจสถานะล่าสุดและกดโหลดข้อมูลล่าสุดก่อนลองใหม่':error.message);return}
    setLoadedRoom(null)
    void loadRoomRevision(target)
-   setManualMsg('บันทึก Defect และ Defect Flow ในฐานข้อมูลแล้ว');setWritebackState('กำลังตรวจสถานะเขียนกลับ Excel ทั้งสองไฟล์');setWritebackRoom(room.trim().toUpperCase());setDetail('');setStatus('');setStatusGroup('');setNextAction('')
+   setManualMsg('บันทึก Defect และ Defect Flow ในฐานข้อมูลแล้ว'+(combineMembers.length>1?' • อัปเดต Combine '+combineMembers.join(' + '):''));setWritebackState('กำลังตรวจสถานะเขียนกลับ Excel ทั้งสองไฟล์');setWritebackRoom(room.trim().toUpperCase());setDetail('');setStatus('');setStatusGroup('');setNextAction('')
  }
 
  if(!editable)return null
