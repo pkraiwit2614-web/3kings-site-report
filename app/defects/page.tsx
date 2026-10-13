@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from 'react'
 import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
 import DefectCombineRoomEnhancer from '@/components/DefectCombineRoomEnhancer'
+import {hotelRoomMembers,normalizeHotelRoom} from '@/lib/hotelRoomGroups'
 import DefectInputPanel from '@/components/DefectInputPanel'
 import { getSupabase } from '@/lib/supabase'
 import { createLiveLoader, requireSuccessfulReads } from '@/lib/liveLoader'
@@ -202,7 +203,7 @@ export default function DefectDetailPage(){
   const totalCount=baseRows.length
 
   const filtered=useMemo(()=>{
-    const needles=Array.from(new Set(q.split(/[,，]+/).map(x=>x.trim().toLowerCase()).filter(Boolean)))
+    const needles=Array.from(new Set(q.split(/[,，]+/).map(x=>normalizeHotelRoom(x.trim()).toLowerCase()).filter(Boolean)))
     return rows.filter(r=>{
       if(building!=='ALL'&&r.building!==building)return false
       if(customerFilter==='CUSTOMER'&&r.customer_status!=='มีลูกค้า')return false
@@ -210,7 +211,7 @@ export default function DefectDetailPage(){
       if(active&&!active.predicate(r))return false
       if(!needles.length)return true
       const searchable=[r.room_no,r.owner_name,r.customer_status,r.hotel_participation,r.defect_detail,statusLabel(r),r.next_action,r.follow_up].filter(Boolean).join(' ').toLowerCase()
-      return needles.some(needle=>searchable.includes(needle))
+      return needles.some(needle=>searchable.includes(needle)||hotelRoomMembers(r.room_no).some(member=>member.toLowerCase().includes(needle)))
     })
   },[rows,building,customerFilter,active,q])
 
@@ -228,7 +229,7 @@ export default function DefectDetailPage(){
         {showDashboard&&<Link href="/?section=defect#dashboard-defect" className="button">← Dashboard</Link>}
       </div>}
     />
-    <DefectInputPanel manualOnly />
+    <DefectInputPanel />
 
     {loading?<div className="panel">กำลังโหลดข้อมูลห้อง…</div>:<>
       <section className={`selected-status ${active?.tone||'neutral'}`} id="room-list">
