@@ -205,10 +205,10 @@ export default function DefectDetailPage(){
   const filtered=useMemo(()=>{
     const needles=Array.from(new Set(q.split(/[,，]+/).map(x=>normalizeHotelRoom(x.trim()).toLowerCase()).filter(Boolean)))
     return rows.filter(r=>{
-      if(building!=='ALL'&&r.building!==building)return false
-      if(customerFilter==='CUSTOMER'&&r.customer_status!=='มีลูกค้า')return false
-      if(customerFilter==='NO_CUSTOMER'&&r.customer_status!=='ไม่มีลูกค้า')return false
       const paired=rows.filter(other=>hotelRoomMembers(r.room_no).includes(other.room_no))
+      if(building!=='ALL'&&!paired.some(other=>other.building===building))return false
+      if(customerFilter==='CUSTOMER'&&!paired.some(other=>other.customer_status==='มีลูกค้า'))return false
+      if(customerFilter==='NO_CUSTOMER'&&!paired.some(other=>other.customer_status==='ไม่มีลูกค้า'))return false
       if(active&&!paired.some(active.predicate))return false
       if(!needles.length)return true
       const searchable=paired.flatMap(other=>[other.room_no,other.owner_name,other.customer_status,other.hotel_participation,other.defect_detail,statusLabel(other),other.next_action,other.follow_up]).filter(Boolean).join(' ').toLowerCase()
