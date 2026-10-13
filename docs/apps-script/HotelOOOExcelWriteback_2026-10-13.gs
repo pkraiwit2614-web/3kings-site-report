@@ -146,15 +146,18 @@ function hotelOOOBackup_(file){
   props.setProperty(key,copy.getId());
 }
 function hotelOOORun_(dryRun){
+  let pending=[],configForError=null;
   const lock=LockService.getScriptLock();
   if(!lock.tryLock(2000))return {ok:false,status:'locked'};
   try {
     const config=hotelOOOConfig_();
+    configForError=config;
     const file=DriveApp.getFileById(HOTEL_OOO_WB.FILE_ID);
     if(file.getMimeType()!==HOTEL_OOO_WB.MIME||!HOTEL_OOO_WB.NAME_RE.test(file.getName()))
       throw Error('Unexpected hotel Excel file name/type: '+file.getName());
     const received=hotelOOORpc_(config,'hotel_room_excel_writeback_pull',{p_limit:HOTEL_OOO_WB.MAX_BATCH});
     const changes=received.rows||[];
+    pending=changes;
     if(received.file_id!==HOTEL_OOO_WB.FILE_ID)throw Error('Pinned file ID mismatch');
     if(!changes.length)return {ok:true,dryRun:dryRun,queued:0,saved:0};
     const mod=file.getLastUpdated().getTime();
@@ -215,6 +218,13 @@ function hotelOOORun_(dryRun){
   } catch(err) {
     // No blind automatic overwrite or destructive repair on a conflict.
     console.error('hotelOOORun_: '+String(err));
+    if(!dryRun&&configForError){
+      pending.forEach(change=>{
+        try{hotelOOORpc_(configForError,'hotel_room_excel_writeback_failure',{
+          p_room_no:change.room_no,p_revision:change.revision,p_error:String(err)});
+        }catch(reportError){console.error('Failure-report error: '+String(reportError));}
+      });
+    }
     return {ok:false,error:String(err)};
   } finally{lock.releaseLock()}
 }
