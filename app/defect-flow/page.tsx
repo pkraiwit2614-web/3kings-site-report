@@ -268,6 +268,7 @@ export default function DefectFlowPage(){
     const svg=svgRef.current
     if(!svg)return
     const clone=svg.cloneNode(true) as SVGSVGElement
+    clone.querySelector('g[font-family]')?.setAttribute('font-family',window.getComputedStyle(svg).fontFamily)
     clone.setAttribute('xmlns','http://www.w3.org/2000/svg')
     clone.setAttribute('width','1920');clone.setAttribute('height','1080')
     const xml=new XMLSerializer().serializeToString(clone)
@@ -316,10 +317,10 @@ export default function DefectFlowPage(){
     </form>
 
     {loading?<div className="panel flow-loading">กำลังโหลด Handover / Defect Flow…</div>:error?<div className="panel flow-error">โหลดข้อมูลไม่ได้: {error}</div>:<section className="flow-stage panel">
-      <svg ref={svgRef} className="flow-svg" viewBox="0 0 1920 1080" role="img" aria-label="Live Handover Defect Flow Building A and B" xmlns="http://www.w3.org/2000/svg">
+      <svg ref={svgRef} className="flow-svg" style={{fontFamily:'inherit'}} viewBox="0 0 1920 1080" role="img" aria-label="Live Handover Defect Flow Building A and B" xmlns="http://www.w3.org/2000/svg">
         <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#718095"/></marker></defs>
         <rect width="1920" height="1080" fill="#ffffff"/>
-        <g fontFamily="system-ui,-apple-system,'Segoe UI',Arial,sans-serif">
+        <g fontFamily="inherit">
           <text x={28} y={50} fontSize={31} fontWeight={900} fill={COLORS.navy}>สรุปเส้นทาง Handover / Defect — ตึก A และ B</text>
           <text x={28} y={81} fontSize={15} fontWeight={700} fill={COLORS.muted}>สถานะลูกค้า → ร่วม/ไม่ร่วมโรงแรม → สถานะปัจจุบัน</text>
           <text x={1888} y={36} textAnchor="end" fontSize={12} fontWeight={700} fill={COLORS.muted}>อ้างอิง: Web App / Supabase — condo_room_status</text>
