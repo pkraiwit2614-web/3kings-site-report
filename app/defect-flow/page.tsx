@@ -221,6 +221,7 @@ export default function DefectFlowPage(){
   const [loading,setLoading]=useState(true)
   const [error,setError]=useState('')
   const [roomSearch,setRoomSearch]=useState('')
+  const [diagramZoom,setDiagramZoom]=useState(100)
   const svgRef=useRef<SVGSVGElement|null>(null)
 
   useEffect(()=>{
@@ -316,8 +317,16 @@ export default function DefectFlowPage(){
       </div>
     </form>
 
+    <div className="flow-zoom-toolbar" role="group" aria-label="ปรับขนาด Diagram Handover / Defect">
+      <span>ขนาดแผนภาพ</span>
+      <button className="button" type="button" disabled={diagramZoom<=75} onClick={()=>setDiagramZoom(z=>Math.max(75,z-25))} aria-label="ย่อ Diagram">−</button>
+      <button className="button" type="button" onClick={()=>setDiagramZoom(100)} aria-label="แสดง Diagram ให้พอดีหน้าจอ">พอดีหน้าจอ</button>
+      <button className="button" type="button" disabled={diagramZoom>=200} onClick={()=>setDiagramZoom(z=>Math.min(200,z+25))} aria-label="ขยาย Diagram">+</button>
+      <b aria-live="polite">{diagramZoom}%</b>
+    </div>
+
     {loading?<div className="panel flow-loading">กำลังโหลด Handover / Defect Flow…</div>:error?<div className="panel flow-error">โหลดข้อมูลไม่ได้: {error}</div>:<section className="flow-stage panel">
-      <svg ref={svgRef} className="flow-svg" style={{fontFamily:'inherit'}} viewBox="0 0 1920 1080" role="img" aria-label="Live Handover Defect Flow Building A and B" xmlns="http://www.w3.org/2000/svg">
+      <svg ref={svgRef} className="flow-svg" style={{fontFamily:'inherit',width:`${diagramZoom}%`}} viewBox="0 0 1920 1080" role="img" aria-label="Live Handover Defect Flow Building A and B" xmlns="http://www.w3.org/2000/svg">
         <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#718095"/></marker></defs>
         <rect width="1920" height="1080" fill="#ffffff"/>
         <g fontFamily="inherit">
@@ -353,7 +362,7 @@ export default function DefectFlowPage(){
 
     <style jsx>{`
       .flow-room-search-panel{margin-bottom:12px!important}.flow-room-search-toolbar{margin-bottom:0}
-      .flow-toolbar{display:grid;grid-template-columns:218px 148px;grid-template-rows:38px 38px;align-items:center;justify-content:end;gap:6px 8px;width:auto}.sync-meta{grid-column:1;grid-row:1;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;justify-self:end;line-height:1.25;margin:0}.sync-meta span{font-size:8.5px;color:var(--muted);font-weight:700}.sync-meta b{font-size:10px;color:var(--navy);font-weight:800;white-space:nowrap}.flow-dashboard-button{grid-column:2;grid-row:1;width:148px;min-width:148px;height:38px;white-space:nowrap}.flow-export-button{grid-column:1;grid-row:2;width:218px;min-width:218px;height:38px}.flow-print-button{grid-column:2;grid-row:2;width:148px!important;min-width:148px!important;height:38px!important;margin:0!important;white-space:nowrap}.flow-stage{padding:10px;overflow:auto;background:#eef2f6}.flow-svg{display:block;width:100%;min-width:1180px;height:auto;background:white;border-radius:10px;box-shadow:0 8px 24px rgba(25,42,63,.08)}.flow-loading,.flow-error{padding:24px}.flow-error{color:#9f312d}
+      .flow-toolbar{display:grid;grid-template-columns:218px 148px;grid-template-rows:38px 38px;align-items:center;justify-content:end;gap:6px 8px;width:auto}.sync-meta{grid-column:1;grid-row:1;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;justify-self:end;line-height:1.25;margin:0}.sync-meta span{font-size:8.5px;color:var(--muted);font-weight:700}.sync-meta b{font-size:10px;color:var(--navy);font-weight:800;white-space:nowrap}.flow-dashboard-button{grid-column:2;grid-row:1;width:148px;min-width:148px;height:38px;white-space:nowrap}.flow-export-button{grid-column:1;grid-row:2;width:218px;min-width:218px;height:38px}.flow-print-button{grid-column:2;grid-row:2;width:148px!important;min-width:148px!important;height:38px!important;margin:0!important;white-space:nowrap}.flow-zoom-toolbar{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin:0 0 9px;font-size:12px;color:var(--muted)}.flow-zoom-toolbar button{padding:6px 11px;min-height:30px}.flow-zoom-toolbar b{min-width:42px;text-align:center;color:var(--navy)}.flow-stage{padding:10px;overflow:auto;max-width:100%;min-width:0;background:#eef2f6}.flow-svg{display:block;min-width:0;height:auto;background:white;border-radius:10px;box-shadow:0 8px 24px rgba(25,42,63,.08)}.flow-loading,.flow-error{padding:24px}.flow-error{color:#9f312d}
       @media(max-width:900px){.flow-toolbar{grid-template-columns:218px 148px;justify-content:end;width:100%}}
       @media(max-width:760px){.flow-stage{padding:6px}.flow-svg{min-width:1050px}}
       @media(max-width:430px){.flow-toolbar{grid-template-columns:1fr;grid-template-rows:auto;width:100%}.sync-meta,.flow-dashboard-button,.flow-export-button,.flow-print-button{grid-column:1;grid-row:auto;width:100%!important;min-width:0!important}.sync-meta{align-items:flex-start;justify-self:stretch}}
