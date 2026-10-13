@@ -3,6 +3,7 @@
 import {useEffect,useMemo,useState} from 'react'
 import useAccessRole from '@/components/useAccessRole'
 import {canEditCalendar} from '@/lib/accessControl'
+import {getActivitySessionId} from '@/lib/activityLog'
 import {getSupabase} from '@/lib/supabase'
 import {logActivity} from '@/lib/activityLog'
 import {useI18n} from '@/components/I18nProvider'
@@ -21,6 +22,8 @@ type GoogleEventApi={
   end:{date?:string;dateTime?:string}
 }
 type WorkEvent=GoogleEventApi&{calendarId:string;calendarLabel:string;calendarColor:string}
+type LocalCalendar={id:string;name:string;color:string;active:boolean}
+type LocalEvent={id:string;calendar_id:string;event_date:string;title:string;detail:string|null}
 type EventDraft={
   eventId:string|null
   calendarId:string
@@ -128,17 +131,67 @@ export function GoogleCalendarManager(){
   const [setupBusy,setSetupBusy]=useState(false)
   const [message,setMessage]=useState('')
   const [draft,setDraft]=useState<EventDraft|null>(null)
+  const [localCalendars,setLocalCalendars]=useState<LocalCalendar[]>([])
+  const [newCalendarOpen,setNewCalendarOpen]=useState(false)
+  const [newCalendarName,setNewCalendarName]=useState('')
+  const [newCalendarColor,setNewCalendarColor]=useState('#7b61ff')
+  const [calendarManageId,setCalendarManageId]=useState('')
+  const [calendarManageName,setCalendarManageName]=useState('')
+  const [calendarManageColor,setCalendarManageColor]=useState('#7b61ff')
+  const allCalendars=useMemo(()=>[
+    ...WORK_CALENDARS.map(row=>({...row,source:'google' as const})),
+    ...localCalendars.filter(row=>row.active).map(row=>({id:row.id,label:row.name,color:row.color,source:'web' as const})),
+  ],[localCalendars])
+  const localCalendarIds=useMemo(()=>new Set(localCalendars.map(row=>row.id)),[localCalendars])
+
+  async function refreshLocalCalendars(){
+    const {data,error}=await getSupabase().from('work_calendars')
+      .select('id,name,color,active').eq('active',true).order('created_at',{ascending:true})
+    if(error)throw error
+    setLocalCalendars((data||[]) as LocalCalendar[])
+  }
+
+  useEffect(()=>{
+    if(!ready)return
+    void refreshLocalCalendars().catch(error=>setMessage('โหลดปฏิทิน Web App ไม่สำเร็จ: '+errorMessage(error)))
+  },[ready])
+
+  async function calendarAction(action:'create'|'update'|'delete'){
+    if(!editable)return
+    setSaving(true);setMessage('')
+    try{
+      const params={p_client_session_id:getActivitySessionId(),p_user_agent:navigator.userAgent}
+      let id=''
+      if(action==='create'){
+        if(!newCalendarName.trim())return
+        const {data,error}=await getSupabase().rpc('work_calendar_create',{...params,p_name:newCalendarName.trim(),p_color:newCalendarColor})
+        if(error)throw error
+        id=String(data||'')
+        setNewCalendarName('');setNewCalendarOpen(false)
+      }else if(action==='update'){
+        const {error}=await getSupabase().rpc('work_calendar_update',{...params,p_calendar_id:calendarManageId,p_name:calendarManageName.trim(),p_color:calendarManageColor})
+        if(error)throw error
+        setCalendarManageId('')
+      }else{
+        if(!window.confirm('ลบปฏิทิน “'+calendarManageName+'” และรายการทั้งหมดอย่างถาวร?'))return
+        const {error}=await getSupabase().rpc('work_calendar_delete',{...params,p_calendar_id:calendarManageId})
+        if(error)throw error
+        setSelected(current=>current.filter(value=>value!==calendarManageId))
+        setCalendarManageId('')
+      }
+      await refreshLocalCalendars()
+      if(id)setSelected(current=>[...new Set([...current,id])])
+      setMessage(action==='delete'?'ลบปฏิทิน Web App แล้ว':'บันทึกปฏิทิน Web App แล้ว')
+    }catch(error){setMessage('จัดการปฏิทินไม่สำเร็จ: '+errorMessage(error))}
+    finally{setSaving(false)}
+  }
 
   useEffect(()=>{
     try{
       const savedSelection=window.localStorage.getItem(STORAGE_SELECTION)
       if(savedSelection){
         const parsed=JSON.parse(savedSelection)
-        const allowed=new Set(WORK_CALENDARS.map(row=>row.id))
-        if(Array.isArray(parsed)){
-          const valid=parsed.filter((value):value is string=>typeof value==='string'&&allowed.has(value))
-          if(valid.length)setSelected(valid)
-        }
+        if(Array.isArray(parsed))setSelected(parsed.filter((value):value is string=>typeof value==='string'&&value.length<=250))
       }
       const savedMode=window.localStorage.getItem(STORAGE_MODE)
       if(savedMode==='MONTH'||savedMode==='WEEK'||savedMode==='AGENDA')setMode(savedMode)
@@ -248,22 +301,38 @@ export function GoogleCalendarManager(){
   const agendaEvents=useMemo(()=>events.slice().sort((a,b)=>(a.start.dateTime||a.start.date||'').localeCompare(b.start.dateTime||b.start.date||'')),[events])
 
   async function loadEvents(){
-    if(connection!=='shared'||!appToken)return
+    if(connection==='checking'||!appToken)return
     if(!selected.length){setEvents([]);return}
     setLoading(true)
     try{
-      const results=await Promise.all(selected.map(async calendarId=>{
+      const googleSelected=connection==='shared'?selected.filter(id=>WORK_CALENDARS.some(row=>row.id===id)):[]
+      const localSelected=selected.filter(id=>localCalendarIds.has(id))
+      const googleResults=await Promise.all(googleSelected.map(async calendarId=>{
         const calendar=getWorkCalendar(calendarId)
         const params=new URLSearchParams({calendar_id:calendarId,time_min:apiTime(fetchWindow.start),time_max:apiTime(fetchWindow.end)})
         const data=await apiFetch<{items?:GoogleEventApi[]}>('/api/google-calendar/events?'+params.toString())
-        return (data.items||[]).filter(item=>item.status!=='cancelled').map(item=>({...item,calendarId,calendarLabel:calendar?.label||calendarId,calendarColor:calendar?.color||'#7b61ff'}))
+        return (data.items||[]).filter(item=>item.status!=='cancelled').map(item=>({
+          ...item,calendarId,calendarLabel:calendar?.label||calendarId,calendarColor:calendar?.color||'#7b61ff'
+        }))
       }))
-      setEvents(results.flat())
-    }catch(error){
-      setMessage('โหลดปฏิทินไม่สำเร็จ: '+errorMessage(error))
-    }finally{setLoading(false)}
+      let localEvents:WorkEvent[]=[]
+      if(localSelected.length){
+        const {data,error}=await getSupabase().from('work_calendar_events')
+          .select('id,calendar_id,event_date,title,detail').in('calendar_id',localSelected)
+          .gte('event_date',fetchWindow.start).lt('event_date',fetchWindow.end).limit(2000)
+        if(error)throw error
+        localEvents=((data||[]) as LocalEvent[]).map(row=>{
+          const calendar=localCalendars.find(c=>c.id===row.calendar_id)
+          return {id:row.id,calendarId:row.calendar_id,calendarLabel:calendar?.name||'Web App',
+            calendarColor:calendar?.color||'#7b61ff',summary:row.title,description:row.detail||'',
+            start:{date:row.event_date},end:{date:addDays(row.event_date,1)}}
+        })
+      }
+      setEvents([...googleResults.flat(),...localEvents])
+    }catch(error){setMessage('โหลดปฏิทินไม่สำเร็จ: '+errorMessage(error))}
+    finally{setLoading(false)}
   }
-  useEffect(()=>{if(connection==='shared'&&appToken)void loadEvents()},[connection,appToken,selected.join('|'),fetchWindow.start,fetchWindow.end])
+  useEffect(()=>{if(connection!=='checking'&&appToken)void loadEvents()},[connection,appToken,selected.join('|'),fetchWindow.start,fetchWindow.end,localCalendars])
 
   async function beginOwnerSetup(){
     if(role!=='owner'||!appToken)return
