@@ -143,13 +143,15 @@ function defectWbPrepare_(meta,change,dryRun) {
   if(xml===before)throw Error('Workbook write produced no change');
   lookup[meta.sheetPath]=Utilities.newBlob(xml,'text/xml',meta.sheetPath);
   // Formula components and other workbook members remain untouched.
-  const output=Utilities.zip(blobs.map(function(b){return lookup[b.getName()];}),meta.name)
-    .setContentType(DEFECT_WB.XLSX_MIME);
+  // A Dry Run must verify workbook XML without packing or uploading XLSX bytes.
   if(dryRun) {
     const verify=defectWbVerifyXml_(xml,meta,idx,values);
     if(!verify)throw Error('Dry-run XML validation failed');
     return {row:idx,dryRun:true};
   }
+  // Utilities.zip() returns an application/zip Blob. Do not change its
+  // ContentType: Drive's media-upload request declares the XLSX MIME type.
+  const output=Utilities.zip(blobs.map(function(b){return lookup[b.getName()];}),meta.name);
   if(file.getLastUpdated().getTime()!==initialModified)
     throw Error('Workbook changed during read; refusing to overwrite.');
   defectWbEnsureBaselineBackup_(file);
