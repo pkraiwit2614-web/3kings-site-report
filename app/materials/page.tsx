@@ -253,7 +253,7 @@ export default function MaterialsPage(){
             onChange={e=>setQ(e.target.value)}
             style={{minWidth:260,padding:'7px 9px',fontSize:12,borderRadius:9}}
           />
-          <select value={project} onChange={e=>setProject(e.target.value)} style={{minWidth:130,maxWidth:180,padding:'7px 9px',fontSize:12,borderRadius:9}}><option value="">ทุก Plot</option>{projects.filter(p=>/^AV-P(?:3|[6-9])$/.test(p.code)).map(p=><option key={p.id} value={p.id}>{p.code} — {p.name}</option>)}</select>
+          <select value={project} onChange={e=>setProject(e.target.value)} style={{minWidth:130,maxWidth:180,padding:'7px 9px',fontSize:12,borderRadius:9}}><option value="">ทุกหน้างาน</option>{projects.filter(p=>/^AV-P(?:3|[6-9])$/.test(p.code)||['MIRAGE','CONDO-A','CONDO-B'].includes(p.code)).map(p=><option key={p.id} value={p.id}>{p.code} — {p.name}</option>)}</select>
           <select value={orderStatus} onChange={e=>setOrderStatus(e.target.value)} style={{minWidth:150,maxWidth:190,padding:'7px 9px',fontSize:12,borderRadius:9}}>
             <option value="">ทุกสถานะการสั่งซื้อ</option>
             <option value="สั่งแล้ว">สั่งแล้ว</option>
@@ -281,7 +281,7 @@ export default function MaterialsPage(){
               <td><b>{x.item_name}</b><small>{x.quantity_unit||'ยังไม่ระบุปริมาณ/หน่วย'}</small></td>
               <td>{[x.brand,x.model_spec].filter(Boolean).join(' / ')||'-'}</td>
               <td><StatusBadge value={x.status}/></td>
-              <td>{related?<><b>{related.procurement_status||'-'}</b><small>{related.current_status||'-'}</small>{(related.po_no||related.pr_no)&&<small>{[related.pr_no,related.po_no].filter(Boolean).join(' / ')}</small>}{related.payment_status&&<small>ชำระเงิน: {related.payment_status}</small>}{related.expected_delivery_text&&<small>กำหนดส่ง: {related.expected_delivery_text}</small>}</>:<span className="muted">ยังไม่มีรายการจัดซื้อที่จับคู่ได้แน่นอน</span>}</td>
+              <td>{related?<>{related.po_no&&<small><b>สั่งแล้ว (มีเลขใบสั่ง)</b></small>}<b>{related.procurement_status||'-'}</b><small>{related.current_status||'-'}</small>{(related.po_no||related.pr_no)&&<small>{[related.pr_no,related.po_no].filter(Boolean).join(' / ')}</small>}{related.payment_status&&<small>ชำระเงิน: {related.payment_status}</small>}{related.expected_delivery_text&&<small>กำหนดส่ง: {related.expected_delivery_text}</small>}</>:<span className="muted">ยังไม่มีรายการจัดซื้อที่จับคู่ได้แน่นอน</span>}</td>
               <td><ReadableDetail parts={[...detail,related?.condition_note]}/>{related?.source_updated_at&&<small>ทะเบียนจัดซื้ออัปเดต {dateTH(related.source_updated_at)}</small>}</td>
               <td>{x.contact_name||x.contact_phone||related?.vendor?<><b>{x.contact_name||related?.vendor||'-'}</b><small>{x.contact_phone||''}</small></>:'-'}</td>
             </tr>
@@ -310,7 +310,7 @@ export default function MaterialsPage(){
             <td><b>{[x.po_no,x.pr_no].filter(Boolean).join(' / ')||'-'}</b></td>
             <td>{x.vendor||'ยังไม่ระบุ'}</td>
             <td><b>{x.item_name||'-'}</b></td>
-            <td>{x.payment_status||x.procurement_status||'-'}</td>
+            <td>{x.po_no&&<small><b>สั่งแล้ว (มีเลขใบสั่ง)</b></small>}{x.payment_status||x.procurement_status||'-'}</td>
             <td><StatusBadge value={x.current_status} multiline/></td>
             <td><b>{x.expected_delivery_text||'ยังไม่ระบุ'}</b></td>
             <td><ReadableDetail parts={[x.condition_note]}/></td>
