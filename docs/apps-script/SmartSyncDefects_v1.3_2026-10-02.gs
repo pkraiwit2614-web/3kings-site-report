@@ -12,6 +12,8 @@
 
 const DEFECT_V13 = {
   SHEET_NAME: 'ข้อมูลจำแนก',
+  SOURCE_FILE_ID: '1MEeB1E7D_35MTndRPi1aBTlVfI2aR0Wj',
+  SOURCE_FILE_NAME: 'Handover_Defect_Summary_Updated_28-09-2026.xlsx',
   STATE_KEY: 'SYNC_CONDO_DEFECT_MASTER_V13',
   HANDLER: 'smartSyncDefectsV13_15m',
   EXPECTED_ROOMS: 263,
@@ -72,6 +74,10 @@ function runDefectSyncV13_(opts) {
     });
 
     file = findLatestFile_(folder, SMART_SYNC_CFG.DEFECT_FILE_RE);
+    // Reject backup, temp, or similarly named workbooks before any database write.
+    if (file.getId() !== DEFECT_V13.SOURCE_FILE_ID || file.getName() !== DEFECT_V13.SOURCE_FILE_NAME) {
+      throw new Error('Defect sync source is not the approved canonical workbook.');
+    }
     const modifiedIso = file.getLastUpdated().toISOString();
 
     if (!opts.force && isUnchanged_(ctx.props, DEFECT_V13.STATE_KEY, file.getId(), modifiedIso)) {
