@@ -41,3 +41,30 @@ test('SQL migration isolates hotel Excel from Defect and checks revisions',()=>{
  assert.doesNotMatch(sql,/UPDATE public\.condo_room_status/i)
  assert.doesNotMatch(sql,/DELETE FROM public\.condo_room_status/i)
 })
+
+test('XLSX bytes are rewrapped as application/zip for all three read paths',()=>{
+ const src=read('docs/apps-script/HotelOOOExcelWriteback_2026-10-13.gs')
+ const bytes=[0x50,0x4b,0x03,0x04]
+ let unzipped=false
+ const utilities={
+  newBlob:(source,mime,name)=>({data:source,mime,name,getBytes(){return this.data}}),
+  unzip:blob=>{
+   assert.equal(blob.mime,'application/zip')
+   assert.equal(blob.name,'hotel-ooo-read.zip')
+   assert.deepEqual(blob.getBytes(),bytes)
+   unzipped=true
+   return ['unzipped']
+  }
+ }
+ const ctx={Utilities:utilities}
+ vm.createContext(ctx)
+ vm.runInContext(src,ctx)
+ const result=ctx.hotelOOOUnzipXlsx_({getBytes:()=>bytes})
+ assert.equal(unzipped,true)
+ assert.equal(result[0],'unzipped')
+ assert.match(src,/hotelOOOUnzipXlsx_\(file\.getBlob\(\)\)/)
+ assert.match(src,/hotelOOOUnzipXlsx_\(f\.getBlob\(\)\)/)
+ assert.match(src,/hotelOOOUnzipXlsx_\(DriveApp\.getFileById\(HOTEL_OOO_WB\.FILE_ID\)\.getBlob\(\)\)/)
+ assert.doesNotMatch(src,/Utilities\.unzip\(file\.getBlob\(\)\)/)
+ assert.doesNotMatch(src,/Utilities\.unzip\(f\.getBlob\(\)\)/)
+})
