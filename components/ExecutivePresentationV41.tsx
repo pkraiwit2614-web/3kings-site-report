@@ -296,7 +296,11 @@ export default function ExecutivePresentationV41(){
     const otherTaskMatches=task?other.filter(p=>p.task_id&&p.task_id!==taskId&&p.source==='drive'&&score(p)>=65)
       .sort((a,b)=>score(b)-score(a)||recent(a,b)):[]
     const fallback=taskId?other.filter(p=>!p.task_id&&!filenameMatches.some(x=>x.id===p.id)).sort(recent):[]
-    const pool=(taskId?[...approved,...direct,...filenameMatches,...otherTaskMatches,...fallback]:eligible.slice().sort(sortEvidenceLatest))
+    // Exhaust the full active photo inventory for this Plot before reporting no alternatives.
+    // A photo mapped to another Task is a review candidate, never an automatic Task match.
+    const otherPlotCandidates=taskId?other.filter(p=>Boolean(p.task_id)&&p.task_id!==taskId
+      &&!otherTaskMatches.some(x=>x.id===p.id)).sort((a,b)=>score(b)-score(a)||recent(a,b)):[]
+    const pool=(taskId?[...approved,...direct,...filenameMatches,...otherTaskMatches,...fallback,...otherPlotCandidates]:eligible.slice().sort(sortEvidenceLatest))
     if(photoMode==='latest') return pool.slice(0,4)
     const before=pool.find(p=>p.phase==='before'); const after=pool.find(p=>p.phase==='after')
     const chosen:PresentationPhoto[]=[]
