@@ -98,6 +98,23 @@ function defectWbRun_(dryRun) {
     return result;
   } finally {lock.releaseLock();}
 }
+function defectWbEnsureBaselineBackup_(file) {
+  // Repacking XLSX rewrites ZIP bytes; keep one untouched baseline inside
+  // the existing Backup folder alongside the two source workbooks.
+  const key='DEFECT_WB_BASELINE_BACKUP_'+file.getId();
+  const props=PropertiesService.getScriptProperties();
+  if(props.getProperty(key))return;
+  const parents=file.getParents();
+  if(!parents.hasNext())throw Error('Original workbook has no parent folder for backup');
+  const parent=parents.next();
+  const folders=parent.getFoldersByName('Backup');
+  const backupFolder=folders.hasNext()?folders.next():parent.createFolder('Backup');
+  const name='BACKUP_before_DefectExcelWriteback_2026-10-13_'+file.getName();
+  const copies=backupFolder.getFilesByName(name);
+  const backup=copies.hasNext()?copies.next():file.makeCopy(name,backupFolder);
+  if(!backup || !backup.getId())throw Error('Baseline backup failed');
+  props.setProperty(key,backup.getId());
+}
 function defectWbPrepare_(meta,change,dryRun) {
   const file=DriveApp.getFileById(meta.id);
   if(file.getName()!==meta.name || file.getMimeType()!==DEFECT_WB.XLSX_MIME)
@@ -135,6 +152,7 @@ function defectWbPrepare_(meta,change,dryRun) {
   }
   if(file.getLastUpdated().getTime()!==initialModified)
     throw Error('Workbook changed during read; refusing to overwrite.');
+  defectWbEnsureBaselineBackup_(file);
   const resp=UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files/'+meta.id+'?uploadType=media',{
     method:'patch',contentType:DEFECT_WB.XLSX_MIME,
     headers:{Authorization:'Bearer '+ScriptApp.getOAuthToken()},
