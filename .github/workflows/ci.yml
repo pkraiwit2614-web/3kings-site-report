@@ -28,6 +28,9 @@ jobs:
       - name: Hotel OOO/OOS room mapping and security regression
         run: node tests/hotel-room-availability.test.cjs
 
+      - name: Hotel Excel OOO/OOS pinned source safety
+        run: node --test tests/hotel-ooo-excel-source.test.cjs
+
       - name: Defect canonical source contract
         run: node tests/defect-canonical-source.test.cjs
 
