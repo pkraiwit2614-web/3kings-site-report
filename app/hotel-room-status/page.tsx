@@ -147,7 +147,7 @@ export default function HotelRoomStatusPage(){
           <th>ห้อง / Combine</th><th>สถานะ Hotel</th><th>ช่วงวันที่</th><th>สาเหตุ</th><th>Defect ค้าง / รอตรวจรับ</th><th>แก้ไขล่าสุด</th><th>จัดการ</th>
         </tr></thead><tbody>
           {filtered.map(g=><tr key={g.key}>
-            <td><b>{g.members.map(r=>r.room_no).join(' + ')}</b>
+            <td><b>{g.key}</b>
               {hotelRoomMembers(g.key).length>1&&<small>⌁ ห้อง Combine: {hotelRoomMembers(g.key).filter(r=>r!==g.key).join(', ')}</small>}
               {!g.inHotel&&<small>ไม่ร่วมโรงแรม</small>}
               {g.members.some(r=>['B101','B102','B103','B104','B105'].includes(r.room_no))&&<small>{g.members.map(r=>r.room_no.replace(/^B10([1-5])$/,'Good0$1')).join(' / ')}</small>}</td>
