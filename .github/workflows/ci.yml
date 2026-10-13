@@ -34,6 +34,9 @@ jobs:
       - name: Defect Excel writeback XML and queue safety
         run: node tests/defect-excel-writeback.test.cjs
 
+      - name: Shift sync and Defect revision safeguards
+        run: node --test tests/sync-shift-and-defect-revision.test.cjs
+
       - name: Stability regression tests
         run: node tests/stability.test.cjs
 
