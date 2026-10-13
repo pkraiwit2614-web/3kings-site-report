@@ -152,3 +152,6 @@
 @media(max-width:760px){
   .page-header-print-actions{width:100%;justify-content:flex-start}
 }
+
+/* Web material/tool edit controls are excluded from original print tables. */
+@media print{.material-web-edit-button{display:none!important}}

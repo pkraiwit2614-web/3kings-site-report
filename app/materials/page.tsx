@@ -383,6 +383,5 @@ export default function MaterialsPage(){
       </div>
       <div className="panel table-wrap" style={{maxHeight:600,overflow:'auto'}}><table className="materials-print-table tools-print-table"><thead><tr className="materials-print-repeat-title"><th colSpan={10}>3 Kings Construction — วัสดุ เครื่องมือและผู้รับเหมา · Tool &amp; Machine</th></tr><tr><th>รหัส</th><th>หมวด</th><th>เครื่องมือ / เครื่องจักร</th><th>ยี่ห้อ / รุ่น</th><th>จำนวน</th><th>สถานะ</th><th>สถานที่ล่าสุด</th><th>ผู้รับผิดชอบ</th><th>วันที่อัปเดต</th><th>หมายเหตุ</th></tr></thead><tbody>{filteredTools.map(x=><tr key={x.id}><td><b>{x.item_code||'-'}</b></td><td>{x.category||'-'}</td><td><b>{x.item_name||'-'}</b></td><td>{[x.brand,x.model_spec].filter(Boolean).join(' / ')||'-'}</td><td>{x.quantity??'-'} {x.unit||''}</td><td><StatusBadge value={x.status}/>{x.__override_updated_at&&<small>Web App update</small>}{canManage&&<button type="button" className="button material-web-edit-button" style={{display:'block',marginTop:5}} onClick={()=>setEditTarget({type:'tool',item:x})}>แก้ไข</button>}</td><td>{x.location||'-'}</td><td>{x.responsible_person||'-'}</td><td>{dateTH(x.source_updated_at)}</td><td>{x.notes||'-'}</td></tr>)}</tbody></table></div>
     </section>
-    <style jsx global>{`@media print{.material-web-edit-button{display:none!important}}`}</style>
   </AppShell>
 }
