@@ -87,6 +87,8 @@ jobs:
 
       - name: Google Calendar live edit regression
         run: node tests/google-calendar-live-edit.test.cjs
+      - name: Calendar procurement date/permission guard regression
+        run: node tests/calendar-procurement-integration.test.cjs
 
       # Validate live Materials print table columns, repeating headers and page-width allocation.
       - name: Materials print pagination regression

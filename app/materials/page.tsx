@@ -80,7 +80,7 @@ export default function MaterialsPage(){
         const [p,m,pr,prLinks,t,overrides,checked,imported]=await Promise.all([
           s.from('projects').select('*').or('active.eq.true,code.eq.AV-P3').order('sort_order').abortSignal(signal),
           s.from('materials').select('*').order('project_id').order('source_row').abortSignal(signal),
-          s.from('procurement_items').select('*').order('source_updated_at',{ascending:false}).order('source_row').abortSignal(signal),
+          s.from('v_procurement_items').select('*').order('source_updated_at',{ascending:false}).order('source_row').abortSignal(signal),
           s.from('procurement_item_projects').select('procurement_item_id,project_id').abortSignal(signal),
           s.from('tool_machine').select('*').order('item_no').abortSignal(signal),
           s.from('material_tool_web_overrides').select('*').abortSignal(signal),
@@ -119,6 +119,7 @@ export default function MaterialsPage(){
       .on('postgres_changes',{event:'*',schema:'public',table:'projects'},queueLoad)
       .on('postgres_changes',{event:'*',schema:'public',table:'materials'},queueLoad)
       .on('postgres_changes',{event:'*',schema:'public',table:'procurement_items'},queueLoad)
+      .on('postgres_changes',{event:'*',schema:'public',table:'procurement_calendar_delivery'},queueLoad)
       .on('postgres_changes',{event:'*',schema:'public',table:'procurement_item_projects'},queueLoad)
       .on('postgres_changes',{event:'*',schema:'public',table:'tool_machine'},queueLoad)
       .on('postgres_changes',{event:'*',schema:'public',table:'material_tool_web_overrides'},queueLoad)
