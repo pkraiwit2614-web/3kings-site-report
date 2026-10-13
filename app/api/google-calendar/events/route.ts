@@ -2,6 +2,8 @@ import {NextRequest,NextResponse} from 'next/server'
 import {authorizeCalendarApi} from '@/lib/googleCalendarApiAuth'
 import {googleCalendarSharedConfigured,googleCalendarSharedFetch} from '@/lib/googleCalendarServer'
 import {WORK_CALENDAR_IDS} from '@/lib/workCalendars'
+import {canEditProcurement} from '@/lib/accessControl'
+import {createClient} from '@supabase/supabase-js'
 
 export const runtime='nodejs'
 export const dynamic='force-dynamic'
@@ -42,6 +44,22 @@ function cleanBody(value:any){
   }
 
   throw new Error('event_time_required')
+}
+
+const SUPABASE_URL=process.env.NEXT_PUBLIC_SUPABASE_URL||'https://wtqubwdduzedmcvyhbgs.supabase.co'
+const SUPABASE_KEY=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||'sb_publishable_Ruyka15H3QApZKY9q2U-Vg_CjmEuMRX'
+
+async function enforceProcurementLinkGuard(role:string,token:string,calendarId:string,eventId:string){
+  if(canEditProcurement(role as Parameters<typeof canEditProcurement>[0]))return null
+  // A calendar editor must not silently change a Purchase-owned delivery promise.
+  const client=createClient(SUPABASE_URL,SUPABASE_KEY,{
+    global:{headers:{Authorization:'Bearer '+token}},auth:{persistSession:false,autoRefreshToken:false},
+  })
+  const {data,error}=await client.from('procurement_calendar_delivery')
+    .select('source_identity').eq('event_key','g:'+calendarId+':'+eventId).maybeSingle()
+  if(error)return noStore({error:'calendar_link_check_failed'},503)
+  if(data)return noStore({error:'procurement_delivery_requires_purchase_role'},403)
+  return null
 }
 
 function calendarBase(calendarId:string){
@@ -115,6 +133,8 @@ export async function PATCH(request:NextRequest){
     const calendarId=safeCalendarId(input?.calendarId)
     const eventId=safeEventId(input?.eventId)
     if(!calendarId||!eventId)return noStore({error:'invalid_target'},400)
+    const linkGuard=await enforceProcurementLinkGuard(auth.role,auth.accessToken,calendarId,eventId)
+    if(linkGuard)return linkGuard
     const body=cleanBody(input?.event)
     const data=await googleCalendarSharedFetch<any>(auth.accessToken,calendarBase(calendarId)+'/'+encodeURIComponent(eventId),{
       method:'PATCH',
@@ -137,6 +157,8 @@ export async function DELETE(request:NextRequest){
     const calendarId=safeCalendarId(input?.calendarId)
     const eventId=safeEventId(input?.eventId)
     if(!calendarId||!eventId)return noStore({error:'invalid_target'},400)
+    const linkGuard=await enforceProcurementLinkGuard(auth.role,auth.accessToken,calendarId,eventId)
+    if(linkGuard)return linkGuard
 
     await googleCalendarSharedFetch<null>(auth.accessToken,calendarBase(calendarId)+'/'+encodeURIComponent(eventId),{
       method:'DELETE',
