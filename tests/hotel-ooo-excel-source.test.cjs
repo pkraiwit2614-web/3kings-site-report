@@ -68,3 +68,25 @@ test('XLSX bytes are rewrapped as application/zip for all three read paths',()=>
  assert.doesNotMatch(src,/Utilities\.unzip\(file\.getBlob\(\)\)/)
  assert.doesNotMatch(src,/Utilities\.unzip\(f\.getBlob\(\)\)/)
 })
+
+
+test('empty self-closing Excel cells do not read data from the following row',()=>{
+ const src=read('docs/apps-script/HotelOOOExcelWriteback_2026-10-13.gs')
+ const ctx={};vm.createContext(ctx);vm.runInContext(src,ctx)
+ const sheet='<worksheet><sheetData>'+
+  '<row r="139"><c r="F139" t="inlineStr"><is><t>A201</t></is></c>'+
+  '<c r="H139" s="22"/><c r="I139" s="22"/><c r="J139" s="24"/>'+
+  '<c r="K139" s="24"/></row>'+
+  '<row r="140"><c r="A140"><v>5.0</v></c><c r="H140" t="inlineStr"><is><t>OOO</t></is></c></row>'+
+  '</sheetData></worksheet>'
+ const beforeRow=sheet.match(/<row r="140">[\s\S]*?<\/row>/)[0]
+ assert.equal(ctx.hotelOOORead_(sheet,'H139',[]),'')
+ assert.equal(ctx.hotelOOORead_(sheet,'H140',[]),'OOO')
+ const changed=ctx.hotelOOOPut_(sheet,'H139','OOS')
+ assert.equal(ctx.hotelOOORead_(changed,'H139',[]),'OOS')
+ assert.equal(ctx.hotelOOORead_(changed,'H140',[]),'OOO')
+ assert.equal(ctx.hotelOOORead_(changed,'I139',[]),'')
+ assert.equal(changed.match(/<row r="140">[\s\S]*?<\/row>/)[0],beforeRow)
+ assert.equal((changed.match(/<row r="139">/g)||[]).length,1)
+ assert.throws(()=>ctx.hotelOOOCellPattern_('H139 OR 1=1'),/INVALID_EXCEL_CELL_ADDRESS/)
+})
