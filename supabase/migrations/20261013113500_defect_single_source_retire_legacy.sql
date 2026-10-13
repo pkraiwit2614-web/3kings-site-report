@@ -216,7 +216,7 @@ exception when others then
     'building_b', coalesce(v_b, 0)
   );
 end;
-$function$
+$function$;
 
 
 COMMENT ON TABLE private.condo_defect_rooms_archive_20261013 IS 'Historical snapshot only, not used by Defect UI or Sync. Archived 2026-10-13.';
