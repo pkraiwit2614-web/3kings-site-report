@@ -307,9 +307,12 @@ export default function DefectFlowPage(){
         <button type="button" className="button report-print-button flow-print-button" onClick={()=>window.print()} disabled={loading||!!error}>🖨️ Print</button>
       </div>}/>
     </div>
-    <form className="panel" onSubmit={e=>{e.preventDefault();if(roomSearch.trim())window.location.assign('/defects?q='+encodeURIComponent(roomSearch.trim())+'#room-list')}} style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',marginBottom:12,padding:10}}>
-      <input value={roomSearch} onChange={e=>setRoomSearch(e.target.value)} placeholder="ค้นหาเลขห้อง / Combine เช่น A313, A314, Good01" aria-label="ค้นหาห้องใน Defect Flow" style={{flex:'1 1 260px',minHeight:36}}/>
-      <button className="button primary" type="submit" disabled={!roomSearch.trim()}>ค้นหา → Defect Detail</button>
+    <form className="panel filter-panel compact-filter-shell flow-room-search-panel" onSubmit={e=>{e.preventDefault();if(roomSearch.trim())window.location.assign('/defects?q='+encodeURIComponent(roomSearch.trim())+'#room-list')}}>
+      <div className="toolbar detail-toolbar compact-filter flow-room-search-toolbar">
+        <input value={roomSearch} onChange={e=>setRoomSearch(e.target.value)} placeholder="ค้นหาหลายรายการได้ เช่น A521, A522, รอตรวจรับ" aria-label="ค้นหาเลขห้อง ชื่อเจ้าของ สถานะ หรือรายละเอียดงาน หลายคำคั่นด้วย comma"/>
+        <button className="button primary" type="submit" disabled={!roomSearch.trim()}>ค้นหา → Defect Detail</button>
+        {roomSearch&&<button className="button" type="button" onClick={()=>setRoomSearch('')}>ล้างคำค้น</button>}
+      </div>
     </form>
 
     {loading?<div className="panel flow-loading">กำลังโหลด Handover / Defect Flow…</div>:error?<div className="panel flow-error">โหลดข้อมูลไม่ได้: {error}</div>:<section className="flow-stage panel">
@@ -348,6 +351,7 @@ export default function DefectFlowPage(){
     </section>}
 
     <style jsx>{`
+      .flow-room-search-panel{margin-bottom:12px!important}.flow-room-search-toolbar{margin-bottom:0}
       .flow-toolbar{display:grid;grid-template-columns:218px 148px;grid-template-rows:38px 38px;align-items:center;justify-content:end;gap:6px 8px;width:auto}.sync-meta{grid-column:1;grid-row:1;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;justify-self:end;line-height:1.25;margin:0}.sync-meta span{font-size:8.5px;color:var(--muted);font-weight:700}.sync-meta b{font-size:10px;color:var(--navy);font-weight:800;white-space:nowrap}.flow-dashboard-button{grid-column:2;grid-row:1;width:148px;min-width:148px;height:38px;white-space:nowrap}.flow-export-button{grid-column:1;grid-row:2;width:218px;min-width:218px;height:38px}.flow-print-button{grid-column:2;grid-row:2;width:148px!important;min-width:148px!important;height:38px!important;margin:0!important;white-space:nowrap}.flow-stage{padding:10px;overflow:auto;background:#eef2f6}.flow-svg{display:block;width:100%;min-width:1180px;height:auto;background:white;border-radius:10px;box-shadow:0 8px 24px rgba(25,42,63,.08)}.flow-loading,.flow-error{padding:24px}.flow-error{color:#9f312d}
       @media(max-width:900px){.flow-toolbar{grid-template-columns:218px 148px;justify-content:end;width:100%}}
       @media(max-width:760px){.flow-stage{padding:6px}.flow-svg{min-width:1050px}}
