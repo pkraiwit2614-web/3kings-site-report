@@ -350,11 +350,12 @@ export function GoogleCalendarManager(){
     setSelected(current=>current.includes(id)?current.filter(value=>value!==id):[...current,id])
   }
   function openCreate(dateKey:string){
-    if(!editable||connection!=='shared')return
-    setDraft(emptyDraft(selected[0]||WORK_CALENDARS[0].id,dateKey));setMessage('')
+    if(!editable||(connection!=='shared'&&!localCalendars.length))return
+    const first=selected.find(id=>allCalendars.some(c=>c.id===id))||allCalendars[0]?.id
+    if(!first)return
+    setDraft(emptyDraft(first,dateKey));setMessage('')
   }
   function openEdit(event:WorkEvent){
-    if(!editable||connection!=='shared')return
     setDraft(draftFromEvent(event));setMessage('')
   }
   function buildEventBody(value:EventDraft){
@@ -369,28 +370,47 @@ export function GoogleCalendarManager(){
   }
 
   async function saveEvent(){
-    if(!draft||!editable||connection!=='shared'||!draft.title.trim())return
+    if(!draft||!editable||!draft.title.trim())return
+    if(!localCalendarIds.has(draft.calendarId)&&connection!=='shared')return
     setSaving(true);setMessage('')
     try{
-      const body=buildEventBody(draft)
-      if(draft.eventId){
-        await apiFetch('/api/google-calendar/events',{method:'PATCH',body:JSON.stringify({calendarId:draft.calendarId,eventId:draft.eventId,event:body})})
+      if(localCalendarIds.has(draft.calendarId)){
+        if(!draft.allDay||draft.startDate!==draft.endDate)throw new Error('ปฏิทิน Web App รองรับกิจกรรมหนึ่งวันต่อรายการ')
+        const {error}=await getSupabase().rpc('work_calendar_save_event',{
+          p_event_id:draft.eventId,p_calendar_id:draft.calendarId,p_event_date:draft.startDate,
+          p_title:draft.title.trim(),p_detail:draft.detail.trim()||null,
+          p_client_session_id:getActivitySessionId(),p_user_agent:navigator.userAgent,
+        })
+        if(error)throw error
       }else{
-        await apiFetch('/api/google-calendar/events',{method:'POST',body:JSON.stringify({calendarId:draft.calendarId,event:body})})
+        const body=buildEventBody(draft)
+        if(draft.eventId){
+          await apiFetch('/api/google-calendar/events',{method:'PATCH',body:JSON.stringify({calendarId:draft.calendarId,eventId:draft.eventId,event:body})})
+        }else{
+          await apiFetch('/api/google-calendar/events',{method:'POST',body:JSON.stringify({calendarId:draft.calendarId,event:body})})
+        }
       }
-      await logActivity({userId,eventType:'submit',path:'/calendar',action:draft.eventId?'google_calendar_event_update':'google_calendar_event_create',target:draft.eventId||draft.title,metadata:{calendar_id:draft.calendarId,start:draft.allDay?draft.startDate:draft.startDateTime,transport:'owner_oauth_shared'}})
+      await logActivity({userId,eventType:'submit',path:'/calendar',action:draft.eventId?'google_calendar_event_update':'google_calendar_event_create',target:draft.eventId||draft.title,metadata:{calendar_id:draft.calendarId,start:draft.allDay?draft.startDate:draft.startDateTime,transport:localCalendarIds.has(draft.calendarId)?'web_app_rpc':'owner_oauth_shared'}})
       setDraft(null);setMessage(draft.eventId?'แก้ไขรายการเรียบร้อย':'เพิ่มรายการเรียบร้อย')
       await loadEvents()
     }catch(error){setMessage('บันทึกไม่สำเร็จ: '+errorMessage(error))}finally{setSaving(false)}
   }
 
   async function deleteEvent(){
-    if(!draft?.eventId||!editable||connection!=='shared')return
+    if(!draft?.eventId||!editable)return
+    if(!localCalendarIds.has(draft.calendarId)&&connection!=='shared')return
     if(!window.confirm('ลบ “'+(draft.title||'รายการนี้')+'” ออกจาก Google Calendar จริงใช่หรือไม่?'))return
     setSaving(true);setMessage('')
     try{
-      await apiFetch('/api/google-calendar/events',{method:'DELETE',body:JSON.stringify({calendarId:draft.calendarId,eventId:draft.eventId})})
-      await logActivity({userId,eventType:'submit',path:'/calendar',action:'google_calendar_event_delete',target:draft.eventId,metadata:{calendar_id:draft.calendarId,transport:'owner_oauth_shared'}})
+      if(localCalendarIds.has(draft.calendarId)){
+        const {error}=await getSupabase().rpc('work_calendar_delete_event',{
+          p_event_id:draft.eventId,p_client_session_id:getActivitySessionId(),p_user_agent:navigator.userAgent,
+        })
+        if(error)throw error
+      }else{
+        await apiFetch('/api/google-calendar/events',{method:'DELETE',body:JSON.stringify({calendarId:draft.calendarId,eventId:draft.eventId})})
+      }
+      await logActivity({userId,eventType:'submit',path:'/calendar',action:'google_calendar_event_delete',target:draft.eventId,metadata:{calendar_id:draft.calendarId,transport:localCalendarIds.has(draft.calendarId)?'web_app_rpc':'owner_oauth_shared'}})
       setDraft(null);setMessage('ลบรายการเรียบร้อย')
       await loadEvents()
     }catch(error){setMessage('ลบไม่สำเร็จ: '+errorMessage(error))}finally{setSaving(false)}
