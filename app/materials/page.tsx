@@ -123,6 +123,7 @@ export default function MaterialsPage(){
   },[])
 
   const projectById=useMemo(()=>new Map(projects.map(p=>[p.id,p])),[projects])
+  const unlinkedSiteNames=useMemo(()=>Array.from(new Set(rows.filter(x=>!x.project_id).map(x=>String(x.source_location||'').trim()).filter(Boolean))).sort((a,b)=>a.localeCompare(b,'th')),[rows])
   const procurementProjectIdsByItem=useMemo(()=>{
     const map=new Map<string,string[]>()
     for(const link of procurementLinks){
@@ -192,11 +193,11 @@ export default function MaterialsPage(){
 
   const filtered=useMemo(()=>rows.filter(x=>{
     const p=projectById.get(x.project_id)
-    return (!project||x.project_id===project)&&
+    return (!project||(project.startsWith('source:')?x.source_location===project.slice(7):x.project_id===project))&&
       (!orderStatus||x.status===orderStatus)&&
       textSearch((()=>{
         const linked=procurementByMaterial.get(String(x.id))
-        return [p?.code,p?.name,x.data_group,x.source_item_no,x.category,x.item_name,x.status,x.status_detail,
+        return [p?.code,p?.name,x.source_location,x.data_group,x.source_item_no,x.category,x.item_name,x.status,x.status_detail,
           x.brand,x.model_spec,x.quantity_unit,x.contact_name,x.contact_phone,x.notes,
           linked?.vendor,linked?.procurement_status,linked?.current_status,linked?.pr_no,linked?.po_no,linked?.condition_note]
       })(),needle)
@@ -253,7 +254,7 @@ export default function MaterialsPage(){
             onChange={e=>setQ(e.target.value)}
             style={{minWidth:260,padding:'7px 9px',fontSize:12,borderRadius:9}}
           />
-          <select value={project} onChange={e=>setProject(e.target.value)} style={{minWidth:130,maxWidth:180,padding:'7px 9px',fontSize:12,borderRadius:9}}><option value="">ทุกหน้างาน</option>{projects.filter(p=>/^AV-P(?:3|[6-9])$/.test(p.code)||['MIRAGE','CONDO-A','CONDO-B'].includes(p.code)).map(p=><option key={p.id} value={p.id}>{p.code} — {p.name}</option>)}</select>
+          <select value={project} onChange={e=>setProject(e.target.value)} style={{minWidth:130,maxWidth:180,padding:'7px 9px',fontSize:12,borderRadius:9}}><option value="">ทุกหน้างาน</option>{projects.filter(p=>/^AV-P(?:3|[6-9])$/.test(p.code)||['MIRAGE','CONDO-A','CONDO-B'].includes(p.code)).map(p=><option key={p.id} value={p.id}>{p.code} — {p.name}</option>)}{unlinkedSiteNames.map(site=><option key={site} value={`source:${site}`}>{site}</option>)}</select>
           <select value={orderStatus} onChange={e=>setOrderStatus(e.target.value)} style={{minWidth:150,maxWidth:190,padding:'7px 9px',fontSize:12,borderRadius:9}}>
             <option value="">ทุกสถานะการสั่งซื้อ</option>
             <option value="สั่งแล้ว">สั่งแล้ว</option>
@@ -276,7 +277,7 @@ export default function MaterialsPage(){
             const detail=[x.status_detail,x.notes].filter(Boolean).filter((v:string,i:number,a:string[])=>a.indexOf(v)===i)
             const related=procurementByMaterial.get(String(x.id))
             return <tr key={x.id}>
-              <td><b>{projectById.get(x.project_id)?.code||'-'}</b></td>
+              <td><b>{projectById.get(x.project_id)?.code||x.source_location||'-'}</b></td>
               <td>{x.category||'-'}</td>
               <td><b>{x.item_name}</b><small>{x.quantity_unit||'ยังไม่ระบุปริมาณ/หน่วย'}</small></td>
               <td>{[x.brand,x.model_spec].filter(Boolean).join(' / ')||'-'}</td>
