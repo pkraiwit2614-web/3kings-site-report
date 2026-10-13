@@ -45,6 +45,15 @@ function hotelOOOUnescape_(v){
   return String(v||'').replace(/&quot;/g,'"').replace(/&apos;/g,"'")
     .replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&');
 }
+/**
+ * DriveApp returns .xlsx as its Office MIME type, but Utilities.unzip()
+ * only accepts an application/zip Blob. Re-wrap the same bytes in memory;
+ * this does not rename, edit or rewrite the stored Excel workbook.
+ */
+function hotelOOOUnzipXlsx_(excelBlob){
+  const zipBlob=Utilities.newBlob(excelBlob.getBytes(),'application/zip','hotel-ooo-read.zip');
+  return Utilities.unzip(zipBlob);
+}
 function hotelOOOShared_(blob) {
   if(!blob)throw Error('XLSX sharedStrings.xml missing');
   const s=blob.getDataAsString(),matches=s.match(/<si(?:\s[^>]*)?>[\s\S]*?<\/si>/g)||[];
@@ -164,7 +173,7 @@ function hotelOOORun_(dryRun){
     if(received.file_id!==HOTEL_OOO_WB.FILE_ID)throw Error('Pinned file ID mismatch');
     if(!changes.length)return {ok:true,dryRun:dryRun,queued:0,saved:0};
     const mod=file.getLastUpdated().getTime();
-    const parts=Utilities.unzip(file.getBlob());
+    const parts=hotelOOOUnzipXlsx_(file.getBlob());
     const blobs={};parts.forEach(p=>{blobs[p.getName()]=p});
     const masterBlob=blobs[HOTEL_OOO_WB.SHEET_MASTER],scheduleBlob=blobs[HOTEL_OOO_WB.SHEET_SCHEDULE];
     if(!masterBlob||!scheduleBlob)throw Error('Hotel OOO sheets not found at exact pinned paths');
@@ -192,7 +201,7 @@ function hotelOOORun_(dryRun){
     if(sent.getResponseCode()<200||sent.getResponseCode()>=300)
       throw Error('Drive update failed: '+sent.getResponseCode()+' '+sent.getContentText().slice(0,200));
     // Read back exact original ID before acknowledging any database revision.
-    const reloaded=Utilities.unzip(DriveApp.getFileById(HOTEL_OOO_WB.FILE_ID).getBlob());
+    const reloaded=hotelOOOUnzipXlsx_(DriveApp.getFileById(HOTEL_OOO_WB.FILE_ID).getBlob());
     const map={};reloaded.forEach(p=>map[p.getName()]=p);
     const readMaster=map[HOTEL_OOO_WB.SHEET_MASTER].getDataAsString();
     const readSchedule=map[HOTEL_OOO_WB.SHEET_SCHEDULE].getDataAsString();
@@ -236,7 +245,7 @@ function hotelOOOReadinessCheck(){
   const f=DriveApp.getFileById(HOTEL_OOO_WB.FILE_ID);
   if(f.getMimeType()!==HOTEL_OOO_WB.MIME||!HOTEL_OOO_WB.NAME_RE.test(f.getName()))
     throw Error('Hotel source workbook file ID/name/MIME mismatch');
-  const map={};Utilities.unzip(f.getBlob()).forEach(b=>map[b.getName()]=b);
+  const map={};hotelOOOUnzipXlsx_(f.getBlob()).forEach(b=>map[b.getName()]=b);
   if(!map[HOTEL_OOO_WB.SHEET_MASTER]||!map[HOTEL_OOO_WB.SHEET_SCHEDULE])
     throw Error('Missing pinned Hotel OOO sheet paths');
   const ss=hotelOOOShared_(map['xl/sharedStrings.xml']);
