@@ -2,7 +2,7 @@
 
 import {useEffect,useMemo,useState} from 'react'
 import useAccessRole from '@/components/useAccessRole'
-import {canEditCalendar} from '@/lib/accessControl'
+import {canEditCalendar,canEditProcurement} from '@/lib/accessControl'
 import {getActivitySessionId} from '@/lib/activityLog'
 import {getSupabase} from '@/lib/supabase'
 import {logActivity} from '@/lib/activityLog'
@@ -24,6 +24,8 @@ type GoogleEventApi={
 type WorkEvent=GoogleEventApi&{calendarId:string;calendarLabel:string;calendarColor:string}
 type LocalCalendar={id:string;name:string;color:string;active:boolean}
 type LocalEvent={id:string;calendar_id:string;event_date:string;title:string;detail:string|null}
+type ProcurementOption={id:string;vendor:string|null;item_name:string;po_no:string|null;actual_delivery:string|null}
+type DeliveryLink={event_key:string;last_item_id:string}
 type EventDraft={
   eventId:string|null
   calendarId:string
@@ -35,6 +37,7 @@ type EventDraft={
   startDateTime:string
   endDateTime:string
   recurring:boolean
+  procurementItemId:string
 }
 
 const STORAGE_SELECTION='3kings:google-calendar:selected'
@@ -98,18 +101,18 @@ function eventTime(event:WorkEvent){
   return event.start.dateTime?bangkokDateTimeInput(event.start.dateTime).slice(11):''
 }
 function emptyDraft(calendarId:string,dateKey:string):EventDraft{
-  return {eventId:null,calendarId,title:'',detail:'',allDay:true,startDate:dateKey,endDate:dateKey,startDateTime:dateKey+'T09:00',endDateTime:dateKey+'T10:00',recurring:false}
+  return {eventId:null,calendarId,title:'',detail:'',allDay:true,startDate:dateKey,endDate:dateKey,startDateTime:dateKey+'T09:00',endDateTime:dateKey+'T10:00',recurring:false,procurementItemId:''}
 }
 function draftFromEvent(event:WorkEvent):EventDraft{
   const allDay=!!event.start.date
   if(allDay){
     const start=event.start.date||todayBangkok()
     const apiEnd=event.end.date||addDays(start,1)
-    return {eventId:event.id,calendarId:event.calendarId,title:event.summary||'',detail:event.description||'',allDay:true,startDate:start,endDate:addDays(apiEnd,-1),startDateTime:start+'T09:00',endDateTime:start+'T10:00',recurring:!!event.recurringEventId}
+    return {eventId:event.id,calendarId:event.calendarId,title:event.summary||'',detail:event.description||'',allDay:true,startDate:start,endDate:addDays(apiEnd,-1),startDateTime:start+'T09:00',endDateTime:start+'T10:00',recurring:!!event.recurringEventId,procurementItemId:''}
   }
   const start=event.start.dateTime||new Date().toISOString()
   const end=event.end.dateTime||start
-  return {eventId:event.id,calendarId:event.calendarId,title:event.summary||'',detail:event.description||'',allDay:false,startDate:bangkokDateFromDateTime(start),endDate:bangkokDateFromDateTime(end),startDateTime:bangkokDateTimeInput(start),endDateTime:bangkokDateTimeInput(end),recurring:!!event.recurringEventId}
+  return {eventId:event.id,calendarId:event.calendarId,title:event.summary||'',detail:event.description||'',allDay:false,startDate:bangkokDateFromDateTime(start),endDate:bangkokDateFromDateTime(end),startDateTime:bangkokDateTimeInput(start),endDateTime:bangkokDateTimeInput(end),recurring:!!event.recurringEventId,procurementItemId:''}
 }
 function errorMessage(value:unknown){
   return value instanceof Error?value.message:String(value||'Calendar request failed')
@@ -119,6 +122,7 @@ export function GoogleCalendarManager(){
   const {language}=useI18n()
   const {role,userId,ready}=useAccessRole()
   const editable=canEditCalendar(role)
+  const canLinkProcurement=canEditProcurement(role)
   const [connection,setConnection]=useState<ConnectionState>('checking')
   const [ownerSetupRequired,setOwnerSetupRequired]=useState(false)
   const [appToken,setAppToken]=useState('')
@@ -132,6 +136,9 @@ export function GoogleCalendarManager(){
   const [message,setMessage]=useState('')
   const [draft,setDraft]=useState<EventDraft|null>(null)
   const [localCalendars,setLocalCalendars]=useState<LocalCalendar[]>([])
+  const [procurementOptions,setProcurementOptions]=useState<ProcurementOption[]>([])
+  const [deliveryLinks,setDeliveryLinks]=useState<DeliveryLink[]>([])
+  const [procurementQuery,setProcurementQuery]=useState('')
   const [newCalendarOpen,setNewCalendarOpen]=useState(false)
   const [newCalendarName,setNewCalendarName]=useState('')
   const [newCalendarColor,setNewCalendarColor]=useState('#7b61ff')
@@ -150,6 +157,17 @@ export function GoogleCalendarManager(){
     if(error)throw error
     setLocalCalendars((data||[]) as LocalCalendar[])
   }
+
+  useEffect(()=>{
+    if(!ready||!canLinkProcurement)return
+    void getSupabase().from('v_procurement_items')
+      .select('id,vendor,item_name,po_no,actual_delivery')
+      .is('actual_delivery',null).order('item_name').limit(400)
+      .then(({data,error})=>{
+        if(error)setMessage('โหลดรายการจัดซื้อสำหรับเชื่อมปฏิทินไม่สำเร็จ: '+error.message)
+        else setProcurementOptions((data||[]) as ProcurementOption[])
+      })
+  },[ready,canLinkProcurement])
 
   useEffect(()=>{
     if(!ready)return
@@ -328,6 +346,10 @@ export function GoogleCalendarManager(){
             start:{date:row.event_date},end:{date:addDays(row.event_date,1)}}
         })
       }
+      const {data:links,error:linksError}=await getSupabase().from('procurement_calendar_delivery')
+        .select('event_key,last_item_id').limit(1000)
+      if(linksError)throw linksError
+      setDeliveryLinks((links||[]) as DeliveryLink[])
       setEvents([...googleResults.flat(),...localEvents])
     }catch(error){setMessage('โหลดปฏิทินไม่สำเร็จ: '+errorMessage(error))}
     finally{setLoading(false)}
@@ -356,7 +378,8 @@ export function GoogleCalendarManager(){
     setDraft(emptyDraft(first,dateKey));setMessage('')
   }
   function openEdit(event:WorkEvent){
-    setDraft(draftFromEvent(event));setMessage('')
+    const matched=deliveryLinks.find(row=>row.event_key==='g:'+event.calendarId+':'+event.id)
+    setDraft({...draftFromEvent(event),procurementItemId:matched?.last_item_id||''});setMessage('')
   }
   function buildEventBody(value:EventDraft){
     if(value.allDay){
