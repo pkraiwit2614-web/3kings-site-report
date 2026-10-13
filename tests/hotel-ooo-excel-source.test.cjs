@@ -25,10 +25,15 @@ test('OOO Excel XML edits preserve non-target fields and block formula overwrite
  assert.equal(ctx.hotelOOONormalize_('GOOD 02'),'B102')
  assert.equal(ctx.hotelOOOPeriod_('2026-10-01','2026-10-31'),'01/10/2026 – 31/10/2026')
 })
-test('Hotel web UI reads and saves statuses individually, not as Combine group key',()=>{
+test('Hotel UI keeps physical rows while synchronizing Combine members through checked RPC',()=>{
  const src=read('app/hotel-room-status/page.tsx')
  assert.match(src,/return rooms\.map\(\(room\):RoomGroup/)
- assert.match(src,/key:room\.room_no,members:\[room\]/)
+ assert.match(src,/key:room\.room_no,members,hotel:ownHotel/)
+ assert.match(src,/hotelRoomMembers\(room\.room_no\)/)
+ assert.match(src,/ownHotel:HotelStatus/)
+ const combineSql=read('supabase/migrations/20261013212500_combine_group_edit_consistency.sql')
+ assert.match(combineSql,/FOREACH v_member IN ARRAY v_rooms LOOP/)
+ assert.match(combineSql,/public\.hotel_room_source_map/)
  assert.match(src,/p_room_no:chosen\.key/)
  assert.match(src,/source_sync_state/)
  assert.match(src,/hotel_remark/)
