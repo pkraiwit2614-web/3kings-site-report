@@ -394,6 +394,11 @@ export function GoogleCalendarManager(){
 
   async function saveEvent(){
     if(!draft||!editable||!draft.title.trim())return
+    if(draft.procurementItemId&&!canLinkProcurement){setMessage('การแก้ไขวันส่งวัสดุต้องใช้สิทธิ์ Purchase/Owner');return}
+    if(draft.procurementItemId&&localCalendarIds.has(draft.calendarId)){
+      setMessage('รายการผูกวันจัดซื้อให้เลือกปฏิทิน Google เดิม (เช่น กำหนดส่ง-ของเข้าหน้างาน)')
+      return
+    }
     if(!localCalendarIds.has(draft.calendarId)&&connection!=='shared')return
     setSaving(true);setMessage('')
     try{
@@ -407,10 +412,24 @@ export function GoogleCalendarManager(){
         if(error)throw error
       }else{
         const body=buildEventBody(draft)
+        let savedEventId=draft.eventId
         if(draft.eventId){
           await apiFetch('/api/google-calendar/events',{method:'PATCH',body:JSON.stringify({calendarId:draft.calendarId,eventId:draft.eventId,event:body})})
         }else{
-          await apiFetch('/api/google-calendar/events',{method:'POST',body:JSON.stringify({calendarId:draft.calendarId,event:body})})
+          const created=await apiFetch<{id:string}>('/api/google-calendar/events',{method:'POST',body:JSON.stringify({calendarId:draft.calendarId,event:body})})
+          if(!created?.id)throw new Error('Google ไม่ส่งเลขรายการกลับมา กรุณาตรวจปฏิทินก่อนบันทึกซ้ำ')
+          savedEventId=created.id
+          setDraft(current=>current?{...current,eventId:created.id}:current)
+        }
+        if(draft.procurementItemId){
+          const dueDate=draft.allDay?draft.startDate:draft.startDateTime.slice(0,10)
+          const {error}=await getSupabase().rpc('procurement_calendar_link_delivery',{
+            p_item_id:draft.procurementItemId,
+            p_event_key:'g:'+draft.calendarId+':'+savedEventId,
+            p_expected_delivery:dueDate,
+            p_client_session_id:getActivitySessionId(),p_user_agent:navigator.userAgent,
+          })
+          if(error)throw new Error('บันทึกกิจกรรมแล้ว แต่เชื่อมวันที่จัดซื้อไม่สำเร็จ: '+error.message)
         }
       }
       await logActivity({userId,eventType:'submit',path:'/calendar',action:draft.eventId?'google_calendar_event_update':'google_calendar_event_create',target:draft.eventId||draft.title,metadata:{calendar_id:draft.calendarId,start:draft.allDay?draft.startDate:draft.startDateTime,transport:localCalendarIds.has(draft.calendarId)?'web_app_rpc':'owner_oauth_shared'}})
@@ -421,8 +440,9 @@ export function GoogleCalendarManager(){
 
   async function deleteEvent(){
     if(!draft?.eventId||!editable)return
+    if(draft.procurementItemId&&!canLinkProcurement)return
     if(!localCalendarIds.has(draft.calendarId)&&connection!=='shared')return
-    if(!window.confirm('ลบ “'+(draft.title||'รายการนี้')+'” ออกจาก Google Calendar จริงใช่หรือไม่?'))return
+    if(!window.confirm('ลบ “'+(draft.title||'รายการนี้')+'” ออกจากปฏิทินจริงใช่หรือไม่?'+(draft.procurementItemId?' ระบบจะยกเลิกวันที่กำหนดส่งที่เชื่อมโยงด้วย':'')))return
     setSaving(true);setMessage('')
     try{
       if(localCalendarIds.has(draft.calendarId)){
@@ -432,6 +452,13 @@ export function GoogleCalendarManager(){
         if(error)throw error
       }else{
         await apiFetch('/api/google-calendar/events',{method:'DELETE',body:JSON.stringify({calendarId:draft.calendarId,eventId:draft.eventId})})
+        if(draft.procurementItemId){
+          const {error}=await getSupabase().rpc('procurement_calendar_unlink_delivery',{
+            p_event_key:'g:'+draft.calendarId+':'+draft.eventId,
+            p_client_session_id:getActivitySessionId(),p_user_agent:navigator.userAgent,
+          })
+          if(error)throw new Error('ลบกิจกรรมแล้ว แต่ยังยกเลิกวันส่งในจัดซื้อไม่ได้: '+error.message)
+        }
       }
       await logActivity({userId,eventType:'submit',path:'/calendar',action:'google_calendar_event_delete',target:draft.eventId,metadata:{calendar_id:draft.calendarId,transport:localCalendarIds.has(draft.calendarId)?'web_app_rpc':'owner_oauth_shared'}})
       setDraft(null);setMessage('ลบรายการเรียบร้อย')
@@ -546,6 +573,18 @@ export function GoogleCalendarManager(){
           <label>ปฏิทิน<select value={draft.calendarId} disabled={!!draft.eventId||!editable} onChange={event=>setDraft(current=>current?{...current,calendarId:event.target.value,allDay:localCalendarIds.has(event.target.value)?true:current.allDay,endDate:localCalendarIds.has(event.target.value)?current.startDate:current.endDate}:current)}>{allCalendars.map(calendar=><option key={calendar.id} value={calendar.id}>{calendar.label}</option>)}</select></label>
           <label>รายการ<input disabled={!editable} value={draft.title} onChange={event=>setDraft(current=>current?{...current,title:event.target.value}:current)} placeholder="ชื่องาน / นัดหมาย"/></label>
           <label className="gcal-wide">รายละเอียด<textarea disabled={!editable} value={draft.detail} onChange={event=>setDraft(current=>current?{...current,detail:event.target.value}:current)} placeholder="รายละเอียดเพิ่มเติม"/></label>
+          {canLinkProcurement&&!localCalendarIds.has(draft.calendarId)&&<div className="gcal-wide gcal-procurement-link">
+            <label>เชื่อมกับวันกำหนดส่งวัสดุ/จัดซื้อ (เฉพาะรายการที่ยังไม่รับของ)
+              <input value={procurementQuery} onChange={event=>setProcurementQuery(event.target.value)} placeholder="ค้นหาชื่อวัสดุ / PO / ผู้ขาย"/>
+              <select value={draft.procurementItemId} disabled={!editable} onChange={event=>setDraft(current=>current?{...current,procurementItemId:event.target.value}:current)}>
+                <option value="">ไม่เชื่อมรายการจัดซื้อ</option>
+                {procurementOptions.filter(row=>(row.item_name+' '+(row.vendor||'')+' '+(row.po_no||'')).toLowerCase().includes(procurementQuery.toLowerCase())||row.id===draft.procurementItemId).slice(0,150).map(row=>
+                  <option key={row.id} value={row.id}>{[row.po_no,row.item_name,row.vendor].filter(Boolean).join(' • ')}</option>)}
+              </select>
+            </label>
+            <small>เลือกใบสั่งซื้อที่ตรงกันและบันทึก: วันกำหนดส่งในหน้า Materials/Procurement จะอัปเดตผ่านชั้นข้อมูล Web App โดยไม่เขียนทับ PR/PO ต้นฉบับ</small>
+          </div>}
+          {draft.procurementItemId&&!canLinkProcurement&&<small className="gcal-wide">กิจกรรมนี้เชื่อมวันส่งวัสดุ ผู้มีสิทธิ์ Purchase/Owner เท่านั้นที่แก้ไขได้</small>}
           <label className="gcal-checkbox"><input type="checkbox" disabled={!editable||localCalendarIds.has(draft.calendarId)} checked={draft.allDay} onChange={event=>setDraft(current=>current?{...current,allDay:event.target.checked}:current)}/><span>ทั้งวัน</span></label>
           {draft.allDay?<><label>วันที่เริ่ม<input type="date" disabled={!editable} value={draft.startDate} onChange={event=>setDraft(current=>current?{...current,startDate:event.target.value,endDate:localCalendarIds.has(current.calendarId)?event.target.value:current.endDate}:current)}/></label><label>วันที่สิ้นสุด<input type="date" disabled={!editable||localCalendarIds.has(draft.calendarId)} value={draft.endDate} onChange={event=>setDraft(current=>current?{...current,endDate:event.target.value}:current)}/></label></>:<><label>เริ่ม<input type="datetime-local" disabled={!editable} value={draft.startDateTime} onChange={event=>setDraft(current=>current?{...current,startDateTime:event.target.value}:current)}/></label><label>สิ้นสุด<input type="datetime-local" disabled={!editable} value={draft.endDateTime} onChange={event=>setDraft(current=>current?{...current,endDateTime:event.target.value}:current)}/></label></>}
         </div>
@@ -566,6 +605,9 @@ export function GoogleCalendarManager(){
       .gcal-calendar-form input{width:100%;min-width:0;border:1px solid var(--line);border-radius:6px;padding:6px;font:inherit;font-size:10px}
       .gcal-calendar-form input[type=color]{height:32px;padding:3px}
       .gcal-calendar-actions{display:flex;flex-wrap:wrap;gap:4px}
+      .gcal-procurement-link{display:grid;gap:5px;border-top:1px solid var(--line);padding-top:8px}
+      .gcal-procurement-link>label{display:grid;gap:4px}
+      .gcal-procurement-link>small{font-size:9px;color:var(--muted);line-height:1.4}
       .gcal-stage{padding:0;overflow:hidden;min-height:560px}.gcal-message{margin:7px;font-size:9px}.gcal-loading{padding:6px 8px;background:#f6f8fb;border-bottom:1px solid var(--line);color:#5d6c7b;font-size:9px}.gcal-frame{display:block;width:100%;height:68vh;min-height:560px;border:0}.gcal-empty{display:grid;place-items:center;min-height:100px;color:var(--muted);font-size:10px}
       .gcal-weekdays{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));background:#f5f7fa;border-bottom:1px solid var(--line)}.gcal-weekdays b{text-align:center;padding:5px;font-size:8.5px;color:#657789;border-right:1px solid var(--line)}.gcal-month-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}.gcal-day{min-height:94px;padding:4px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);background:#fff;overflow:hidden}.gcal-day:nth-child(7n){border-right:0}.gcal-day.outside{background:#fafbfc}.gcal-day.today{box-shadow:inset 0 0 0 1.5px #8aa8c7}.gcal-day-head{display:flex;align-items:center;justify-content:space-between;gap:3px;margin-bottom:3px}.gcal-day-head button{width:21px;height:21px;border:0;border-radius:50%;background:transparent;font:inherit;font-size:9px;font-weight:800;cursor:pointer}.gcal-day-head small{font-size:7px;color:#386995}.gcal-day-events{display:grid;gap:2px}
       .gcal-event{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:start;gap:3px;width:100%;min-width:0;max-height:32px;border:1px solid #e4e9ee;border-left-width:2px;border-left-style:solid;border-radius:4px;background:#fbfcfe;text-align:left;padding:2px 3px;margin:0;cursor:pointer;overflow:hidden;box-shadow:none}.gcal-event-time{font-size:7.5px;line-height:1.25;color:#738294;font-weight:700;white-space:nowrap}.gcal-event-title{min-width:0;font-size:8.5px;line-height:1.2;color:#263b50;font-weight:700;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;white-space:normal;word-break:break-word}.gcal-more{border:0;background:transparent;color:#5b7188;text-align:left;padding:1px 3px;font:inherit;font-size:7.5px;font-weight:800;cursor:pointer}
