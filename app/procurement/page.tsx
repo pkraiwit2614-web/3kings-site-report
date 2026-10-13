@@ -251,7 +251,7 @@ export default function ProcurementPage(){
             <td><b>{[x.po_no,x.pr_no].filter(Boolean).join(' / ')||'-'}</b></td>
             <td>{x.vendor||'ยังไม่ระบุ'}</td>
             <td><b>{x.item_name}</b></td>
-            <td>{x.payment_status||x.procurement_status||'-'}</td>
+            <td>{x.po_no&&<small><b>สั่งแล้ว (มีเลขใบสั่ง)</b></small>}{x.payment_status||x.procurement_status||'-'}</td>
             <td style={{width:180,minWidth:180,maxWidth:180,whiteSpace:'normal',overflowWrap:'anywhere'}}><StatusBadge value={x.current_status} multiline/></td>
             <td><b>{x.expected_delivery_text||'ยังไม่ระบุ'}</b></td>
             <td><ReadableDetail parts={[x.condition_note]}/></td>
