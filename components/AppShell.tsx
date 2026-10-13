@@ -50,7 +50,7 @@ function roleLabel(role:AccessRole|null){
   if(role==='owner') return 'Site Supervisor'
   if(role==='admin') return 'Admin'
   if(role==='viewer') return 'Viewer · ดูข้อมูล'
-  if(role==='viewer_editor') return 'Viewer Editor · แผนงาน / ปฏิทิน'
+  if(role==='viewer_editor') return 'Viewer & Editor · แผนงาน / ปฏิทิน / Defect'
   if(role==='defect_contributor') return 'Defect Contributor'
   if(role==='defect_editor') return 'Defect Contributor Editor'
   if(role==='purchase') return 'Purchase'
@@ -245,7 +245,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       </nav>}
       {isSiteOperationsSection&&<nav className="defect-section-tabs" aria-label="Site Operations navigation">
         <Link href="/reports" className={path==='/reports'?'active':''}>Site Operations</Link>
-        <Link href="/reports/labour" className={path==='/reports/labour'?'active':''}>{canViewPayroll(presentationRole)?'แรงงานและค่าแรง':'แรงงาน'}</Link>
+        {canViewPayroll(presentationRole)&&<Link href="/reports/labour" className={path==='/reports/labour'?'active':''}>แรงงานและค่าแรง</Link>}
       </nav>}
       {isOwnerToolsSection&&<nav className="defect-section-tabs" aria-label="System & Access navigation">
         <Link href="/users" className={path==='/users'?'active':''}>User & Access</Link>
