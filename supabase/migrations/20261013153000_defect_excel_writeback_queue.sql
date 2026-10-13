@@ -146,3 +146,128 @@ GRANT EXECUTE ON FUNCTION public.defect_writeback_pull(text,integer) TO anon,ser
 GRANT EXECUTE ON FUNCTION public.defect_writeback_ack(text,text,timestamptz,text,text) TO anon,service_role;
 GRANT EXECUTE ON FUNCTION public.defect_writeback_failure(text,text,timestamptz,text) TO anon,service_role;
 GRANT EXECUTE ON FUNCTION public.defect_writeback_status(text) TO authenticated;
+
+-- Inbound Excel Sync must not create new outbound Web-manual events.
+CREATE OR REPLACE FUNCTION public.defect_manual_update_apply(p_room_no text, p_detail_text text, p_current_status text, p_status_group text, p_next_action text, p_client_session_id uuid, p_user_agent text)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_user uuid := (select auth.uid());
+  v_id uuid;
+  v_room text := upper(replace(btrim(coalesce(p_room_no,'')),' ',''));
+  v_normalized_detail text := lower(regexp_replace(btrim(coalesce(p_detail_text,'')),'\s+',' ','g'));
+  v_fingerprint text;
+  v_duplicate uuid;
+begin
+  if v_user is null then raise exception 'AUTH_REQUIRED'; end if;
+  if not exists(select 1 from public.profiles p where p.user_id=v_user and p.active=true and ((p.user_id='bc6ee244-3472-422f-bbf9-d551987ee9a3'::uuid and p.role='manager') or p.role in ('defect_editor','viewer_editor'))) then
+    raise exception 'NOT_AUTHORIZED_FOR_DEFECT_EDIT';
+  end if;
+  if v_room !~ '^[AB][0-9]{3}$' then raise exception 'INVALID_ROOM_NO'; end if;
+  if v_normalized_detail='' then raise exception 'DETAIL_REQUIRED'; end if;
+  if char_length(p_detail_text)>4000 or char_length(coalesce(p_current_status,''))>1000 or char_length(coalesce(p_next_action,''))>4000 then raise exception 'TEXT_TOO_LONG'; end if;
+  if nullif(btrim(coalesce(p_status_group,'')),'') is not null and p_status_group not in ('Hotel - Incomplete','Hotel - Awaiting Check','Hotel - Checked Complete','Non-Hotel - Pending Handover','Non-Hotel - Handover Complete','Non-Hotel - Awaiting Sale') then raise exception 'INVALID_STATUS_GROUP'; end if;
+  if not exists(select 1 from public.condo_room_status r where r.room_no=v_room) then raise exception 'ROOM_NOT_FOUND'; end if;
+
+  v_fingerprint:=encode(extensions.digest(convert_to(v_room||'|'||v_normalized_detail,'UTF8'),'sha256'),'hex');
+
+  select m.id into v_duplicate
+  from public.defect_manual_updates m
+  where m.room_no=v_room
+    and (
+      m.detail_fingerprint=v_fingerprint
+      or lower(regexp_replace(btrim(coalesce(m.detail_text,'')),'\s+',' ','g'))=v_normalized_detail
+    )
+  order by m.created_at desc
+  limit 1;
+
+  if v_duplicate is null then
+    insert into public.defect_manual_updates(room_no,detail_text,created_by,detail_fingerprint)
+    values(v_room,btrim(p_detail_text),v_user,v_fingerprint)
+    returning id into v_id;
+  else
+    v_id:=v_duplicate;
+  end if;
+
+  -- Mark the authenticated Web save, not an inbound Excel update.
+  perform pg_catalog.set_config('app.defect_manual_update','1',true);
+
+  update public.condo_room_status set
+    defect_detail=btrim(p_detail_text),
+    current_status=coalesce(nullif(btrim(coalesce(p_current_status,'')),''),current_status),
+    status_group=coalesce(nullif(btrim(coalesce(p_status_group,'')),''),status_group),
+    next_action=coalesce(nullif(btrim(coalesce(p_next_action,'')),''),next_action),
+    latest_source='Web App manual update',
+    source_note=case when v_duplicate is null
+      then 'Manual Defect update from authorized Web App user'
+      else 'Duplicate Defect detail ignored; current status fields reconciled'
+    end,
+    source_modified_at=now(),
+    synced_at=now()
+  where room_no=v_room;
+
+  insert into public.activity_logs(user_id,client_session_id,event_type,path,action,target,metadata,user_agent)
+  values(
+    v_user,coalesce(p_client_session_id,gen_random_uuid()),'data_change','/defect-flow',
+    case when v_duplicate is null then 'defect_manual_update' else 'defect_manual_duplicate_ignored' end,
+    v_room,
+    jsonb_build_object('manual_update_id',v_id,'duplicate',v_duplicate is not null,'detail_fingerprint',v_fingerprint),
+    left(nullif(btrim(coalesce(p_user_agent,'')),''),500)
+  );
+  return v_id;
+end $function$;
+
+CREATE OR REPLACE FUNCTION public.defect_web_override_capture()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+begin
+ if new.latest_source = 'Web App manual update'
+   and pg_catalog.current_setting('app.defect_manual_update',true) = '1' then
+   insert into public.defect_web_overrides as ov
+       (room_no,current_status,status_group,next_action,detail_text,updated_at,source_sync_state,source_synced_at)
+   values (
+       new.room_no,
+       case when old.current_status is distinct from new.current_status then new.current_status end,
+       case when old.status_group is distinct from new.status_group then new.status_group end,
+       case when old.next_action is distinct from new.next_action then new.next_action end,
+       new.defect_detail,now(),'pending',null
+   )
+   on conflict(room_no) do update set
+       current_status=coalesce(excluded.current_status,ov.current_status),
+       status_group=coalesce(excluded.status_group,ov.status_group),
+       next_action=coalesce(excluded.next_action,ov.next_action),
+       detail_text=excluded.detail_text,
+       updated_at=now(),source_sync_state='pending',source_synced_at=null;
+ end if;
+ return null;
+end $function$;
+
+CREATE OR REPLACE FUNCTION public.defect_web_override_protect()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare v public.defect_web_overrides%rowtype;
+begin
+ if pg_catalog.current_setting('app.defect_manual_update',true) is distinct from '1' then
+    select * into v from public.defect_web_overrides where room_no=new.room_no;
+    if found then
+       new.current_status=coalesce(v.current_status,new.current_status);
+       new.status_group=coalesce(v.status_group,new.status_group);
+       new.next_action=coalesce(v.next_action,new.next_action);
+       new.defect_detail=coalesce(v.detail_text,new.defect_detail);
+       if v.source_sync_state <> 'synced' and
+           (v.current_status is not null or v.status_group is not null or v.next_action is not null) then
+         new.latest_source=old.latest_source;
+       end if;
+    end if;
+ end if;
+ return new;
+end $function$;
