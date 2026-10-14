@@ -17,16 +17,17 @@ const HOTEL:Record<string,string>={AVAILABLE:'พร้อมให้บริ�
 const SOURCE_URL='https://docs.google.com/spreadsheets/d/1KZ-VMDssYeMmTE-TNLYU0d8fwQkSUtuS/edit'
 const dateTH=(v:string|null|undefined)=>v&&/^\d{4}-\d{2}-\d{2}$/.test(v)?v.slice(8,10)+'/'+v.slice(5,7)+'/'+v.slice(0,4):'—'
 function contractorFor(defect:string|null,building:string){
+ // Show only trade-level classification supported by the agreed contractor rules.
+ // Do not treat an unconfirmed defect item as a work order.
  const tasks=(defect||'').split(/[\n;|]+/).map(v=>v.trim()).filter(Boolean)
- const check=(part:string)=>{
+ return tasks.map(part=>{
   const labels:string[]=[]
-  if(/เฟอร์นิเจอร์|furniture|บานตู้|ตู้เสื้อผ้า|ลิ้นชัก|โต๊ะ|เตียง|บานพับตู้/i.test(part))labels.push('Pre Fur.')
-  if(/อลูมิเนียม|alumini|alumin|กรอบหน้าต่าง|บานเลื่อน|กระจกกั้น|กระจกแตก/i.test(part))labels.push('ทองทวี')
-  if(/ก่อ|ฉาบ|ยาแนว|ทาสี|เก็บสี|ผนัง|กระเบื้อง|ซิลิโคน|กันซึม|water leakage|น้ำซึม|พื้นห้อง/i.test(part))labels.push(building==='B'?'หมู่ 8':'3 Kings')
-  if(/ระบบ|ไฟฟ้า|ไฟไม่|สวิตช์|switch|rcu|คีย์การ์ด|กริ่ง|แอร์|remote|รีโมท|boiler|น้ำไหล|น้ำลง|ท่อ|drain|p-trap|trap|water pressure|stop valve|น้ำรั่ว/i.test(part))labels.push(building==='B'?'RSE':'ขอพงษ์')
+  if(/เฟอร์นิเจอร์|furniture/i.test(part))labels.push('Pre Fur.')
+  if(/อลูมิเนียม|alumini|alumin/i.test(part))labels.push('ทองทวี')
+  if(/ก่อ|ฉาบ|ยาแนว|ทาสี|เก็บสี|งานสี/i.test(part))labels.push(building==='B'?'หมู่ 8':'3 Kings')
+  if(/ระบบ|ไฟฟ้า|ไฟไม่|สวิตช์|switch|rcu|คีย์การ์ด|กริ่ง|แอร์|รีโมทแอร์|boiler|ท่อน้ำ|drain|p-trap|ไฟเส้น|ท่อระบายน้ำ/i.test(part))labels.push(building==='B'?'RSE':'ขอพงษ์')
   return {part,labels:[...new Set(labels)]}
- }
- return tasks.map(check)
+ })
 }
 export default function HotelWorkPlanPage(){
  const {role}=useAccessRole()
@@ -169,7 +170,7 @@ export default function HotelWorkPlanPage(){
     {workItems.length? <div className="work-tasks">{workItems.map((item,i)=><div key={i}><span>{item.part}</span><strong>{item.labels.join(' / ')||'รอจำแนกผู้รับผิดชอบ'}</strong></div>)}</div>
      :<p className="muted small">ไม่มีรายละเอียดงาน Defect ให้จำแนกผู้รับเหมาในขณะนี้</p>}
     {(selectedDefect?.next_action||selectedDefect?.follow_up)&&<p className="muted small">ต้องติดตาม: {selectedDefect.next_action||selectedDefect.follow_up}</p>}
-    <p className="muted small">ระบบเสนอผู้รับเหมาจากประเภทงานและอาคารเท่านั้น ต้องตรวจความถูกต้องกับรายการจริงก่อนมอบหมาย</p>
+    <p className="muted small">แสดงทีมตามกฎประเภทงานและอาคารเฉพาะรายการที่มีคำระบุประเภทงานชัดเจน · รายการที่ไม่ชัดเจนคง “รอจำแนกผู้รับผิดชอบ” และต้องตรวจยืนยัน Defect ก่อนสั่งงาน</p>
     <div className="work-room-editor">
       <label>Day<select disabled={!editable||saving} value={roomDay} onChange={e=>setRoomDay(Number(e.target.value))}>{days.map(d=><option key={d.day_no} value={d.day_no}>Day {d.day_no}</option>)}</select></label>
       <label>วันที่เฉพาะห้อง<input disabled={!editable||saving} type="date" value={roomDate} onChange={e=>setRoomDate(e.target.value)}/></label>
