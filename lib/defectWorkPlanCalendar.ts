@@ -78,7 +78,7 @@ export function buildDefectPlanCalendarEvents(
   }
   group.sourceCount+=1
   const old=group.roomMap.get(canonical)
-  if(!old||row.seq_no<old.seq_no){
+  if(!old||row.seq_no<old.seq){
    group.roomMap.set(canonical,{seq:row.seq_no,label:defectPlanRoomLabel(canonical,row.source_room)})
   }
  }
