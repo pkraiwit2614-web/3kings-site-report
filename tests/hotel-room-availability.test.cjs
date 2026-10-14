@@ -17,6 +17,19 @@ for (let i=1;i<=5;i++){
  assert.equal(g.normalizeHotelRoom('Good0'+i),'B10'+i)
  assert.equal(g.normalizeHotelRoom('GOOD'+i),'B10'+i)
 }
+for (let i=1;i<=5;i++){
+ const canonical='B10'+i
+ const label=canonical+' (Good-0'+i+')'
+ assert.equal(g.hotelRoomAlias(canonical),'Good-0'+i)
+ assert.equal(g.hotelRoomLabel(canonical),label)
+ for(const term of ['Good0'+i,'GOOD-'+i,'good 0'+i,label]){
+  assert.equal(g.normalizeHotelRoom(term),canonical,term)
+  assert.equal(g.hotelRoomMatchesSearch(canonical,term),true,term)
+ }
+}
+assert.equal(g.hotelRoomLabel('A213'),'A213')
+assert.equal(g.hotelRoomAlias('B106'),null)
+assert.equal(g.hotelRoomMatchesSearch('B101','Good02'),false)
 assert.equal(g.hotelRoomKey('B615'),'B614')
 assert.deepEqual([...g.hotelRoomMembers('A224')],['A223','A224','A225'])
 assert.deepEqual([...g.hotelRoomMembers('B614')],['B614','B615'])
@@ -28,6 +41,14 @@ for(const r of ['owner','admin','viewer','viewer_editor','purchase','defect_cont
 const sql=fs.readFileSync('supabase/migrations/20261013190000_hotel_room_availability.sql','utf8')
 const tab=fs.readFileSync('app/hotel-room-status/page.tsx','utf8')
 const reconciliation=fs.readFileSync('components/HotelRoomReconciliationPanel.tsx','utf8')
+const defectsPage=fs.readFileSync('app/defects/page.tsx','utf8')
+const inputPanel=fs.readFileSync('components/DefectInputPanel.tsx','utf8')
+assert.match(defectsPage,/hotelRoomLabel\(r.room_no\)/)
+assert.match(tab,/hotelRoomLabel\(g.key\)/)
+assert.match(reconciliation,/hotelRoomLabel\(h.room_no\)/)
+assert.match(inputPanel,/const target=normalizeHotelRoom\(room\)/)
+assert.match(inputPanel,/p_room_no:target/)
+assert.match(inputPanel,/loadedRoom\?\.room!==normalizeHotelRoom\(room\)/)
 assert.match(sql,/ENABLE ROW LEVEL SECURITY/g)
 assert.match(sql,/ROOM_AVAILABILITY_EDIT_DENIED/)
 assert.match(sql,/REVISION_CONFLICT_RELOAD/)
