@@ -96,6 +96,16 @@ export default function HotelWorkPlanPage(){
   window.addEventListener('focus',onFocus)
   return()=>{alive=false;window.removeEventListener('focus',onFocus)}
  },[refresh])
+ // Keep the read-only Defect presentation current without resetting unsaved Work Plan forms.
+ useEffect(()=>{
+  const s=getSupabase()
+  const channel=s.channel('hotel-work-plan-defect-status').on('postgres_changes',
+   {event:'*',schema:'public',table:'condo_room_status'},()=>{
+    void s.from('condo_room_status').select('room_no,defect_detail,status_group,current_status,hotel_participation,next_action,follow_up').order('room_no')
+     .then(({data,error})=>{if(!error)setDefects((data||[]) as Defect[])})
+   }).subscribe()
+  return()=>{void s.removeChannel(channel)}
+ },[])
  // Keep the verified Excel readback timestamp fresh while this page remains open.
  // This reads only sync metadata and never touches Work Plan edits or source files.
  useEffect(()=>{
@@ -189,6 +199,7 @@ export default function HotelWorkPlanPage(){
    if(receipt?.ok!==true||typeof receipt.revision!=='number')throw Error('ไม่ได้รับผลยืนยันจากเซิร์ฟเวอร์ กรุณาตรวจสอบข้อมูลก่อนบันทึกซ้ำ')
    // The Work Plan RPC confirms the Web DB write only. Excel writeback is asynchronous.
    setSaveDialog({phase:'success',intent,returnedRevision:receipt.revision})
+   if(intent.kind==='room')setSelectedDay(intent.values.p_day)
    try{await refresh()}
    catch(ex){setSaveDialog({phase:'success',intent,returnedRevision:receipt.revision,feedback:'บันทึกในฐานข้อมูลแล้ว แต่โหลดข้อมูลล่าสุดไม่สำเร็จ: '+String(ex)})}
   }catch(ex){
@@ -246,7 +257,7 @@ export default function HotelWorkPlanPage(){
     <div className="work-filter"><div><h2>รายการห้อง · Day {selectedDay}</h2><small>คลิกเลขห้องเพื่อดูรายละเอียดและผู้รับเหมา</small></div>
      <input aria-label="ค้นหาเลขห้อง" placeholder="ค้นหาห้อง เช่น A212, Good02" value={roomSearch} onChange={e=>setRoomSearch(e.target.value)}/>
      <select aria-label="กรองอาคาร" value={building} onChange={e=>setBuilding(e.target.value)}><option value="ALL">อาคาร A + B</option><option value="A">อาคาร A</option><option value="B">อาคาร B</option></select>
-     <select aria-label="กรองสถานะ Defect ปัจจุบัน" value={defectStatusFilter} onChange={e=>setDefectStatusFilter(e.target.value)}><option value="ALL">ทุกสถานะ Defect</option>{defectStatusOptions.map(label=><option key={label} value={label}>{label}</option>)}</select>
+     <select className="work-defect-filter" aria-label="กรองสถานะ Defect ปัจจุบัน" value={defectStatusFilter} onChange={e=>setDefectStatusFilter(e.target.value)}><option value="ALL">ทุกสถานะ Defect</option>{defectStatusOptions.map(label=><option key={label} value={label}>{label}</option>)}</select>
     </div>
     <div className="table-wrap"><table><thead><tr><th>Seq.</th><th>ห้อง</th><th>วันที่แผน</th><th>วันที่จริง</th><th>สถานะแผน</th><th>Defect ปัจจุบัน</th><th>OOO/OOS</th><th>รายละเอียด</th></tr></thead><tbody>
     {filtered.map(r=>{
@@ -347,7 +358,7 @@ export default function HotelWorkPlanPage(){
     .work-date{white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:700}.work-day-editor{display:grid;grid-template-columns:minmax(170px,1.4fr) minmax(140px,.8fr) minmax(180px,1.5fr) auto;align-items:end;gap:10px;margin-bottom:12px}
     .work-day-editor h2,.work-table h2,.work-room-detail h2{margin:0;font-size:16px}.work-day-editor p{margin:3px 0 0}.work-day-editor label,.work-room-editor label{display:grid;gap:4px;font-size:10.5px;font-weight:700;min-width:0}
     .work-day-editor input,.work-room-editor input,.work-room-editor select,.work-filter input,.work-filter select{font:inherit;font-size:11px;padding:8px;border:1px solid #cbd5e1;border-radius:8px;min-width:0;max-width:100%;background:#fff}
-    .work-history{font-size:10px;color:#64748b;grid-column:1/-1}.work-table{padding-bottom:0}.work-filter{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}.work-filter>div{flex:1}.work-filter input{flex:0 1 230px}.work-filter select{flex:0 1 125px}
+    .work-history{font-size:10px;color:#64748b;grid-column:1/-1}.work-table{padding-bottom:0}.work-filter{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}.work-filter>div{flex:1}.work-filter input{flex:0 1 230px}.work-filter select{flex:0 1 125px}.work-filter select.work-defect-filter{flex:0 1 270px}
     .work-table .table-wrap{max-height:65vh;overflow:auto}.work-table table{width:100%;min-width:780px}.work-table th{position:sticky;top:0;z-index:2}.work-table td{font-size:10.5px;vertical-align:middle}.work-table td .button{font-size:10px;padding:5px 8px}
     .work-room-link{background:none;border:0;text-decoration:underline;color:#175187;font-weight:800;font-size:11px;cursor:pointer}.work-duplicate{display:block;color:#935513;font-size:9px}
     .work-room-detail{margin-top:12px}.work-room-heading{display:flex;justify-content:space-between;align-items:center}.work-facts{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.work-facts span{background:#f2f5f9;border-radius:8px;padding:8px;font-size:10px}
