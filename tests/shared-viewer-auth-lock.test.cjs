@@ -46,9 +46,9 @@ function makeApp({role='viewer',isOwner=true,confirm=true,existingFactor=null,ma
     auth:{
       verifyOtp:async o=>({data:{user:o.token_hash==='one-time-hash'?{id:VIEWER}:null},error:null}),
       mfa:{
-        enroll:async()=>{enrollCalls++;return {data:{id:fnId,totp:{secret:'JBSWY3DPEHPK3PXP'}},error:null}},
+        enroll:async()=>{enrollCalls++;return {data:{id:fnId,totp:{secret:'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ'}},error:null}},
         challenge:async()=>({data:{id:'33333333-3333-4333-8333-333333333333'},error:null}),
-        verify:async o=>{assert.match(o.code,/^\\d{6}$/);verified=true;verifierCalls++;return {error:null}},
+        verify:async o=>{assert.match(o.code,/^\d{6}$/);const counter=Buffer.alloc(8);counter.writeBigUInt64BE(BigInt(Math.floor(Date.now()/30000)));const h=require('node:crypto').createHmac('sha1',Buffer.from('12345678901234567890')).update(counter).digest();const idx=h[h.length-1]&15;const n=((h[idx]&127)<<24)|(h[idx+1]<<16)|(h[idx+2]<<8)|h[idx+3];assert.equal(o.code,String(n%1000000).padStart(6,'0'));verified=true;verifierCalls++;return {error:null}},
       },
       signOut:async o=>{assert.equal(o.scope,'local');signoutCalls++;return {error:null}},
     },
@@ -97,7 +97,7 @@ test('Owner must explicitly accept one-time signout before enabling MFA',async()
 test('Server-only magiclink and verified MFA protect Viewer without changing password',async()=>{
   const x=makeApp()
   const result=await x.post('enable','ALLOW_ONE_TIME_VIEWER_SIGNOUT')
-  assert.equal(result.status,200)
+  assert.equal(result.status,200,JSON.stringify(result.data))
   assert.equal(result.data.protected,true)
   assert.equal(result.data.oneTimeSignout,true)
   assert.equal(x.get().enrollCalls,1)
