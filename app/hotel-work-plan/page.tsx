@@ -30,7 +30,6 @@ function buildSaveChanges(fields:DiffField[]):SaveChange[]{
 }
 const LABELS:Record<string,string>={pending:'รอกำหนด / รอดำเนินการ',confirmed:'ยืนยันนัดหมาย',in_progress:'กำลังทำ',completed:'ทำงานตามแผนแล้ว',postponed:'เลื่อนแผน'}
 const HOTEL:Record<string,string>={AVAILABLE:'พร้อมให้บริการ',OOO:'OOO',OOS:'OOS',UNKNOWN:'รอตรวจสอบ'}
-const SOURCE_URL='https://docs.google.com/spreadsheets/d/1KZ-VMDssYeMmTE-TNLYU0d8fwQkSUtuS/edit'
 const dateTH=(v:string|null|undefined)=>v&&/^\d{4}-\d{2}-\d{2}$/.test(v)?v.slice(8,10)+'/'+v.slice(5,7)+'/'+v.slice(0,4):'—'
 const verifiedSyncTimeTH=(iso:string)=>new Intl.DateTimeFormat('th-TH',{timeZone:'Asia/Bangkok',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(iso))+' น.'
 function contractorFor(defect:string|null,building:string){
@@ -215,7 +214,7 @@ export default function HotelWorkPlanPage(){
      <span>อัพเดทล่าสุด</span>
      <b className={!excelVerifiedAt?'work-update-unverified':undefined}>{excelVerifiedAt?<time dateTime={excelVerifiedAt}>{verifiedSyncTimeTH(excelVerifiedAt)}</time>:'ยังไม่ยืนยันการซิงก์ Excel'}</b>
     </div>
-    <a href={SOURCE_URL} target="_blank" rel="noreferrer" className="button">Excel ต้นฉบับ</a><Link className="button" href="/calendar">Work Calendar</Link>
+    <Link className="button" href="/calendar">Work Calendar</Link>
    </div>}/> 
   {error&&<div className="panel" role="alert" style={{color:'#9e312d'}}>โหลด/บันทึกข้อมูลไม่ได้: {error} <button className="button" onClick={()=>{void refresh().then(()=>setError('')).catch(e=>setError(String(e)))}}>ลองใหม่</button></div>}
   {loading?<div className="panel">กำลังโหลดแผนโรงแรม…</div>:<>
@@ -358,7 +357,20 @@ export default function HotelWorkPlanPage(){
 .work-sync-audit h2{font-size:14px;margin:0 0 8px}.work-audit-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:10px;padding:7px 0;border-bottom:1px solid #e5e7eb}.work-audit-row span{color:#64748b}.work-audit-row small{color:#4c647f}
     @media(max-width:1200px){.work-days{grid-template-columns:repeat(5,minmax(0,1fr))}.work-day-editor{grid-template-columns:1fr 1fr}.work-day-editor>div{grid-column:1/-1}}
     @media(max-width:650px){.work-days{grid-template-columns:repeat(3,minmax(0,1fr))}.work-day-editor,.work-room-editor{grid-template-columns:1fr}.work-note{grid-column:auto}.work-filter input,.work-filter select{flex:1 1 100%}.work-tasks>div{flex-direction:column}.work-tasks strong{flex:auto;text-align:left}}
-    @media print{.work-days button{break-inside:avoid}.work-day-editor button,.work-room-editor,.work-filter,.work-room-detail button{display:none!important}.work-table .table-wrap{max-height:none;overflow:visible}}
+    @media print{
+      /* Work Plan only: keep the selected Day table visible in report-print mode.
+         The shared print rule otherwise hides panels containing filter inputs. */
+      :global(body.report-print-mode .main) .panel.work-table{display:block!important;break-inside:auto!important;page-break-inside:auto!important;padding:0!important;margin:0!important;border:0!important}
+      .work-days,.work-day-editor,.work-room-detail,.work-sync-audit{display:none!important}
+      .work-table .work-filter{display:flex!important;margin:0 0 5px!important}
+      .work-filter input,.work-filter select,.work-filter small{display:none!important}
+      .work-table .table-wrap{max-height:none!important;overflow:visible!important}
+      .work-table table{width:100%!important;min-width:0!important;table-layout:fixed!important}
+      .work-table thead{display:table-header-group!important}
+      .work-table tbody tr{break-inside:avoid!important;page-break-inside:avoid!important}
+      .work-table th:last-child,.work-table td:last-child{display:none!important}
+      .work-room-link{text-decoration:none!important;color:inherit!important;cursor:default!important}
+    }
   `}</style>
  </AppShell>
 }
