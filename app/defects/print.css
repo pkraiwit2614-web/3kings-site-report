@@ -37,17 +37,59 @@
   .defect-table th{position:static!important;background:#eef3f8!important;color:#40536d!important;font-size:8.5px!important;line-height:1.2!important;padding:4px 4px!important;white-space:normal!important}
   .defect-table td{font-size:8.5px!important;line-height:1.25!important;padding:4px 4px!important;overflow-wrap:anywhere!important;word-break:normal!important;white-space:normal!important}
 
-  .defect-table th:nth-child(1),.defect-table td:nth-child(1){width:6%}
-  .defect-table th:nth-child(2),.defect-table td:nth-child(2){width:4%}
-  .defect-table th:nth-child(3),.defect-table td:nth-child(3){width:8%}
-  .defect-table th:nth-child(4),.defect-table td:nth-child(4){width:13%}
+  .defect-table th:nth-child(1),.defect-table td:nth-child(1){width:5.5%}
+  .defect-table th:nth-child(2),.defect-table td:nth-child(2){width:3.5%}
+  .defect-table th:nth-child(3),.defect-table td:nth-child(3){width:8.5%}
+  .defect-table th:nth-child(4),.defect-table td:nth-child(4){width:10%}
   .defect-table th:nth-child(5),.defect-table td:nth-child(5){width:7%}
-  .defect-table th:nth-child(6),.defect-table td:nth-child(6){width:8%}
+  .defect-table th:nth-child(6),.defect-table td:nth-child(6){width:7%}
   .defect-table th:nth-child(7),.defect-table td:nth-child(7){width:24%}
-  .defect-table th:nth-child(8),.defect-table td:nth-child(8){width:13%}
-  .defect-table th:nth-child(9),.defect-table td:nth-child(9){width:17%}
+  .defect-table th:nth-child(8),.defect-table td:nth-child(8){width:12.5%}
+  .defect-table th:nth-child(9),.defect-table td:nth-child(9){width:10%}
+  .defect-table th:nth-child(10),.defect-table td:nth-child(10){width:12%}
 
   .defect-detail{min-width:0!important;max-width:none!important;line-height:1.25!important}
+
+  /* Defect Report only: use content-sized rows and share A4 width across all 10 columns. */
+  .detail-panel .defect-table th,
+  .detail-panel .defect-table td,
+  body.report-print-mode .detail-panel .defect-table th,
+  body.report-print-mode .detail-panel .defect-table td{
+    padding:2px 3px!important;
+    vertical-align:top!important;
+  }
+  .detail-panel .defect-table td,
+  body.report-print-mode .detail-panel .defect-table td{
+    font-size:8px!important;
+    line-height:1.16!important;
+    height:auto!important;
+  }
+  .detail-panel .defect-table th,
+  body.report-print-mode .detail-panel .defect-table th{
+    font-size:8px!important;
+    line-height:1.15!important;
+    padding:3px!important;
+  }
+  .detail-panel .defect-table .room-cell b{font-size:8.5px!important;line-height:1.12!important}
+  .detail-panel .defect-table .room-cell small{font-size:7px!important;line-height:1.1!important;margin-top:0!important}
+  .detail-panel .defect-table .customer-badge,
+  .detail-panel .defect-table .program-badge,
+  .detail-panel .defect-table .state-badge{padding:1px 2px!important;font-size:7px!important;line-height:1.12!important}
+  .detail-panel .defect-table .defect-detail-text{line-height:1.16!important;overflow-wrap:anywhere!important}
+  .detail-panel .defect-table .work-plan-cell{
+    min-width:0!important;
+    max-width:none!important;
+    white-space:normal!important;
+    overflow-wrap:anywhere!important;
+  }
+  .detail-panel .defect-table .work-plan-cell small{
+    display:block!important;
+    font-size:7.2px!important;
+    line-height:1.14!important;
+    margin:0!important;
+  }
+  .detail-panel .defect-table .work-plan-cell a{display:none!important}
+
   .room-cell b{font-size:9px!important}
   .room-cell small{font-size:7px!important;margin-top:1px!important}
   .notice-date{font-size:8px!important;white-space:nowrap!important}
