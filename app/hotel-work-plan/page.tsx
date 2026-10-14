@@ -13,6 +13,21 @@ type Room={seq_no:number;day_no:number;source_room:string;room_no:string;planned
 type Defect={room_no:string;defect_detail:string|null;status_group:string|null;current_status:string|null;next_action:string|null;follow_up:string|null}
 type Hotel={room_no:string;availability_status:string;start_date:string|null;end_date:string|null}
 type SyncAudit={id:number;source:string;kind:string;item_id:number;recorded_at:string;old_data:Record<string,unknown>;new_data:Record<string,unknown>}
+type SaveChange={label:string;before:string;after:string}
+type DaySaveValues={p_day:number;p_planned_date:string|null;p_note:string;p_expected_revision:number}
+type RoomSaveValues={p_seq:number;p_day:number;p_override_date:string|null;p_actual_date:string|null;p_status:string;p_note:string;p_expected_revision:number}
+type SaveIntent=
+ |{kind:'day';target:string;changes:SaveChange[];values:DaySaveValues}
+ |{kind:'room';target:string;changes:SaveChange[];values:RoomSaveValues}
+type SaveDialog={phase:'confirm'|'saving'|'success'|'error';intent:SaveIntent;returnedRevision?:number;feedback?:string}
+type DiffField={label:string;before:string|null|undefined;after:string|null|undefined;format?:(value:string)=>string}
+function buildSaveChanges(fields:DiffField[]):SaveChange[]{
+ return fields.filter(field=>(field.before||'')!==(field.after||'')).map(field=>({
+  label:field.label,
+  before:field.format?field.format(field.before||''):field.before||'—',
+  after:field.format?field.format(field.after||''):field.after||'—',
+ }))
+}
 const LABELS:Record<string,string>={pending:'รอกำหนด / รอดำเนินการ',confirmed:'ยืนยันนัดหมาย',in_progress:'กำลังทำ',completed:'ทำงานตามแผนแล้ว',postponed:'เลื่อนแผน'}
 const HOTEL:Record<string,string>={AVAILABLE:'พร้อมให้บริการ',OOO:'OOO',OOS:'OOS',UNKNOWN:'รอตรวจสอบ'}
 const SOURCE_URL='https://docs.google.com/spreadsheets/d/1KZ-VMDssYeMmTE-TNLYU0d8fwQkSUtuS/edit'
@@ -56,7 +71,7 @@ export default function HotelWorkPlanPage(){
  const [error,setError]=useState('')
  const [syncAudit,setSyncAudit]=useState<SyncAudit[]>([])
  const [excelVerifiedAt,setExcelVerifiedAt]=useState<string|null>(null)
- const [message,setMessage]=useState('')
+ const [saveDialog,setSaveDialog]=useState<SaveDialog|null>(null)
  const refresh=useCallback(async()=>{
   const s=getSupabase()
   const result=await Promise.all([
@@ -132,20 +147,65 @@ export default function HotelWorkPlanPage(){
   return rooms.filter(r=>r.day_no===selectedDay&&(building==='ALL'||r.room_no.startsWith(building))&&(!query||[r.room_no,r.source_room,hotelRoomLabel(r.room_no)].some(s=>s.toUpperCase().includes(query))||r.room_no.includes(normalized)))
  },[rooms,selectedDay,building,roomSearch])
  const duplicates=useMemo(()=>{const count=new Map<string,number>();rooms.forEach(r=>count.set(r.room_no,(count.get(r.room_no)||0)+1));return count},[rooms])
- const saveDay=async()=>{
-  if(!editable||!day)return
-  setSaving(true);setError('');setMessage('')
-  const {error:e}=await getSupabase().rpc('hotel_work_plan_save_day',{p_day:selectedDay,p_planned_date:dayDate||null,p_note:dayNote,p_expected_revision:day.revision})
-  if(e)setError(e.message);else {setMessage('บันทึกแผนแล้ว • รอการซิงก์กลับ Excel ต้นฉบับ');try{await refresh()}catch(ex){setError(String(ex))}}
-  setSaving(false)
+ const openDaySaveReview=()=>{
+  if(!editable||!day||saving||saveDialog)return
+  const values:DaySaveValues={
+   p_day:day.day_no,p_planned_date:dayDate||null,p_note:dayNote.trim(),p_expected_revision:day.revision,
+  }
+  const changes=buildSaveChanges([
+   {label:'วันที่เข้าทำงาน',before:day.planned_date,after:values.p_planned_date,format:v=>dateTH(v)},
+   {label:'หมายเหตุการนัดหมาย',before:day.note,after:values.p_note},
+  ])
+  const count=rooms.filter(r=>r.day_no===day.day_no).length
+  setSaveDialog({phase:'confirm',intent:{kind:'day',target:'Day '+day.day_no+' · '+count+' รายการ',changes,values}})
  }
- const saveRoom=async()=>{
-  if(!editable||!selected)return
-  setSaving(true);setError('');setMessage('')
-  const {error:e}=await getSupabase().rpc('hotel_work_plan_save_room',{p_seq:selected.seq_no,p_day:roomDay,p_override_date:roomDate||null,p_actual_date:roomActual||null,p_status:roomStatus,p_note:roomNote,p_expected_revision:selected.revision})
-  if(e)setError(e.message);else {setMessage('บันทึกรายห้องแล้ว • รอการซิงก์กลับ Excel ต้นฉบับ');try{await refresh()}catch(ex){setError(String(ex))}}
-  setSaving(false)
+ const openRoomSaveReview=()=>{
+  if(!editable||!selected||saving||saveDialog)return
+  const values:RoomSaveValues={
+   p_seq:selected.seq_no,p_day:roomDay,p_override_date:roomDate||null,p_actual_date:roomActual||null,
+   p_status:roomStatus,p_note:roomNote.trim(),p_expected_revision:selected.revision,
+  }
+  const changes=buildSaveChanges([
+   {label:'Day',before:String(selected.day_no),after:String(values.p_day),format:v=>'Day '+v},
+   {label:'วันที่เฉพาะห้อง',before:selected.planned_date_override,after:values.p_override_date,format:v=>v?dateTH(v):'ตามวันที่ของ Day'},
+   {label:'วันเข้าจริง',before:selected.actual_date,after:values.p_actual_date,format:v=>dateTH(v)},
+   {label:'สถานะแผน',before:selected.work_status,after:values.p_status,format:v=>LABELS[v]||v||'—'},
+   {label:'หมายเหตุ',before:selected.note,after:values.p_note},
+  ])
+  setSaveDialog({phase:'confirm',intent:{kind:'room',target:'ห้อง '+hotelRoomLabel(selected.room_no)+' · Seq. '+selected.seq_no,changes,values}})
  }
+ const confirmSave=async()=>{
+  if(!editable||saving||!saveDialog||saveDialog.phase!=='confirm'||!saveDialog.intent.changes.length)return
+  const intent=saveDialog.intent
+  setSaveDialog({phase:'saving',intent})
+  setSaving(true)
+  try{
+   const response=intent.kind==='day'
+    ?await getSupabase().rpc('hotel_work_plan_save_day',intent.values)
+    :await getSupabase().rpc('hotel_work_plan_save_room',intent.values)
+   if(response.error)throw Error(response.error.message)
+   const receipt=response.data as {ok?:boolean;revision?:number}|null
+   if(receipt?.ok!==true||typeof receipt.revision!=='number')throw Error('ไม่ได้รับผลยืนยันจากเซิร์ฟเวอร์ กรุณาตรวจสอบข้อมูลก่อนบันทึกซ้ำ')
+   // The Work Plan RPC confirms the Web DB write only. Excel writeback is asynchronous.
+   setSaveDialog({phase:'success',intent,returnedRevision:receipt.revision})
+   try{await refresh()}
+   catch(ex){setSaveDialog({phase:'success',intent,returnedRevision:receipt.revision,feedback:'บันทึกในฐานข้อมูลแล้ว แต่โหลดข้อมูลล่าสุดไม่สำเร็จ: '+String(ex)})}
+  }catch(ex){
+   // An ambiguous transport error is not proof that the server never received the request.
+   setSaveDialog({phase:'error',intent,feedback:ex instanceof Error?ex.message:String(ex)})
+  }finally{setSaving(false)}
+ }
+ useEffect(()=>{
+  if(!saveDialog)return
+  const onEscape=(event:KeyboardEvent)=>{
+   if(event.key==='Escape'&&saveDialog.phase!=='saving'&&!saving)setSaveDialog(null)
+  }
+  window.addEventListener('keydown',onEscape)
+  window.requestAnimationFrame(()=>{
+   document.getElementById(saveDialog.phase==='confirm'?'work-save-confirm':'work-save-close')?.focus()
+  })
+  return()=>window.removeEventListener('keydown',onEscape)
+ },[saveDialog?.phase,saving])
  const selectedDefect=selected?defectMap.get(selected.room_no):undefined
  const workItems=selected?contractorFor(selectedDefect?.defect_detail||null,selected.room_no[0]):[]
  return <AppShell>
@@ -158,7 +218,6 @@ export default function HotelWorkPlanPage(){
     <a href={SOURCE_URL} target="_blank" rel="noreferrer" className="button">Excel ต้นฉบับ</a><Link className="button" href="/calendar">Work Calendar</Link>
    </div>}/> 
   {error&&<div className="panel" role="alert" style={{color:'#9e312d'}}>โหลด/บันทึกข้อมูลไม่ได้: {error} <button className="button" onClick={()=>{void refresh().then(()=>setError('')).catch(e=>setError(String(e)))}}>ลองใหม่</button></div>}
-  {message&&<div className="panel" role="status">{message}</div>}
   {loading?<div className="panel">กำลังโหลดแผนโรงแรม…</div>:<>
    <section className="work-days" aria-label="เลือกแผน Day 1 ถึง Day 9">
     {days.map(d=>{
@@ -177,7 +236,7 @@ export default function HotelWorkPlanPage(){
      <p className="muted small">วันที่กลางของ Day ใช้กับทุกห้องที่ไม่มีวันที่เฉพาะ · เปลี่ยนแผนไม่เปลี่ยนสถานะ Defect หรือ OOO/OOS</p></div>
     <label>วันที่เข้าทำงาน<input type="date" value={dayDate} disabled={!editable||saving} onChange={e=>setDayDate(e.target.value)}/></label>
     <label>หมายเหตุการนัดหมาย<input value={dayNote} maxLength={2000} disabled={!editable||saving} onChange={e=>setDayNote(e.target.value)} placeholder="รอโรงแรมยืนยัน / ข้อจำกัด"/></label>
-    {editable&&<button className="button" disabled={saving} onClick={()=>{void saveDay()}}>บันทึก Day {selectedDay}</button>}
+    {editable&&<button type="button" className="button" disabled={saving||!!saveDialog} onClick={openDaySaveReview}>บันทึก Day {selectedDay}</button>}
     {day?.updated_at&&<small className="work-history">แก้ไขล่าสุด {day.updated_by_name||'ผู้ใช้'} · {new Date(day.updated_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})} · {day.sync_state==='pending'?'รอซิงก์ Excel':day.sync_state==='conflict'?'ข้อมูลขัดแย้ง':'ซิงก์แล้ว'}</small>}
    </section>
    <section className="panel work-table">
@@ -213,7 +272,7 @@ export default function HotelWorkPlanPage(){
       <label>สถานะแผน<select disabled={!editable||saving} value={roomStatus} onChange={e=>setRoomStatus(e.target.value)}>{Object.entries(LABELS).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
       <label className="work-note">หมายเหตุ<input disabled={!editable||saving} value={roomNote} maxLength={2000} onChange={e=>setRoomNote(e.target.value)}/></label>
     </div>
-    {editable&&<button type="button" className="button" disabled={saving} onClick={()=>{void saveRoom()}}>บันทึกรายห้อง</button>}
+    {editable&&<button type="button" className="button" disabled={saving||!!saveDialog} onClick={openRoomSaveReview}>บันทึกรายห้อง</button>}
     {selected.updated_at&&<p className="work-history">แก้ไขล่าสุด {selected.updated_by_name||'ผู้ใช้'} · {new Date(selected.updated_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})} · Revision {selected.revision} · {selected.sync_state==='pending'?'รอซิงก์ Excel':selected.sync_state==='conflict'?'ข้อมูลขัดแย้ง':'ซิงก์แล้ว'}</p>}
     <p><Link href={'/defects?q='+encodeURIComponent(selected.room_no)+'#room-list'}>เปิด Defect Report ของห้องนี้</Link></p>
    </section>}
@@ -228,7 +287,62 @@ export default function HotelWorkPlanPage(){
    </section>}
    <p className="muted small">อ้างอิงลำดับ 267 รายการจาก Hotel Day 1–9 Snapshot 13/10/2026 · สถานะ Defect/OOO/OOS อ้างอิงจากระบบล่าสุด ไม่ใช่ Snapshot · ประวัติการแก้ไขแผนเก็บใน Activity Log</p>
   </>}
+  {saveDialog&&<div className="work-save-overlay" role="presentation"
+    onMouseDown={e=>{if(e.target===e.currentTarget&&saveDialog.phase!=='saving'&&!saving)setSaveDialog(null)}}>
+   <section className="work-save-dialog" role="dialog" aria-modal="true" aria-labelledby="work-save-title" aria-describedby="work-save-description">
+    <div className="work-save-titlebar">
+     <div>
+      <small className={'work-save-state '+saveDialog.phase}>
+       {saveDialog.phase==='confirm'?'ก่อนบันทึก · ยังไม่ส่งข้อมูล':
+        saveDialog.phase==='saving'?'กำลังส่งข้อมูลไปยังระบบ':
+        saveDialog.phase==='success'?'บันทึกเข้า Web App สำเร็จ':'ไม่สามารถยืนยันผลการบันทึก'}
+      </small>
+      <h2 id="work-save-title">{saveDialog.phase==='confirm'?'ตรวจสอบก่อนยืนยัน':
+       saveDialog.phase==='saving'?'กำลังบันทึก…':
+       saveDialog.phase==='success'?'บันทึกข้อมูลเรียบร้อย':'บันทึกไม่สำเร็จ / ต้องตรวจสอบ'}</h2>
+     </div>
+     {saveDialog.phase!=='saving'&&<button type="button" className="work-save-x" onClick={()=>setSaveDialog(null)} aria-label="ปิดหน้าต่าง">×</button>}
+    </div>
+    <p id="work-save-description" className="work-save-target">{saveDialog.intent.target}</p>
+    {saveDialog.intent.changes.length>0?<div className="work-save-diffs">
+     <b>สรุปการเปลี่ยนแปลง ({saveDialog.intent.changes.length} ช่อง)</b>
+     {saveDialog.intent.changes.map(change=><div className="work-save-diff" key={change.label}>
+      <strong>{change.label}</strong>
+      <div><small>ก่อนบันทึก</small><span>{change.before}</span></div>
+      <div><small>ค่าที่ส่งบันทึก</small><span>{change.after}</span></div>
+     </div>)}
+    </div>:<p className="work-save-nochange">ยังไม่มีข้อมูลเปลี่ยนแปลง จึงไม่จำเป็นต้องส่งบันทึก</p>}
+    {saveDialog.phase==='success'&&<div className="work-save-feedback" role="status">
+     <b>บันทึกใน Web App แล้ว · Revision {saveDialog.returnedRevision}</b>
+     <p>ข้อมูลถูกยืนยันจากฐานข้อมูลแล้ว ส่วนการเขียนกลับไฟล์ Excel รอการซิงก์ตามรอบ ไม่ได้ยืนยันว่าไฟล์ Excel อัปเดตแล้ว</p>
+     {saveDialog.feedback&&<p>{saveDialog.feedback}</p>}
+    </div>}
+    {saveDialog.phase==='error'&&<div className="work-save-failure" role="alert">
+     <b>ยังยืนยันการบันทึกไม่ได้</b>
+     <p>{saveDialog.feedback}</p>
+     <p>หากพบ REVISION_CONFLICT_RELOAD หรือการเชื่อมต่อขัดข้อง ให้โหลดข้อมูลล่าสุดตรวจสอบก่อนส่งซ้ำ</p>
+    </div>}
+    <div className="work-save-actions">
+     {saveDialog.phase==='confirm'?<>
+      <button type="button" className="button" onClick={()=>setSaveDialog(null)}>ยกเลิก</button>
+      <button type="button" id="work-save-confirm" className="button primary" disabled={saving||!saveDialog.intent.changes.length}
+       onClick={()=>{void confirmSave()}}>ยืนยันบันทึก</button>
+     </>:saveDialog.phase==='saving'?<button type="button" className="button" disabled>กำลังบันทึก…</button>:<>
+      <button type="button" className="button primary" id="work-save-close" onClick={()=>setSaveDialog(null)}>ปิดหน้าต่าง</button>
+     </>}
+    </div>
+   </section>
+  </div>}
   <style jsx>{`
+    .work-save-overlay{position:fixed;inset:0;z-index:1300;background:rgba(12,25,43,.46);display:grid;place-items:center;padding:16px}
+    .work-save-dialog{width:min(510px,100%);max-height:calc(100dvh - 32px);overflow:auto;background:#fff;border:1px solid #d7dee8;border-radius:14px;padding:18px;box-shadow:0 18px 50px rgba(13,31,53,.23)}
+    .work-save-titlebar{display:flex;align-items:start;justify-content:space-between;gap:12px}.work-save-titlebar h2{font-size:18px;margin:5px 0 0;color:#172a43}.work-save-state{font-size:11px;font-weight:800;color:#526779}.work-save-state.success{color:#217449}.work-save-state.error{color:#9d3030}.work-save-state.saving{color:#8b6b2b}
+    .work-save-x{font-size:24px;background:none;border:0;color:#526779;cursor:pointer;padding:0 5px}.work-save-target{font-size:12px;color:#526779;margin:9px 0 14px}
+    .work-save-diffs{display:grid;gap:9px}.work-save-diffs>b{font-size:12px;color:#172a43}
+    .work-save-diff{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:5px 9px;border:1px solid #e3e8ef;border-radius:9px;padding:10px}
+    .work-save-diff>strong{grid-column:1/-1;font-size:12px}.work-save-diff>div{display:grid;gap:4px;min-width:0}.work-save-diff small{font-size:10px;color:#69798a}.work-save-diff span{font-size:12px;overflow-wrap:anywhere;white-space:pre-wrap;max-height:110px;overflow:auto}.work-save-diff>div:last-child span{color:#155888;font-weight:700}
+    .work-save-nochange{padding:12px;border:1px solid #e3e8ef;border-radius:8px;font-size:12px}.work-save-feedback,.work-save-failure{margin-top:12px;padding:11px;border-radius:9px;font-size:11px;background:#f5f8fb;border:1px solid #dce5ef}.work-save-feedback b{color:#217449}.work-save-failure{background:#fff7f7;border-color:#edcaca}.work-save-failure b{color:#9d3030}.work-save-feedback p,.work-save-failure p{margin:5px 0 0;line-height:1.6}
+    .work-save-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:15px;flex-wrap:wrap}
     .work-head{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px}.work-update-meta{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:2px;line-height:1.25;text-align:right;margin-right:4px}.work-update-meta span{font-size:9px;color:var(--muted);font-weight:700}.work-update-meta b{font-size:11px;color:var(--navy);font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums}.work-update-meta .work-update-unverified{color:#935513}.work-days{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:6px;margin:0 0 12px}
     .work-day{min-width:0;display:flex;flex-direction:column;text-align:left;gap:2px;border:1px solid #d9e0e7;border-radius:10px;padding:9px;background:#fff;cursor:pointer;color:#172a43;font:inherit}
     .work-day.current{border-color:#172a43;box-shadow:inset 0 0 0 1px #172a43;background:#f0f6ff}.work-day strong{font-size:13px}.work-day span,.work-day small{font-size:10px}.work-day small{color:#69798a}
