@@ -7,7 +7,7 @@ import PageHeader from '@/components/PageHeader'
 import PrintButton from '@/components/PrintButton'
 import useAccessRole from '@/components/useAccessRole'
 import {getSupabase} from '@/lib/supabase'
-import {hotelRoomKey,hotelRoomMembers,normalizeHotelRoom} from '@/lib/hotelRoomGroups'
+import {hotelRoomKey,hotelRoomLabel,hotelRoomMembers,normalizeHotelRoom} from '@/lib/hotelRoomGroups'
 
 type Room={
   room_no:string;building:string;floor:number|null;hotel_participation:string;owner_name:string|null;customer_status:string|null;follow_up:string|null;
@@ -102,7 +102,7 @@ export default function HotelRoomStatusPage(){
     if((formStatus==='OOO'||formStatus==='OOS')&&!fromDate){setMessage('กรุณาระบุวันที่เริ่มใช้สถานะ');return}
     if(toDate&&!fromDate){setMessage('กรุณาระบุวันที่เริ่มก่อนกำหนดวันที่สิ้นสุด');return}
     if(toDate&&fromDate&&toDate<fromDate){setMessage('วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่ม');return}
-    if(!window.confirm('ยืนยันบันทึก '+hotelRoomMembers(chosen.key).join(' + ')+' เป็น '+(formStatus==='AVAILABLE'?'พร้อมให้บริการ':formStatus==='UNKNOWN'?'รอตรวจสอบ':formStatus)+' ทั้งชุด Combine?\\nไม่เปลี่ยนข้อมูล Defect'))return
+    if(!window.confirm('ยืนยันบันทึก '+hotelRoomMembers(chosen.key).map(hotelRoomLabel).join(' + ')+' เป็น '+(formStatus==='AVAILABLE'?'พร้อมให้บริการ':formStatus==='UNKNOWN'?'รอตรวจสอบ':formStatus)+' ทั้งชุด Combine?\\nไม่เปลี่ยนข้อมูล Defect'))return
     setBusy(true);setMessage('')
     const {error:saveError}=await getSupabase().rpc('hotel_room_availability_save',{
       p_room_no:chosen.key,p_status:formStatus,
@@ -127,7 +127,7 @@ export default function HotelRoomStatusPage(){
       </div>
       <div className="toolbar detail-toolbar compact-filter hotel-search-toolbar" style={{marginTop:12}}>
         <input aria-label="ค้นหาห้องพัก" value={query} onChange={e=>setQuery(e.target.value)}
-          placeholder="ค้นหาหลายรายการได้ เช่น A213, A214, B614" />
+          placeholder="ค้นหา เช่น B101, Good01, Good-01, A213" />
         <select aria-label="เลือกอาคาร" value={building} onChange={e=>setBuilding(e.target.value)}>
           <option value="ALL">อาคาร A+B</option><option value="A">อาคาร A</option><option value="B">อาคาร B</option>
         </select>
@@ -146,10 +146,10 @@ export default function HotelRoomStatusPage(){
           <th>ห้อง / Combine</th><th>สถานะ Hotel</th><th>ช่วงวันที่</th><th>สาเหตุ</th><th>Defect ค้าง / รอตรวจรับ</th><th>แก้ไขล่าสุด</th><th>จัดการ</th>
         </tr></thead><tbody>
           {filtered.map(g=><tr key={g.key}>
-            <td><b>{g.key}</b>
+            <td><b>{hotelRoomLabel(g.key)}</b>
               {hotelRoomMembers(g.key).length>1&&<small>⌁ ห้อง Combine: {hotelRoomMembers(g.key).filter(r=>r!==g.key).join(', ')}</small>}
               {!g.inHotel&&<small>ไม่ร่วมโรงแรม</small>}
-              {g.members.some(r=>['B101','B102','B103','B104','B105'].includes(r.room_no))&&<small>{g.members.map(r=>r.room_no.replace(/^B10([1-5])$/,'Good0$1')).join(' / ')}</small>}</td>
+            </td>
             <td><span className={'hotel-status-badge status-'+(g.hotel?.availability_status||'UNKNOWN').toLowerCase()}>{statusText(g.hotel)}</span>{g.inferred&&<small>อ้างอิงสถานะคู่ Combine • รอยืนยันห้องนี้</small>}{g.conflict&&<small className="hotel-conflict">สถานะต้นทางของชุด Combine ไม่ตรงกัน • ตรวจสอบก่อน</small>}</td>
             <td>{g.hotel?.start_date||'—'}{g.hotel?.end_date?' ถึง '+g.hotel.end_date:''}</td>
             <td>{g.hotel?.reason||'—'}{g.hotel?.hotel_remark&&<small>Hotel Remark: {g.hotel.hotel_remark}</small>}</td>
@@ -162,13 +162,13 @@ export default function HotelRoomStatusPage(){
       </section>
       {chosen&&<section className="panel" style={{padding:16,marginTop:12}} aria-label="รายละเอียดสถานะห้องที่เลือก">
         <div style={{display:'flex',justifyContent:'space-between',gap:8,flexWrap:'wrap',alignItems:'center'}}>
-          <h2>ห้อง {chosen.key} {hotelRoomMembers(chosen.key).length>1?'⌁ คู่ Combine: '+hotelRoomMembers(chosen.key).filter(r=>r!==chosen.key).join(', '):''}</h2>
+          <h2>ห้อง {hotelRoomLabel(chosen.key)} {hotelRoomMembers(chosen.key).length>1?'⌁ คู่ Combine: '+hotelRoomMembers(chosen.key).filter(r=>r!==chosen.key).join(', '):''}</h2>
           <button type="button" className="button" onClick={()=>setSelected('')}>ปิด</button>
         </div>
         <p className="muted small">แก้ไขเฉพาะสถานะห้องและช่วงวันที่ โดยอัปเดต Room ID ทุกห้องในชุด Combine เดียวกัน • สาเหตุ/หมายเหตุจากต้นทางคงเดิม • ไม่แก้ข้อมูล Defect หรือประวัติ 3 Kings</p>
         {currentlyPending.length>0?<div className="hotel-pending">
           <b>Defect ที่ยังค้างหรือรอตรวจรับ ({currentlyPending.length} ห้อง)</b>
-          {currentlyPending.map(r=><p key={r.room_no}><b>{r.room_no}</b> — {r.defect_detail||r.current_status||r.status_group||'รอดำเนินการ'}{r.next_action?' • ต้องทำต่อ: '+r.next_action:''}</p>)}
+          {currentlyPending.map(r=><p key={r.room_no}><b>{hotelRoomLabel(r.room_no)}</b> — {r.defect_detail||r.current_status||r.status_group||'รอดำเนินการ'}{r.next_action?' • ต้องทำต่อ: '+r.next_action:''}</p>)}
         </div>:<div className="hotel-pending">ไม่พบกลุ่มสถานะ Defect ค้างตามข้อมูลล่าสุด (ไม่ใช่การยืนยันว่าห้องพร้อมบริการ)</div>}
         <p><Link href={'/defects?q='+encodeURIComponent(hotelRoomMembers(chosen.key).join(','))+'#room-list'} className="button">ดู Defect Detail ทั้งชุด Combine</Link></p>
         {canEdit&&<div className="hotel-editor">
