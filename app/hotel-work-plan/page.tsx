@@ -7,6 +7,7 @@ import PageHeader from '@/components/PageHeader'
 import useAccessRole from '@/components/useAccessRole'
 import {getSupabase} from '@/lib/supabase'
 import {hotelRoomLabel,hotelRoomMembers,normalizeHotelRoom} from '@/lib/hotelRoomGroups'
+import {canAccessPath} from '@/lib/accessControl'
 
 type Day={day_no:number;planned_date:string|null;note:string|null;revision:number;sync_state:string;updated_by_name:string|null;updated_at:string|null}
 type Room={seq_no:number;day_no:number;source_room:string;room_no:string;planned_date_override:string|null;actual_date:string|null;work_status:string;note:string|null;revision:number;sync_state:string;updated_by_name:string|null;updated_at:string|null}
@@ -138,7 +139,7 @@ export default function HotelWorkPlanPage(){
  const workItems=selected?contractorFor(selectedDefect?.defect_detail||null,selected.room_no[0]):[]
  return <AppShell>
   <PageHeader title="Hotel Work Plan | Day 1–9" subtitle="Above Element · คิวโรงแรม 267 รายการ · วันที่จริงยังไม่กำหนดในไฟล์ต้นฉบับ"
-   action={<div className="work-head"><a href={SOURCE_URL} target="_blank" rel="noreferrer" className="button">Excel ต้นฉบับ</a><Link className="button" href="/calendar">Work Calendar</Link></div>}/>
+   action={<div className="work-head"><a href={SOURCE_URL} target="_blank" rel="noreferrer" className="button">Excel ต้นฉบับ</a>{role!==null&&canAccessPath(role,'/calendar')&&<Link className="button" href={'/calendar?view=work-plan-defect'+(day?.planned_date?'&date='+day.planned_date:'')}>ปฏิทิน Work Plan Defect</Link>}</div>}/>
   <div className="work-excel-health" role="status">
    {excelVerifiedAt?'Excel Sync ยืนยันไฟล์จริงล่าสุด '+new Date(excelVerifiedAt).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'}):
     'Excel Sync ยังไม่ได้ยืนยันการเขียน/อ่านกลับจาก Google Drive · ไม่ถือว่าซิงก์แล้ว'}
