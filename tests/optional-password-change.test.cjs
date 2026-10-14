@@ -24,17 +24,17 @@ function load(file, deps = {}) {
   return mod.exports
 }
 
-function fixture({ oldValid = true, verifiedUserId = 'u-1', active = true, profileError = null } = {}) {
+function fixture({ oldValid = true, verifiedUserId = 'u-1', active = true, role = 'viewer_editor', profileError = null } = {}) {
   const events = []
   const main = {
     auth: { getUser: async () => ({ data: { user: { id: 'u-1', email: 'user01@3kings.invalid' } }, error: null }) },
     from: table => {
       assert.equal(table, 'profiles')
       return { select: fields => {
-        assert.equal(fields, 'active')
+        assert.equal(fields, 'active,role')
         return { eq: (field, value) => {
           assert.equal(field, 'user_id');assert.equal(value, 'u-1')
-          return { maybeSingle: async () => ({ data: { active }, error: profileError }) }
+          return { maybeSingle: async () => ({ data: { active, role }, error: profileError }) }
         } }
       } }
     },
@@ -54,6 +54,7 @@ function fixture({ oldValid = true, verifiedUserId = 'u-1', active = true, profi
   }
   const change = load('lib/changeOwnPassword.ts', {
     '@/lib/supabase': { getSupabase: () => main, getSupabaseConnection: () => ({ url: 'https://example.supabase.co', key: 'anon-key' }) },
+    '@/lib/accessControl': load('lib/accessControl.ts'),
     '@supabase/supabase-js': { createClient: (url, key, opts) => {
       assert.equal(url, 'https://example.supabase.co'); assert.equal(key, 'anon-key')
       assert.equal(opts.auth.persistSession, false)
@@ -93,19 +94,23 @@ test('reject weak or identical new password without contacting auth service', as
   await assert.rejects(change('old-value', 'old-value'), /12|ต่างจาก/)
   assert.equal(events.length, 0)
 })
-test('all roles can visit account; existing sensitive permissions remain unchanged', () => {
+test('only Owner, Admin, Editor, Purchase, Contributor can visit account; existing sensitive permissions remain unchanged', () => {
   const access = load('lib/accessControl.ts')
   const roles = ['owner', 'admin', 'viewer', 'viewer_editor', 'defect_contributor', 'defect_editor', 'purchase']
   for (const role of roles) {
-    assert.equal(access.canAccessPath(role, '/account'), true, role)
+    assert.equal(access.canAccessPath(role, '/account'), ['owner', 'admin', 'viewer_editor', 'defect_editor', 'purchase'].includes(role), role)
     assert.equal(access.canAccessPath(role, '/users'), role === 'owner', role)
     assert.equal(access.canViewPayroll(role), role === 'owner' || role === 'admin', role)
   }
   assert.equal(access.canAccessPath('defect_contributor', '/reports'), false)
+  assert.equal(access.canChangeOwnPassword(null), false)
+  assert.equal(access.canChangeOwnPassword('viewer'), false)
+  assert.equal(access.canChangeOwnPassword('defect_contributor'), false)
+  assert.equal(access.canChangeOwnPassword('owner'), true)
 })
 test('account navigation is present on mobile and desktop with no forced change at login', () => {
-  assert.match(shell, /<Link href="\/account">บัญชีของฉัน/)
-  assert.match(shell, /<Link href="\/account" onClick/)
+  assert.match(shell, /canChangeOwnPassword\(actualRole\)&&<Link href="\/account">บัญชีของฉัน/)
+  assert.match(shell, /canChangeOwnPassword\(actualRole\)&&<Link href="\/account" onClick/)
   assert.match(account, /changeOwnPassword\(currentPassword, newPassword\)/)
   assert.match(account, /ไม่มีก[า]?รบังคับเปลี่ยนรหัสผ่าน/)
   const login = fs.readFileSync('app/login/page.tsx', 'utf8')
@@ -116,4 +121,26 @@ test('Owner reset remains the existing owner-only action and never reads user pa
   assert.match(adminUsers, /callerProfile\.role !== 'manager'/)
   assert.match(adminUsers, /admin\.auth\.admin\.updateUserById\(target, \{ password \}\)/)
   assert.doesNotMatch(source, /service_role|admin\.updateUserById|insert\(/i)
+})
+
+test('shared Viewer and Defect Viewer are rejected before verification or update', async () => {
+  for (const role of ['viewer', 'defect_contributor', 'foreman']) {
+    const {change, events}=fixture({role})
+    await assert.rejects(change('old-value','New-value-12345'), /Viewer/)
+    assert.deepEqual(events, [], role)
+  }
+})
+test('all four allowed non-owner roles pass canonical profile checks', async () => {
+  for (const role of ['admin','viewer_editor','purchase','defect_editor']) {
+    const {change,events}=fixture({role})
+    assert.equal(await change('old-value','New-value-12345'),'u-1')
+    assert.deepEqual(events.map(x=>x.type), ['verify','update','signout'],role)
+  }
+})
+test('unknown role and database errors fail closed', async () => {
+  for (const opts of [{role:'invalid'}, {profileError:Error('offline')}]) {
+    const {change,events}=fixture(opts)
+    await assert.rejects(change('old-value','New-value-12345'))
+    assert.equal(events.length,0)
+  }
 })
