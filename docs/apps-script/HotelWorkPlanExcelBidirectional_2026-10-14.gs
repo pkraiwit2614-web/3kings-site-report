@@ -140,6 +140,17 @@ function hpEnsureNewSheet_(map,snapshot){
  t=t.replace('</Types>','<Override PartName="/xl/worksheets/sheet7.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>');
  map[file]=Utilities.newBlob(w,'text/xml',file);map[rel]=Utilities.newBlob(r,'text/xml',rel);
  map[types]=Utilities.newBlob(t,'text/xml',types);
+ // Keep Excel extended-properties sheet counts and named-range titles consistent.
+ const appPath='docProps/app.xml';
+ if(!map[appPath])throw Error('Missing XLSX extended-properties metadata');
+ let app=map[appPath].getDataAsString();
+ if(!app.includes('<vt:i4>6</vt:i4>')||!app.includes('<TitlesOfParts><vt:vector size="9"')||
+    !app.includes('<vt:lpstr>ครบทุกห้อง_263</vt:lpstr>'))throw Error('Unexpected Excel sheet-title metadata; refuse bootstrap');
+ app=app.replace('<vt:i4>6</vt:i4>','<vt:i4>7</vt:i4>')
+    .replace('<TitlesOfParts><vt:vector size="9"','<TitlesOfParts><vt:vector size="10"')
+    .replace('<vt:lpstr>ครบทุกห้อง_263</vt:lpstr>',
+      '<vt:lpstr>ครบทุกห้อง_263</vt:lpstr><vt:lpstr>'+HOTEL_WORK_PLAN_SYNC.TAB+'</vt:lpstr>');
+ map[appPath]=Utilities.newBlob(app,'text/xml',appPath);
  map[HOTEL_WORK_PLAN_SYNC.TARGET]=Utilities.newBlob(hpBuildSheet_(snapshot),'text/xml',HOTEL_WORK_PLAN_SYNC.TARGET);
 }
 function hpReadSheet_(xml,shared,snapshot){
@@ -233,7 +244,7 @@ function hpDigest_(blob){
 function hpUnchangedOthers_(before,after){
  for(const path in before){
   if(path===HOTEL_WORK_PLAN_SYNC.TARGET||path==='xl/workbook.xml'||
-    path==='xl/_rels/workbook.xml.rels'||path==='[Content_Types].xml')continue;
+    path==='xl/_rels/workbook.xml.rels'||path==='[Content_Types].xml'||path==='docProps/app.xml')continue;
   if(!after[path]||hpDigest_(before[path])!==hpDigest_(after[path]))throw Error('Non-target Excel part changed: '+path);
  }
 }
