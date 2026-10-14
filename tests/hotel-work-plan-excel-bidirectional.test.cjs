@@ -5,6 +5,7 @@ const vm=require('node:vm')
 const sql=fs.readFileSync('supabase/migrations/20261014115000_hotel_work_plan_isolated.sql','utf8')
 const syncSql=fs.readFileSync('supabase/migrations/20261014130000_hotel_work_plan_excel_bidirectional.sql','utf8')
 const script=fs.readFileSync('docs/apps-script/HotelWorkPlanExcelBidirectional_2026-10-14.gs','utf8')
+const verifiedSql=fs.readFileSync('supabase/migrations/20261014134500_hotel_work_plan_verified_sync_state.sql','utf8')
 const ctx={console};vm.createContext(ctx);vm.runInContext(script,ctx)
 const entries=[...sql.matchAll(/\((\d+),(\d+),'([^']+)','([AB]\d{3})',(\d+)\)/g)]
 function sample(){
@@ -33,6 +34,8 @@ test('pinned source identity 267, protected old sheets, revision-required RPC',(
  assert.match(script,/hpCheckReadback_/)
  assert.match(script,/hotelWorkPlanInstallTrigger/)
  assert.match(syncSql,/pg_advisory_xact_lock/)
+ assert.match(verifiedSql,/last_verified_at=EXCLUDED\.last_verified_at/)
+ assert.match(verifiedSql,/hotel_work_plan_sync_control/)
  assert.match(syncSql,/REVISION_CONFLICT|WEB_REVISION_CONFLICT/)
  assert.doesNotMatch(script,/DriveApp\.getFileById\([^)]*DEFECT_SOURCE/i)
  assert.doesNotMatch(syncSql,/UPDATE public\.condo_room_status|UPDATE public\.hotel_room_availability/i)
