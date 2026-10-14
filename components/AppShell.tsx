@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { ReactNode, useEffect, useMemo, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import BrandLogo from '@/components/BrandLogo'
-import {canViewPayroll,resolveAccessRole,type AccessRole} from '@/lib/accessControl'
+import {canChangeOwnPassword,canViewPayroll,resolveAccessRole,type AccessRole} from '@/lib/accessControl'
 import useRolePreview from '@/components/useRolePreview'
 import {ROLE_PREVIEW_LABELS} from '@/lib/rolePreview'
 import ActivityTracker from '@/components/ActivityTracker'
@@ -227,7 +227,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
     <aside className="sidebar">
       <div className="brand" data-i18n-skip><BrandLogo className="brand-logo"/><div><b>3 Kings Construction</b><small>Site Report V3.4</small></div></div>
       <nav>{nav.map(([href,label]) => <Link key={href} className={navIsActive(path,href)?'active':''} href={href}>{label}</Link>)}</nav>
-      <div className="userbox"><b data-i18n-skip>{userName}</b><span>{displayRole}</span>{renderPreviewControl()}<LanguageSelector/><Link href="/account">บัญชีของฉัน / เปลี่ยนรหัสผ่าน</Link><button onClick={signOut}>ออกจากระบบ</button></div>
+      <div className="userbox"><b data-i18n-skip>{userName}</b><span>{displayRole}</span>{renderPreviewControl()}<LanguageSelector/>{canChangeOwnPassword(actualRole)&&<Link href="/account">บัญชีของฉัน / เปลี่ยนรหัสผ่าน</Link>}<button onClick={signOut}>ออกจากระบบ</button></div>
     </aside>
 
     <main className="main">
@@ -268,7 +268,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         {previewTargets.length>0&&<div className="mobile-preview-control">{renderPreviewControl()}</div>}
         <div className="mobile-language-control"><LanguageSelector compact/></div>
         <div className="mobile-more-links">
-          <Link href="/account" onClick={()=>setMobileMore(false)}>บัญชีของฉัน / เปลี่ยนรหัสผ่าน<span>›</span></Link>
+          {canChangeOwnPassword(actualRole)&&<Link href="/account" onClick={()=>setMobileMore(false)}>บัญชีของฉัน / เปลี่ยนรหัสผ่าน<span>›</span></Link>}
           {extraNav.map(([href,label]) => <Link key={href} className={navIsActive(path,href)?'active':''} href={href}>{label}<span>›</span></Link>)}
         </div>
         <button className="mobile-logout" type="button" onClick={signOut}>ออกจากระบบ</button>
