@@ -38,6 +38,7 @@ export default function HotelWorkPlanPage(){
  const [selectedDay,setSelectedDay]=useState(1)
  const [selectedSeq,setSelectedSeq]=useState<number|null>(null)
  const [roomSearch,setRoomSearch]=useState('')
+ useEffect(()=>{const room=new URLSearchParams(window.location.search).get('room');if(room)setRoomSearch(room)},[])
  const [building,setBuilding]=useState('ALL')
  const [dayDate,setDayDate]=useState('')
  const [dayNote,setDayNote]=useState('')
