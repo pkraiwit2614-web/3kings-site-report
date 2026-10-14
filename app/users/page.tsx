@@ -208,6 +208,28 @@ function UserRow({ row, onChanged, onCredential, onMessage }: { row: Profile; on
   const [role,setRole] = useState(row.role)
   const [active,setActive] = useState(row.active)
   const [saving,setSaving] = useState(false)
+  const [lockBusy,setLockBusy] = useState(false)
+  const [lockStatus,setLockStatus] = useState<'protected'|'unprotected'|'unknown'>('unknown')
+  const isSharedViewer = row.role === 'viewer' || row.role === 'defect_contributor'
+
+  const viewerLockAction = async (action: 'status'|'enable') => {
+    if(lockBusy || !isSharedViewer || !row.active) return
+    if(action==='enable' && !window.confirm(`เปิดการป้องกันเปลี่ยนรหัสผ่านสำหรับ ${row.username||row.full_name||'Viewer'}? ผู้ที่ล็อกอินอยู่จะต้องเข้าสู่ระบบใหม่ 1 ครั้ง แต่ยังใช้รหัสผ่านเดิมได้ และ Owner ยัง Reset Password ได้`))return
+    setLockBusy(true)
+    onMessage('')
+    try {
+      const {data,error}=await getSupabase().functions.invoke('shared-viewer-auth-lock',{
+        body:{action,user_id:row.user_id,...(action==='enable'?{confirmation:'ALLOW_ONE_TIME_VIEWER_SIGNOUT'}:{})},
+      })
+      if(error)throw error
+      if(!data?.ok)throw Error(data?.error||'ตรวจสถานะ MFA ไม่สำเร็จ')
+      setLockStatus(data.protected?'protected':'unprotected')
+      onMessage(data.protected
+        ? `ตรวจสอบ ${row.username||row.full_name}: MFA ล็อกการเปลี่ยนรหัสผ่านเองแล้ว (Owner ยัง Reset ได้)`
+        : `ตรวจสอบ ${row.username||row.full_name}: ยังไม่ได้เปิดการป้องกันระดับ Authentication`)
+    } catch(err:any){onMessage(err?.message||'ไม่สามารถจัดการ MFA ได้')}
+    finally{setLockBusy(false)}
+  }
   const changed = username !== (row.username || '') || name !== (row.full_name || '') || role !== row.role || active !== row.active
 
   const save = async () => {
@@ -236,6 +258,13 @@ function UserRow({ row, onChanged, onCredential, onMessage }: { row: Profile; on
     <td><input value={name} onChange={e=>setName(e.target.value)} disabled={owner} style={{minWidth:120}}/></td>
     <td><select value={role} onChange={e=>setRole(e.target.value)} disabled={owner}>{owner?<option value="manager">Owner</option>:<>{!['admin','viewer','viewer_editor','defect_contributor','defect_editor','purchase'].includes(role)&&<option value={role}>{roleLabel[role]||role} — Legacy</option>}<option value="admin">Admin</option><option value="viewer">Viewer</option><option value="viewer_editor">Viewer & Editor</option><option value="defect_contributor">Defect Viewer</option><option value="defect_editor">Defect Contributor</option><option value="purchase">Purchase</option></>}</select></td>
     <td><label className="inline-toggle"><input type="checkbox" checked={active} onChange={e=>setActive(e.target.checked)} disabled={owner}/><StatusBadge value={active?'Active':'Inactive'}/></label></td>
-    <td><div className="row" style={{gap:6,flexWrap:'wrap'}}><button className="button primary" disabled={owner||!changed||saving} onClick={save}>{saving?'Saving…':'Save'}</button><button className="button" disabled={owner} onClick={resetPassword}>Reset Password</button></div></td>
+    <td><div className="row" style={{gap:6,flexWrap:'wrap'}}><button className="button primary" disabled={owner||!changed||saving} onClick={save}>{saving?'Saving…':'Save'}</button><button className="button" disabled={owner} onClick={resetPassword}>Reset Password</button>
+    {isSharedViewer && row.active && <div className="row" style={{gap:5,flexWrap:'wrap'}}>
+      <button className="button" disabled={lockBusy} onClick={()=>void viewerLockAction('status')}>
+        {lockBusy?'Checking…':lockStatus==='protected'?'MFA: Locked':lockStatus==='unprotected'?'MFA: Unlocked':'ตรวจ MFA'}
+      </button>
+      {lockStatus==='unprotected' && <button className="button" disabled={lockBusy} onClick={()=>void viewerLockAction('enable')}>เปิดป้องกันรหัสผ่าน</button>}
+    </div>}
+  </div></td>
   </tr>
 }

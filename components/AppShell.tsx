@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { ReactNode, useEffect, useMemo, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import BrandLogo from '@/components/BrandLogo'
-import {canViewPayroll,resolveAccessRole,type AccessRole} from '@/lib/accessControl'
+import {canChangeOwnPassword,canViewPayroll,resolveAccessRole,type AccessRole} from '@/lib/accessControl'
 import useRolePreview from '@/components/useRolePreview'
 import {ROLE_PREVIEW_LABELS} from '@/lib/rolePreview'
 import ActivityTracker from '@/components/ActivityTracker'
@@ -227,7 +227,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
     <aside className="sidebar">
       <div className="brand" data-i18n-skip><BrandLogo className="brand-logo"/><div><b>3 Kings Construction</b><small>Site Report V3.4</small></div></div>
       <nav>{nav.map(([href,label]) => <Link key={href} className={navIsActive(path,href)?'active':''} href={href}>{label}</Link>)}</nav>
-      <div className="userbox"><b data-i18n-skip>{userName}</b><span>{displayRole}</span>{renderPreviewControl()}<LanguageSelector/><button onClick={signOut}>ออกจากระบบ</button></div>
+      <div className="userbox"><b data-i18n-skip>{userName}</b><span>{displayRole}</span>{renderPreviewControl()}<LanguageSelector/>{canChangeOwnPassword(actualRole)&&<Link href="/account">บัญชีของฉัน / เปลี่ยนรหัสผ่าน</Link>}<button onClick={signOut}>ออกจากระบบ</button></div>
     </aside>
 
     <main className="main">
@@ -268,6 +268,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         {previewTargets.length>0&&<div className="mobile-preview-control">{renderPreviewControl()}</div>}
         <div className="mobile-language-control"><LanguageSelector compact/></div>
         <div className="mobile-more-links">
+          {canChangeOwnPassword(actualRole)&&<Link href="/account" onClick={()=>setMobileMore(false)}>บัญชีของฉัน / เปลี่ยนรหัสผ่าน<span>›</span></Link>}
           {extraNav.map(([href,label]) => <Link key={href} className={navIsActive(path,href)?'active':''} href={href}>{label}<span>›</span></Link>)}
         </div>
         <button className="mobile-logout" type="button" onClick={signOut}>ออกจากระบบ</button>
@@ -280,7 +281,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
     </nav>
 
     <style jsx global>{`
-      .role-preview-control{display:grid;gap:4px;margin-top:8px;text-align:left}.role-preview-control>span{font-size:9px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;opacity:.72}.role-preview-control select{width:100%;min-height:34px;border:1px solid #cbd5df;border-radius:8px;background:#fff;padding:6px 8px;color:#172a43;font:inherit;font-size:10px;font-weight:700}.role-preview-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px;padding:9px 11px;border:1px solid #d8b454;border-radius:10px;background:#fff8df;color:#5c4300}.role-preview-banner>div{display:grid;gap:2px}.role-preview-banner b{font-size:11px}.role-preview-banner span{font-size:9.5px}.role-preview-banner button{min-height:30px;border:1px solid #caa43f;border-radius:8px;background:#fff;color:#6a4d00;padding:5px 9px;font:inherit;font-size:9.5px;font-weight:800;white-space:nowrap}.mobile-preview-control{padding:0 16px 12px}.mobile-preview-control .role-preview-control{margin-top:0}
+      .userbox>a[href='/account']{display:block;padding:5px 0;color:#b9c5d5;font-size:12px}.userbox>a[href='/account']:hover,.userbox>a[href='/account'].active{color:#fff}\n      .role-preview-control{display:grid;gap:4px;margin-top:8px;text-align:left}.role-preview-control>span{font-size:9px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;opacity:.72}.role-preview-control select{width:100%;min-height:34px;border:1px solid #cbd5df;border-radius:8px;background:#fff;padding:6px 8px;color:#172a43;font:inherit;font-size:10px;font-weight:700}.role-preview-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px;padding:9px 11px;border:1px solid #d8b454;border-radius:10px;background:#fff8df;color:#5c4300}.role-preview-banner>div{display:grid;gap:2px}.role-preview-banner b{font-size:11px}.role-preview-banner span{font-size:9.5px}.role-preview-banner button{min-height:30px;border:1px solid #caa43f;border-radius:8px;background:#fff;color:#6a4d00;padding:5px 9px;font:inherit;font-size:9.5px;font-weight:800;white-space:nowrap}.mobile-preview-control{padding:0 16px 12px}.mobile-preview-control .role-preview-control{margin-top:0}
       .defect-section-tabs{display:inline-flex;align-items:center;gap:4px;padding:4px;margin:0 0 12px;border:1px solid #d9e0e7;border-radius:12px;background:#f4f7fa;box-shadow:0 3px 10px rgba(23,42,67,.05)}
       .defect-section-tabs a{display:flex;align-items:center;justify-content:center;min-height:34px;padding:7px 12px;border-radius:9px;color:#617083;font-size:11px;font-weight:800;text-decoration:none;white-space:nowrap;transition:background .15s ease,color .15s ease,box-shadow .15s ease}
       .defect-section-tabs a:hover{background:#e9eef4;color:#213d5e}
