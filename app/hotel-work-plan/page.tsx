@@ -17,7 +17,7 @@ const LABELS:Record<string,string>={pending:'รอกำหนด / รอด�
 const HOTEL:Record<string,string>={AVAILABLE:'พร้อมให้บริการ',OOO:'OOO',OOS:'OOS',UNKNOWN:'รอตรวจสอบ'}
 const SOURCE_URL='https://docs.google.com/spreadsheets/d/1KZ-VMDssYeMmTE-TNLYU0d8fwQkSUtuS/edit'
 const dateTH=(v:string|null|undefined)=>v&&/^\d{4}-\d{2}-\d{2}$/.test(v)?v.slice(8,10)+'/'+v.slice(5,7)+'/'+v.slice(0,4):'—'
-const verifiedSyncTimeTH=(iso:string)=>new Date(iso).toLocaleString('en-GB',{timeZone:'Asia/Bangkok',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).replace(',','')+' น.'
+const verifiedSyncTimeTH=(iso:string)=>new Intl.DateTimeFormat('th-TH',{timeZone:'Asia/Bangkok',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(iso))+' น.'
 function contractorFor(defect:string|null,building:string){
  // Show only trade-level classification supported by the agreed contractor rules.
  // Do not treat an unconfirmed defect item as a work order.
@@ -150,14 +150,13 @@ export default function HotelWorkPlanPage(){
  const workItems=selected?contractorFor(selectedDefect?.defect_detail||null,selected.room_no[0]):[]
  return <AppShell>
   <PageHeader title="Hotel Work Plan | Day 1–9" subtitle="Above Element · คิวโรงแรม 267 รายการ · วันที่จริงยังไม่กำหนดในไฟล์ต้นฉบับ"
-   action={<div className="work-head"><a href={SOURCE_URL} target="_blank" rel="noreferrer" className="button">Excel ต้นฉบับ</a><Link className="button" href="/calendar">Work Calendar</Link></div>}/>
-  <section className="work-excel-health" role="status" aria-label="ข้อมูลอัปเดตไฟล์ Defect Work Plan">
-   <strong className="work-excel-heading">ข้อมูลอัปเดต</strong>
-   <div className="work-excel-detail">
-    <span>ซิงก์ไฟล์ Excel ล่าสุด (ยืนยันอ่านกลับจาก Google Drive)</span>
-    {excelVerifiedAt?<time dateTime={excelVerifiedAt} className="work-excel-time">{verifiedSyncTimeTH(excelVerifiedAt)}</time>:<span className="work-excel-unverified">ยังไม่พบการซิงก์ที่ยืนยันแล้ว</span>}
-   </div>
-  </section>
+   action={<div className="work-head">
+    <div className="work-update-meta" role="status" aria-label="ข้อมูลอัปเดตไฟล์ Defect Work Plan" title="เวลาซิงก์ Excel ที่ยืนยันอ่านกลับจาก Google Drive">
+     <span>อัพเดทล่าสุด</span>
+     <b className={!excelVerifiedAt?'work-update-unverified':undefined}>{excelVerifiedAt?<time dateTime={excelVerifiedAt}>{verifiedSyncTimeTH(excelVerifiedAt)}</time>:'ยังไม่ยืนยันการซิงก์ Excel'}</b>
+    </div>
+    <a href={SOURCE_URL} target="_blank" rel="noreferrer" className="button">Excel ต้นฉบับ</a><Link className="button" href="/calendar">Work Calendar</Link>
+   </div>}/> 
   {error&&<div className="panel" role="alert" style={{color:'#9e312d'}}>โหลด/บันทึกข้อมูลไม่ได้: {error} <button className="button" onClick={()=>{void refresh().then(()=>setError('')).catch(e=>setError(String(e)))}}>ลองใหม่</button></div>}
   {message&&<div className="panel" role="status">{message}</div>}
   {loading?<div className="panel">กำลังโหลดแผนโรงแรม…</div>:<>
@@ -230,7 +229,7 @@ export default function HotelWorkPlanPage(){
    <p className="muted small">อ้างอิงลำดับ 267 รายการจาก Hotel Day 1–9 Snapshot 13/10/2026 · สถานะ Defect/OOO/OOS อ้างอิงจากระบบล่าสุด ไม่ใช่ Snapshot · ประวัติการแก้ไขแผนเก็บใน Activity Log</p>
   </>}
   <style jsx>{`
-    .work-excel-health{display:flex;align-items:center;flex-wrap:wrap;gap:8px 18px;font-size:11px;color:#475569;background:#f4f6f9;border:1px solid #d9e0e7;border-radius:9px;padding:10px 13px;margin:0 0 11px}.work-excel-heading{font-size:13px;color:#172a43;white-space:nowrap}.work-excel-detail{display:flex;align-items:center;flex-wrap:wrap;gap:4px 10px}.work-excel-time{font-size:12px;font-weight:700;color:#172a43;white-space:nowrap;font-variant-numeric:tabular-nums}.work-excel-unverified{font-weight:700;color:#935513}.work-head{display:flex;flex-wrap:wrap;gap:6px}.work-days{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:6px;margin:0 0 12px}
+    .work-head{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px}.work-update-meta{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:2px;line-height:1.25;text-align:right;margin-right:4px}.work-update-meta span{font-size:9px;color:var(--muted);font-weight:700}.work-update-meta b{font-size:11px;color:var(--navy);font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums}.work-update-meta .work-update-unverified{color:#935513}.work-days{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:6px;margin:0 0 12px}
     .work-day{min-width:0;display:flex;flex-direction:column;text-align:left;gap:2px;border:1px solid #d9e0e7;border-radius:10px;padding:9px;background:#fff;cursor:pointer;color:#172a43;font:inherit}
     .work-day.current{border-color:#172a43;box-shadow:inset 0 0 0 1px #172a43;background:#f0f6ff}.work-day strong{font-size:13px}.work-day span,.work-day small{font-size:10px}.work-day small{color:#69798a}
     .work-date{white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:700}.work-day-editor{display:grid;grid-template-columns:minmax(170px,1.4fr) minmax(140px,.8fr) minmax(180px,1.5fr) auto;align-items:end;gap:10px;margin-bottom:12px}
