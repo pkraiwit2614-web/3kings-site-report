@@ -1,6 +1,6 @@
 # Shared Viewer password immutability — Auth-layer rollout gate
 
-**Status: NOT ACTIVATED.** Do not merge/deploy #105 as full enforcement while native Auth protections remain absent.
+**Status: FEATURE DEVELOPED, NOT ACTIVATED ON SHARED PRODUCTION USERS.** The user explicitly accepted a one-time sign-out for shared Viewer accounts on 14 October 2026. Do not mark the rollout complete until the verified-factor state and real login/reset behavior are checked.
 
 ## Scope and identities
 
@@ -24,7 +24,7 @@ GoTrue's user-update handler rejects a password change when the user has a **ver
 - https://supabase.com/docs/guides/auth/auth-mfa
 - https://supabase.com/docs/reference/javascript/auth-admin-mfa-deletefactor
 
-**Important side effect:** Verifying a new MFA factor invalidates that user's other AAL1 sessions. Affected Viewer users must sign in again, although their existing username/password and subsequent AAL1 sign-in behavior remain the same if the app does not enforce AAL2 for normal access. That one-time interruption conflicts with a literal "no impact on existing login sessions" requirement.
+**Accepted side effect:** Verifying a new MFA factor invalidates that user's other AAL1 sessions. On 14 October 2026 the user agreed that shared Viewer users may sign in again once with the same username/password. Normal read permissions are not to be changed.
 
 A shared identity must not receive the factor's TOTP secret or a means to enroll/remove a verified factor at AAL1; the enrollment and recovery process must be controlled by Owner. Do not enroll factors blindly on production users or retain TOTP secrets in application logs.
 
@@ -54,3 +54,15 @@ A `BEFORE UPDATE` trigger on `auth.users.encrypted_password` would also intercep
 - No automatic promotion while Vercel preview is unavailable / build rate limited.
 
 **2026-10-14 preflight:** Production Supabase has 3 `viewer` and 1 `defect_contributor` profile, and zero verified MFA factors for those roles. Therefore provider-level enforcement is **not active** yet. This document is operational research, not evidence of live enforcement.
+
+## New isolated deployment unit (PR #105)
+
+- `supabase/functions/shared-viewer-auth-lock/index.ts` is separate from `admin-users`; requires a signed-in **exact Owner ID** whose active profile has `role=manager`.
+- Action `status` reports whether an owner-managed **verified TOTP** factor exists for one shared viewer. It never creates a session or changes credentials.
+- Action `enable` requires exact confirmation token `ALLOW_ONE_TIME_VIEWER_SIGNOUT`. It refuses roles other than Viewer/Defect Viewer, inactive users, unrecognized email domains, and accounts with an unrelated verified factor. It generates a server-only one-time magic link (no password is ever requested or exposed), enrolls a TOTP factor, computes/verifies an ephemeral TOTP without recording its secret, independently rechecks the verified factor, and signs out the temporary session locally.
+- Owner buttons in `app/users/page.tsx` check status and require a confirmation dialog before activation. Normal `Reset Password` remains unchanged.
+- No user MFA enrollment, Auth configuration, or password has been modified in Production by the code changes themselves.
+
+### Deployment and acceptance
+
+Before releasing this on real shared accounts, require: passing new CI tests, isolated integration test against the project's actual GoTrue configuration with a temporary account and a rollback plan, working Production Vercel deployment, and owner-side confirmation that each desired account reports `protected=true`. Post-rollout, test password-login after forced logout; verify self-update denied at Auth API, admin reset succeeded with new password, and unrelated roles unaffected. If an account is later promoted out of a shared Viewer role, Owner must remove its managed verified factor through the privileged `auth.admin.mfa.deleteFactor` before re-enabling optional self-password changes.
