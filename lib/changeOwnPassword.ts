@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { getSupabase } from '@/lib/supabase'
+import { getSupabase, getSupabaseConnection } from '@/lib/supabase'
 
 // Account changes are voluntary. Owner resets remain in the existing admin-users function.
 // Authenticate the current password in a separate, non-persistent session so an incorrect
@@ -27,7 +27,8 @@ export async function changeOwnPassword(currentPassword: string, newPassword: st
 
   // Supabase-js is currently pinned to v2.95; using a separate sign-in checks the
   // current password without changing the main session or relying on email OTPs.
-  const verifier = createClient(current.supabaseUrl, current.supabaseKey, {
+  const connection = getSupabaseConnection()
+  const verifier = createClient(connection.url, connection.key, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   })
   try {
