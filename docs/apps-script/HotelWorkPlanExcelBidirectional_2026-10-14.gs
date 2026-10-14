@@ -127,6 +127,37 @@ function hpCheckCanonical_(map,snapshot,shared){
   if(Number(seq)!==r.seq_no||room!==r.source_room)throw Error('Original source identity changed at Seq '+r.seq_no);
  });
 }
+/**
+ * Resolve the Work Plan worksheet by its real workbook relationship.
+ * Editing an XLSX through Google Sheets can reassign r:id, e.g.
+ * rIdHotelWorkPlan20261014 -> rId7, with sheet7.xml unchanged.
+ * Never treat the relationship ID as a permanent source identifier.
+ */
+function hpCheckExistingSheet_(parts){
+ const workbook=parts['xl/workbook.xml']?.getDataAsString();
+ const rels=parts['xl/_rels/workbook.xml.rels']?.getDataAsString();
+ const types=parts['[Content_Types].xml']?.getDataAsString();
+ if(!workbook||!rels||!types||!parts[HOTEL_WORK_PLAN_SYNC.TARGET]){
+  throw Error('Work Plan XLSX worksheet or metadata missing');
+ }
+ const sheets=(workbook.match(/<sheet\\b[^>]*\\/>/g)||[])
+  .filter(tag=>tag.includes('name="'+HOTEL_WORK_PLAN_SYNC.TAB+'"'));
+ if(sheets.length!==1)throw Error('Work Plan sheet name not unique or missing');
+ const relationId=(sheets[0].match(/\\br:id="([^"]+)"/)||[])[1];
+ if(!relationId||!/^[A-Za-z0-9_.-]+$/.test(relationId))throw Error('Work Plan relationship ID invalid');
+ const relations=(rels.match(/<Relationship\\b[^>]*\\/>/g)||[])
+  .filter(tag=>tag.includes('Id="'+relationId+'"'));
+ if(relations.length!==1)throw Error('Work Plan relationship missing or ambiguous');
+ const target=(relations[0].match(/\\bTarget="([^"]+)"/)||[])[1];
+ const type=(relations[0].match(/\\bType="([^"]+)"/)||[])[1];
+ if(target!=='worksheets/sheet7.xml'||type!=='http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet'){
+  throw Error('Work Plan relationship points to an unexpected worksheet');
+ }
+ if(!types.includes('PartName="/xl/worksheets/sheet7.xml"')){
+  throw Error('Work Plan XLSX content type missing');
+ }
+ return {relationId,target};
+}
 function hpEnsureNewSheet_(map,snapshot){
  const file='xl/workbook.xml',rel='xl/_rels/workbook.xml.rels',types='[Content_Types].xml';
  let w=map[file].getDataAsString(),r=map[rel].getDataAsString(),t=map[types].getDataAsString();
@@ -297,9 +328,9 @@ function hpRun_(dryRun){
    const ack=hpRPC_(c,'hotel_work_plan_sync_ack',{p_days:desired.days,p_rooms:desired.rooms});
    return {ok:ack.ok,bootstrapped:true,backupId,verified:ack.verified_rooms};
   }
-  const workbook=parts['xl/workbook.xml'].getDataAsString();
-  if(!workbook.includes('name="'+HOTEL_WORK_PLAN_SYNC.TAB+'"')||!workbook.includes(HOTEL_WORK_PLAN_SYNC.REL_ID))
-   throw Error('Hotel Work Plan sheet name/relationship changed; repair manually');
+  // Google Sheets rewrites XLSX relationship IDs during normal Excel edits.
+  // Verify the *resolved sheet relationship*, not the original bootstrap r:id.
+  hpCheckExistingSheet_(parts);
   const read=hpReadSheet_(parts[HOTEL_WORK_PLAN_SYNC.TARGET].getDataAsString(),shared,snapshot);
   const plan=hpReconcile_(snapshot,read);
   if(plan.conflicts.length){
