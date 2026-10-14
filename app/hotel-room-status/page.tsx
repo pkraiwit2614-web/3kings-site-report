@@ -24,6 +24,7 @@ const pending=(r:Room)=>(
   ['Hotel - Incomplete','Hotel - Awaiting Check','Hotel - Awaiting Room Inspection','Non-Hotel - Pending Handover'].includes(r.status_group||'')
 )
 const dateTH=(value:string|null)=>value?new Intl.DateTimeFormat('th-TH',{timeZone:'Asia/Bangkok',dateStyle:'medium',timeStyle:'short'}).format(new Date(value)):'—'
+const displayRangeDate=(value:string)=>value.replace(/^(\d{4})-(\d{2})-(\d{2})$/,'$3/$2/$1')
 const statusText=(s:HotelStatus|null)=>!s||s.availability_status==='UNKNOWN'?'รอตรวจสอบ':s.availability_status==='AVAILABLE'?'พร้อมให้บริการ':s.availability_status
 
 export default function HotelRoomStatusPage(){
@@ -151,7 +152,7 @@ export default function HotelRoomStatusPage(){
               {!g.inHotel&&<small>ไม่ร่วมโรงแรม</small>}
             </td>
             <td><span className={'hotel-status-badge status-'+(g.hotel?.availability_status||'UNKNOWN').toLowerCase()}>{statusText(g.hotel)}</span>{g.inferred&&<small>อ้างอิงสถานะคู่ Combine • รอยืนยันห้องนี้</small>}{g.conflict&&<small className="hotel-conflict">สถานะต้นทางของชุด Combine ไม่ตรงกัน • ตรวจสอบก่อน</small>}</td>
-            <td>{g.hotel?.start_date||'—'}{g.hotel?.end_date?' ถึง '+g.hotel.end_date:''}</td>
+            <td>{g.hotel?.start_date?displayRangeDate(g.hotel.start_date):'—'}{g.hotel?.end_date?' ถึง '+displayRangeDate(g.hotel.end_date):''}</td>
             <td>{g.hotel?.reason||'—'}{g.hotel?.hotel_remark&&<small>Hotel Remark: {g.hotel.hotel_remark}</small>}</td>
             <td>{g.members.filter(pending).length?g.members.filter(pending).map(r=>r.room_no).join(', '):'—'}</td>
             <td>{g.ownHotel? <>{g.ownHotel.updated_by_name}<small>{dateTH(g.ownHotel.updated_at)}</small><small>{g.ownHotel.source_sync_state==='pending'?'รอบันทึก Excel':'Excel ตรงกับ Revision '+g.ownHotel.source_synced_revision}</small></>:g.inferred?'ยังไม่มีรายการยืนยันสำหรับห้องนี้':'—'}</td>
