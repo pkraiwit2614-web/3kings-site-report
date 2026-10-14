@@ -322,7 +322,11 @@ function hpRun_(dryRun){
    parts[HOTEL_WORK_PLAN_SYNC.TARGET]=Utilities.newBlob(changed.xml,'text/xml',HOTEL_WORK_PLAN_SYNC.TARGET);
    backupId=hpWriteFile_(file,original,parts,modified,desired,fresh);
   }else{
-   hpCheckReadback_(parts,desired,fresh);
+   // A no-write ACK must still be based on a fresh Drive read, not stale memory.
+   if(file.getLastUpdated().getTime()!==modified)throw Error('Excel changed before no-write readback');
+   const latest=hpParts_(hpUnzip_(DriveApp.getFileById(HOTEL_WORK_PLAN_SYNC.FILE_ID).getBlob()));
+   hpUnchangedOthers_(original,latest);
+   hpCheckReadback_(latest,desired,fresh);
   }
   const ack=hpRPC_(c,'hotel_work_plan_sync_ack',{p_days:desired.days,p_rooms:desired.rooms});
   const result={ok:ack.ok,imported:plan.imports.length,writtenCells:changed.changed,verified:ack.verified_rooms,backupId};
