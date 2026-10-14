@@ -54,6 +54,7 @@ export default function HotelWorkPlanPage(){
  const [loading,setLoading]=useState(true)
  const [error,setError]=useState('')
  const [syncAudit,setSyncAudit]=useState<SyncAudit[]>([])
+ const [excelVerifiedAt,setExcelVerifiedAt]=useState<string|null>(null)
  const [message,setMessage]=useState('')
  const refresh=useCallback(async()=>{
   const s=getSupabase()
@@ -61,7 +62,8 @@ export default function HotelWorkPlanPage(){
    s.from('hotel_work_plan_days').select('day_no,planned_date,note,revision,sync_state,updated_by_name,updated_at').order('day_no'),
    s.from('hotel_work_plan_rooms').select('seq_no,day_no,source_room,room_no,planned_date_override,actual_date,work_status,note,revision,sync_state,updated_by_name,updated_at').order('seq_no'),
    s.from('condo_room_status').select('room_no,defect_detail,status_group,current_status,next_action,follow_up').order('room_no'),
-   s.from('hotel_room_availability').select('room_no,availability_status,start_date,end_date')
+   s.from('hotel_room_availability').select('room_no,availability_status,start_date,end_date'),
+   s.from('hotel_work_plan_sync_control').select('last_verified_at').eq('id',true).maybeSingle()
   ])
   const failed=result.find(r=>r.error)
   if(failed?.error)throw Error(failed.error.message)
@@ -69,6 +71,7 @@ export default function HotelWorkPlanPage(){
   setRooms((result[1].data||[]) as Room[])
   setDefects((result[2].data||[]) as Defect[])
   setHotels((result[3].data||[]) as Hotel[])
+  setExcelVerifiedAt((result[4].data as {last_verified_at:string|null}|null)?.last_verified_at||null)
  },[])
  useEffect(()=>{
   let alive=true
@@ -136,6 +139,10 @@ export default function HotelWorkPlanPage(){
  return <AppShell>
   <PageHeader title="Hotel Work Plan | Day 1–9" subtitle="Above Element · คิวโรงแรม 267 รายการ · วันที่จริงยังไม่กำหนดในไฟล์ต้นฉบับ"
    action={<div className="work-head"><a href={SOURCE_URL} target="_blank" rel="noreferrer" className="button">Excel ต้นฉบับ</a><Link className="button" href="/calendar">Work Calendar</Link></div>}/>
+  <div className="work-excel-health" role="status">
+   {excelVerifiedAt?'Excel Sync ยืนยันไฟล์จริงล่าสุด '+new Date(excelVerifiedAt).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'}):
+    'Excel Sync ยังไม่ได้ยืนยันการเขียน/อ่านกลับจาก Google Drive · ไม่ถือว่าซิงก์แล้ว'}
+  </div>
   {error&&<div className="panel" role="alert" style={{color:'#9e312d'}}>โหลด/บันทึกข้อมูลไม่ได้: {error} <button className="button" onClick={()=>{void refresh().then(()=>setError('')).catch(e=>setError(String(e)))}}>ลองใหม่</button></div>}
   {message&&<div className="panel" role="status">{message}</div>}
   {loading?<div className="panel">กำลังโหลดแผนโรงแรม…</div>:<>
@@ -208,7 +215,7 @@ export default function HotelWorkPlanPage(){
    <p className="muted small">อ้างอิงลำดับ 267 รายการจาก Hotel Day 1–9 Snapshot 13/10/2026 · สถานะ Defect/OOO/OOS อ้างอิงจากระบบล่าสุด ไม่ใช่ Snapshot · ประวัติการแก้ไขแผนเก็บใน Activity Log</p>
   </>}
   <style jsx>{`
-    .work-head{display:flex;flex-wrap:wrap;gap:6px}.work-days{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:6px;margin:0 0 12px}
+    .work-excel-health{font-size:10px;color:#475569;background:#f4f6f9;border:1px solid #d9e0e7;border-radius:9px;padding:8px 10px;margin:0 0 11px}.work-head{display:flex;flex-wrap:wrap;gap:6px}.work-days{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:6px;margin:0 0 12px}
     .work-day{min-width:0;display:flex;flex-direction:column;text-align:left;gap:2px;border:1px solid #d9e0e7;border-radius:10px;padding:9px;background:#fff;cursor:pointer;color:#172a43;font:inherit}
     .work-day.current{border-color:#172a43;box-shadow:inset 0 0 0 1px #172a43;background:#f0f6ff}.work-day strong{font-size:13px}.work-day span,.work-day small{font-size:10px}.work-day small{color:#69798a}
     .work-date{white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:700}.work-day-editor{display:grid;grid-template-columns:minmax(170px,1.4fr) minmax(140px,.8fr) minmax(180px,1.5fr) auto;align-items:end;gap:10px;margin-bottom:12px}
