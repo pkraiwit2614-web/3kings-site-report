@@ -33,7 +33,7 @@ export function canAccessPath(role:AccessRole,path:string){
   const value=cleanPath(path)
   if(role==='owner')return true
   // Shared Viewer identities must not receive the password-change route.
-  if(value==='/account')return canChangeOwnPassword(role)
+  if(value==='/account'||value==='/reset-password')return canChangeOwnPassword(role)
   if(value===PAYROLL_RECORD_PREFIX||value.startsWith(PAYROLL_RECORD_PREFIX+'/'))return canViewPayroll(role)
   if(role==='defect_contributor'||role==='defect_editor'){
     return value==='/defect-flow'||value==='/defects'||value.startsWith('/defects/')||value==='/hotel-room-status'||value==='/hotel-work-plan'
