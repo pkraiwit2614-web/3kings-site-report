@@ -1,0 +1,326 @@
+'use client'
+
+import Link from 'next/link'
+import { usePathname, useRouter } from 'next/navigation'
+import { ReactNode, useEffect, useMemo, useState } from 'react'
+import { getSupabase } from '@/lib/supabase'
+import BrandLogo from '@/components/BrandLogo'
+import {canViewPayroll,resolveAccessRole,type AccessRole} from '@/lib/accessControl'
+import useRolePreview from '@/components/useRolePreview'
+import {ROLE_PREVIEW_LABELS} from '@/lib/rolePreview'
+import ActivityTracker from '@/components/ActivityTracker'
+import LanguageSelector from '@/components/LanguageSelector'
+import { logActivity } from '@/lib/activityLog'
+
+type NavItem = [string,string]
+
+const standardNav: NavItem[] = [
+  ['/', 'Dashboard'],
+  ['/presentation', 'Executive Presentation'],
+  ['/schedule', 'แผนงานที่กำหนด'],
+  ['/materials', 'วัสดุ / เครื่องมือ / จัดซื้อจัดจ้าง'],
+  ['/defect-flow', 'Defect Report'],
+  ['/reports', 'Site Operations'],
+  ['/site-photos', 'รูปภาพหน้างาน'],
+  ['/weekly', 'รายงานการทำงานประจำสัปดาห์'],
+  ['/calendar', 'Work Calendar']
+]
+
+const defectContributorNav: NavItem[] = [
+  ['/defect-flow', 'Defect Report']
+]
+
+const MOBILE_PRIMARY_COUNT = 4
+const MOBILE_PRIORITY_PATHS = ['/', '/defect-flow', '/reports', '/schedule']
+const mobileLabel: Record<string,string> = {
+  '/': 'Dashboard',
+  '/presentation': 'Executive',
+  '/schedule': 'แผนงาน',
+  '/calendar': 'Calendar',
+  '/materials': 'วัสดุ',
+  '/defect-flow': 'Defect',
+  '/site-photos': 'รูปหน้างาน',
+  '/reports': 'Site Ops',
+  '/reports/labour': 'Labour'
+}
+
+const DRIVE_WATCH_PATHS = new Set(['/', '/presentation', '/schedule', '/materials', '/site-photos', '/procurement', '/photo-mapping', '/data-health'])
+
+function roleLabel(role:AccessRole|null){
+  if(role==='owner') return 'Site Supervisor'
+  if(role==='admin') return 'Admin'
+  if(role==='viewer') return 'Viewer · ดูข้อมูล'
+  if(role==='viewer_editor') return 'Viewer & Editor · แผนงาน / ปฏิทิน / Defect'
+  if(role==='defect_contributor') return 'Defect Viewer'
+  if(role==='defect_editor') return 'Defect Contributor'
+  if(role==='purchase') return 'Purchase'
+  return 'User'
+}
+
+function navIsActive(path:string,href:string){
+  if(href==='/materials') return path==='/materials'||path==='/procurement'
+  if(href==='/defect-flow') return path==='/defect-flow'||path==='/defects'||path==='/hotel-room-status'
+  if(href==='/reports/labour') return path==='/reports/labour'
+  if(href==='/reports') return path==='/reports'||(path.startsWith('/reports/')&&path!=='/reports/labour')
+  return path===href
+}
+
+export default function AppShell({ children }: { children: ReactNode }) {
+  const path = usePathname(); const router = useRouter()
+  const [userName, setUserName] = useState('')
+  const [role, setRole] = useState('')
+  const [userId, setUserId] = useState('')
+  const [ready, setReady] = useState(false)
+  const [accessError, setAccessError] = useState(false)
+  const [accessAttempt, setAccessAttempt] = useState(0)
+  const [mobileMore, setMobileMore] = useState(false)
+  const actualRole=useMemo(()=>resolveAccessRole(role,userId),[role,userId])
+  const {previewRole,presentationRole,targets:previewTargets,ready:previewReady,startPreview,exitPreview}=useRolePreview(actualRole)
+  const nav = useMemo<NavItem[]>(() => {
+    if(presentationRole==='defect_contributor'||presentationRole==='defect_editor') return defectContributorNav
+    if(presentationRole==='owner') return [...standardNav,['/users','System & Access']]
+    if(presentationRole) return standardNav
+    return []
+  }, [presentationRole])
+  const mobileOrderedNav = useMemo<NavItem[]>(() => {
+    const priority = MOBILE_PRIORITY_PATHS.flatMap((href) => {
+      const item = nav.find(([navHref]) => navHref === href)
+      return item ? [item] : []
+    })
+    const priorityPaths = new Set(priority.map(([href]) => href))
+    return [...priority, ...nav.filter(([href]) => !priorityPaths.has(href))]
+  }, [nav])
+  const mobilePrimary = useMemo<NavItem[]>(() => mobileOrderedNav.slice(0, MOBILE_PRIMARY_COUNT).map(([href,label]) => [href, mobileLabel[href] || label]), [mobileOrderedNav])
+  const extraNav = useMemo<NavItem[]>(() => mobileOrderedNav.slice(MOBILE_PRIMARY_COUNT), [mobileOrderedNav])
+
+  useEffect(() => {
+    const supabase = getSupabase()
+    const controller = new AbortController()
+    let alive = true
+    setAccessError(false)
+    const timer = window.setTimeout(() => {
+      controller.abort()
+      if (alive) setAccessError(true)
+    }, 15000)
+    const checkAccess = async () => {
+      try {
+        const { data, error } = await supabase.auth.getUser()
+        if (!alive || controller.signal.aborted) return
+        if (error && error.status !== 401 && error.status !== 403 && error.name !== 'AuthSessionMissingError') throw error
+        if (!data.user) { router.replace('/login'); return }
+        const { data: profile, error: profileError } = await supabase.from('profiles').select('full_name,role,active').eq('user_id', data.user.id).abortSignal(controller.signal).maybeSingle()
+        if (!alive || controller.signal.aborted) return
+        if (profileError) throw profileError
+        if (!profile?.active) { await supabase.auth.signOut(); if (alive && !controller.signal.aborted) router.replace('/login'); return }
+        const nextRole=resolveAccessRole(profile.role,data.user.id)
+        if(!nextRole){ await supabase.auth.signOut(); if(alive&&!controller.signal.aborted)router.replace('/login'); return }
+        setUserName(profile.full_name || data.user.email || 'User'); setUserId(data.user.id); setRole(profile.role || 'viewer'); setReady(true)
+      } catch {
+        if (alive) setAccessError(true)
+      } finally {
+        window.clearTimeout(timer)
+      }
+    }
+    void checkAccess()
+    return () => { alive = false; controller.abort(); window.clearTimeout(timer) }
+  }, [router, accessAttempt])
+
+  useEffect(() => { setMobileMore(false) }, [path])
+
+  useEffect(() => {
+    const isDefect = path === '/defects' || path === '/defect-flow'
+    const isDriveBacked = DRIVE_WATCH_PATHS.has(path) || path.startsWith('/projects/')
+    if (!isDefect && !isDriveBacked) return
+
+    let cancelled = false
+    const storageKey = isDefect ? '3kings:defect-latest-sync' : '3kings:drive-latest-write'
+    const intervalMs = isDefect ? 5 * 60 * 1000 : 10 * 60 * 1000
+
+    const checkForDataUpdate = async () => {
+      if (cancelled || document.visibilityState !== 'visible') return
+      const supabase = getSupabase()
+      let latest: string | null = null
+
+      if (isDefect) {
+        const { data, error } = await supabase
+          .from('condo_room_status')
+          .select('synced_at')
+          .order('synced_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (cancelled || error || !data?.synced_at) return
+        latest = String(data.synced_at)
+      } else {
+        const { data, error } = await supabase
+          .from('drive_sync_runs')
+          .select('created_at')
+          .eq('status', 'success')
+          .gt('rows_written', 0)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (cancelled || error || !data?.created_at) return
+        latest = String(data.created_at)
+      }
+
+      const previous = window.sessionStorage.getItem(storageKey)
+      if (!previous) {
+        window.sessionStorage.setItem(storageKey, latest)
+        return
+      }
+      if (previous !== latest) {
+        window.sessionStorage.setItem(storageKey, latest)
+        window.location.reload()
+      }
+    }
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') void checkForDataUpdate()
+    }
+    const onFocus = () => { void checkForDataUpdate() }
+
+    void checkForDataUpdate()
+    const timer = window.setInterval(() => { void checkForDataUpdate() }, intervalMs)
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibility)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [path])
+
+  const signOut = async () => {
+    setMobileMore(false)
+    exitPreview()
+    await logActivity({userId,eventType:'logout',path})
+    await getSupabase().auth.signOut()
+    router.replace('/login')
+  }
+
+  const renderPreviewControl=()=>previewTargets.length?<label className="role-preview-control">
+    <span>Preview as</span>
+    <select value={previewRole||''} onChange={(event)=>{
+      const value=event.currentTarget.value as AccessRole
+      if(value)startPreview(value)
+      else exitPreview()
+    }}>
+      <option value="">Actual role{actualRole?` · ${ROLE_PREVIEW_LABELS[actualRole]}`:''}</option>
+      {previewTargets.map(target=><option key={target} value={target}>{ROLE_PREVIEW_LABELS[target]}</option>)}
+    </select>
+  </label>:null
+
+  const displayRole = roleLabel(presentationRole)
+
+  if (!ready || (actualRole!==null&&!previewReady)) return <div className="loading-screen">{accessError ? <div role="alert"><p>ตรวจสอบสิทธิ์ไม่สำเร็จ กรุณาตรวจการเชื่อมต่อแล้วลองใหม่</p><button type="button" onClick={() => setAccessAttempt(v => v + 1)}>ลองใหม่</button></div> : 'กำลังโหลดระบบ…'}</div>
+
+  const extraActive = extraNav.some(([href]) => navIsActive(path,href))
+  const isMaterialsProcurementSection = path==='/materials'||path==='/procurement'
+  const isDefectSection = path==='/defect-flow'||path==='/defects'||path==='/hotel-room-status'
+  const isSiteOperationsSection = path==='/reports'||path==='/reports/labour'
+  const isOwnerToolsSection = actualRole==='owner'&&(path==='/users'||path==='/photo-mapping'||path==='/data-health')
+
+  return <div className="app-shell">
+    <ActivityTracker userId={userId}/>
+    <aside className="sidebar">
+      <div className="brand" data-i18n-skip><BrandLogo className="brand-logo"/><div><b>3 Kings Construction</b><small>Site Report V3.4</small></div></div>
+      <nav>{nav.map(([href,label]) => <Link key={href} className={navIsActive(path,href)?'active':''} href={href}>{label}</Link>)}</nav>
+      <div className="userbox"><b data-i18n-skip>{userName}</b><span>{displayRole}</span>{renderPreviewControl()}<LanguageSelector/><button onClick={signOut}>ออกจากระบบ</button></div>
+    </aside>
+
+    <main className="main">
+      {previewRole&&<div className="role-preview-banner" role="status" data-role-preview={previewRole}>
+        <div><b>Previewing as: {ROLE_PREVIEW_LABELS[previewRole]}</b><span>UI preview only · Actual access remains {actualRole?ROLE_PREVIEW_LABELS[actualRole]:'Unknown'}</span></div>
+        <button type="button" onClick={exitPreview}>Exit Preview</button>
+      </div>}
+      {isMaterialsProcurementSection&&<nav className="defect-section-tabs" aria-label="Materials and procurement navigation">
+        <Link href="/materials" className={path==='/materials'?'active':''}>วัสดุ เครื่องมือและผู้รับเหมา</Link>
+        <Link href="/procurement" className={path==='/procurement'?'active':''}>การจัดซื้อ/จัดจ้าง</Link>
+      </nav>}
+      {isDefectSection&&<nav className="defect-section-tabs" aria-label="Defect navigation">
+        <Link href="/defect-flow" className={path==='/defect-flow'?'active':''}>Live Handover / Defect Flow</Link>
+        <Link href="/defects" className={path==='/defects'?'active':''}>Defect Report</Link>
+        <Link href="/hotel-room-status" className={path==='/hotel-room-status'?'active':''}>Room Status | OOO/OOS</Link>
+      </nav>}
+      {isSiteOperationsSection&&<nav className="defect-section-tabs" aria-label="Site Operations navigation">
+        <Link href="/reports" className={path==='/reports'?'active':''}>Site Operations</Link>
+        {canViewPayroll(presentationRole)&&<Link href="/reports/labour" className={path==='/reports/labour'?'active':''}>แรงงานและค่าแรง</Link>}
+      </nav>}
+      {isOwnerToolsSection&&<nav className="defect-section-tabs" aria-label="System & Access navigation">
+        <Link href="/users" className={path==='/users'?'active':''}>User & Access</Link>
+        <Link href="/photo-mapping" className={path==='/photo-mapping'?'active':''}>Photo Mapping</Link>
+        <Link href="/data-health" className={path==='/data-health'?'active':''}>Data Health</Link>
+      </nav>}
+      {children}
+    </main>
+
+    {mobileMore && <>
+      <button className="mobile-more-backdrop" aria-label="ปิดเมนูเพิ่มเติม" onClick={()=>setMobileMore(false)} />
+      <section id="mobile-more-menu" className="mobile-more-sheet" aria-label="เมนูเพิ่มเติม">
+        <div className="mobile-more-handle" />
+        <div className="mobile-more-user">
+          <div><b data-i18n-skip>{userName}</b><span>{displayRole}</span></div>
+          <button type="button" onClick={()=>setMobileMore(false)}>ปิด</button>
+        </div>
+        {previewTargets.length>0&&<div className="mobile-preview-control">{renderPreviewControl()}</div>}
+        <div className="mobile-language-control"><LanguageSelector compact/></div>
+        <div className="mobile-more-links">
+          {extraNav.map(([href,label]) => <Link key={href} className={navIsActive(path,href)?'active':''} href={href}>{label}<span>›</span></Link>)}
+        </div>
+        <button className="mobile-logout" type="button" onClick={signOut}>ออกจากระบบ</button>
+      </section>
+    </>}
+
+    <nav className="mobile-nav" aria-label="เมนูหลักบนมือถือ">
+      {mobilePrimary.map(([href,label]) => <Link key={href} className={navIsActive(path,href)?'active':''} href={href}>{label}</Link>)}
+      <button type="button" className={(mobileMore||extraActive)?'active':''} aria-expanded={mobileMore} aria-controls="mobile-more-menu" onClick={()=>setMobileMore(v=>!v)}>เพิ่มเติม</button>
+    </nav>
+
+    <style jsx global>{`
+      .role-preview-control{display:grid;gap:4px;margin-top:8px;text-align:left}.role-preview-control>span{font-size:9px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;opacity:.72}.role-preview-control select{width:100%;min-height:34px;border:1px solid #cbd5df;border-radius:8px;background:#fff;padding:6px 8px;color:#172a43;font:inherit;font-size:10px;font-weight:700}.role-preview-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px;padding:9px 11px;border:1px solid #d8b454;border-radius:10px;background:#fff8df;color:#5c4300}.role-preview-banner>div{display:grid;gap:2px}.role-preview-banner b{font-size:11px}.role-preview-banner span{font-size:9.5px}.role-preview-banner button{min-height:30px;border:1px solid #caa43f;border-radius:8px;background:#fff;color:#6a4d00;padding:5px 9px;font:inherit;font-size:9.5px;font-weight:800;white-space:nowrap}.mobile-preview-control{padding:0 16px 12px}.mobile-preview-control .role-preview-control{margin-top:0}
+      .defect-section-tabs{display:inline-flex;align-items:center;gap:4px;padding:4px;margin:0 0 12px;border:1px solid #d9e0e7;border-radius:12px;background:#f4f7fa;box-shadow:0 3px 10px rgba(23,42,67,.05)}
+      .defect-section-tabs a{display:flex;align-items:center;justify-content:center;min-height:34px;padding:7px 12px;border-radius:9px;color:#617083;font-size:11px;font-weight:800;text-decoration:none;white-space:nowrap;transition:background .15s ease,color .15s ease,box-shadow .15s ease}
+      .defect-section-tabs a:hover{background:#e9eef4;color:#213d5e}
+      .defect-section-tabs a.active{background:#172a43;color:#fff;box-shadow:0 3px 8px rgba(23,42,67,.18)}
+      .dashboard-module{overflow:hidden}
+      .dashboard-module .module-title{min-height:62px;padding:12px 14px;display:grid;grid-template-columns:34px minmax(0,1fr) auto;align-items:center;gap:11px;background:linear-gradient(135deg,#172a43,#213d5e);color:#fff}
+      .dashboard-module .module-title>span{width:30px;height:30px;display:grid;place-items:center;border-radius:9px;background:rgba(229,189,104,.16);border:1px solid rgba(229,189,104,.34);color:#f2cc79;font-size:12px!important;font-weight:800;line-height:1}
+      .dashboard-module .module-title>div{min-width:0}
+      .dashboard-module .module-title>div>b{display:block;color:#fff;font-size:13px;line-height:1.25;font-weight:800;letter-spacing:.035em}
+      .dashboard-module .module-title>div>small{display:block;margin-top:4px;color:#c3d0df;font-size:10.5px;line-height:1.45;font-weight:500;letter-spacing:0}
+      .dashboard-module .module-title>a{color:#f1cf84;font-size:10.5px;font-weight:700;white-space:nowrap}
+      .dashboard-module .module-title>a:hover{color:#fff}
+      .executive-section-title b,.dashboard-module h2{letter-spacing:-.01em}
+      .executive-kpi span,.resource-kpis span{font-size:10.5px!important;font-weight:700!important;letter-spacing:.025em!important;text-transform:none!important}
+      .executive-kpi b,.resource-kpis b{font-variant-numeric:tabular-nums}
+      .portfolio-status-strip>button>b{font-size:13px!important;line-height:1.2;font-weight:800}
+      .portfolio-status-strip>button>small{font-size:9.5px!important;line-height:1.4!important}
+      .portfolio-status-strip>button>strong{font-variant-numeric:tabular-nums}
+      .discipline-row b,.alert-row b,.resource-list b{font-weight:700}
+      .discipline-row small,.alert-row small,.resource-list small{line-height:1.45}
+      #site-performance a[href^='/projects/']{grid-template-columns:80px minmax(0,1fr)!important;gap:9px!important;overflow:hidden;min-width:0}
+      #site-performance a[href^='/projects/']>svg{width:80px!important;height:80px!important;max-width:100%}
+      #site-performance a[href^='/projects/']>div{min-width:0}
+      #site-performance a[href^='/projects/'] .row.between{flex-direction:column;align-items:flex-start;gap:5px;min-width:0}
+      #site-performance a[href^='/projects/'] .row.between>div{min-width:0;max-width:100%}
+      #site-performance a[href^='/projects/'] .row.between small{white-space:normal;overflow-wrap:anywhere}
+      #site-performance a[href^='/projects/'] .badge{margin-top:2px;max-width:124px}
+      #site-performance a[href^='/projects/'] div[style*='grid-template-columns']{min-width:0}
+      #site-performance a[href^='/projects/'] div[style*='grid-template-columns']>div{min-width:0;overflow:hidden}
+      #site-performance a[href^='/projects/'] div[style*='grid-template-columns'] small{white-space:nowrap;font-size:9.5px}
+      @media(max-width:760px){
+        .role-preview-banner{align-items:flex-start}.role-preview-banner>div{min-width:0}.role-preview-banner span{line-height:1.35}
+        .defect-section-tabs{display:flex;width:100%;overflow-x:auto;justify-content:flex-start}
+        .defect-section-tabs a{flex:0 0 auto}
+        .dashboard-module .module-title{grid-template-columns:30px minmax(0,1fr);padding:11px 12px;min-height:58px}
+        .dashboard-module .module-title>a{grid-column:2;margin-top:1px}
+        .dashboard-module .module-title>span{width:28px;height:28px}
+        #site-performance a[href^='/projects/']{grid-template-columns:72px minmax(0,1fr)!important;padding:10px!important}
+        #site-performance a[href^='/projects/']>svg{width:72px!important;height:72px!important}
+      }
+      @media print{.defect-section-tabs{display:none!important}}
+    `}</style>
+  </div>
+}

@@ -1,4 +1,5 @@
 import {NextRequest,NextResponse} from 'next/server'
+import {readPermissionSnapshot} from '@/lib/permissionServer'
 import {createClient} from '@supabase/supabase-js'
 import {canAccessPath,defaultPathForRole,resolveAccessRole} from '@/lib/accessControl'
 
@@ -28,9 +29,11 @@ export async function GET(request:NextRequest){
   const role=resolveAccessRole(profile.role,user.id)
   if(!role)return NextResponse.json({allowed:false},{status:403,headers:{'cache-control':'no-store'}})
 
-  const allowed=canAccessPath(role,path)
+  let permissions
+  try{permissions=await readPermissionSnapshot(s)}catch{return NextResponse.json({allowed:false,error:'permission_check_unavailable'},{status:503,headers:{'cache-control':'no-store'}})}
+  const allowed=canAccessPath(role,path,permissions)
   return NextResponse.json(
-    {allowed,role,redirect:allowed?null:defaultPathForRole(role)},
+    {allowed,role,permissions,redirect:allowed?null:defaultPathForRole(role,permissions)},
     {status:allowed?200:403,headers:{'cache-control':'no-store'}}
   )
 }

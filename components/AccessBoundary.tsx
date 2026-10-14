@@ -2,6 +2,8 @@
 
 import {useEffect,useState,type ReactNode} from 'react'
 import {usePathname,useRouter} from 'next/navigation'
+import {applyPermissionSnapshot} from '@/lib/permissionClient'
+import type {PermissionSnapshot} from '@/lib/accessControl'
 import {getSupabase} from '@/lib/supabase'
 import {canAccessPath,defaultPathForRole,type AccessRole} from '@/lib/accessControl'
 import useRolePreview from '@/components/useRolePreview'
@@ -13,7 +15,7 @@ export default function AccessBoundary({children}:{children:ReactNode}){
   const [actualRole,setActualRole]=useState<AccessRole|null>(null)
   const [failed,setFailed]=useState(false)
   const [attempt,setAttempt]=useState(0)
-  const {presentationRole,ready:previewReady}=useRolePreview(actualRole)
+  const {presentationRole,ready:previewReady,permissionRevision}=useRolePreview(actualRole)
 
   useEffect(()=>{
     if(path==='/login'){
@@ -39,9 +41,10 @@ export default function AccessBoundary({children}:{children:ReactNode}){
           headers:{authorization:`Bearer ${token}`},
           cache:'no-store',
         })
-        const data=await response.json().catch(()=>null) as {allowed?:boolean;redirect?:string|null;role?:AccessRole}|null
+        const data=await response.json().catch(()=>null) as {allowed?:boolean;redirect?:string|null;role?:AccessRole;permissions?:PermissionSnapshot}|null
         if(cancelled)return
         if(response.ok&&data?.allowed&&data.role){
+          if(data.permissions)applyPermissionSnapshot(data.permissions)
           setActualRole(data.role)
           setAllowedPath(path)
           return
@@ -65,7 +68,7 @@ export default function AccessBoundary({children}:{children:ReactNode}){
     if(canAccessPath(presentationRole,path))return
     setAllowedPath('')
     router.replace(defaultPathForRole(presentationRole))
-  },[allowedPath,path,presentationRole,previewReady,router])
+  },[allowedPath,path,presentationRole,previewReady,permissionRevision,router])
 
   if(path==='/login'&&allowedPath===path)return <>{children}</>
 

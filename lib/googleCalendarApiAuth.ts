@@ -1,3 +1,4 @@
+import {readPermissionSnapshot} from '@/lib/permissionServer'
 import {createClient} from '@supabase/supabase-js'
 import {canAccessPath,canEditCalendar,resolveAccessRole,type AccessRole} from '@/lib/accessControl'
 
@@ -27,7 +28,9 @@ export async function authorizeCalendarApi(request:Request):Promise<CalendarApiA
   if(profileError||!profile?.active)return null
 
   const role=resolveAccessRole(profile.role,user.id)
-  if(!role||!canAccessPath(role,'/calendar'))return null
+  let permissions
+  try{permissions=await readPermissionSnapshot(s)}catch{return null}
+  if(!role||!canAccessPath(role,'/calendar',permissions))return null
 
-  return {userId:user.id,role,editable:canEditCalendar(role),accessToken:token}
+  return {userId:user.id,role,editable:canEditCalendar(role,permissions),accessToken:token}
 }

@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { ReactNode, useEffect, useMemo, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import BrandLogo from '@/components/BrandLogo'
-import {canChangeOwnPassword,canViewPayroll,resolveAccessRole,type AccessRole} from '@/lib/accessControl'
+import {canAccessPath,canChangeOwnPassword,canViewPayroll,resolveAccessRole,type AccessRole} from '@/lib/accessControl'
 import useRolePreview from '@/components/useRolePreview'
 import {ROLE_PREVIEW_LABELS} from '@/lib/rolePreview'
 import ActivityTracker from '@/components/ActivityTracker'
@@ -75,13 +75,18 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [accessAttempt, setAccessAttempt] = useState(0)
   const [mobileMore, setMobileMore] = useState(false)
   const actualRole=useMemo(()=>resolveAccessRole(role,userId),[role,userId])
-  const {previewRole,presentationRole,targets:previewTargets,ready:previewReady,startPreview,exitPreview}=useRolePreview(actualRole)
+  const {previewRole,presentationRole,targets:previewTargets,ready:previewReady,permissionRevision,startPreview,exitPreview}=useRolePreview(actualRole)
   const nav = useMemo<NavItem[]>(() => {
-    if(presentationRole==='defect_contributor'||presentationRole==='defect_editor') return defectContributorNav
-    if(presentationRole==='owner') return [...standardNav,['/users','System & Access']]
-    if(presentationRole) return standardNav
-    return []
-  }, [presentationRole])
+    if(!presentationRole)return []
+    const candidates=presentationRole==='owner'?[...standardNav,['/users','System & Access'] as NavItem]:standardNav
+    return candidates.map(([href,label]):NavItem=>{
+      if(href==='/defect-flow'&&!canAccessPath(presentationRole,href)){
+        const available=['/hotel-work-plan','/hotel-room-status'].find(p=>canAccessPath(presentationRole,p))
+        if(available)return [available,label]
+      }
+      return [href,label]
+    }).filter(([href])=>canAccessPath(presentationRole,href))
+  }, [presentationRole,permissionRevision])
   const mobileOrderedNav = useMemo<NavItem[]>(() => {
     const priority = MOBILE_PRIORITY_PATHS.flatMap((href) => {
       const item = nav.find(([navHref]) => navHref === href)
@@ -240,10 +245,10 @@ export default function AppShell({ children }: { children: ReactNode }) {
         <Link href="/procurement" className={path==='/procurement'?'active':''}>การจัดซื้อ/จัดจ้าง</Link>
       </nav>}
       {isDefectSection&&<nav className="defect-section-tabs" aria-label="Defect navigation">
-        <Link href="/defect-flow" className={path==='/defect-flow'?'active':''}>Defect Flow</Link>
-        <Link href="/defects" className={path==='/defects'?'active':''}>Defect Report</Link>
-        <Link href="/hotel-work-plan" className={path==='/hotel-work-plan'?'active':''}>Work Plan</Link>
-        <Link href="/hotel-room-status" className={path==='/hotel-room-status'?'active':''}>Status | OOO/OOS</Link>
+        {presentationRole&&canAccessPath(presentationRole,'/defect-flow')&&<Link href="/defect-flow" className={path==='/defect-flow'?'active':''}>Defect Flow</Link>}
+        {presentationRole&&canAccessPath(presentationRole,'/defects')&&<Link href="/defects" className={path==='/defects'?'active':''}>Defect Report</Link>}
+        {presentationRole&&canAccessPath(presentationRole,'/hotel-work-plan')&&<Link href="/hotel-work-plan" className={path==='/hotel-work-plan'?'active':''}>Work Plan</Link>}
+        {presentationRole&&canAccessPath(presentationRole,'/hotel-room-status')&&<Link href="/hotel-room-status" className={path==='/hotel-room-status'?'active':''}>Status | OOO/OOS</Link>}
       </nav>}
       {isSiteOperationsSection&&<nav className="defect-section-tabs" aria-label="Site Operations navigation">
         <Link href="/reports" className={path==='/reports'?'active':''}>Site Operations</Link>

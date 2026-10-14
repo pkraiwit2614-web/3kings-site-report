@@ -2,15 +2,16 @@
 
 import {useEffect,useState} from 'react'
 import {usePathname,useRouter} from 'next/navigation'
+import {loadPermissions} from '@/lib/permissionClient'
 import {getSupabase} from '@/lib/supabase'
-import {canAccessPath,defaultPathForRole,resolveAccessRole,type AccessRole} from '@/lib/accessControl'
+import {canAccessPath,defaultPathForRole,resolveAccessRole,canEditSiteOperations,type AccessRole} from '@/lib/accessControl'
 import useRolePreview from '@/components/useRolePreview'
 
 export default function RolePermissionGuard20260927(){
   const path=usePathname()
   const router=useRouter()
   const [actualRole,setActualRole]=useState<AccessRole|null>(null)
-  const {presentationRole,ready:previewReady}=useRolePreview(actualRole)
+  const {presentationRole,ready:previewReady,permissionRevision}=useRolePreview(actualRole)
 
   useEffect(()=>{
     let cancelled=false
@@ -24,6 +25,7 @@ export default function RolePermissionGuard20260927(){
       if(!profile?.active){setActualRole(null);return}
       const role=resolveAccessRole(profile.role,user.id)
       if(!role){setActualRole(null);return}
+      try{await loadPermissions()}catch{return}
       setActualRole(role)
       if(!canAccessPath(role,path))router.replace(defaultPathForRole(role))
     }
@@ -37,15 +39,16 @@ export default function RolePermissionGuard20260927(){
       if(cls.startsWith('access-role-'))body.classList.remove(cls)
     }
     if(previewReady&&presentationRole)body.classList.add(`access-role-${presentationRole}`)
+    body.classList.toggle('access-reports-readonly',!previewReady||!canEditSiteOperations(presentationRole))
     return()=>{
       if(presentationRole)body.classList.remove(`access-role-${presentationRole}`)
     }
-  },[presentationRole,previewReady])
+  },[presentationRole,previewReady,permissionRevision])
 
   return <style jsx global>{`
-    body.access-role-viewer a[href='/reports/quick'],
-    body.access-role-viewer a[href='/reports/new'],
-    body.access-role-viewer a[href^='/reports/'][href$='/edit'],
+    body.access-reports-readonly a[href='/reports/quick'],
+    body.access-reports-readonly a[href='/reports/new'],
+    body.access-reports-readonly a[href^='/reports/'][href$='/edit'],
     body.access-role-admin a[href='/photo-mapping'],
     body.access-role-admin a[href='/data-health'],
     body.access-role-admin a[href='/users'],

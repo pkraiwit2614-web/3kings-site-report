@@ -5,10 +5,11 @@ const {create,act}=require(process.env.TEST_RENDERER_MODULE||'react-test-rendere
 global.IS_REACT_ACT_ENVIRONMENT=true
 class PreviewEvent extends Event{constructor(type,options){super(type);this.detail=options?.detail}}
 const win=new EventTarget(),storage=new Map()
+win.setInterval=setInterval;win.clearInterval=clearInterval
 win.sessionStorage={getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)}
 let profileRole='manager',userId='bc6ee244-3472-422f-bbf9-d551987ee9a3',active=true
 const supabase={auth:{getUser:async()=>({data:{user:{id:userId}}})},from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:{role:profileRole,active}})})})})}
-const modules={react:React,'@/lib/supabase':{getSupabase:()=>supabase}}
+const modules={react:React,'@/lib/supabase':{getSupabase:()=>supabase},'@/lib/permissionClient':{loadPermissions:async()=>({revision:1,rows:[]}),PERMISSION_EVENT:'permissions-changed'}}
 function load(file){const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,{module,exports:module.exports,require:n=>{if(!(n in modules))throw Error(n);return modules[n]},window:win,CustomEvent:PreviewEvent});return module.exports}
 modules['@/lib/accessControl']=load('lib/accessControl.ts')
 modules['@/lib/rolePreview']=load('lib/rolePreview.ts')
@@ -17,7 +18,7 @@ const useAccessRole=load('components/useAccessRole.ts').default
 const access=modules['@/lib/accessControl'],preview=modules['@/lib/rolePreview']
 let latest,root
 function Probe(){latest=useAccessRole();return null}
-const matrix={admin:[false,true,false,false,false],purchase:[false,false,false,true,false],viewer:[false,false,false,false,false],viewer_editor:[true,false,true,false,true],defect_contributor:[false,false,false,false,false],defect_editor:[false,false,true,false,false],owner:[true,true,true,true,true]}
+const matrix={admin:[false,true,false,false,false],purchase:[false,false,false,true,true],viewer:[false,false,false,false,false],viewer_editor:[true,false,true,false,true],defect_contributor:[false,false,false,false,false],defect_editor:[false,false,true,false,false],owner:[true,true,true,true,true]}
 const checks=['canEditSchedule','canEditSiteOperations','canEditDefect','canEditProcurement','canEditCalendar']
 function expectRole(role){assert.equal(latest.role,role);assert.equal(latest.ready,true);checks.forEach((fn,i)=>assert.equal(access[fn](latest.role),matrix[role][i],role+' '+fn))}
 ;(async()=>{

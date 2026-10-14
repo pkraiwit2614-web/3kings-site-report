@@ -24,7 +24,7 @@ test('tab order, visibility, and scoped editor access remain consistent',()=>{
  assert.match(tabs,/>Work Plan<\/Link>/)
  assert.match(tabs,/>Status \| OOO\/OOS<\/Link>/)
  assert.match(access,/value==='\/hotel-work-plan'/)
- assert.match(work,/role==='owner'\|\|role==='defect_editor'/)
+ assert.match(work,/canEditWorkPlan\(role\)/)
  assert.match(sql,/p\.role='defect_editor'/)
  assert.doesNotMatch(work,/from\('condo_room_status'\)\.update/)
 })

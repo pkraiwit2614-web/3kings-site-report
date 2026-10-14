@@ -29,12 +29,19 @@ export function resolveAccessRole(profileRole:string|undefined|null,userId:strin
   return null
 }
 
-export function canAccessPath(role:AccessRole,path:string){
+export function canAccessPath(role:AccessRole,path:string,snapshot?:PermissionSnapshot|null){
+  if(cleanPath(path)==='/no-access')return true
+  const module=moduleForPath(path)
+  if(module)return permissionDecision(role,module,'view',legacyCanAccessPath(role,path),snapshot)
+  return legacyCanAccessPath(role,path)
+}
+
+function legacyCanAccessPath(role:AccessRole,path:string){
   const value=cleanPath(path)
   if(role==='owner')return true
   // Shared Viewer identities must not receive the password-change route.
   if(value==='/account'||value==='/reset-password')return canChangeOwnPassword(role)
-  if(value===PAYROLL_RECORD_PREFIX||value.startsWith(PAYROLL_RECORD_PREFIX+'/'))return canViewPayroll(role)
+  if(value===PAYROLL_RECORD_PREFIX||value.startsWith(PAYROLL_RECORD_PREFIX+'/'))return role==='admin'
   if(role==='defect_contributor'||role==='defect_editor'){
     return value==='/defect-flow'||value==='/defects'||value.startsWith('/defects/')||value==='/hotel-room-status'||value==='/hotel-work-plan'
   }
@@ -42,40 +49,41 @@ export function canAccessPath(role:AccessRole,path:string){
   return ['admin','viewer','viewer_editor','defect_editor','purchase'].includes(role)
 }
 
-export function defaultPathForRole(role:AccessRole){
-  return role==='defect_contributor'||role==='defect_editor'?'/defect-flow':'/'
+export function defaultPathForRole(role:AccessRole,snapshot?:PermissionSnapshot|null){
+  const paths=role==='defect_contributor'||role==='defect_editor'?['/defect-flow','/hotel-room-status','/']:['/','/defect-flow','/hotel-room-status']
+  return [...paths,'/hotel-work-plan','/schedule','/reports','/materials','/procurement','/calendar','/reports/labour','/presentation'].find(p=>canAccessPath(role,p,snapshot))||'/no-access'
 }
 
-export function canEditSiteOperations(role:AccessRole|null){
-  return role==='owner'||role==='admin'
+export function canEditSiteOperations(role:AccessRole|null,snapshot?:PermissionSnapshot|null){
+  return permissionDecision(role,'reports','manage',role==='owner'||role==='admin',snapshot)
 }
 
-export function canEditCalendar(role:AccessRole|null){
-  return role==='owner'||role==='viewer_editor'||role==='purchase'
+export function canEditCalendar(role:AccessRole|null,snapshot?:PermissionSnapshot|null){
+  return permissionDecision(role,'calendar','manage',role==='owner'||role==='viewer_editor'||role==='purchase',snapshot)
 }
 
-export function canEditSchedule(role:AccessRole|null){
-  return role==='owner'||role==='viewer_editor'
+export function canEditSchedule(role:AccessRole|null,snapshot?:PermissionSnapshot|null){
+  return permissionDecision(role,'schedule','manage',role==='owner'||role==='viewer_editor',snapshot)
 }
 
-export function canEditDefect(role:AccessRole|null){
-  return role==='owner'||role==='defect_editor'||role==='viewer_editor'
+export function canEditDefect(role:AccessRole|null,snapshot?:PermissionSnapshot|null){
+  return permissionDecision(role,'defect','manage',role==='owner'||role==='defect_editor'||role==='viewer_editor',snapshot)
 }
 
-export function canEditProcurement(role:AccessRole|null){
-  return role==='owner'||role==='purchase'
+export function canEditProcurement(role:AccessRole|null,snapshot?:PermissionSnapshot|null){
+  return permissionDecision(role,'procurement','manage',role==='owner'||role==='purchase',snapshot)
 }
 
-export function canManageMaterialsTools(role:AccessRole|null){
-  return role==='owner'||role==='purchase'
+export function canManageMaterialsTools(role:AccessRole|null,snapshot?:PermissionSnapshot|null){
+  return permissionDecision(role,'materials','manage',role==='owner'||role==='purchase',snapshot)
 }
 
-export function canManageLabour(role:AccessRole|null){
-  return role==='owner'||role==='admin'
+export function canManageLabour(role:AccessRole|null,snapshot?:PermissionSnapshot|null){
+  return permissionDecision(role,'payroll','manage',role==='owner'||role==='admin',snapshot)
 }
 
-export function canViewPayroll(role:AccessRole|null){
-  return role!==null&&['owner','admin'].includes(role)
+export function canViewPayroll(role:AccessRole|null,snapshot?:PermissionSnapshot|null){
+  return permissionDecision(role,'payroll','view',role!==null&&['owner','admin'].includes(role),snapshot)
 }
 
 export function isOwnerOnlyPath(path:string){
@@ -85,6 +93,47 @@ export function isOwnerOnlyPath(path:string){
 
 export function isPayrollRecordPath(path:string){
   return cleanPath(path).startsWith(PAYROLL_RECORD_PREFIX)
+}
+
+export type PermissionLevel = 'none'|'view'|'manage'
+export type PermissionRow = {role:AccessRole; module:string; level:PermissionLevel; default_level:PermissionLevel; locked:boolean}
+export type PermissionSnapshot = {revision:number; rows:PermissionRow[]}
+let browserPermissions:PermissionSnapshot|null=null
+export function setBrowserPermissions(value:PermissionSnapshot){
+  if(typeof window!=='undefined')browserPermissions=value
+}
+export function moduleForPath(path:string):string|null{
+  const p=cleanPath(path)
+  if(p==='/reports/labour'||p.startsWith('/reports/labour/'))return 'payroll'
+  if(p==='/users')return path.includes('tab=activity')?'activity':'users'
+  if(p==='/defects'||p.startsWith('/defects/')||p==='/defect-flow')return 'defect'
+  if(p==='/hotel-room-status')return 'hotel'
+  if(p==='/hotel-work-plan')return 'workplan'
+  if(p==='/')return 'dashboard'
+  if(p==='/presentation'||p.startsWith('/presentation/')||p==='/site-photos')return 'presentation'
+  if(p==='/weekly'||p.startsWith('/projects/'))return 'reports'
+  if(p==='/wallpaper')return 'dashboard'
+  if(p.startsWith('/schedule'))return 'schedule'
+  if(p==='/reports'||p.startsWith('/reports/'))return 'reports'
+  if(p==='/materials')return 'materials'
+  if(p==='/procurement')return 'procurement'
+  if(p==='/calendar')return 'calendar'
+  if(['/photo-mapping','/data-health','/data-house'].some(x=>p===x||p.startsWith(x+'/')))return 'reconciliation'
+  return null
+}
+export function permissionDecision(role:AccessRole|null,module:string,action:'view'|'manage',fallback:boolean,snapshot?:PermissionSnapshot|null){
+  if(!role)return false
+  const source=snapshot===undefined?(typeof window!=='undefined'?browserPermissions:null):snapshot
+  const cell=source?.rows.find(x=>x.role===role&&x.module===module)
+  if(!cell)return fallback
+  return action==='manage'?cell.level==='manage':cell.level!=='none'
+}
+export function canEditHotel(role:AccessRole|null,snapshot?:PermissionSnapshot|null){
+ return permissionDecision(role,'hotel','manage',role==='owner'||role==='defect_editor',snapshot)
+}
+
+export function canEditWorkPlan(role:AccessRole|null,snapshot?:PermissionSnapshot|null){
+ return permissionDecision(role,'workplan','manage',role==='owner'||role==='defect_editor',snapshot)
 }
 export function canChangeOwnPassword(role:AccessRole|null){
   return role!==null&&['owner','admin','viewer_editor','defect_editor','purchase'].includes(role)

@@ -1,0 +1,27 @@
+{
+  "name": "3kings-site-report-v32",
+  "version": "3.2.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@resvg/resvg-js": "2.6.2",
+    "@supabase/supabase-js": "2.95.0",
+    "@vercel/oidc": "3.8.8",
+    "next": "15.5.24",
+    "pptxgenjs": "4.0.1",
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
+    "read-excel-file": "9.3.10",
+    "sharp": "0.35.5"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.3",
+    "@types/react": "19.1.2",
+    "@types/react-dom": "19.1.2",
+    "typescript": "5.8.3"
+  }
+}
