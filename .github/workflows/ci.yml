@@ -61,6 +61,9 @@ jobs:
       - name: RBAC regression tests
         run: node tests/rbac.test.cjs
 
+      - name: Optional self-service password change safety
+        run: node --test tests/optional-password-change.test.cjs
+
       - name: Activity Log security regression tests
         run: node tests/activity-log.test.cjs
 
