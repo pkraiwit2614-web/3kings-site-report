@@ -1,7 +1,7 @@
 'use client'
 import {useCallback,useEffect,useMemo,useState} from 'react'
 import {getSupabase} from '@/lib/supabase'
-import {hotelRoomMembers} from '@/lib/hotelRoomGroups'
+import {hotelRoomLabel,hotelRoomMatchesSearch,hotelRoomMembers} from '@/lib/hotelRoomGroups'
 import useAccessRole from '@/components/useAccessRole'
 
 type HotelStatus={room_no:string;availability_status:string;reason:string|null;revision:number;updated_by_name:string;updated_at:string;source_sync_state:string;source_writeback_last_error:string|null}
@@ -27,11 +27,11 @@ export default function HotelRoomReconciliationPanel(){
   const reviewMap=useMemo(()=>new Map(reviews.map(r=>[r.room_no,r])),[reviews])
   const pending=hotel.filter(h=>reviewMap.get(h.room_no)?.reviewed_revision!==h.revision||h.source_sync_state==='pending')
   const shown=(showAll?hotel:pending).filter(h=>{
-    const needle=query.trim().toUpperCase();return !needle||hotelRoomMembers(h.room_no).some(r=>r.includes(needle))||
+    const needle=query.trim().toUpperCase();return !needle||hotelRoomMatchesSearch(h.room_no,query)||
        h.availability_status.includes(needle)||h.updated_by_name.toUpperCase().includes(needle)
   })
   const confirm=async(row:HotelStatus)=>{
-    if(!window.confirm('ยืนยันรับทราบสถานะ '+row.room_no+' = '+row.availability_status+' (revision '+row.revision+') โดยไม่แก้ Defect หรือห้อง Combine?'))return
+    if(!window.confirm('ยืนยันรับทราบสถานะ '+hotelRoomLabel(row.room_no)+' = '+row.availability_status+' (revision '+row.revision+') โดยไม่แก้ Defect หรือห้อง Combine?'))return
     setBusy(row.room_no);setError('')
     const {error:e}=await getSupabase().rpc('hotel_room_availability_review',{p_room_no:row.room_no,p_expected_revision:row.revision})
     if(e)setError(e.message)
@@ -55,7 +55,7 @@ export default function HotelRoomReconciliationPanel(){
     </tr></thead><tbody>
       {shown.map(h=>{const r=reviewMap.get(h.room_no),outdated=!!r&&r.reviewed_revision!==h.revision
         return <tr key={h.room_no}>
-          <td><b>{h.room_no}</b><small>{hotelRoomMembers(h.room_no).length>1?'Combine: '+hotelRoomMembers(h.room_no).filter(x=>x!==h.room_no).join(', '):''}</small></td>
+          <td><b>{hotelRoomLabel(h.room_no)}</b><small>{hotelRoomMembers(h.room_no).length>1?'Combine: '+hotelRoomMembers(h.room_no).filter(x=>x!==h.room_no).join(', '):''}</small></td>
           <td>{h.availability_status}<small>{h.reason||'—'}</small></td>
           <td>{r?r.reviewed_status:'—'}<small>{r?'rev '+r.reviewed_revision:'ไม่มีข้อมูลยืนยัน'}</small></td>
           <td><b>{!r?'รอตรวจสอบ':outdated?(r.reviewed_status===h.availability_status?'มีการอัปเดตใหม่':'สถานะต่างจากที่ยืนยัน'):'ตรงกัน / ตรวจแล้ว'}</b>

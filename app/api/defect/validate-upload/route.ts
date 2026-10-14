@@ -2,6 +2,7 @@ import {canEditDefect,resolveAccessRole} from '@/lib/accessControl'
 import {NextRequest,NextResponse} from 'next/server'
 import {createClient} from '@supabase/supabase-js'
 import {createHash} from 'node:crypto'
+import {normalizeHotelRoom} from '@/lib/hotelRoomGroups'
 
 export const runtime='nodejs'
 export const maxDuration=60
@@ -28,7 +29,7 @@ function parseJson(raw:string){
   throw new Error('validation_invalid_json')
 }
 function normalizeRoom(value:unknown){
-  const room=clean(value,16).toUpperCase().replace(/\s+/g,'')
+  const room=normalizeHotelRoom(clean(value,24))
   return /^[AB][0-9]{3}$/.test(room)?room:''
 }
 async function logEvent(s:any,userId:string,sessionId:string|null,userAgent:string,action:string,target:string,metadata:Record<string,unknown>){
@@ -51,9 +52,10 @@ async function validatePdf(bytes:Buffer,fileName:string):Promise<ValidationResul
 ตรวจ PDF นี้แบบเข้มงวดก่อนอนุญาตให้เข้าระบบ Defect
 ชื่อไฟล์: ${fileName}
 
-ให้ is_defect=true เฉพาะเมื่อเอกสารมี "รายการปัญหา/งานค้าง/Defect/Handover issue" ที่ผูกกับเลขห้องจริงรูปแบบ Axxx หรือ Bxxx อย่างน้อย 1 ห้อง
+ให้ is_defect=true เฉพาะเมื่อเอกสารมี "รายการปัญหา/งานค้าง/Defect/Handover issue" ที่ผูกกับเลขห้องจริงรูปแบบ Axxx, Bxxx หรือ Good01–Good05 (ชื่อเรียกของ B101–B105) อย่างน้อย 1 ห้อง
 ตัวอย่างที่ต้อง reject: รายการวัสดุ, PO/PR, จำนวนโคมไฟ, ใบส่งของ, invoice, progress report, schedule, payroll, daily report หรือเอกสารอื่นที่ไม่ใช่รายการ Defect แม้จะมีเลขห้องอยู่
 ห้ามเดาเลขห้องหรือรายละเอียดที่ไม่เห็นในเอกสาร
+เมื่อพบชื่อ Good01–Good05 ให้ส่งกลับเป็น B101–B105 ตามลำดับเท่านั้น โดยไม่สร้าง Room ID ใหม่
 
 ตอบ JSON เท่านั้น:
 {

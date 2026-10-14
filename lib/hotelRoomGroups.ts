@@ -133,7 +133,21 @@ const members = new Map<string,readonly string[]>(HOTEL_COMBINE_GROUPS.flatMap(g
 export function normalizeHotelRoom(value:string):string {
   const cleaned=String(value||'').trim().toUpperCase().replace(/[\s-]/g,'')
   const good=cleaned.match(/^GOOD0?([1-5])$/)
-  return good?'B10'+good[1]:cleaned
+  if(good)return 'B10'+good[1]
+  // Also accept a displayed label when it is copied back into a search or edit field.
+  const labeled=cleaned.match(/^B10([1-5])\(GOOD0?\1\)$/)
+  return labeled?'B10'+labeled[1]:cleaned
+}
+
+/** Extra name for display only; stored room IDs remain B101–B105. */
+export function hotelRoomAlias(value:string):string|null {
+  const match=normalizeHotelRoom(value).match(/^B10([1-5])$/)
+  return match?'Good-0'+match[1]:null
+}
+export function hotelRoomLabel(value:string):string {
+  const canonical=normalizeHotelRoom(value)
+  const alias=hotelRoomAlias(canonical)
+  return alias?canonical+' ('+alias+')':canonical
 }
 export function hotelRoomMembers(value:string):readonly string[]{
   const key=normalizeHotelRoom(value)

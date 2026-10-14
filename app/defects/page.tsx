@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from 'react'
 import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
 import DefectCombineRoomEnhancer from '@/components/DefectCombineRoomEnhancer'
-import {hotelRoomMembers,normalizeHotelRoom} from '@/lib/hotelRoomGroups'
+import {hotelRoomLabel,hotelRoomMembers,normalizeHotelRoom} from '@/lib/hotelRoomGroups'
 import DefectInputPanel from '@/components/DefectInputPanel'
 import { getSupabase } from '@/lib/supabase'
 import { createLiveLoader, requireSuccessfulReads } from '@/lib/liveLoader'
@@ -232,7 +232,7 @@ export default function DefectDetailPage(){
     />
     <section className="panel filter-panel compact-filter-shell">
         <div className="toolbar detail-toolbar compact-filter">
-          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="ค้นหาหลายรายการได้ เช่น A521, A522, รอตรวจรับ" aria-label="ค้นหาเลขห้อง ชื่อเจ้าของ สถานะ หรือรายละเอียดงาน หลายคำคั่นด้วย comma"/>
+          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="ค้นหา เช่น B101, Good01, Good-01, A521" aria-label="ค้นหาเลขห้อง ชื่อเจ้าของ สถานะ หรือรายละเอียดงาน หลายคำคั่นด้วย comma"/>
           <select value={building} onChange={e=>setBuilding(e.target.value)} aria-label="กรองอาคาร"><option value="ALL">ตึก A + B</option><option value="A">ตึก A</option><option value="B">ตึก B</option></select>
           <select value={filter} onChange={e=>setFilter(e.target.value)} aria-label="กรองสถานะ"><option value="">ทุกสถานะ</option>{categories.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</select>
           {(q||building!=='ALL'||filter||customerFilter!=='ALL')&&<button type="button" className="button" onClick={()=>{setQ('');setBuilding('ALL');setFilter('');setCustomerFilter('ALL')}}>ล้างตัวกรอง</button>}
@@ -264,7 +264,7 @@ export default function DefectDetailPage(){
         </div>
         <div className="table-wrap defect-table"><table><thead><tr><th>ห้อง</th><th className="center">อาคาร</th><th className="center">วันที่ Hotel แจ้ง</th><th>ชื่อลูกค้า/เจ้าของ</th><th className="center">ลูกค้า</th><th className="center">โรงแรม</th><th>รายละเอียดงาน</th><th className="center">สถานะ</th><th>ต้องทำต่อ</th></tr></thead><tbody>
           {filtered.map(r=><tr key={r.room_no}>
-            <td className="room-cell"><b>{r.room_no}</b><small>ชั้น {r.floor??'-'}</small></td>
+            <td className="room-cell"><b>{hotelRoomLabel(r.room_no)}</b><small>ชั้น {r.floor??'-'}</small></td>
             <td className="center"><b>{r.building}</b></td>
             <td className="center"><span className="notice-date" title="วันที่ตาม Hotel Defect Notice">{hotelNoticeDateTH(r)}</span></td>
             <td>{r.owner_name||<span className="muted">—</span>}</td>
