@@ -12,6 +12,7 @@ type Day={day_no:number;planned_date:string|null;note:string|null;revision:numbe
 type Room={seq_no:number;day_no:number;source_room:string;room_no:string;planned_date_override:string|null;actual_date:string|null;work_status:string;note:string|null;revision:number;sync_state:string;updated_by_name:string|null;updated_at:string|null}
 type Defect={room_no:string;defect_detail:string|null;status_group:string|null;current_status:string|null;next_action:string|null;follow_up:string|null}
 type Hotel={room_no:string;availability_status:string;start_date:string|null;end_date:string|null}
+type SyncAudit={id:number;source:string;kind:string;item_id:number;recorded_at:string;old_data:Record<string,unknown>;new_data:Record<string,unknown>}
 const LABELS:Record<string,string>={pending:'รอกำหนด / รอดำเนินการ',confirmed:'ยืนยันนัดหมาย',in_progress:'กำลังทำ',completed:'ทำงานตามแผนแล้ว',postponed:'เลื่อนแผน'}
 const HOTEL:Record<string,string>={AVAILABLE:'พร้อมให้บริการ',OOO:'OOO',OOS:'OOS',UNKNOWN:'รอตรวจสอบ'}
 const SOURCE_URL='https://docs.google.com/spreadsheets/d/1KZ-VMDssYeMmTE-TNLYU0d8fwQkSUtuS/edit'
@@ -52,6 +53,7 @@ export default function HotelWorkPlanPage(){
  const [saving,setSaving]=useState(false)
  const [loading,setLoading]=useState(true)
  const [error,setError]=useState('')
+ const [syncAudit,setSyncAudit]=useState<SyncAudit[]>([])
  const [message,setMessage]=useState('')
  const refresh=useCallback(async()=>{
   const s=getSupabase()
@@ -86,6 +88,18 @@ export default function HotelWorkPlanPage(){
  useEffect(()=>{
   if(selectedSeq!==null)window.requestAnimationFrame(()=>document.getElementById('work-room-detail')?.scrollIntoView({behavior:'smooth',block:'start'}))
  },[selectedSeq])
+ useEffect(()=>{
+  if(role!=='owner')return
+  let alive=true
+  const load=async()=>{
+   const {data,error}=await getSupabase().from('hotel_work_plan_sync_audit')
+    .select('id,source,kind,item_id,recorded_at,old_data,new_data').order('recorded_at',{ascending:false}).limit(12)
+   if(alive&&!error)setSyncAudit((data||[]) as SyncAudit[])
+  }
+  void load()
+  window.addEventListener('focus',load)
+  return()=>{alive=false;window.removeEventListener('focus',load)}
+ },[role])
  const day=days.find(d=>d.day_no===selectedDay)
  const selected=rooms.find(r=>r.seq_no===selectedSeq)
  useEffect(()=>{setDayDate(day?.planned_date||'');setDayNote(day?.note||'')},[day?.day_no,day?.revision,day?.planned_date,day?.note])
@@ -182,6 +196,15 @@ export default function HotelWorkPlanPage(){
     {selected.updated_at&&<p className="work-history">แก้ไขล่าสุด {selected.updated_by_name||'ผู้ใช้'} · {new Date(selected.updated_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})} · Revision {selected.revision} · {selected.sync_state==='pending'?'รอซิงก์ Excel':selected.sync_state==='conflict'?'ข้อมูลขัดแย้ง':'ซิงก์แล้ว'}</p>}
     <p><Link href={'/defects?q='+encodeURIComponent(selected.room_no)+'#room-list'}>เปิด Defect Report ของห้องนี้</Link></p>
    </section>}
+   {role==='owner'&&syncAudit.length>0&&<section className="panel work-sync-audit">
+    <h2>ประวัติซิงก์ Excel / ข้อมูลขัดแย้ง</h2>
+    {syncAudit.map(event=><div key={event.id} className="work-audit-row">
+     <span>{new Date(event.recorded_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}</span>
+     <b>{event.source==='excel'?'แก้ไขจาก Excel':event.source==='conflict'?'ข้อมูลขัดแย้ง':'เขียนกลับ Excel'}</b>
+     <span>{event.kind==='day'?'Day '+event.item_id:'Seq. '+event.item_id}</span>
+     <small title={JSON.stringify(event.old_data)+' → '+JSON.stringify(event.new_data)}>ดูรายละเอียดก่อน/หลังโดยวางเมาส์</small>
+    </div>)}
+   </section>}
    <p className="muted small">อ้างอิงลำดับ 267 รายการจาก Hotel Day 1–9 Snapshot 13/10/2026 · สถานะ Defect/OOO/OOS อ้างอิงจากระบบล่าสุด ไม่ใช่ Snapshot · ประวัติการแก้ไขแผนเก็บใน Activity Log</p>
   </>}
   <style jsx>{`
@@ -197,6 +220,7 @@ export default function HotelWorkPlanPage(){
     .work-room-detail{margin-top:12px}.work-room-heading{display:flex;justify-content:space-between;align-items:center}.work-facts{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.work-facts span{background:#f2f5f9;border-radius:8px;padding:8px;font-size:10px}
     .work-room-detail h3{font-size:13px;margin:12px 0 7px}.work-tasks{display:grid;gap:6px}.work-tasks>div{display:flex;gap:12px;justify-content:space-between;align-items:start;border:1px solid #e1e6ec;padding:7px 9px;border-radius:8px;font-size:11px}.work-tasks strong{flex:0 0 130px;color:#365979;text-align:right}
     .work-room-editor{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin:15px 0 10px}.work-note{grid-column:1/-1}
+.work-sync-audit h2{font-size:14px;margin:0 0 8px}.work-audit-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:10px;padding:7px 0;border-bottom:1px solid #e5e7eb}.work-audit-row span{color:#64748b}.work-audit-row small{color:#4c647f}
     @media(max-width:1200px){.work-days{grid-template-columns:repeat(5,minmax(0,1fr))}.work-day-editor{grid-template-columns:1fr 1fr}.work-day-editor>div{grid-column:1/-1}}
     @media(max-width:650px){.work-days{grid-template-columns:repeat(3,minmax(0,1fr))}.work-day-editor,.work-room-editor{grid-template-columns:1fr}.work-note{grid-column:auto}.work-filter input,.work-filter select{flex:1 1 100%}.work-tasks>div{flex-direction:column}.work-tasks strong{flex:auto;text-align:left}}
     @media print{.work-days button{break-inside:avoid}.work-day-editor button,.work-room-editor,.work-filter,.work-room-detail button{display:none!important}.work-table .table-wrap{max-height:none;overflow:visible}}
