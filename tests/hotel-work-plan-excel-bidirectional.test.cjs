@@ -92,7 +92,8 @@ test('bootstrap metadata adds sheet 7 without replacing any original worksheet',
  const original={
   'xl/workbook.xml':{getDataAsString:()=>'<workbook><sheets><sheet sheetId="1"/></sheets></workbook>'},
   'xl/_rels/workbook.xml.rels':{getDataAsString:()=>'<Relationships></Relationships>'},
-  '[Content_Types].xml':{getDataAsString:()=>'<Types></Types>'}
+  '[Content_Types].xml':{getDataAsString:()=>'<Types></Types>'},
+  'docProps/app.xml':{getDataAsString:()=>'<HeadingPairs><vt:i4>6</vt:i4></HeadingPairs><TitlesOfParts><vt:vector size="9"><vt:lpstr>ครบทุกห้อง_263</vt:lpstr></vt:vector></TitlesOfParts>'}
  }
  const x=Object.assign({},original)
  ctx.Utilities={newBlob:(s,typ,n)=>({getName:()=>n,getDataAsString:()=>s})}
@@ -100,6 +101,8 @@ test('bootstrap metadata adds sheet 7 without replacing any original worksheet',
  assert.match(x['xl/workbook.xml'].getDataAsString(),/Hotel_Work_Plan/)
  assert.match(x['xl/_rels/workbook.xml.rels'].getDataAsString(),/worksheets\/sheet7.xml/)
  assert.match(x['[Content_Types].xml'].getDataAsString(),/worksheets\/sheet7.xml/)
+ assert.match(x['docProps/app.xml'].getDataAsString(),/vt:i4>7</)
+ assert.match(x['docProps/app.xml'].getDataAsString(),/Hotel_Work_Plan/)
  assert.ok(x['xl/worksheets/sheet7.xml'])
  assert.equal(x['xl/worksheets/sheet7.xml'].getDataAsString().match(/<row r="/g).length,268)
 })
