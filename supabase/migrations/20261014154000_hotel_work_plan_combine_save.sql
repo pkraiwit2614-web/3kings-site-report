@@ -92,3 +92,5 @@ BEGIN
 END $fn$;
 REVOKE ALL ON FUNCTION public.hotel_work_plan_save_combine_room(integer,integer,date,date,text,text,integer,jsonb) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.hotel_work_plan_save_combine_room(integer,integer,date,date,text,text,integer,jsonb) TO authenticated;
+
+NOTIFY pgrst, 'reload schema';
