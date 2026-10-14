@@ -99,6 +99,7 @@ test('only Owner, Admin, Editor, Purchase, Contributor can visit account; existi
   const roles = ['owner', 'admin', 'viewer', 'viewer_editor', 'defect_contributor', 'defect_editor', 'purchase']
   for (const role of roles) {
     assert.equal(access.canAccessPath(role, '/account'), ['owner', 'admin', 'viewer_editor', 'defect_editor', 'purchase'].includes(role), role)
+    assert.equal(access.canAccessPath(role, '/reset-password'), ['owner', 'admin', 'viewer_editor', 'defect_editor', 'purchase'].includes(role), 'legacy recovery path '+role)
     assert.equal(access.canAccessPath(role, '/users'), role === 'owner', role)
     assert.equal(access.canViewPayroll(role), role === 'owner' || role === 'admin', role)
   }
@@ -143,4 +144,12 @@ test('unknown role and database errors fail closed', async () => {
     await assert.rejects(change('old-value','New-value-12345'))
     assert.equal(events.length,0)
   }
+})
+
+test('shared Viewer cannot reach legacy reset-password route even when knowing shared credentials',()=>{
+  const access=load('lib/accessControl.ts')
+  assert.equal(access.canAccessPath('viewer','/reset-password'),false)
+  assert.equal(access.canAccessPath('defect_contributor','/reset-password'),false)
+  const recovery=fs.readFileSync('app/reset-password/page.tsx','utf8')
+  assert.match(recovery,/updateUser\(\{password\}\)/)
 })
