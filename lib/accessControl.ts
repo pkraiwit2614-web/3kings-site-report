@@ -32,6 +32,8 @@ export function resolveAccessRole(profileRole:string|undefined|null,userId:strin
 export function canAccessPath(role:AccessRole,path:string){
   const value=cleanPath(path)
   if(role==='owner')return true
+  // Credential self-service is available to every authenticated, active role.
+  if(value==='/account')return true
   if(value===PAYROLL_RECORD_PREFIX||value.startsWith(PAYROLL_RECORD_PREFIX+'/'))return canViewPayroll(role)
   if(role==='defect_contributor'||role==='defect_editor'){
     return value==='/defect-flow'||value==='/defects'||value.startsWith('/defects/')||value==='/hotel-room-status'||value==='/hotel-work-plan'
