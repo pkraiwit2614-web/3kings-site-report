@@ -59,7 +59,7 @@ function roleLabel(role:AccessRole|null){
 
 function navIsActive(path:string,href:string){
   if(href==='/materials') return path==='/materials'||path==='/procurement'
-  if(href==='/defect-flow') return path==='/defect-flow'||path==='/defects'||path==='/hotel-room-status'
+  if(href==='/defect-flow') return path==='/defect-flow'||path==='/defects'||path==='/hotel-work-plan'||path==='/hotel-room-status'
   if(href==='/reports/labour') return path==='/reports/labour'
   if(href==='/reports') return path==='/reports'||(path.startsWith('/reports/')&&path!=='/reports/labour')
   return path===href
@@ -218,7 +218,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   const extraActive = extraNav.some(([href]) => navIsActive(path,href))
   const isMaterialsProcurementSection = path==='/materials'||path==='/procurement'
-  const isDefectSection = path==='/defect-flow'||path==='/defects'||path==='/hotel-room-status'
+  const isDefectSection = path==='/defect-flow'||path==='/defects'||path==='/hotel-work-plan'||path==='/hotel-room-status'
   const isSiteOperationsSection = path==='/reports'||path==='/reports/labour'
   const isOwnerToolsSection = actualRole==='owner'&&(path==='/users'||path==='/photo-mapping'||path==='/data-health')
 
@@ -240,9 +240,10 @@ export default function AppShell({ children }: { children: ReactNode }) {
         <Link href="/procurement" className={path==='/procurement'?'active':''}>การจัดซื้อ/จัดจ้าง</Link>
       </nav>}
       {isDefectSection&&<nav className="defect-section-tabs" aria-label="Defect navigation">
-        <Link href="/defect-flow" className={path==='/defect-flow'?'active':''}>Live Handover / Defect Flow</Link>
+        <Link href="/defect-flow" className={path==='/defect-flow'?'active':''}>Defect Flow</Link>
         <Link href="/defects" className={path==='/defects'?'active':''}>Defect Report</Link>
-        <Link href="/hotel-room-status" className={path==='/hotel-room-status'?'active':''}>Room Status | OOO/OOS</Link>
+        <Link href="/hotel-work-plan" className={path==='/hotel-work-plan'?'active':''}>Work Plan</Link>
+        <Link href="/hotel-room-status" className={path==='/hotel-room-status'?'active':''}>Status | OOO/OOS</Link>
       </nav>}
       {isSiteOperationsSection&&<nav className="defect-section-tabs" aria-label="Site Operations navigation">
         <Link href="/reports" className={path==='/reports'?'active':''}>Site Operations</Link>

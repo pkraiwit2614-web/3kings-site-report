@@ -25,6 +25,12 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Hotel Work Plan bidirectional Excel safety
+        run: node --test tests/hotel-work-plan-excel-bidirectional.test.cjs
+
+      - name: Hotel Work Plan schedule and scoped editor safety
+        run: node --test tests/hotel-work-plan.test.cjs
+
       - name: Hotel OOO/OOS room mapping and security regression
         run: node tests/hotel-room-availability.test.cjs
 
