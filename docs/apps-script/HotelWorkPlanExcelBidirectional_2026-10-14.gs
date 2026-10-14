@@ -164,7 +164,7 @@ function hpNormalize_(v){return String(v==null?'':v).trim()}
 function hpDayValue_(d){return [hpNormalize_(d.date),hpNormalize_(d.note)].join('|')}
 function hpRoomValue_(r){return [hpNormalize_(r.day),hpNormalize_(r.override),hpNormalize_(r.actual),hpNormalize_(r.status),hpNormalize_(r.note)].join('|')}
 function hpReconcile_(snapshot,excel){
- const imports=[],conflicts=[];
+ const imports=[],conflicts=[],issues=[];
  snapshot.days.forEach((d,i)=>{
   const e=excel.days[i];
   const baseline=hpDayValue_({date:d.source_synced_date,note:d.source_synced_note});
@@ -172,7 +172,7 @@ function hpReconcile_(snapshot,excel){
   const actual=hpDayValue_(e);
   if(actual!==baseline){
    if(current===baseline&&d.sync_state==='synced')imports.push({...e,revision:d.revision});
-   else if(actual!==current)conflicts.push('Day '+d.day_no);
+   else if(actual!==current){conflicts.push('Day '+d.day_no);issues.push({kind:'day',id:d.day_no,revision:d.revision})}
   }
  });
  snapshot.rooms.forEach((r,i)=>{
@@ -184,10 +184,10 @@ function hpReconcile_(snapshot,excel){
   const actual=hpRoomValue_(e);
   if(actual!==baseline){
    if(current===baseline&&r.sync_state==='synced')imports.push({...e,revision:r.revision});
-   else if(actual!==current)conflicts.push('Seq '+r.seq_no+' ('+r.room_no+')');
+   else if(actual!==current){conflicts.push('Seq '+r.seq_no+' ('+r.room_no+')');issues.push({kind:'room',id:r.seq_no,revision:r.revision})}
   }
  });
- return {imports,conflicts};
+ return {imports,conflicts,issues};
 }
 function hpDesired_(snapshot){
  return {
@@ -214,11 +214,11 @@ function hpUpdateXml_(xml,shared,desired){
  });
  return {xml,changed};
 }
-function hpCheckReadback_(map,desired){
+function hpCheckReadback_(map,desired,identities){
  const ss=hpShared_(map),xml=map[HOTEL_WORK_PLAN_SYNC.TARGET].getDataAsString();
  const records=hpReadSheet_(xml,ss,{
   days:desired.days.map(d=>({day_no:d.id})),
-  rooms:desired.rooms.map((r,i)=>({seq_no:r.id,source_room:hpRaw_(xml,'B'+(i+2),ss)}))
+  rooms:desired.rooms.map((r,i)=>({seq_no:r.id,source_room:identities.rooms[i].source_room}))
  });
  desired.days.forEach((d,i)=>{
   if(hpDayValue_(records.days[i])!==hpDayValue_(d))throw Error('Excel Day readback mismatch: '+d.id);
@@ -246,7 +246,7 @@ function hpBackup_(file){
  if(!backup.getId())throw Error('Cannot verify backup');
  return backup.getId();
 }
-function hpWriteFile_(file,originalParts,parts,modifiedAt,desired){
+function hpWriteFile_(file,originalParts,parts,modifiedAt,desired,identities){
  if(file.getLastUpdated().getTime()!==modifiedAt)throw Error('Excel changed during preflight; retry');
  hpUnchangedOthers_(originalParts,parts);
  const backupId=hpBackup_(file);
@@ -259,7 +259,7 @@ function hpWriteFile_(file,originalParts,parts,modifiedAt,desired){
  const newFile=DriveApp.getFileById(HOTEL_WORK_PLAN_SYNC.FILE_ID);
  const readback=hpParts_(hpUnzip_(newFile.getBlob()));
  hpUnchangedOthers_(originalParts,readback);
- hpCheckReadback_(readback,desired);
+ hpCheckReadback_(readback,desired,identities);
  return backupId;
 }
 function hpRun_(dryRun){
@@ -282,7 +282,7 @@ function hpRun_(dryRun){
    if(dryRun)return {ok:true,dryRun:true,bootstrapRequired:true,sourceRows:267};
    hpEnsureNewSheet_(parts,snapshot);
    const desired=hpDesired_(snapshot);
-   const backupId=hpWriteFile_(file,original,parts,modified,desired);
+   const backupId=hpWriteFile_(file,original,parts,modified,desired,snapshot);
    const ack=hpRPC_(c,'hotel_work_plan_sync_ack',{p_days:desired.days,p_rooms:desired.rooms});
    return {ok:ack.ok,bootstrapped:true,backupId,verified:ack.verified_rooms};
   }
@@ -292,6 +292,7 @@ function hpRun_(dryRun){
   const read=hpReadSheet_(parts[HOTEL_WORK_PLAN_SYNC.TARGET].getDataAsString(),shared,snapshot);
   const plan=hpReconcile_(snapshot,read);
   if(plan.conflicts.length){
+   if(!dryRun)hpRPC_(c,'hotel_work_plan_sync_conflict',{p_issues:plan.issues});
    const result={ok:false,conflict:true,rooms:plan.conflicts,importsBlocked:plan.imports.length};
    console.error(JSON.stringify(result));return result;
   }
@@ -308,9 +309,9 @@ function hpRun_(dryRun){
   let backupId=null;
   if(changed.changed){
    parts[HOTEL_WORK_PLAN_SYNC.TARGET]=Utilities.newBlob(changed.xml,'text/xml',HOTEL_WORK_PLAN_SYNC.TARGET);
-   backupId=hpWriteFile_(file,original,parts,modified,desired);
+   backupId=hpWriteFile_(file,original,parts,modified,desired,fresh);
   }else{
-   hpCheckReadback_(parts,desired);
+   hpCheckReadback_(parts,desired,fresh);
   }
   const ack=hpRPC_(c,'hotel_work_plan_sync_ack',{p_days:desired.days,p_rooms:desired.rooms});
   const result={ok:ack.ok,imported:plan.imports.length,writtenCells:changed.changed,verified:ack.verified_rooms,backupId};
