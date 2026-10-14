@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { getSupabase, getSupabaseConnection } from '@/lib/supabase'
+import {canChangeOwnPassword,resolveAccessRole} from '@/lib/accessControl'
 
 // Account changes are voluntary. Owner resets remain in the existing admin-users function.
 // Authenticate the current password in a separate, non-persistent session so an incorrect
@@ -20,9 +21,14 @@ export async function changeOwnPassword(currentPassword: string, newPassword: st
   }
 
   const { data: profile, error: profileError } = await current
-    .from('profiles').select('active').eq('user_id', user.id).maybeSingle()
+    .from('profiles').select('active,role').eq('user_id', user.id).maybeSingle()
   if (profileError || !profile?.active) {
     throw new Error('บัญชีนี้ไม่ได้รับอนุญาตให้ใช้งาน')
+  }
+
+  // Always evaluate the caller's canonical role, not metadata or UI preview role.
+  if (!canChangeOwnPassword(resolveAccessRole(profile.role, user.id))) {
+    throw new Error('บัญชีประเภท Viewer ไม่ได้รับสิทธิ์เปลี่ยนรหัสผ่าน กรุณาติดต่อ Owner')
   }
 
   // Supabase-js is currently pinned to v2.95; using a separate sign-in checks the
