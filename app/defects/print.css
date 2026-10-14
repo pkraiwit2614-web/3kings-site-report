@@ -45,8 +45,8 @@
   .defect-table th:nth-child(6),.defect-table td:nth-child(6){width:7%}
   .defect-table th:nth-child(7),.defect-table td:nth-child(7){width:24%}
   .defect-table th:nth-child(8),.defect-table td:nth-child(8){width:12.5%}
-  .defect-table th:nth-child(9),.defect-table td:nth-child(9){width:10%}
-  .defect-table th:nth-child(10),.defect-table td:nth-child(10){width:12%}
+  .defect-table th:nth-child(9),.defect-table td:nth-child(9){width:12%}
+  .defect-table th:nth-child(10),.defect-table td:nth-child(10){width:10%}
 
   .defect-detail{min-width:0!important;max-width:none!important;line-height:1.25!important}
 

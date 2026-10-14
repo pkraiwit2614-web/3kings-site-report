@@ -7,18 +7,18 @@ import PageHeader from '@/components/PageHeader'
 import useAccessRole from '@/components/useAccessRole'
 import {getSupabase} from '@/lib/supabase'
 import {hotelRoomLabel,hotelRoomMembers,normalizeHotelRoom} from '@/lib/hotelRoomGroups'
+import {statusLabel,statusTone} from '@/lib/defectStatusPresentation'
 
 type Day={day_no:number;planned_date:string|null;note:string|null;revision:number;sync_state:string;updated_by_name:string|null;updated_at:string|null}
 type Room={seq_no:number;day_no:number;source_room:string;room_no:string;planned_date_override:string|null;actual_date:string|null;work_status:string;note:string|null;revision:number;sync_state:string;updated_by_name:string|null;updated_at:string|null}
-type Defect={room_no:string;defect_detail:string|null;status_group:string|null;current_status:string|null;next_action:string|null;follow_up:string|null}
+type Defect={room_no:string;defect_detail:string|null;status_group:string|null;current_status:string|null;hotel_participation:string|null;next_action:string|null;follow_up:string|null}
 type Hotel={room_no:string;availability_status:string;start_date:string|null;end_date:string|null}
-type SyncAudit={id:number;source:string;kind:string;item_id:number;recorded_at:string;old_data:Record<string,unknown>;new_data:Record<string,unknown>}
 type SaveChange={label:string;before:string;after:string}
 type DaySaveValues={p_day:number;p_planned_date:string|null;p_note:string;p_expected_revision:number}
-type RoomSaveValues={p_seq:number;p_day:number;p_override_date:string|null;p_actual_date:string|null;p_status:string;p_note:string;p_expected_revision:number}
+type RoomSaveValues={p_seq:number;p_day:number;p_override_date:string|null;p_actual_date:string|null;p_status:string;p_note:string;p_expected_revision:number;p_group_expected?:{seq:number;revision:number}[]}
 type SaveIntent=
  |{kind:'day';target:string;changes:SaveChange[];values:DaySaveValues}
- |{kind:'room';target:string;changes:SaveChange[];values:RoomSaveValues}
+ |{kind:'room';target:string;changes:SaveChange[];values:RoomSaveValues;affectedRows?:string[]}
 type SaveDialog={phase:'confirm'|'saving'|'success'|'error';intent:SaveIntent;returnedRevision?:number;feedback?:string}
 type DiffField={label:string;before:string|null|undefined;after:string|null|undefined;format?:(value:string)=>string}
 function buildSaveChanges(fields:DiffField[]):SaveChange[]{
@@ -55,6 +55,7 @@ export default function HotelWorkPlanPage(){
  const [selectedDay,setSelectedDay]=useState(1)
  const [selectedSeq,setSelectedSeq]=useState<number|null>(null)
  const [roomSearch,setRoomSearch]=useState('')
+ const [defectStatusFilter,setDefectStatusFilter]=useState('ALL')
  const [initialRoom,setInitialRoom]=useState<string|null>(null)
  useEffect(()=>{const room=new URLSearchParams(window.location.search).get('room');if(room){setRoomSearch(room);setInitialRoom(room)}},[])
  const [building,setBuilding]=useState('ALL')
@@ -68,7 +69,6 @@ export default function HotelWorkPlanPage(){
  const [saving,setSaving]=useState(false)
  const [loading,setLoading]=useState(true)
  const [error,setError]=useState('')
- const [syncAudit,setSyncAudit]=useState<SyncAudit[]>([])
  const [excelVerifiedAt,setExcelVerifiedAt]=useState<string|null>(null)
  const [saveDialog,setSaveDialog]=useState<SaveDialog|null>(null)
  const refresh=useCallback(async()=>{
@@ -76,7 +76,7 @@ export default function HotelWorkPlanPage(){
   const result=await Promise.all([
    s.from('hotel_work_plan_days').select('day_no,planned_date,note,revision,sync_state,updated_by_name,updated_at').order('day_no'),
    s.from('hotel_work_plan_rooms').select('seq_no,day_no,source_room,room_no,planned_date_override,actual_date,work_status,note,revision,sync_state,updated_by_name,updated_at').order('seq_no'),
-   s.from('condo_room_status').select('room_no,defect_detail,status_group,current_status,next_action,follow_up').order('room_no'),
+   s.from('condo_room_status').select('room_no,defect_detail,status_group,current_status,hotel_participation,next_action,follow_up').order('room_no'),
    s.from('hotel_room_availability').select('room_no,availability_status,start_date,end_date'),
    s.from('hotel_work_plan_sync_control').select('last_verified_at').eq('id',true).maybeSingle()
   ])
@@ -96,6 +96,16 @@ export default function HotelWorkPlanPage(){
   window.addEventListener('focus',onFocus)
   return()=>{alive=false;window.removeEventListener('focus',onFocus)}
  },[refresh])
+ // Keep the read-only Defect presentation current without resetting unsaved Work Plan forms.
+ useEffect(()=>{
+  const s=getSupabase()
+  const channel=s.channel('hotel-work-plan-defect-status').on('postgres_changes',
+   {event:'*',schema:'public',table:'condo_room_status'},()=>{
+    void s.from('condo_room_status').select('room_no,defect_detail,status_group,current_status,hotel_participation,next_action,follow_up').order('room_no')
+     .then(({data,error})=>{if(!error)setDefects((data||[]) as Defect[])})
+   }).subscribe()
+  return()=>{void s.removeChannel(channel)}
+ },[])
  // Keep the verified Excel readback timestamp fresh while this page remains open.
  // This reads only sync metadata and never touches Work Plan edits or source files.
  useEffect(()=>{
@@ -117,18 +127,6 @@ export default function HotelWorkPlanPage(){
  useEffect(()=>{
   if(selectedSeq!==null)window.requestAnimationFrame(()=>document.getElementById('work-room-detail')?.scrollIntoView({behavior:'smooth',block:'start'}))
  },[selectedSeq])
- useEffect(()=>{
-  if(role!=='owner')return
-  let alive=true
-  const load=async()=>{
-   const {data,error}=await getSupabase().from('hotel_work_plan_sync_audit')
-    .select('id,source,kind,item_id,recorded_at,old_data,new_data').order('recorded_at',{ascending:false}).limit(12)
-   if(alive&&!error)setSyncAudit((data||[]) as SyncAudit[])
-  }
-  void load()
-  window.addEventListener('focus',load)
-  return()=>{alive=false;window.removeEventListener('focus',load)}
- },[role])
  const day=days.find(d=>d.day_no===selectedDay)
  const selected=rooms.find(r=>r.seq_no===selectedSeq)
  useEffect(()=>{setDayDate(day?.planned_date||'');setDayNote(day?.note||'')},[day?.day_no,day?.revision,day?.planned_date,day?.note])
@@ -138,13 +136,25 @@ export default function HotelWorkPlanPage(){
  },[selected?.seq_no,selected?.revision])
  const defectMap=useMemo(()=>new Map(defects.map(d=>[d.room_no,d])),[defects])
  const hotelMap=useMemo(()=>new Map(hotels.map(d=>[d.room_no,d])),[hotels])
+ // Preserve every original Seq./Day row; Combine affects lookup and explicitly confirmed edits only.
+ const defectFor=(room:string)=>defectMap.get(room)||hotelRoomMembers(room).map(member=>defectMap.get(member)).find(Boolean)
  const planDate=(r:Room)=>r.planned_date_override||days.find(d=>d.day_no===r.day_no)?.planned_date||null
  const statusFor=(room:string)=>hotelRoomMembers(room).map(member=>hotelMap.get(member)).find(Boolean)
+ const defectStatusOptions=useMemo(()=>[...new Set(rooms.flatMap(r=>hotelRoomMembers(r.room_no).map(member=>defectMap.get(member)).filter((d):d is Defect=>!!d).map(statusLabel)))].sort((a,b)=>a.localeCompare(b,'th')),[rooms,defectMap])
  const filtered=useMemo(()=>{
   const query=roomSearch.trim().toUpperCase()
   const normalized=normalizeHotelRoom(query)
-  return rooms.filter(r=>r.day_no===selectedDay&&(building==='ALL'||r.room_no.startsWith(building))&&(!query||[r.room_no,r.source_room,hotelRoomLabel(r.room_no)].some(s=>s.toUpperCase().includes(query))||r.room_no.includes(normalized)))
- },[rooms,selectedDay,building,roomSearch])
+  return rooms.filter(r=>{
+   if(r.day_no!==selectedDay||(building!=='ALL'&&!r.room_no.startsWith(building)))return false
+   const members=hotelRoomMembers(r.room_no)
+   if(query&&!([r.source_room,...members.flatMap(member=>[member,hotelRoomLabel(member)])].some(value=>value.toUpperCase().includes(query))||members.some(member=>member.includes(normalized))))return false
+   if(defectStatusFilter!=='ALL'&&!members.some(member=>{
+    const d=defectMap.get(member)
+    return d&&statusLabel(d)===defectStatusFilter
+   }))return false
+   return true
+  })
+ },[rooms,selectedDay,building,roomSearch,defectStatusFilter,defectMap])
  const duplicates=useMemo(()=>{const count=new Map<string,number>();rooms.forEach(r=>count.set(r.room_no,(count.get(r.room_no)||0)+1));return count},[rooms])
  const openDaySaveReview=()=>{
   if(!editable||!day||saving||saveDialog)return
@@ -164,6 +174,8 @@ export default function HotelWorkPlanPage(){
    p_seq:selected.seq_no,p_day:roomDay,p_override_date:roomDate||null,p_actual_date:roomActual||null,
    p_status:roomStatus,p_note:roomNote.trim(),p_expected_revision:selected.revision,
   }
+  const groupRows=rooms.filter(r=>hotelRoomMembers(selected.room_no).includes(r.room_no))
+  if(groupRows.length>1)values.p_group_expected=groupRows.map(r=>({seq:r.seq_no,revision:r.revision}))
   const changes=buildSaveChanges([
    {label:'Day',before:String(selected.day_no),after:String(values.p_day),format:v=>'Day '+v},
    {label:'วันที่เฉพาะห้อง',before:selected.planned_date_override,after:values.p_override_date,format:v=>v?dateTH(v):'ตามวันที่ของ Day'},
@@ -171,7 +183,7 @@ export default function HotelWorkPlanPage(){
    {label:'สถานะแผน',before:selected.work_status,after:values.p_status,format:v=>LABELS[v]||v||'—'},
    {label:'หมายเหตุ',before:selected.note,after:values.p_note},
   ])
-  setSaveDialog({phase:'confirm',intent:{kind:'room',target:'ห้อง '+hotelRoomLabel(selected.room_no)+' · Seq. '+selected.seq_no,changes,values}})
+  setSaveDialog({phase:'confirm',intent:{kind:'room',target:'ห้อง '+hotelRoomLabel(selected.room_no)+' · Seq. '+selected.seq_no,changes,values,affectedRows:groupRows.length>1?groupRows.map(r=>hotelRoomLabel(r.room_no)+' · Seq. '+r.seq_no+' · Day '+r.day_no):undefined}})
  }
  const confirmSave=async()=>{
   if(!editable||saving||!saveDialog||saveDialog.phase!=='confirm'||!saveDialog.intent.changes.length)return
@@ -181,12 +193,13 @@ export default function HotelWorkPlanPage(){
   try{
    const response=intent.kind==='day'
     ?await getSupabase().rpc('hotel_work_plan_save_day',intent.values)
-    :await getSupabase().rpc('hotel_work_plan_save_room',intent.values)
+    :await getSupabase().rpc(intent.values.p_group_expected?'hotel_work_plan_save_combine_room':'hotel_work_plan_save_room',intent.values)
    if(response.error)throw Error(response.error.message)
    const receipt=response.data as {ok?:boolean;revision?:number}|null
    if(receipt?.ok!==true||typeof receipt.revision!=='number')throw Error('ไม่ได้รับผลยืนยันจากเซิร์ฟเวอร์ กรุณาตรวจสอบข้อมูลก่อนบันทึกซ้ำ')
    // The Work Plan RPC confirms the Web DB write only. Excel writeback is asynchronous.
    setSaveDialog({phase:'success',intent,returnedRevision:receipt.revision})
+   if(intent.kind==='room')setSelectedDay(intent.values.p_day)
    try{await refresh()}
    catch(ex){setSaveDialog({phase:'success',intent,returnedRevision:receipt.revision,feedback:'บันทึกในฐานข้อมูลแล้ว แต่โหลดข้อมูลล่าสุดไม่สำเร็จ: '+String(ex)})}
   }catch(ex){
@@ -205,7 +218,9 @@ export default function HotelWorkPlanPage(){
   })
   return()=>window.removeEventListener('keydown',onEscape)
  },[saveDialog?.phase,saving])
- const selectedDefect=selected?defectMap.get(selected.room_no):undefined
+ const selectedDefect=selected?defectFor(selected.room_no):undefined
+ const combineRows=selected?rooms.filter(r=>hotelRoomMembers(selected.room_no).includes(r.room_no)):[]
+ const combineStatusConflict=selected&&new Set(hotelRoomMembers(selected.room_no).map(member=>defectMap.get(member)).filter((d):d is Defect=>!!d).map(statusLabel)).size>1
  const workItems=selected?contractorFor(selectedDefect?.defect_detail||null,selected.room_no[0]):[]
  return <AppShell>
   <PageHeader title="Hotel Work Plan | Day 1–9" subtitle="Above Element · คิวโรงแรม 267 รายการ · วันที่จริงยังไม่กำหนดในไฟล์ต้นฉบับ"
@@ -221,8 +236,8 @@ export default function HotelWorkPlanPage(){
    <section className="work-days" aria-label="เลือกแผน Day 1 ถึง Day 9">
     {days.map(d=>{
      const records=rooms.filter(r=>r.day_no===d.day_no)
-     const open=records.filter(r=>defectMap.get(r.room_no)?.status_group==='Hotel - Incomplete').length
-     const review=records.filter(r=>defectMap.get(r.room_no)?.status_group==='Hotel - Awaiting Check').length
+     const open=records.filter(r=>defectFor(r.room_no)?.status_group==='Hotel - Incomplete').length
+     const review=records.filter(r=>defectFor(r.room_no)?.status_group==='Hotel - Awaiting Check').length
      return <button type="button" key={d.day_no} onClick={()=>{setSelectedDay(d.day_no);setSelectedSeq(null)}} className={'work-day '+(selectedDay===d.day_no?'current':'')}>
       <strong>Day {d.day_no}</strong><span>{records.length} รายการ</span>
       <small>ค้าง {open} · รอตรวจ {review}</small>
@@ -242,13 +257,15 @@ export default function HotelWorkPlanPage(){
     <div className="work-filter"><div><h2>รายการห้อง · Day {selectedDay}</h2><small>คลิกเลขห้องเพื่อดูรายละเอียดและผู้รับเหมา</small></div>
      <input aria-label="ค้นหาเลขห้อง" placeholder="ค้นหาห้อง เช่น A212, Good02" value={roomSearch} onChange={e=>setRoomSearch(e.target.value)}/>
      <select aria-label="กรองอาคาร" value={building} onChange={e=>setBuilding(e.target.value)}><option value="ALL">อาคาร A + B</option><option value="A">อาคาร A</option><option value="B">อาคาร B</option></select>
+     <select className="work-defect-filter" aria-label="กรองสถานะ Defect ปัจจุบัน" value={defectStatusFilter} onChange={e=>setDefectStatusFilter(e.target.value)}><option value="ALL">ทุกสถานะ Defect</option>{defectStatusOptions.map(label=><option key={label} value={label}>{label}</option>)}</select>
     </div>
     <div className="table-wrap"><table><thead><tr><th>Seq.</th><th>ห้อง</th><th>วันที่แผน</th><th>วันที่จริง</th><th>สถานะแผน</th><th>Defect ปัจจุบัน</th><th>OOO/OOS</th><th>รายละเอียด</th></tr></thead><tbody>
     {filtered.map(r=>{
-     const df=defectMap.get(r.room_no),hotel=statusFor(r.room_no)
-     return <tr key={r.seq_no}><td>{r.seq_no}</td><td><button className="work-room-link" onClick={()=>setSelectedSeq(r.seq_no)}>{hotelRoomLabel(r.room_no)}</button>{duplicates.get(r.room_no)!>1&&<small className="work-duplicate">มีมากกว่า 1 คิว</small>}</td>
+     const df=defectFor(r.room_no),hotel=statusFor(r.room_no)
+     const peers=hotelRoomMembers(r.room_no).filter(member=>member!==r.room_no)
+     return <tr key={r.seq_no}><td>{r.seq_no}</td><td><button className="work-room-link" onClick={()=>setSelectedSeq(r.seq_no)}>{hotelRoomLabel(r.room_no)}</button>{peers.length>0&&<small className="work-combine">Combine: {peers.map(hotelRoomLabel).join(', ')}</small>}{duplicates.get(r.room_no)!>1&&<small className="work-duplicate">มีมากกว่า 1 คิว</small>}</td>
       <td>{dateTH(planDate(r))}</td><td>{dateTH(r.actual_date)}</td><td>{LABELS[r.work_status]||r.work_status}</td>
-      <td>{df?.status_group||'—'}</td><td>{HOTEL[hotel?.availability_status||'UNKNOWN']}</td>
+      <td><span className={'work-defect-badge '+(df?statusTone(df):'neutral')}>{df?statusLabel(df):'—'}</span></td><td>{HOTEL[hotel?.availability_status||'UNKNOWN']}</td>
       <td><button className="button" onClick={()=>setSelectedSeq(r.seq_no)}>ดู{editable?' / แก้ไข':''}</button></td></tr>
     })}
     {!filtered.length&&<tr><td colSpan={8}>ไม่พบห้องตามตัวกรอง</td></tr>}
@@ -258,7 +275,8 @@ export default function HotelWorkPlanPage(){
     <div className="work-room-heading"><div><h2>ห้อง {hotelRoomLabel(selected.room_no)}</h2><small>Seq. {selected.seq_no} · Day {selected.day_no} · Room ID หลัก {selected.room_no}</small></div>
      <button className="button" onClick={()=>setSelectedSeq(null)}>ปิดรายละเอียด</button></div>
     <div className="work-facts"><span>วันตามแผน: <b>{dateTH(planDate(selected))}</b></span><span>สถานะห้อง: <b>{HOTEL[statusFor(selected.room_no)?.availability_status||'UNKNOWN']}</b></span>
-     <span>สถานะ Defect: <b>{selectedDefect?.status_group||'—'}</b></span></div>
+     <span>สถานะ Defect: <b className={'work-defect-badge '+(selectedDefect?statusTone(selectedDefect):'neutral')}>{selectedDefect?statusLabel(selectedDefect):'—'}</b></span></div>
+    {combineRows.length>1&&<div className="work-combine-detail"><b>ห้อง Combine · กฎห้องคู่</b><div>{combineRows.map(r=><button key={r.seq_no} type="button" onClick={()=>{setSelectedDay(r.day_no);setSelectedSeq(r.seq_no)}}>{hotelRoomLabel(r.room_no)} · Seq. {r.seq_no} · Day {r.day_no}</button>)}</div><small>คิว Seq. ของแต่ละห้องยังแยกตามแผนโรงแรม การบันทึกการเปลี่ยนแปลงจะใช้กับทุกห้องในกลุ่ม โดยต้องยืนยันก่อน</small>{combineStatusConflict&&<small className="work-combine-conflict">สถานะ Defect ของห้องในกลุ่มไม่ตรงกัน โปรดตรวจสอบใน Defect Report</small>}</div>}
     <h3>รายละเอียด Defect / ผู้รับเหมาที่รับผิดชอบ</h3>
     {workItems.length? <div className="work-tasks">{workItems.map((item,i)=><div key={i}><span>{item.part}</span><strong>{item.labels.join(' / ')||'รอจำแนกผู้รับผิดชอบ'}</strong></div>)}</div>
      :<p className="muted small">ไม่มีรายละเอียดงาน Defect ให้จำแนกผู้รับเหมาในขณะนี้</p>}
@@ -274,15 +292,6 @@ export default function HotelWorkPlanPage(){
     {editable&&<button type="button" className="button" disabled={saving||!!saveDialog} onClick={openRoomSaveReview}>บันทึกรายห้อง</button>}
     {selected.updated_at&&<p className="work-history">แก้ไขล่าสุด {selected.updated_by_name||'ผู้ใช้'} · {new Date(selected.updated_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})} · Revision {selected.revision} · {selected.sync_state==='pending'?'รอซิงก์ Excel':selected.sync_state==='conflict'?'ข้อมูลขัดแย้ง':'ซิงก์แล้ว'}</p>}
     <p><Link href={'/defects?q='+encodeURIComponent(selected.room_no)+'#room-list'}>เปิด Defect Report ของห้องนี้</Link></p>
-   </section>}
-   {role==='owner'&&syncAudit.length>0&&<section className="panel work-sync-audit">
-    <h2>ประวัติซิงก์ Excel / ข้อมูลขัดแย้ง</h2>
-    {syncAudit.map(event=><div key={event.id} className="work-audit-row">
-     <span>{new Date(event.recorded_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}</span>
-     <b>{event.source==='excel'?'แก้ไขจาก Excel':event.source==='conflict'?'ข้อมูลขัดแย้ง':'เขียนกลับ Excel'}</b>
-     <span>{event.kind==='day'?'Day '+event.item_id:'Seq. '+event.item_id}</span>
-     <small title={JSON.stringify(event.old_data)+' → '+JSON.stringify(event.new_data)}>ดูรายละเอียดก่อน/หลังโดยวางเมาส์</small>
-    </div>)}
    </section>}
    <p className="muted small">อ้างอิงลำดับ 267 รายการจาก Hotel Day 1–9 Snapshot 13/10/2026 · สถานะ Defect/OOO/OOS อ้างอิงจากระบบล่าสุด ไม่ใช่ Snapshot · ประวัติการแก้ไขแผนเก็บใน Activity Log</p>
   </>}
@@ -303,6 +312,7 @@ export default function HotelWorkPlanPage(){
      {saveDialog.phase!=='saving'&&<button type="button" className="work-save-x" onClick={()=>setSaveDialog(null)} aria-label="ปิดหน้าต่าง">×</button>}
     </div>
     <p id="work-save-description" className="work-save-target">{saveDialog.intent.target}</p>
+    {saveDialog.intent.kind==='room'&&saveDialog.intent.affectedRows&&<div className="work-combine-warning"><b>การแก้ไขจะมีผลกับทุกห้อง Combine:</b><p>{saveDialog.intent.affectedRows.join(' | ')}</p><p>Day / วันที่ / สถานะแผน / หมายเหตุจะถูกบันทึกให้ทุก Seq. ที่เกี่ยวข้อง และซิงก์ Excel ตามแต่ละรายการ</p></div>}
     {saveDialog.intent.changes.length>0?<div className="work-save-diffs">
      <b>สรุปการเปลี่ยนแปลง ({saveDialog.intent.changes.length} ช่อง)</b>
      {saveDialog.intent.changes.map(change=><div className="work-save-diff" key={change.label}>
@@ -348,20 +358,23 @@ export default function HotelWorkPlanPage(){
     .work-date{white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:700}.work-day-editor{display:grid;grid-template-columns:minmax(170px,1.4fr) minmax(140px,.8fr) minmax(180px,1.5fr) auto;align-items:end;gap:10px;margin-bottom:12px}
     .work-day-editor h2,.work-table h2,.work-room-detail h2{margin:0;font-size:16px}.work-day-editor p{margin:3px 0 0}.work-day-editor label,.work-room-editor label{display:grid;gap:4px;font-size:10.5px;font-weight:700;min-width:0}
     .work-day-editor input,.work-room-editor input,.work-room-editor select,.work-filter input,.work-filter select{font:inherit;font-size:11px;padding:8px;border:1px solid #cbd5e1;border-radius:8px;min-width:0;max-width:100%;background:#fff}
-    .work-history{font-size:10px;color:#64748b;grid-column:1/-1}.work-table{padding-bottom:0}.work-filter{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}.work-filter>div{flex:1}.work-filter input{flex:0 1 230px}.work-filter select{flex:0 1 125px}
+    .work-history{font-size:10px;color:#64748b;grid-column:1/-1}.work-table{padding-bottom:0}.work-filter{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}.work-filter>div{flex:1}.work-filter input{flex:0 1 230px}.work-filter select{flex:0 1 125px}.work-filter select.work-defect-filter{flex:0 1 270px}
     .work-table .table-wrap{max-height:65vh;overflow:auto}.work-table table{width:100%;min-width:780px}.work-table th{position:sticky;top:0;z-index:2}.work-table td{font-size:10.5px;vertical-align:middle}.work-table td .button{font-size:10px;padding:5px 8px}
     .work-room-link{background:none;border:0;text-decoration:underline;color:#175187;font-weight:800;font-size:11px;cursor:pointer}.work-duplicate{display:block;color:#935513;font-size:9px}
     .work-room-detail{margin-top:12px}.work-room-heading{display:flex;justify-content:space-between;align-items:center}.work-facts{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.work-facts span{background:#f2f5f9;border-radius:8px;padding:8px;font-size:10px}
     .work-room-detail h3{font-size:13px;margin:12px 0 7px}.work-tasks{display:grid;gap:6px}.work-tasks>div{display:flex;gap:12px;justify-content:space-between;align-items:start;border:1px solid #e1e6ec;padding:7px 9px;border-radius:8px;font-size:11px}.work-tasks strong{flex:0 0 130px;color:#365979;text-align:right}
     .work-room-editor{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin:15px 0 10px}.work-note{grid-column:1/-1}
-.work-sync-audit h2{font-size:14px;margin:0 0 8px}.work-audit-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:10px;padding:7px 0;border-bottom:1px solid #e5e7eb}.work-audit-row span{color:#64748b}.work-audit-row small{color:#4c647f}
+.work-defect-badge{display:inline-flex;align-items:center;justify-content:center;max-width:230px;white-space:normal;text-align:center;border:1px solid transparent;border-radius:999px;padding:5px 8px;font-size:9px;font-weight:750;line-height:1.35}
+    .work-defect-badge.danger{background:#fdeceb;border-color:#f1cdca;color:#9e312d}.work-defect-badge.warn{background:#fff3dc;border-color:#f0dfb8;color:#85570d}.work-defect-badge.good{background:#e9f6ef;border-color:#cfe9da;color:#196645}.work-defect-badge.neutral{background:#f0f2f4;border-color:#d8dde2;color:#5f6873}
+    .work-combine{display:block;color:#406a83;font-size:9px}.work-combine-detail{border:1px solid #d6e4f0;background:#f5f9fc;padding:10px;border-radius:8px;font-size:11px}.work-combine-detail>div{display:flex;flex-wrap:wrap;gap:6px;margin:7px 0}.work-combine-detail button{border:1px solid #bad0df;background:white;border-radius:7px;padding:5px 8px;cursor:pointer;font:inherit;font-weight:700;color:#1b567d}.work-combine-detail small{display:block;color:#52697f;margin-top:4px}.work-combine-detail .work-combine-conflict{color:#9e312d;font-weight:800}
+    .work-combine-warning{border:1px solid #ead6ab;background:#fff9ea;padding:10px;border-radius:8px;font-size:11px;margin-bottom:10px}.work-combine-warning p{margin:5px 0;line-height:1.4}
     @media(max-width:1200px){.work-days{grid-template-columns:repeat(5,minmax(0,1fr))}.work-day-editor{grid-template-columns:1fr 1fr}.work-day-editor>div{grid-column:1/-1}}
     @media(max-width:650px){.work-days{grid-template-columns:repeat(3,minmax(0,1fr))}.work-day-editor,.work-room-editor{grid-template-columns:1fr}.work-note{grid-column:auto}.work-filter input,.work-filter select{flex:1 1 100%}.work-tasks>div{flex-direction:column}.work-tasks strong{flex:auto;text-align:left}}
     @media print{
       /* Work Plan only: keep the selected Day table visible in report-print mode.
          The shared print rule otherwise hides panels containing filter inputs. */
       :global(body.report-print-mode .main) .panel.work-table{display:block!important;break-inside:auto!important;page-break-inside:auto!important;padding:0!important;margin:0!important;border:0!important}
-      .work-days,.work-day-editor,.work-room-detail,.work-sync-audit{display:none!important}
+      .work-days,.work-day-editor,.work-room-detail{display:none!important}
       .work-table .work-filter{display:flex!important;margin:0 0 5px!important}
       .work-filter input,.work-filter select,.work-filter small{display:none!important}
       .work-table .table-wrap{max-height:none!important;overflow:visible!important}

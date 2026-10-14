@@ -8,6 +8,7 @@ import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
 import DefectCombineRoomEnhancer from '@/components/DefectCombineRoomEnhancer'
 import {hotelRoomLabel,hotelRoomMembers,normalizeHotelRoom} from '@/lib/hotelRoomGroups'
+import {statusLabel,statusTone} from '@/lib/defectStatusPresentation'
 import DefectInputPanel from '@/components/DefectInputPanel'
 import { getSupabase } from '@/lib/supabase'
 import { createLiveLoader, requireSuccessfulReads } from '@/lib/liveLoader'
@@ -118,24 +119,6 @@ function latestSourceDate(rows:RoomRow[]){
   const values=rows.map(r=>r.source_modified_at).filter(Boolean) as string[]
   if(!values.length)return null
   return values.reduce((latest,current)=>new Date(current)>new Date(latest)?current:latest)
-}
-
-function statusTone(r:RoomRow){
-  if(r.status_group==='Hotel - Incomplete')return 'danger'
-  if(r.status_group==='Hotel - Awaiting Check'||r.status_group==='Non-Hotel - Pending Handover')return 'warn'
-  if(r.status_group==='Hotel - Checked Complete')return r.hotel_participation==='ไม่ร่วมโรงแรม'?'warn':'good'
-  if(r.status_group==='Non-Hotel - Handover Complete')return 'good'
-  return 'neutral'
-}
-
-function statusLabel(r:RoomRow){
-  if(r.status_group==='Hotel - Incomplete')return 'เพิ่งได้รับแจ้ง Defect'
-  if(r.status_group==='Hotel - Awaiting Check')return 'Defect เสร็จแล้ว • รอลูกค้า / Hotel ตรวจรับ'
-  if(r.status_group==='Hotel - Checked Complete')return r.hotel_participation==='ไม่ร่วมโรงแรม'?'Defect เสร็จแล้ว • รอลูกค้า / Hotel ตรวจรับ':'Hotel Engineer ตรวจแล้ว'
-  if(r.status_group==='Non-Hotel - Pending Handover')return 'Defect เสร็จแล้ว • รอลูกค้า / Hotel ตรวจรับ'
-  if(r.status_group==='Non-Hotel - Handover Complete')return 'ลูกค้าตรวจรับเรียบร้อยแล้ว'
-  if(r.status_group==='Non-Hotel - Awaiting Sale')return 'Awaiting Sale'
-  return r.current_status
 }
 
 function isLongDefectDetail(text:string){
@@ -314,7 +297,7 @@ export default function DefectDetailPage(){
           <div><h2>รายชื่อห้อง</h2><p>แสดง {filtered.length} ห้อง</p></div>
           <div className="legend"><span><i className="customer-dot"/>มีลูกค้า</span><span><i className="no-customer-dot"/>ไม่มีลูกค้า</span><span><i className="bad-dot"/>เพิ่งได้รับแจ้ง Defect</span><span><i className="warn-dot"/>Defect เสร็จแล้ว • รอตรวจรับ</span><span><i className="good-dot"/>ตรวจรับแล้ว / Hotel ตรวจแล้ว</span></div>
         </div>
-        <div className="table-wrap defect-table"><table><thead><tr><th>ห้อง</th><th className="center">อาคาร</th><th className="center">วันที่ Hotel แจ้ง</th><th>ชื่อลูกค้า/เจ้าของ</th><th className="center">ลูกค้า</th><th className="center">โรงแรม</th><th>รายละเอียดงาน</th><th className="center">สถานะ</th><th>ต้องทำต่อ</th><th>Work Plan / Hotel Status</th></tr></thead><tbody>
+        <div className="table-wrap defect-table"><table><thead><tr><th>ห้อง</th><th className="center">อาคาร</th><th className="center">วันที่ Hotel แจ้ง</th><th>ชื่อลูกค้า/เจ้าของ</th><th className="center">ลูกค้า</th><th className="center">โรงแรม</th><th>รายละเอียดงาน</th><th className="center">สถานะ</th><th>Work Plan / Hotel Status</th><th>ต้องทำต่อ</th></tr></thead><tbody>
           {filtered.map(r=><tr key={r.room_no}>
             <td className="room-cell"><b>{hotelRoomLabel(r.room_no)}</b><small>ชั้น {r.floor??'-'}</small></td>
             <td className="center"><b>{r.building}</b></td>
@@ -327,8 +310,8 @@ export default function DefectDetailPage(){
                {isLongDefectDetail(r.defect_detail)&&<button type="button" className="defect-detail-toggle" aria-expanded={!!expandedDetails[r.room_no]} aria-label={`${expandedDetails[r.room_no]?'ย่อรายละเอียด':'ดูรายละเอียดทั้งหมด'} ห้อง ${r.room_no}`} onClick={()=>setExpandedDetails(previous=>({...previous,[r.room_no]:!previous[r.room_no]}))}>{expandedDetails[r.room_no]?'ย่อรายละเอียด':'ดูทั้งหมด'}</button>}
              </>:<span className="muted">—</span>}</td>
             <td className="center"><span className={`state-badge ${statusTone(r)}`}>{statusLabel(r)}</span></td>
-            <td>{r.next_action||r.follow_up||'-'}</td>
             <td className="work-plan-cell">{(workPlanContext.get(r.room_no)||[]).map((label,i)=><small key={i}>{label}</small>)}<small>{roomHotelContext.get(r.room_no)||'สถานะโรงแรม: —'}</small><Link href={'/hotel-work-plan?room='+encodeURIComponent(r.room_no)}>ดูแผน</Link></td>
+            <td>{r.next_action||r.follow_up||'-'}</td>
           </tr>)}
           {!filtered.length&&<tr><td colSpan={10} className="muted" style={{padding:28,textAlign:'center'}}>ไม่พบห้องตามเงื่อนไข</td></tr>}
         </tbody></table></div>
