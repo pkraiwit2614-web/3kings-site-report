@@ -64,6 +64,9 @@ jobs:
       - name: Optional self-service password change safety
         run: node --test tests/optional-password-change.test.cjs
 
+      - name: Shared Viewer Auth MFA lock and Owner reset protection
+        run: node --test tests/shared-viewer-auth-lock.test.cjs
+
       - name: Activity Log security regression tests
         run: node tests/activity-log.test.cjs
 
