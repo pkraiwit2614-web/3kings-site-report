@@ -9,6 +9,10 @@ import {logActivity} from '@/lib/activityLog'
 import {useI18n} from '@/components/I18nProvider'
 import type {AppLanguage} from '@/lib/i18n'
 import {WORK_CALENDARS,getWorkCalendar} from '@/lib/workCalendars'
+import {canAccessPath} from '@/lib/accessControl'
+import {DEFECT_WORK_PLAN_CALENDAR,buildDefectPlanCalendarEvents} from '@/lib/defectWorkPlanCalendar'
+import type {DefectPlanDay,DefectPlanRoom} from '@/lib/defectWorkPlanCalendar'
+import Link from 'next/link'
 
 type CalendarMode='MONTH'|'WEEK'|'AGENDA'
 type ConnectionState='checking'|'shared'|'unconfigured'
@@ -21,7 +25,7 @@ type GoogleEventApi={
   start:{date?:string;dateTime?:string}
   end:{date?:string;dateTime?:string}
 }
-type WorkEvent=GoogleEventApi&{calendarId:string;calendarLabel:string;calendarColor:string}
+type WorkEvent=GoogleEventApi&{calendarId:string;calendarLabel:string;calendarColor:string;managedWorkPlan?:boolean;firstRoom?:string;dayNo?:number}
 type LocalCalendar={id:string;name:string;color:string;active:boolean}
 type LocalEvent={id:string;calendar_id:string;event_date:string;title:string;detail:string|null}
 type ProcurementOption={id:string;vendor:string|null;item_name:string;po_no:string|null;actual_delivery:string|null}
@@ -42,6 +46,7 @@ type EventDraft={
 
 const STORAGE_SELECTION='3kings:google-calendar:selected'
 const STORAGE_MODE='3kings:google-calendar:mode'
+const STORAGE_DEFECT_PLAN_INTRO='3kings:work-plan-defect-calendar:v1'
 const MAX_MONTH_EVENTS=3
 
 function todayBangkok(){
@@ -123,10 +128,11 @@ export function GoogleCalendarManager(){
   const {role,userId,ready}=useAccessRole()
   const editable=canEditCalendar(role)
   const canLinkProcurement=canEditProcurement(role)
+  const canViewDefectPlan=role!==null&&canAccessPath(role,'/hotel-work-plan')
   const [connection,setConnection]=useState<ConnectionState>('checking')
   const [ownerSetupRequired,setOwnerSetupRequired]=useState(false)
   const [appToken,setAppToken]=useState('')
-  const [selected,setSelected]=useState<string[]>(()=>WORK_CALENDARS.map(row=>row.id))
+  const [selected,setSelected]=useState<string[]>(()=>[...WORK_CALENDARS.map(row=>row.id),DEFECT_WORK_PLAN_CALENDAR.id])
   const [mode,setMode]=useState<CalendarMode>('MONTH')
   const [focusDate,setFocusDate]=useState(todayBangkok())
   const [events,setEvents]=useState<WorkEvent[]>([])
@@ -148,8 +154,10 @@ export function GoogleCalendarManager(){
   const allCalendars=useMemo(()=>[
     ...WORK_CALENDARS.map(row=>({...row,source:'google' as const})),
     ...localCalendars.filter(row=>row.active).map(row=>({id:row.id,label:row.name,color:row.color,source:'web' as const})),
-  ],[localCalendars])
+    ...(canViewDefectPlan?[{...DEFECT_WORK_PLAN_CALENDAR,source:'managed' as const}]:[]),
+  ],[localCalendars,canViewDefectPlan])
   const localCalendarIds=useMemo(()=>new Set(localCalendars.map(row=>row.id)),[localCalendars])
+  const managedPlanSelected=canViewDefectPlan&&selected.includes(DEFECT_WORK_PLAN_CALENDAR.id)
 
   async function refreshLocalCalendars(){
     const {data,error}=await getSupabase().from('work_calendars')
@@ -209,9 +217,22 @@ export function GoogleCalendarManager(){
       const savedSelection=window.localStorage.getItem(STORAGE_SELECTION)
       if(savedSelection){
         const parsed=JSON.parse(savedSelection)
-        if(Array.isArray(parsed))setSelected(parsed.filter((value):value is string=>typeof value==='string'&&value.length<=250))
+        if(Array.isArray(parsed)){
+          const allowed=parsed.filter((value):value is string=>typeof value==='string'&&value.length<=250)
+          setSelected(!window.localStorage.getItem(STORAGE_DEFECT_PLAN_INTRO)
+            ?[...new Set([...allowed,DEFECT_WORK_PLAN_CALENDAR.id])]:allowed)
+        }
       }
-      const savedMode=window.localStorage.getItem(STORAGE_MODE)
+      window.localStorage.setItem(STORAGE_DEFECT_PLAN_INTRO,'1')
+       const params=new URLSearchParams(window.location.search)
+       if(params.get('view')==='work-plan-defect'){
+         setSelected([DEFECT_WORK_PLAN_CALENDAR.id])
+         const chosen=params.get('date')
+         if(chosen&&/^\d{4}-\d{2}-\d{2}$/.test(chosen))setFocusDate(chosen)
+         setMode('MONTH')
+         return
+       }
+       const savedMode=window.localStorage.getItem(STORAGE_MODE)
       if(savedMode==='MONTH'||savedMode==='WEEK'||savedMode==='AGENDA')setMode(savedMode)
     }catch{}
   },[])
@@ -318,6 +339,23 @@ export function GoogleCalendarManager(){
   },[events])
   const agendaEvents=useMemo(()=>events.slice().sort((a,b)=>(a.start.dateTime||a.start.date||'').localeCompare(b.start.dateTime||b.start.date||'')),[events])
 
+  async function loadDefectPlanEvents(){
+    const client=getSupabase()
+    const [days,rooms]=await Promise.all([
+      client.from('hotel_work_plan_days').select('day_no,planned_date,note').order('day_no'),
+      client.from('hotel_work_plan_rooms').select('seq_no,day_no,room_no,source_room,planned_date_override').order('seq_no'),
+    ])
+    if(days.error)throw days.error
+    if(rooms.error)throw rooms.error
+    if((days.data||[]).length!==9||(rooms.data||[]).length!==267)
+      throw Error('Work Plan ไม่ครบ 9 วัน / 267 รายการ — ปฏิทินไม่ถูกแทนที่')
+    return buildDefectPlanCalendarEvents(
+      (days.data||[]) as DefectPlanDay[],
+      (rooms.data||[]) as DefectPlanRoom[],
+      fetchWindow.start,fetchWindow.end,
+    )
+  }
+
   async function loadEvents(){
     if(connection==='checking'||!appToken)return
     if(!selected.length){setEvents([]);return}
@@ -350,11 +388,32 @@ export function GoogleCalendarManager(){
         .select('event_key,last_item_id').limit(1000)
       if(linksError)throw linksError
       setDeliveryLinks((links||[]) as DeliveryLink[])
-      setEvents([...googleResults.flat(),...localEvents])
+      const defectPlanEvents=managedPlanSelected?await loadDefectPlanEvents():[]
+      setEvents([...googleResults.flat(),...localEvents,...defectPlanEvents])
     }catch(error){setMessage('โหลดปฏิทินไม่สำเร็จ: '+errorMessage(error))}
     finally{setLoading(false)}
   }
-  useEffect(()=>{if(connection!=='checking'&&appToken)void loadEvents()},[connection,appToken,selected.join('|'),fetchWindow.start,fetchWindow.end,localCalendars])
+  useEffect(()=>{if(connection!=='checking'&&appToken)void loadEvents()},[connection,appToken,selected.join('|'),fetchWindow.start,fetchWindow.end,localCalendars,canViewDefectPlan])
+
+  // Excel imports arrive via Supabase without touching Google Calendar.
+  // Refresh only the generated layer every minute / when refocusing; Google events stay untouched.
+  useEffect(()=>{
+    if(!ready||connection==='checking'||!appToken||!managedPlanSelected)return
+    let alive=true
+    const refreshPlan=async()=>{
+      try{
+        const rows=await loadDefectPlanEvents()
+        if(alive)setEvents(current=>[
+          ...current.filter(event=>event.calendarId!==DEFECT_WORK_PLAN_CALENDAR.id),
+          ...rows,
+        ])
+      }catch(error){if(alive)setMessage('โหลด Work Plan Defect ไม่สำเร็จ: '+errorMessage(error))}
+    }
+    const onFocus=()=>{void refreshPlan()}
+    window.addEventListener('focus',onFocus)
+    const interval=window.setInterval(()=>{void refreshPlan()},60_000)
+    return()=>{alive=false;window.clearInterval(interval);window.removeEventListener('focus',onFocus)}
+  },[ready,connection,appToken,managedPlanSelected,fetchWindow.start,fetchWindow.end])
 
   async function beginOwnerSetup(){
     if(role!=='owner'||!appToken)return
@@ -373,7 +432,8 @@ export function GoogleCalendarManager(){
   }
   function openCreate(dateKey:string){
     if(!editable||(connection!=='shared'&&!localCalendars.length))return
-    const first=selected.find(id=>allCalendars.some(c=>c.id===id))||allCalendars[0]?.id
+    const first=selected.find(id=>id!==DEFECT_WORK_PLAN_CALENDAR.id&&allCalendars.some(c=>c.id===id))
+      ||allCalendars.find(c=>c.id!==DEFECT_WORK_PLAN_CALENDAR.id)?.id
     if(!first)return
     setDraft(emptyDraft(first,dateKey));setMessage('')
   }
@@ -393,7 +453,7 @@ export function GoogleCalendarManager(){
   }
 
   async function saveEvent(){
-    if(!draft||!editable||!draft.title.trim())return
+    if(!draft||!editable||draft.calendarId===DEFECT_WORK_PLAN_CALENDAR.id||!draft.title.trim())return
     if(draft.procurementItemId&&!canLinkProcurement){setMessage('การแก้ไขวันส่งวัสดุต้องใช้สิทธิ์ Purchase/Owner');return}
     if(draft.procurementItemId&&localCalendarIds.has(draft.calendarId)){
       setMessage('รายการผูกวันจัดซื้อให้เลือกปฏิทิน Google เดิม (เช่น กำหนดส่ง-ของเข้าหน้างาน)')
@@ -439,7 +499,7 @@ export function GoogleCalendarManager(){
   }
 
   async function deleteEvent(){
-    if(!draft?.eventId||!editable)return
+    if(!draft?.eventId||!editable||draft.calendarId===DEFECT_WORK_PLAN_CALENDAR.id)return
     if(draft.procurementItemId&&!canLinkProcurement)return
     if(!localCalendarIds.has(draft.calendarId)&&connection!=='shared')return
     if(!window.confirm('ลบ “'+(draft.title||'รายการนี้')+'” ออกจากปฏิทินจริงใช่หรือไม่?'+(draft.procurementItemId?' ระบบจะยกเลิกวันที่กำหนดส่งที่เชื่อมโยงด้วย':'')))return
@@ -542,7 +602,7 @@ export function GoogleCalendarManager(){
       <main className="panel gcal-stage">
         {message&&<div className="notice gcal-message">{message}</div>}
         {loading&&<div className="gcal-loading">กำลังโหลดปฏิทิน…</div>}
-        {connection==='checking'?<div className="gcal-empty">กำลังตรวจสอบการเชื่อมต่อ…</div>:connection!=='shared'&&!selected.some(id=>localCalendarIds.has(id))?<>
+        {connection==='checking'?<div className="gcal-empty">กำลังตรวจสอบการเชื่อมต่อ…</div>:connection!=='shared'&&!selected.some(id=>localCalendarIds.has(id))&&!managedPlanSelected?<>
           {readOnlyEmbedUrl?<iframe key={readOnlyEmbedUrl} className="gcal-frame" src={readOnlyEmbedUrl} title="3 Kings Google Calendar" loading="eager" referrerPolicy="strict-origin-when-cross-origin"/>:<div className="gcal-empty">เลือกอย่างน้อย 1 ปฏิทิน</div>}
         </>:<>
           {mode==='MONTH'&&<>
