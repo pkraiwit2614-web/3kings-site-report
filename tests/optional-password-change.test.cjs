@@ -27,7 +27,6 @@ function load(file, deps = {}) {
 function fixture({ oldValid = true, verifiedUserId = 'u-1', active = true, profileError = null } = {}) {
   const events = []
   const main = {
-    supabaseUrl: 'https://example.supabase.co', supabaseKey: 'anon-key',
     auth: { getUser: async () => ({ data: { user: { id: 'u-1', email: 'user01@3kings.invalid' } }, error: null }) },
     from: table => {
       assert.equal(table, 'profiles')
@@ -54,9 +53,9 @@ function fixture({ oldValid = true, verifiedUserId = 'u-1', active = true, profi
     },
   }
   const change = load('lib/changeOwnPassword.ts', {
-    '@/lib/supabase': { getSupabase: () => main },
+    '@/lib/supabase': { getSupabase: () => main, getSupabaseConnection: () => ({ url: 'https://example.supabase.co', key: 'anon-key' }) },
     '@supabase/supabase-js': { createClient: (url, key, opts) => {
-      assert.equal(url, main.supabaseUrl); assert.equal(key, main.supabaseKey)
+      assert.equal(url, 'https://example.supabase.co'); assert.equal(key, 'anon-key')
       assert.equal(opts.auth.persistSession, false)
       assert.equal(opts.auth.autoRefreshToken, false)
       assert.equal(opts.auth.detectSessionInUrl, false)
