@@ -44,7 +44,7 @@ function base32Bytes(value:string):Uint8Array {
   return new Uint8Array(out)
 }
 async function totp(secret:string):Promise<string>{
-  const key=await crypto.subtle.importKey('raw',base32Bytes(secret),'HMAC',false,['sign'])
+  const key=await crypto.subtle.importKey('raw',base32Bytes(secret),{name:'HMAC',hash:'SHA-1'},false,['sign'])
   const seconds=BigInt(Math.floor(Date.now()/30000))
   const payload=new Uint8Array(8)
   let count=seconds
