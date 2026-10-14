@@ -34,6 +34,9 @@ jobs:
       - name: Hotel Work Plan schedule and scoped editor safety
         run: node --test tests/hotel-work-plan.test.cjs
 
+      - name: Work Plan Defect status, Combine groups and column order regression
+        run: node --test tests/hotel-work-plan-status-combine.test.cjs
+
       - name: Hotel OOO/OOS room mapping and security regression
         run: node tests/hotel-room-availability.test.cjs
 
