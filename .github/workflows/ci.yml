@@ -28,6 +28,9 @@ jobs:
       - name: Hotel Work Plan bidirectional Excel safety
         run: node --test tests/hotel-work-plan-excel-bidirectional.test.cjs
 
+      - name: Hotel Work Plan save confirmation and before-after review
+        run: node --test tests/hotel-work-plan-save-dialog.test.cjs
+
       - name: Hotel Work Plan schedule and scoped editor safety
         run: node --test tests/hotel-work-plan.test.cjs
 
