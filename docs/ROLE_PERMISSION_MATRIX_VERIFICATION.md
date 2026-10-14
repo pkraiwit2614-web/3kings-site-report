@@ -19,3 +19,13 @@ Base: main `0563f7d6b4fa9c094c907092b9612774ff79aedf`, confirmed as the READY pr
 The migration and application have not been released. A final read confirmed the Matrix table is absent and 23 active profiles remain. Git push was rejected by automatic approval review because explicit authorization to upload source and captured database definitions to the remote was not established. No alternate upload was attempted.
 
 Review the release and rollback sequence in `ROLE_PERMISSION_MATRIX_RUNBOOK.md` before rollout. Successful isolated tests do not replace the remaining Preview/CI and production verification gates.
+
+## Database installation — 15 October 2026 Bangkok
+
+Explicit user approval received for GitHub upload, PR/Preview and Supabase installation while preserving all existing permissions. PR #110 is open, CI run 38652218723 passed, Preview dpl_96NkspZykwapFwnk6FG4Q62r7yny is READY. The final password-integrated local build passed Chromium Owner workflow and six non-owner role checks with intercepted services.
+
+Applied Supabase migration `20261014231301_editable_role_permission_matrix_preserve_defaults` to `wtqubwdduzedmcvyhbgs`. Installation included 182 before/after visibility comparisons and an exact profile-role fingerprint guard in the same transaction. Post-install results: 98 cells, zero changed defaults, revision 1, zero history, 23 active profiles, identical profile fingerprint, zero unlocked Owner cells and zero anonymous executable Matrix functions. The 198 grant/deny cases and owner/concurrency/audit/restore tests passed again after installation, with all test mutations rolled back.
+
+Advisor changes are the three intentionally private RLS tables with no client policies, and four explicitly authenticated security-definer RPCs. Anonymous function warnings did not increase. Owner-only save/history and active-profile read guards were tested.
+
+The application PR is not merged and the production frontend remains unchanged. The database prerequisite for authenticated Preview testing is now installed. A real authenticated Preview session/save has not been tested; do not confuse isolated Chromium/database checks with that gate.

@@ -17,7 +17,7 @@ The Owner opens System & Access → Permission Matrix. Changes are staged, revie
 1. Confirm main and production SHA, then run the current regression suite and build.
 2. Run `tests/editable-role-matrix-db.sql` through psql (it includes the migration and always rolls back). The migration fails if any captured function or policy has drifted.
 3. Verify browser behavior using synthetic sessions and intercepted services: `tests/role-matrix-browser.cjs` and `tests/editable-role-matrix-browser.cjs`. These tests never write live data.
-4. Apply `20261014190000_editable_role_permission_matrix.sql` once through the Supabase migration API, before releasing the application that reads its RPCs.
+4. Apply `20261014231301_editable_role_permission_matrix_preserve_defaults.sql` once through the Supabase migration API, before releasing the application that reads its RPCs.
 5. Verify 98 cells, revision 1, zero overrides and empty history; confirm profile assignments are unchanged.
 6. Release the application and verify the production deployment SHA and health.
 

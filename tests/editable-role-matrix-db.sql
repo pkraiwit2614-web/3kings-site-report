@@ -17,7 +17,7 @@ BEGIN
  RESET ROLE;
  END LOOP;
 END $test$;
-\i supabase/migrations/20261014190000_editable_role_permission_matrix.sql
+\i supabase/migrations/20261014231301_editable_role_permission_matrix_preserve_defaults.sql
 DO $test$ DECLARE u record;t text;c bigint;
 BEGIN
  FOR u IN SELECT DISTINCT ON (role) role,user_id FROM public.profiles WHERE active ORDER BY role,user_id LOOP
