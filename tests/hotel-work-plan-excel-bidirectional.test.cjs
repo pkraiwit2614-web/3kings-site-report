@@ -90,6 +90,41 @@ test('no formulas can be replaced, dates parse Excel serial and Thai DD/MM/YYYY'
  assert.equal(ctx.hpIsoDate_('46309'),'2026-10-14')
  assert.throws(()=>ctx.hpIsoDate_('31/02/2026'),/Invalid Excel date/)
 })
+test('Google Sheets rewrite of xlsx r:id retains canonical Work Plan and M2 imports',()=>{
+ const canonical={
+  'xl/workbook.xml':{getDataAsString:()=>'<workbook><sheets><sheet name="Hotel_Work_Plan" sheetId="7" r:id="rId7"/></sheets></workbook>'},
+  'xl/_rels/workbook.xml.rels':{getDataAsString:()=>'<Relationships><Relationship Id="rId7" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet7.xml"/></Relationships>'},
+  '[Content_Types].xml':{getDataAsString:()=>'<Types><Override PartName="/xl/worksheets/sheet7.xml"/></Types>'},
+  'xl/worksheets/sheet7.xml':{getDataAsString:()=>'<worksheet/>'},
+ }
+ assert.equal(ctx.hpCheckExistingSheet_(canonical).relationId,'rId7')
+ const bootstrap={
+  ...canonical,
+  'xl/workbook.xml':{getDataAsString:()=>'<workbook><sheets><sheet name="Hotel_Work_Plan" sheetId="7" r:id="rIdHotelWorkPlan20261014"/></sheets></workbook>'},
+  'xl/_rels/workbook.xml.rels':{getDataAsString:()=>'<Relationships><Relationship Id="rIdHotelWorkPlan20261014" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet7.xml"/></Relationships>'},
+ }
+ assert.equal(ctx.hpCheckExistingSheet_(bootstrap).relationId,'rIdHotelWorkPlan20261014')
+ const shared=Array(670).fill('')
+ shared[400]='1';shared[401]='';shared[669]='ทดสอบจาก excel ขึ้นเวป'
+ const xml='<worksheet><sheetData><row r="2"><c r="K2" t="s"><v>400</v></c><c r="M2" t="s"><v>669</v></c></row></sheetData></worksheet>'
+ assert.equal(ctx.hpRaw_(xml,'M2',shared),'ทดสอบจาก excel ขึ้นเวป')
+ const current=sample().days[0]
+ const excel={days:[{id:1,date:'',note:ctx.hpRaw_(xml,'M2',shared)}],rooms:[]}
+ const singleDay={days:[current],rooms:[]}
+ const change=ctx.hpReconcile_(singleDay,excel)
+ assert.equal(change.conflicts.length,0)
+ assert.equal(change.imports.length,1)
+ assert.equal(change.imports[0].note,'ทดสอบจาก excel ขึ้นเวป')
+})
+test('a spoofed or altered Work Plan worksheet relationship fails safely',()=>{
+ const base={
+  'xl/workbook.xml':{getDataAsString:()=>'<sheets><sheet name="Hotel_Work_Plan" sheetId="7" r:id="rId7"/></sheets>'},
+  'xl/_rels/workbook.xml.rels':{getDataAsString:()=>'<Relationships><Relationship Id="rId7" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/other.xml"/></Relationships>'},
+  '[Content_Types].xml':{getDataAsString:()=>'<Types><Override PartName="/xl/worksheets/sheet7.xml"/></Types>'},
+  'xl/worksheets/sheet7.xml':{getDataAsString:()=>''},
+ }
+ assert.throws(()=>ctx.hpCheckExistingSheet_(base),/unexpected worksheet/)
+})
 test('manual Excel rich-text notes are concatenated without data loss',()=>{
  const xml='<worksheet><sheetData><row r="2"><c r="G2" t="inlineStr"><is><r><t>รอ</t></r><r><t>ตรวจ</t></r></is></c></row></sheetData></worksheet>'
  assert.equal(ctx.hpRaw_(xml,'G2',[]),'รอตรวจ')
