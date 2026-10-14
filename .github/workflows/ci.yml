@@ -28,6 +28,9 @@ jobs:
       - name: Hotel Work Plan bidirectional Excel safety
         run: node --test tests/hotel-work-plan-excel-bidirectional.test.cjs
 
+      - name: Auto Work Plan Defect calendar projection safety
+        run: node --test tests/defect-work-plan-calendar.test.cjs
+
       - name: Hotel Work Plan schedule and scoped editor safety
         run: node --test tests/hotel-work-plan.test.cjs
 
