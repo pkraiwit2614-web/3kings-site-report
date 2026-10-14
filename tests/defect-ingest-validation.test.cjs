@@ -8,6 +8,8 @@ const viewerEditor=fs.readFileSync('supabase/migrations/20261006083000_viewer_ed
 
 assert.match(route,/inlineData:\{mimeType:'application\/pdf'/)
 assert.match(route,/is_defect/)
+assert.match(route,/normalizeHotelRoom\(clean\(value,24\)\)/)
+assert.match(route,/Good01–Good05/)
 assert.match(route,/\^\[AB\]\[0-9\]\{3\}\$/)
 assert.match(route,/createHash\('sha256'\)/)
 assert.match(route,/defect_register_validated_file/)
