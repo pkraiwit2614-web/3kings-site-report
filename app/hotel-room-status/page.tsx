@@ -25,6 +25,12 @@ const pending=(r:Room)=>(
 )
 const dateTH=(value:string|null)=>value?new Intl.DateTimeFormat('th-TH',{timeZone:'Asia/Bangkok',dateStyle:'medium',timeStyle:'short'}).format(new Date(value)):'—'
 const displayRangeDate=(value:string)=>value.replace(/^(\d{4})-(\d{2})-(\d{2})$/,'$3/$2/$1')
+/** Inclusive intersection with hotel-defined availability dates; a missing end date is open-ended. */
+const hotelPeriodOverlaps=(status:HotelStatus|null,start:string,end:string)=>{
+  if(!start&&!end)return true
+  if(!status?.start_date)return false
+  return (!end||status.start_date<=end)&&(!start||!status.end_date||status.end_date>=start)
+}
 const statusText=(s:HotelStatus|null)=>!s||s.availability_status==='UNKNOWN'?'รอตรวจสอบ':s.availability_status==='AVAILABLE'?'พร้อมให้บริการ':s.availability_status
 
 export default function HotelRoomStatusPage(){
@@ -37,6 +43,8 @@ export default function HotelRoomStatusPage(){
   const [query,setQuery]=useState('')
   const [building,setBuilding]=useState('ALL')
   const [stateFilter,setStateFilter]=useState('ALL')
+  const [rangeStart,setRangeStart]=useState('')
+  const [rangeEnd,setRangeEnd]=useState('')
   const [selected,setSelected]=useState('')
   const [formStatus,setFormStatus]=useState<'AVAILABLE'|'OOO'|'OOS'|'UNKNOWN'>('UNKNOWN')
   const [fromDate,setFromDate]=useState('')
@@ -79,9 +87,11 @@ export default function HotelRoomStatusPage(){
     }).sort((a,b)=>a.key.localeCompare(b.key))
   },[rooms,statuses])
   const lastUpdated=useMemo(()=>statuses.map(r=>r.updated_at).filter(Boolean).sort().at(-1)||null,[statuses])
+  const invalidDateRange=Boolean(rangeStart&&rangeEnd&&rangeStart>rangeEnd)
   const filtered=useMemo(()=>{
     const terms=query.split(/[,，]+/).map(normalizeHotelRoom).filter(Boolean)
     return groups.filter(g=>
+      !invalidDateRange && hotelPeriodOverlaps(g.hotel,rangeStart,rangeEnd) &&
       (building==='ALL'||g.members.some(r=>r.building===building)) &&
       (stateFilter==='ALL'||g.members.some(member=>(groups.find(other=>other.key===member.room_no)?.hotel?.availability_status||'UNKNOWN')===stateFilter)) &&
       (!terms.length||terms.some(t=>g.members.some(r=>r.room_no.includes(t))||
@@ -89,7 +99,7 @@ export default function HotelRoomStatusPage(){
         g.members.some(r=>[r.owner_name,r.customer_status,r.hotel_participation,r.defect_detail,r.current_status,r.next_action,r.follow_up].filter(Boolean).join(' ').toUpperCase().includes(t))||
         [g.hotel?.reason,g.hotel?.availability_status,g.hotel?.hotel_remark].filter(Boolean).join(' ').toUpperCase().includes(t)))
     )
-  },[groups,query,building,stateFilter])
+  },[groups,query,building,stateFilter,rangeStart,rangeEnd,invalidDateRange])
   const chosen=groups.find(x=>x.key===selected)||null
   const currentlyPending=chosen?.members.filter(pending)||[]
   const count=(status:string)=>groups.filter(g=>(g.hotel?.availability_status||'UNKNOWN')===status).length
@@ -135,8 +145,15 @@ export default function HotelRoomStatusPage(){
         <select aria-label="สถานะห้อง" value={stateFilter} onChange={e=>setStateFilter(e.target.value)}>
           <option value="ALL">ทุกสถานะ</option><option value="AVAILABLE">พร้อมให้บริการ</option><option value="OOO">OOO</option><option value="OOS">OOS</option><option value="UNKNOWN">รอตรวจสอบ</option>
         </select>
-        <button type="button" className="button" onClick={()=>{setQuery('');setBuilding('ALL');setStateFilter('ALL')}}>ล้างตัวกรอง</button>
+        <button type="button" className="button" onClick={()=>{setQuery('');setBuilding('ALL');setStateFilter('ALL');setRangeStart('');setRangeEnd('')}}>ล้างตัวกรอง</button>
       </div>
+      <div className="hotel-date-range-filter" role="group" aria-label="กรองตามช่วงวันที่โรงแรมกำหนด">
+        <b>ช่วงวันที่โรงแรมกำหนด</b>
+        <label>ตั้งแต่<input aria-label="วันที่เริ่มต้นที่ต้องการกรอง" type="date" value={rangeStart} max={rangeEnd||undefined} onChange={e=>setRangeStart(e.target.value)}/></label>
+        <label>ถึง<input aria-label="วันที่สิ้นสุดที่ต้องการกรอง" type="date" value={rangeEnd} min={rangeStart||undefined} onChange={e=>setRangeEnd(e.target.value)}/></label>
+        <small>แสดงห้องที่ช่วงวันที่ทับซ้อนกัน</small>
+      </div>
+      {invalidDateRange&&<p role="alert" className="small" style={{color:'#a63329',marginTop:6}}>วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่มต้น</p>}
       <p className="small muted" style={{marginTop:8}}>สถานะรอตรวจสอบไม่ใช่การยืนยันว่าห้องพร้อมให้บริการ • หนึ่งรายการต่อหนึ่ง Room ID (263 ห้อง) • ค้นหาห้องใดจะแสดงสมาชิก Combine ทั้งชุด • สถานะที่อ้างอิงคู่ยังไม่ใช่ข้อมูลที่บันทึกแล้ว • ความขัดแย้งเก่าต้องตรวจสอบ Data Reconciliation</p>
     </section>
     {error&&<div className="panel" role="alert" style={{color:'#a63329',marginBottom:12}}>โหลดข้อมูลล้มเหลว: {error}</div>}
@@ -184,7 +201,7 @@ export default function HotelRoomStatusPage(){
       </section>}
     </>}
     <style jsx>{`
-      .hotel-header-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}.hotel-update-meta{display:grid;gap:2px;text-align:right;line-height:1.25}.hotel-update-meta span{font-size:8.5px;color:var(--muted);font-weight:700}.hotel-update-meta b{font-size:10px;color:var(--navy);font-weight:800;white-space:nowrap}.hotel-search-toolbar{flex-wrap:wrap;gap:8px;margin-bottom:0}.hotel-search-toolbar input{flex:1 1 225px;min-width:190px;max-width:420px;min-height:34px}.hotel-search-toolbar select{flex:0 1 155px;min-width:120px;padding:7px 9px}.hotel-status-table{max-height:68vh;overflow:auto} .hotel-status-table th{position:sticky;top:0;z-index:3}.hotel-conflict{color:#9e312d!important;font-weight:800}@media print{.hotel-status-table{max-height:none;overflow:visible}.hotel-status-table thead{display:table-header-group}}.hotel-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.hotel-kpi{border:1px solid #d9e0e7;border-radius:10px;background:#f6f8fa;padding:10px;text-align:left;cursor:pointer} .hotel-kpi.chosen{outline:2px solid var(--navy);outline-offset:1px}.hotel-kpi.status-available,.hotel-status-badge.status-available{background:#e4f5e9;color:#176238;border-color:#82cca0}.hotel-kpi.status-ooo,.hotel-status-badge.status-ooo{background:#ffebeb;color:#a0222a;border-color:#eaa7a9}.hotel-kpi.status-oos,.hotel-status-badge.status-oos{background:#fff1d6;color:#925711;border-color:#eac27a}.hotel-kpi.status-unknown,.hotel-status-badge.status-unknown{background:#eceff3;color:#506071;border-color:#bfc8d2}.hotel-status-badge{display:inline-flex;align-items:center;padding:5px 9px;border:1px solid;border-radius:7px;font-weight:800;white-space:nowrap} .hotel-kpi span,.hotel-kpi small{display:block;color:inherit;font-size:10px} .hotel-kpi b{display:block;font-size:24px;margin:4px 0;color:inherit}.hotel-pending{background:#fff8e7;border:1px solid #efdcab;padding:12px;border-radius:10px;margin:12px 0;font-size:11px}.hotel-pending p{margin:7px 0 0;line-height:1.5}.hotel-editor{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px}.hotel-editor label{display:grid;gap:5px;font-size:11px;font-weight:700}.hotel-editor input,.hotel-editor select,.hotel-editor textarea{width:100%;border:1px solid #cad2de;border-radius:8px;background:#fff;padding:8px;font:inherit}.hotel-editor .full{grid-column:1/-1}.hotel-editor button{grid-column:1/-1;justify-self:start}
+      .hotel-header-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}.hotel-update-meta{display:grid;gap:2px;text-align:right;line-height:1.25}.hotel-update-meta span{font-size:8.5px;color:var(--muted);font-weight:700}.hotel-update-meta b{font-size:10px;color:var(--navy);font-weight:800;white-space:nowrap}.hotel-search-toolbar{flex-wrap:wrap;gap:8px;margin-bottom:0}.hotel-search-toolbar input{flex:1 1 225px;min-width:190px;max-width:420px;min-height:34px}.hotel-search-toolbar select{flex:0 1 155px;min-width:120px;padding:7px 9px}.hotel-date-range-filter{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px}.hotel-date-range-filter>b{font-size:11px;white-space:nowrap}.hotel-date-range-filter label{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700}.hotel-date-range-filter input{width:148px;min-width:0;min-height:34px;border:1px solid #cad2de;border-radius:7px;background:#fff;padding:5px 7px;font:inherit}.hotel-date-range-filter small{font-size:10px;color:var(--muted)}.hotel-status-table{max-height:68vh;overflow:auto} .hotel-status-table th{position:sticky;top:0;z-index:3}.hotel-conflict{color:#9e312d!important;font-weight:800}@media print{.hotel-status-table{max-height:none;overflow:visible}.hotel-status-table thead{display:table-header-group}}.hotel-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.hotel-kpi{border:1px solid #d9e0e7;border-radius:10px;background:#f6f8fa;padding:10px;text-align:left;cursor:pointer} .hotel-kpi.chosen{outline:2px solid var(--navy);outline-offset:1px}.hotel-kpi.status-available,.hotel-status-badge.status-available{background:#e4f5e9;color:#176238;border-color:#82cca0}.hotel-kpi.status-ooo,.hotel-status-badge.status-ooo{background:#ffebeb;color:#a0222a;border-color:#eaa7a9}.hotel-kpi.status-oos,.hotel-status-badge.status-oos{background:#fff1d6;color:#925711;border-color:#eac27a}.hotel-kpi.status-unknown,.hotel-status-badge.status-unknown{background:#eceff3;color:#506071;border-color:#bfc8d2}.hotel-status-badge{display:inline-flex;align-items:center;padding:5px 9px;border:1px solid;border-radius:7px;font-weight:800;white-space:nowrap} .hotel-kpi span,.hotel-kpi small{display:block;color:inherit;font-size:10px} .hotel-kpi b{display:block;font-size:24px;margin:4px 0;color:inherit}.hotel-pending{background:#fff8e7;border:1px solid #efdcab;padding:12px;border-radius:10px;margin:12px 0;font-size:11px}.hotel-pending p{margin:7px 0 0;line-height:1.5}.hotel-editor{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px}.hotel-editor label{display:grid;gap:5px;font-size:11px;font-weight:700}.hotel-editor input,.hotel-editor select,.hotel-editor textarea{width:100%;border:1px solid #cad2de;border-radius:8px;background:#fff;padding:8px;font:inherit}.hotel-editor .full{grid-column:1/-1}.hotel-editor button{grid-column:1/-1;justify-self:start}
       @media(max-width:760px){.hotel-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.hotel-editor{grid-template-columns:1fr}}
     `}</style>
   </AppShell>

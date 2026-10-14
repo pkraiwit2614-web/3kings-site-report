@@ -86,4 +86,28 @@ assert.match(flow,/style=\{\{fontFamily:'inherit',width:`\$\{diagramZoom\}%`\}\}
 assert.doesNotMatch(flow,/min-width:1180px/)
 assert.match(flow,/onClick=\{\(\)=>setDiagramZoom\(100\)\}/)
 assert.match(fs.readFileSync('app/defects/page.tsx','utf8'),/<DefectInputPanel\s*\/>/)
+// Date filtering is read-only and uses the displayed Hotel availability period, not updated_at.
+const overlapSource=tab.match(/const hotelPeriodOverlaps=\(status:HotelStatus\|null,start:string,end:string\)=>\{[\s\S]*?\n\}/)
+assert.ok(overlapSource,'Hotel period overlap helper must be present')
+const overlapModule={exports:null}
+vm.runInNewContext(ts.transpileModule(overlapSource[0]+'\nmodule.exports=hotelPeriodOverlaps',{
+  compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}
+}).outputText,{module:overlapModule})
+const dateMatches=overlapModule.exports
+const oct={start_date:'2026-10-01',end_date:'2026-10-14'}
+assert.equal(dateMatches(null,'',''),true,'no date filter preserves all rows')
+assert.equal(dateMatches(oct,'2026-10-14','2026-10-20'),true,'ending boundary included')
+assert.equal(dateMatches(oct,'2026-09-01','2026-10-01'),true,'starting boundary included')
+assert.equal(dateMatches(oct,'2026-10-15','2026-10-20'),false,'non-overlapping period excluded')
+assert.equal(dateMatches(oct,'2026-10-15',''),false,'start-only filter excludes ended periods')
+assert.equal(dateMatches(oct,'','2026-09-30'),false,'end-only filter excludes later starts')
+assert.equal(dateMatches({start_date:'2026-10-01',end_date:null},'2026-11-01','2026-11-30'),true,'missing Hotel end is open-ended')
+assert.equal(dateMatches({start_date:null,end_date:null},'2026-10-01','2026-10-31'),false,'unknown Hotel start is not invented')
+assert.match(tab,/hotelPeriodOverlaps\(g.hotel,rangeStart,rangeEnd\)/,'filter actual displayed Hotel dates')
+assert.match(tab,/setRangeStart\(''\);setRangeEnd\(''\)/,'reset clears both date filters')
+assert.match(tab,/type="date" value=\{rangeStart\}/)
+assert.match(tab,/type="date" value=\{rangeEnd\}/)
+assert.match(tab,/const invalidDateRange=Boolean\(rangeStart&&rangeEnd&&rangeStart>rangeEnd\)/)
+assert.doesNotMatch(overlapSource[0],/\brpc\b|\b(update|insert|delete)\b/i,'filter must not write data')
+
 console.log('Hotel room availability checks passed: role visibility, 31 Combine groups, Good aliases, separation and review')
