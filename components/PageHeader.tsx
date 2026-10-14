@@ -5,7 +5,8 @@ const printableTitles=new Set([
   'Above Condo — Defect Report',
   'วัสดุ เครื่องมือและผู้รับเหมา',
   'Schedule / Plan vs Actual',
-  'การจัดซื้อ/จัดจ้าง'
+  'การจัดซื้อ/จัดจ้าง',
+  'Hotel Work Plan | Day 1–9'
 ])
 
 export default function PageHeader({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode }) {
