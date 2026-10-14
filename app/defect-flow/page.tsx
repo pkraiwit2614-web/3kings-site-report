@@ -311,7 +311,7 @@ export default function DefectFlowPage(){
     </div>
     <form className="panel filter-panel compact-filter-shell flow-room-search-panel" onSubmit={e=>{e.preventDefault();if(roomSearch.trim())window.location.assign('/defects?q='+encodeURIComponent(roomSearch.trim())+'#room-list')}}>
       <div className="toolbar detail-toolbar compact-filter flow-room-search-toolbar">
-        <input value={roomSearch} onChange={e=>setRoomSearch(e.target.value)} placeholder="ค้นหาหลายรายการได้ เช่น A521, A522, รอตรวจรับ" aria-label="ค้นหาเลขห้อง ชื่อเจ้าของ สถานะ หรือรายละเอียดงาน หลายคำคั่นด้วย comma"/>
+        <input value={roomSearch} onChange={e=>setRoomSearch(e.target.value)} placeholder="ค้นหา เช่น B101, Good01, Good-01, A521" aria-label="ค้นหาเลขห้อง ชื่อเจ้าของ สถานะ หรือรายละเอียดงาน หลายคำคั่นด้วย comma"/>
         <button className="button primary" type="submit" disabled={!roomSearch.trim()}>ค้นหา → Defect Detail</button>
         {roomSearch&&<button className="button" type="button" onClick={()=>setRoomSearch('')}>ล้างคำค้น</button>}
       </div>
