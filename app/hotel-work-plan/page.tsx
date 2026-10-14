@@ -38,7 +38,8 @@ export default function HotelWorkPlanPage(){
  const [selectedDay,setSelectedDay]=useState(1)
  const [selectedSeq,setSelectedSeq]=useState<number|null>(null)
  const [roomSearch,setRoomSearch]=useState('')
- useEffect(()=>{const room=new URLSearchParams(window.location.search).get('room');if(room)setRoomSearch(room)},[])
+ const [initialRoom,setInitialRoom]=useState<string|null>(null)
+ useEffect(()=>{const room=new URLSearchParams(window.location.search).get('room');if(room){setRoomSearch(room);setInitialRoom(room)}},[])
  const [building,setBuilding]=useState('ALL')
  const [dayDate,setDayDate]=useState('')
  const [dayNote,setDayNote]=useState('')
@@ -74,6 +75,16 @@ export default function HotelWorkPlanPage(){
   window.addEventListener('focus',onFocus)
   return()=>{alive=false;window.removeEventListener('focus',onFocus)}
  },[refresh])
+ useEffect(()=>{
+  if(!initialRoom||!rooms.length)return
+  const room=normalizeHotelRoom(initialRoom)
+  const match=rooms.find(r=>r.room_no===room)
+  if(match)setSelectedDay(match.day_no)
+  setInitialRoom(null)
+ },[initialRoom,rooms])
+ useEffect(()=>{
+  if(selectedSeq!==null)window.requestAnimationFrame(()=>document.getElementById('work-room-detail')?.scrollIntoView({behavior:'smooth',block:'start'}))
+ },[selectedSeq])
  const day=days.find(d=>d.day_no===selectedDay)
  const selected=rooms.find(r=>r.seq_no===selectedSeq)
  useEffect(()=>{setDayDate(day?.planned_date||'');setDayNote(day?.note||'')},[day?.day_no,day?.revision,day?.planned_date,day?.note])
