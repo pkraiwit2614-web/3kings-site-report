@@ -61,7 +61,7 @@ jobs:
       - name: Complete role matrix regression tests
         run: node tests/role-matrix.test.cjs
 
-      - name: Read-only Permission Matrix UI regression
+      - name: Permission Matrix default regression
         run: node tests/role-permission-matrix-ui.test.cjs
 
       - name: RBAC regression tests
@@ -112,3 +112,6 @@ jobs:
       - name: Materials print pagination regression
         run: node tests/materials-print-layout.test.cjs
 
+
+      - name: Editable permission defaults and confirmed save workflow
+        run: node --test tests/editable-role-matrix.test.cjs tests/editable-role-matrix-ui.test.cjs tests/access-role-preview-hook.test.cjs

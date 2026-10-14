@@ -1,0 +1,688 @@
+[
+  {
+    "role": "owner",
+    "module": "dashboard",
+    "level": "manage",
+    "default_level": "manage",
+    "locked": true
+  },
+  {
+    "role": "owner",
+    "module": "presentation",
+    "level": "manage",
+    "default_level": "manage",
+    "locked": true
+  },
+  {
+    "role": "owner",
+    "module": "schedule",
+    "level": "manage",
+    "default_level": "manage",
+    "locked": true
+  },
+  {
+    "role": "owner",
+    "module": "reports",
+    "level": "manage",
+    "default_level": "manage",
+    "locked": true
+  },
+  {
+    "role": "owner",
+    "module": "defect",
+    "level": "manage",
+    "default_level": "manage",
+    "locked": true
+  },
+  {
+    "role": "owner",
+    "module": "hotel",
+    "level": "manage",
+    "default_level": "manage",
+    "locked": true
+  },
+  {
+    "role": "owner",
+    "module": "materials",
+    "level": "manage",
+    "default_level": "manage",
+    "locked": true
+  },
+  {
+    "role": "owner",
+    "module": "procurement",
+    "level": "manage",
+    "default_level": "manage",
+    "locked": true
+  },
+  {
+    "role": "owner",
+    "module": "calendar",
+    "level": "manage",
+    "default_level": "manage",
+    "locked": true
+  },
+  {
+    "role": "owner",
+    "module": "payroll",
+    "level": "manage",
+    "default_level": "manage",
+    "locked": true
+  },
+  {
+    "role": "owner",
+    "module": "users",
+    "level": "manage",
+    "default_level": "manage",
+    "locked": true
+  },
+  {
+    "role": "owner",
+    "module": "activity",
+    "level": "view",
+    "default_level": "view",
+    "locked": true
+  },
+  {
+    "role": "owner",
+    "module": "reconciliation",
+    "level": "manage",
+    "default_level": "manage",
+    "locked": true
+  },
+  {
+    "role": "admin",
+    "module": "dashboard",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "admin",
+    "module": "presentation",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "admin",
+    "module": "schedule",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "admin",
+    "module": "reports",
+    "level": "manage",
+    "default_level": "manage",
+    "locked": false
+  },
+  {
+    "role": "admin",
+    "module": "defect",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "admin",
+    "module": "hotel",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "admin",
+    "module": "materials",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "admin",
+    "module": "procurement",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "admin",
+    "module": "calendar",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "admin",
+    "module": "payroll",
+    "level": "manage",
+    "default_level": "manage",
+    "locked": false
+  },
+  {
+    "role": "admin",
+    "module": "users",
+    "level": "none",
+    "default_level": "none",
+    "locked": true
+  },
+  {
+    "role": "admin",
+    "module": "activity",
+    "level": "none",
+    "default_level": "none",
+    "locked": true
+  },
+  {
+    "role": "admin",
+    "module": "reconciliation",
+    "level": "none",
+    "default_level": "none",
+    "locked": true
+  },
+  {
+    "role": "viewer",
+    "module": "dashboard",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "viewer",
+    "module": "presentation",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "viewer",
+    "module": "schedule",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "viewer",
+    "module": "reports",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "viewer",
+    "module": "defect",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "viewer",
+    "module": "hotel",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "viewer",
+    "module": "materials",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "viewer",
+    "module": "procurement",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "viewer",
+    "module": "calendar",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "viewer",
+    "module": "payroll",
+    "level": "none",
+    "default_level": "none",
+    "locked": false
+  },
+  {
+    "role": "viewer",
+    "module": "users",
+    "level": "none",
+    "default_level": "none",
+    "locked": true
+  },
+  {
+    "role": "viewer",
+    "module": "activity",
+    "level": "none",
+    "default_level": "none",
+    "locked": true
+  },
+  {
+    "role": "viewer",
+    "module": "reconciliation",
+    "level": "none",
+    "default_level": "none",
+    "locked": true
+  },
+  {
+    "role": "viewer_editor",
+    "module": "dashboard",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "viewer_editor",
+    "module": "presentation",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "viewer_editor",
+    "module": "schedule",
+    "level": "manage",
+    "default_level": "manage",
+    "locked": false
+  },
+  {
+    "role": "viewer_editor",
+    "module": "reports",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "viewer_editor",
+    "module": "defect",
+    "level": "manage",
+    "default_level": "manage",
+    "locked": false
+  },
+  {
+    "role": "viewer_editor",
+    "module": "hotel",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "viewer_editor",
+    "module": "materials",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "viewer_editor",
+    "module": "procurement",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "viewer_editor",
+    "module": "calendar",
+    "level": "manage",
+    "default_level": "manage",
+    "locked": false
+  },
+  {
+    "role": "viewer_editor",
+    "module": "payroll",
+    "level": "none",
+    "default_level": "none",
+    "locked": false
+  },
+  {
+    "role": "viewer_editor",
+    "module": "users",
+    "level": "none",
+    "default_level": "none",
+    "locked": true
+  },
+  {
+    "role": "viewer_editor",
+    "module": "activity",
+    "level": "none",
+    "default_level": "none",
+    "locked": true
+  },
+  {
+    "role": "viewer_editor",
+    "module": "reconciliation",
+    "level": "none",
+    "default_level": "none",
+    "locked": true
+  },
+  {
+    "role": "purchase",
+    "module": "dashboard",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "purchase",
+    "module": "presentation",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "purchase",
+    "module": "schedule",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "purchase",
+    "module": "reports",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "purchase",
+    "module": "defect",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "purchase",
+    "module": "hotel",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "purchase",
+    "module": "materials",
+    "level": "manage",
+    "default_level": "manage",
+    "locked": false
+  },
+  {
+    "role": "purchase",
+    "module": "procurement",
+    "level": "manage",
+    "default_level": "manage",
+    "locked": false
+  },
+  {
+    "role": "purchase",
+    "module": "calendar",
+    "level": "manage",
+    "default_level": "manage",
+    "locked": false
+  },
+  {
+    "role": "purchase",
+    "module": "payroll",
+    "level": "none",
+    "default_level": "none",
+    "locked": false
+  },
+  {
+    "role": "purchase",
+    "module": "users",
+    "level": "none",
+    "default_level": "none",
+    "locked": true
+  },
+  {
+    "role": "purchase",
+    "module": "activity",
+    "level": "none",
+    "default_level": "none",
+    "locked": true
+  },
+  {
+    "role": "purchase",
+    "module": "reconciliation",
+    "level": "none",
+    "default_level": "none",
+    "locked": true
+  },
+  {
+    "role": "defect_contributor",
+    "module": "dashboard",
+    "level": "none",
+    "default_level": "none",
+    "locked": false
+  },
+  {
+    "role": "defect_contributor",
+    "module": "presentation",
+    "level": "none",
+    "default_level": "none",
+    "locked": false
+  },
+  {
+    "role": "defect_contributor",
+    "module": "schedule",
+    "level": "none",
+    "default_level": "none",
+    "locked": false
+  },
+  {
+    "role": "defect_contributor",
+    "module": "reports",
+    "level": "none",
+    "default_level": "none",
+    "locked": false
+  },
+  {
+    "role": "defect_contributor",
+    "module": "defect",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "defect_contributor",
+    "module": "hotel",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "defect_contributor",
+    "module": "materials",
+    "level": "none",
+    "default_level": "none",
+    "locked": false
+  },
+  {
+    "role": "defect_contributor",
+    "module": "procurement",
+    "level": "none",
+    "default_level": "none",
+    "locked": false
+  },
+  {
+    "role": "defect_contributor",
+    "module": "calendar",
+    "level": "none",
+    "default_level": "none",
+    "locked": false
+  },
+  {
+    "role": "defect_contributor",
+    "module": "payroll",
+    "level": "none",
+    "default_level": "none",
+    "locked": false
+  },
+  {
+    "role": "defect_contributor",
+    "module": "users",
+    "level": "none",
+    "default_level": "none",
+    "locked": true
+  },
+  {
+    "role": "defect_contributor",
+    "module": "activity",
+    "level": "none",
+    "default_level": "none",
+    "locked": true
+  },
+  {
+    "role": "defect_contributor",
+    "module": "reconciliation",
+    "level": "none",
+    "default_level": "none",
+    "locked": true
+  },
+  {
+    "role": "defect_editor",
+    "module": "dashboard",
+    "level": "none",
+    "default_level": "none",
+    "locked": false
+  },
+  {
+    "role": "defect_editor",
+    "module": "presentation",
+    "level": "none",
+    "default_level": "none",
+    "locked": false
+  },
+  {
+    "role": "defect_editor",
+    "module": "schedule",
+    "level": "none",
+    "default_level": "none",
+    "locked": false
+  },
+  {
+    "role": "defect_editor",
+    "module": "reports",
+    "level": "none",
+    "default_level": "none",
+    "locked": false
+  },
+  {
+    "role": "defect_editor",
+    "module": "defect",
+    "level": "manage",
+    "default_level": "manage",
+    "locked": false
+  },
+  {
+    "role": "defect_editor",
+    "module": "hotel",
+    "level": "manage",
+    "default_level": "manage",
+    "locked": false
+  },
+  {
+    "role": "defect_editor",
+    "module": "materials",
+    "level": "none",
+    "default_level": "none",
+    "locked": false
+  },
+  {
+    "role": "defect_editor",
+    "module": "procurement",
+    "level": "none",
+    "default_level": "none",
+    "locked": false
+  },
+  {
+    "role": "defect_editor",
+    "module": "calendar",
+    "level": "none",
+    "default_level": "none",
+    "locked": false
+  },
+  {
+    "role": "defect_editor",
+    "module": "payroll",
+    "level": "none",
+    "default_level": "none",
+    "locked": false
+  },
+  {
+    "role": "defect_editor",
+    "module": "users",
+    "level": "none",
+    "default_level": "none",
+    "locked": true
+  },
+  {
+    "role": "defect_editor",
+    "module": "activity",
+    "level": "none",
+    "default_level": "none",
+    "locked": true
+  },
+  {
+    "role": "defect_editor",
+    "module": "reconciliation",
+    "level": "none",
+    "default_level": "none",
+    "locked": true
+  },
+  {
+    "role": "owner",
+    "module": "workplan",
+    "level": "manage",
+    "default_level": "manage",
+    "locked": true
+  },
+  {
+    "role": "admin",
+    "module": "workplan",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "viewer",
+    "module": "workplan",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "viewer_editor",
+    "module": "workplan",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "purchase",
+    "module": "workplan",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "defect_contributor",
+    "module": "workplan",
+    "level": "view",
+    "default_level": "view",
+    "locked": false
+  },
+  {
+    "role": "defect_editor",
+    "module": "workplan",
+    "level": "manage",
+    "default_level": "manage",
+    "locked": false
+  }
+]

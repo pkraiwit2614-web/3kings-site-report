@@ -5,6 +5,7 @@ import Link from 'next/link'
 import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
 import useAccessRole from '@/components/useAccessRole'
+import {canEditWorkPlan} from '@/lib/accessControl'
 import {getSupabase} from '@/lib/supabase'
 import {hotelRoomLabel,hotelRoomMembers,normalizeHotelRoom} from '@/lib/hotelRoomGroups'
 import {statusLabel,statusTone} from '@/lib/defectStatusPresentation'
@@ -47,7 +48,7 @@ function contractorFor(defect:string|null,building:string){
 }
 export default function HotelWorkPlanPage(){
  const {role}=useAccessRole()
- const editable=role==='owner'||role==='defect_editor'
+ const editable=canEditWorkPlan(role)
  const [days,setDays]=useState<Day[]>([])
  const [rooms,setRooms]=useState<Room[]>([])
  const [defects,setDefects]=useState<Defect[]>([])

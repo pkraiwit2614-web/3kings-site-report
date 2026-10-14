@@ -58,7 +58,7 @@ assert.match(server,/decryptGoogleRefreshToken/)
 assert.match(server,/refreshGoogleAccessToken/)
 assert.match(tokenStore,/google_calendar_owner_token_upsert/)
 assert.match(tokenStore,/google_calendar_owner_token_get/)
-assert.match(auth,/canAccessPath\(role,'\/calendar'\)/)
+assert.match(auth,/canAccessPath\(role,'\/calendar',permissions\)/)
 
 assert.match(migration,/app_private\.google_calendar_owner_token/)
 assert.match(migration,/bc6ee244-3472-422f-bbf9-d551987ee9a3/)

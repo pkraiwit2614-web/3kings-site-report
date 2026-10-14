@@ -1,3 +1,8 @@
+'use client'
+import {useEffect,useState} from 'react'
+import {getSupabase} from '@/lib/supabase'
+import {applyPermissionSnapshot,loadPermissions} from '@/lib/permissionClient'
+import {moduleForPath,canEditHotel,canEditWorkPlan,type PermissionSnapshot,type PermissionRow} from '@/lib/accessControl'
 import {
   canAccessPath,
   canEditCalendar,
@@ -20,8 +25,7 @@ type PermissionSection = {
   readOnly?: boolean
 }
 
-// Display-only matrix: all route and editor decisions use the existing access-control
-// helpers. The Defect/OOO editor-specific exception mirrors the guarded DB RPC.
+// Defaults are derived from the existing helpers; edits are persisted by the owner-only RPC.
 export const MATRIX_ROLES: readonly AccessRole[] = [
   'owner', 'admin', 'viewer', 'viewer_editor',
   'purchase', 'defect_contributor', 'defect_editor',
@@ -33,8 +37,9 @@ export const MATRIX_SECTIONS: readonly PermissionSection[] = [
   {label: 'Schedule / Plan vs Actual', path: '/schedule', canManage: canEditSchedule},
   {label: 'Site Operations', path: '/reports', canManage: canEditSiteOperations},
   {label: 'Defect Report / Flow', path: '/defect-flow', canManage: canEditDefect},
+  {label: 'Hotel Work Plan', path: '/hotel-work-plan', canManage: canEditWorkPlan},
   {label: 'Room Status | OOO/OOS', path: '/hotel-room-status',
-    canManage: role => role === 'owner' || role === 'defect_editor'},
+    canManage: canEditHotel},
   {label: 'วัสดุ / เครื่องมือ', path: '/materials', canManage: canManageMaterialsTools},
   {label: 'Procurement', path: '/procurement', canManage: canEditProcurement},
   {label: 'Work Calendar', path: '/calendar', canManage: canEditCalendar},
@@ -58,13 +63,42 @@ const statusLabel: Record<PermissionLevel, string> = {
 }
 
 export default function RolePermissionMatrix() {
+  const [snapshot,setSnapshot]=useState<PermissionSnapshot|null>(null)
+  const [draft,setDraft]=useState<Record<string,PermissionLevel>>({})
+  const [message,setMessage]=useState('')
+  const [saving,setSaving]=useState(false)
+  const [confirming,setConfirming]=useState(false)
+  const [history,setHistory]=useState<{revision:number;changed_at:string;full_name:string;changes:{role:string;module:string;before:PermissionLevel;after:PermissionLevel}[]}[]>([])
+  const key=(r:PermissionRow)=>r.role+':'+r.module
+  const changes=snapshot?.rows.filter(r=>draft[key(r)]!==undefined&&draft[key(r)]!==r.level).map(r=>({role:r.role,module:r.module,level:draft[key(r)],before:r.level}))||[]
+  async function refresh(){
+    try{const value=await loadPermissions(true);setSnapshot(value);setDraft({});setConfirming(false);setMessage('');const {data,error}=await getSupabase().rpc('role_permission_matrix_history');if(!error)setHistory(data||[])}catch(e){setMessage(e instanceof Error?e.message:'โหลดสิทธิ์ไม่สำเร็จ')}
+  }
+  useEffect(()=>{void refresh()},[])
+  async function save(){
+    if(!snapshot||!changes.length||saving)return
+    setSaving(true);setMessage('')
+    try{
+      const {data,error}=await getSupabase().rpc('role_permission_matrix_save',{p_expected_revision:snapshot.revision,p_changes:changes.map(({role,module,level})=>({role,module,level}))})
+      if(error)throw error
+      applyPermissionSnapshot(data);setSnapshot(data);setDraft({});setConfirming(false)
+      const {data:logs}=await getSupabase().rpc('role_permission_matrix_history');setHistory(logs||[])
+      setMessage('บันทึกสิทธิ์แล้ว ระบบตรวจสิทธิ์ใหม่ที่ฐานข้อมูลทันที')
+    }catch(e){const text=e instanceof Error?e.message:String((e as {message?:string})?.message||e);setMessage(text.includes('REVISION_CONFLICT')?'มีการเปลี่ยนสิทธิ์จากหน้าจออื่น กรุณาโหลดข้อมูลล่าสุดก่อนแก้ไขอีกครั้ง':'บันทึกไม่สำเร็จ: '+text)}finally{setSaving(false)}
+  }
+  function restoreDefaults(){
+    if(!snapshot)return
+    setDraft(Object.fromEntries(snapshot.rows.filter(r=>!r.locked).map(r=>[key(r),r.default_level])))
+    setConfirming(false)
+  }
+
   return <section className="panel permission-matrix" aria-labelledby="permission-matrix-title">
     <div className="permission-matrix-heading">
       <div>
         <h2 id="permission-matrix-title">Role Permission Matrix</h2>
-        <p>ตารางสิทธิ์ตามการตั้งค่าปัจจุบันของ Web App • อ่านอย่างเดียว ไม่สามารถเปลี่ยนสิทธิ์จากตารางนี้</p>
+        <p>แก้ไขได้เฉพาะ Owner • เลือกสิทธิ์ ตรวจรายการเปลี่ยนแปลง แล้วกดยืนยันบันทึก</p>
       </div>
-      <span className="permission-matrix-count">7 Roles · 13 Modules</span>
+      <span className="permission-matrix-count">7 Roles · 14 Modules</span>
     </div>
 
     <div className="permission-matrix-legend" aria-label="คำอธิบายสถานะสิทธิ์">
@@ -73,6 +107,20 @@ export default function RolePermissionMatrix() {
       <span><b className="permission-legend-mark none">—</b> ไม่มีสิทธิ์เข้าถึง</span>
     </div>
 
+    <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:12}}>
+      <button className="button" disabled={!snapshot||saving||!changes.length} onClick={()=>setConfirming(true)}>ตรวจสอบก่อนบันทึก ({changes.length})</button>
+      <button className="button" disabled={!snapshot||saving} onClick={()=>{setDraft({});setConfirming(false)}}>ยกเลิกการแก้ไข</button>
+      <button className="button" disabled={!snapshot||saving} onClick={restoreDefaults}>คืนค่าเริ่มต้น</button>
+      <button className="button" disabled={saving} onClick={()=>void refresh()}>โหลดข้อมูลล่าสุด</button>
+    </div>
+    {message&&<p role="status">{message}</p>}
+    {!snapshot&&<p>กำลังโหลดสิทธิ์จริงจากระบบ…</p>}
+    {confirming&&<div className="panel" role="region" aria-label="ตรวจสอบสิทธิ์ก่อนบันทึก" style={{marginBottom:12}}>
+      <b>ตรวจสอบ {changes.length} รายการ — มีผลกับผู้ใช้ทุกคนใน Role นั้น</b>
+      <ul>{changes.map(c=><li key={c.role+c.module}>{ROLE_PREVIEW_LABELS[c.role]} / {MATRIX_SECTIONS.find(s=>moduleForPath(s.path)===c.module)?.label}: {statusLabel[c.before]} → {statusLabel[c.level]}</li>)}</ul>
+      <button className="button primary" disabled={saving||!changes.length} onClick={()=>void save()}>{saving?'กำลังบันทึก…':'ยืนยันบันทึกสิทธิ์'}</button>{' '}
+      <button className="button" disabled={saving} onClick={()=>setConfirming(false)}>กลับไปแก้ไข</button>
+    </div>}
     <div className="permission-matrix-scroll" tabIndex={0} role="region" aria-label="ตารางเปรียบเทียบสิทธิ์ทั้งเจ็ด Role">
       <table className="permission-matrix-table">
         <thead><tr>
@@ -83,9 +131,12 @@ export default function RolePermissionMatrix() {
           {MATRIX_SECTIONS.map(section => <tr key={section.path}>
             <th scope="row">{section.label}</th>
             {MATRIX_ROLES.map(role => {
-              const level = permissionMatrixLevel(role, section)
+              const cell=snapshot?.rows.find(r=>r.role===role&&r.module===moduleForPath(section.path))
+              const level = cell?(draft[key(cell)]??cell.level):permissionMatrixLevel(role, section)
               return <td key={role} data-level={level} aria-label={`${ROLE_PREVIEW_LABELS[role]}: ${statusLabel[level]}`}>
-                <span className="permission-state">{statusLabel[level]}</span>
+                {cell&&!cell.locked?<select aria-label={`${ROLE_PREVIEW_LABELS[role]} / ${section.label}`} value={level} disabled={saving} onChange={e=>{setDraft(d=>({...d,[key(cell)]:e.target.value as PermissionLevel}));setConfirming(false)}} style={{maxWidth:96,fontSize:11,padding:5,border:level!==cell.level?'2px solid #d48b13':'1px solid #cbd5e1',borderRadius:6}}>
+                  <option value="none">ไม่มีสิทธิ์</option><option value="view">ดู</option>{!section.ownerManaged&&!section.readOnly&&<option value="manage">จัดการ</option>}
+                </select>:<span className="permission-state" title="สิทธิ์ระบบที่ป้องกันการแก้ไข">{statusLabel[level]} · ล็อก</span>}
               </td>
             })}
           </tr>)}
@@ -94,9 +145,11 @@ export default function RolePermissionMatrix() {
     </div>
 
     <div className="permission-matrix-notes">
-      <p><b>Purchase:</b> จัดการสถานะและรายละเอียดวัสดุ/เครื่องมือ, Procurement และ Work Calendar ได้ แต่ไม่มีสิทธิ์ดู Payroll</p>
-      <p><b>Defect Viewer:</b> คือ Role เดิม <code>defect_contributor</code> (ดูอย่างเดียว) · <b>Defect Contributor:</b> คือ Role เดิม <code>defect_editor</code> (แก้ไข Defect และ OOO/OOS ได้)</p>
-      <p>การจัดการวัสดุ/เครื่องมือไม่รวมการแก้ไขจำนวน สเปก หรือเลข PR/PO ในไฟล์ต้นทาง • การบังคับสิทธิ์ยังอยู่ที่หน้าเว็บและฐานข้อมูลตามเดิม</p>
+      <p>ค่าเริ่มต้นคง Role และสิทธิ์เดิมทั้งหมด • Owner, System &amp; Access, Activity History และ Data Reconciliation ล็อกไว้เพื่อป้องกันการสูญเสียสิทธิ์ควบคุมระบบ</p>
+      <p>“จัดการ” เปิดฟังก์ชันแก้ไขของโมดูลนั้น โดยคงข้อจำกัดรายรายการ การตรวจข้อมูล และกฎอนุมัติเดิม ไม่รวมการแก้ไฟล์ต้นทางหรือการลบที่สงวนไว้สำหรับ Owner</p>
+      <p>การถอนสิทธิ์มีผลกับคำขอใหม่ที่ฐานข้อมูลทันที หน้าที่เปิดอยู่ตรวจสิทธิ์ใหม่เมื่อกลับเข้าแท็บหรือภายใน 30 วินาที • ข้อมูลที่เปิดอ่านไปแล้วไม่สามารถเรียกคืนได้</p>
+      <p>Defect Viewer ใช้รหัสเดิม <code>defect_contributor</code> • Defect Contributor ใช้รหัสเดิม <code>defect_editor</code></p>
+      <details><summary>ประวัติการเปลี่ยนสิทธิ์ ({history.length} รายการล่าสุด)</summary>{history.map(h=><div key={h.revision} style={{padding:'8px 0'}}><b>เวอร์ชัน {h.revision}</b> · {new Date(h.changed_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})} · {h.full_name||'Owner'}<ul>{h.changes.map(c=><li key={c.role+c.module}>{ROLE_PREVIEW_LABELS[c.role as AccessRole]||c.role} / {MATRIX_SECTIONS.find(s=>moduleForPath(s.path)===c.module)?.label||c.module}: {statusLabel[c.before]} → {statusLabel[c.after]}</li>)}</ul></div>)}</details>
     </div>
     <style jsx>{`
       .permission-matrix{padding:16px;min-width:0}

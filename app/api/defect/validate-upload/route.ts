@@ -1,3 +1,4 @@
+import {readPermissionSnapshot} from '@/lib/permissionServer'
 import {canEditDefect,resolveAccessRole} from '@/lib/accessControl'
 import {NextRequest,NextResponse} from 'next/server'
 import {createClient} from '@supabase/supabase-js'
@@ -112,7 +113,9 @@ export async function POST(request:NextRequest){
   const {data:{user},error:userError}=await supabase.auth.getUser(accessToken)
   if(userError||!user)return NextResponse.json({ok:false,error:'invalid_auth'},{status:401})
   const {data:profile}=await supabase.from('profiles').select('role,active').eq('user_id',user.id).maybeSingle()
-  if(!profile?.active||!canEditDefect(resolveAccessRole(profile.role,user.id))){
+  let permissions
+  try{permissions=await readPermissionSnapshot(supabase)}catch{return Response.json({error:'permission_check_unavailable'},{status:503})}
+  if(!profile?.active||!canEditDefect(resolveAccessRole(profile.role,user.id),permissions)){
     return NextResponse.json({ok:false,error:'forbidden'},{status:403})
   }
 

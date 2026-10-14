@@ -1,3 +1,4 @@
+import {readPermissionSnapshot} from '@/lib/permissionServer'
 import {NextRequest,NextResponse} from 'next/server'
 import {authorizeCalendarApi} from '@/lib/googleCalendarApiAuth'
 import {googleCalendarSharedConfigured,googleCalendarSharedFetch} from '@/lib/googleCalendarServer'
@@ -50,11 +51,11 @@ const SUPABASE_URL=process.env.NEXT_PUBLIC_SUPABASE_URL||'https://wtqubwdduzedmc
 const SUPABASE_KEY=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||'sb_publishable_Ruyka15H3QApZKY9q2U-Vg_CjmEuMRX'
 
 async function enforceProcurementLinkGuard(role:string,token:string,calendarId:string,eventId:string){
-  if(canEditProcurement(role as Parameters<typeof canEditProcurement>[0]))return null
   // A calendar editor must not silently change a Purchase-owned delivery promise.
   const client=createClient(SUPABASE_URL,SUPABASE_KEY,{
     global:{headers:{Authorization:'Bearer '+token}},auth:{persistSession:false,autoRefreshToken:false},
   })
+  try{if(canEditProcurement(role as Parameters<typeof canEditProcurement>[0],await readPermissionSnapshot(client)))return null}catch{return noStore({error:'permission_check_unavailable'},503)}
   const {data,error}=await client.from('procurement_calendar_delivery')
     .select('source_identity').eq('event_key','g:'+calendarId+':'+eventId).maybeSingle()
   if(error)return noStore({error:'calendar_link_check_failed'},503)

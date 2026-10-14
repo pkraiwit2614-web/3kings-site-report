@@ -1,4 +1,5 @@
 'use client'
+import {canEditHotel} from '@/lib/accessControl'
 
 import {useCallback,useEffect,useMemo,useState} from 'react'
 import Link from 'next/link'
@@ -35,7 +36,7 @@ const statusText=(s:HotelStatus|null)=>!s||s.availability_status==='UNKNOWN'?'à¸
 
 export default function HotelRoomStatusPage(){
   const {role,ready}=useAccessRole()
-  const canEdit=role==='owner'||role==='defect_editor'
+  const canEdit=canEditHotel(role)
   const [rooms,setRooms]=useState<Room[]>([])
   const [statuses,setStatuses]=useState<HotelStatus[]>([])
   const [loading,setLoading]=useState(true)

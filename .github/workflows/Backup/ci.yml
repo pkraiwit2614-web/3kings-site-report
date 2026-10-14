@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build
+        run: npm run build
+
+      - name: Hotel OOO/OOS room mapping and security regression
+        run: node tests/hotel-room-availability.test.cjs
+
+      - name: Combine room save, search, print, and role regression
+        run: node tests/combine-room-group-edit.test.cjs
+
+      - name: Hotel Excel OOO/OOS pinned source safety
+        run: node --test tests/hotel-ooo-excel-source.test.cjs
+
+      - name: Defect canonical source contract
+        run: node tests/defect-canonical-source.test.cjs
+
+      - name: Defect Excel writeback XML and queue safety
+        run: node tests/defect-excel-writeback.test.cjs
+
+      - name: Shift sync and Defect revision safeguards
+        run: node --test tests/sync-shift-and-defect-revision.test.cjs
+
+      - name: Stability regression tests
+        run: node tests/stability.test.cjs
+
+      - name: Complete role matrix regression tests
+        run: node tests/role-matrix.test.cjs
+
+      - name: Read-only Permission Matrix UI regression
+        run: node tests/role-permission-matrix-ui.test.cjs
+
+      - name: RBAC regression tests
+        run: node tests/rbac.test.cjs
+
+      - name: Activity Log security regression tests
+        run: node tests/activity-log.test.cjs
+
+      - name: Defect ingest validation regression
+        run: node tests/defect-ingest-validation.test.cjs
+
+      - name: Prompt 23 labour/payroll QA
+        run: node --test tests/prompt23/labour-payroll.test.cjs
+
+      - name: Prompt 12 headcount reconciliation tests
+        run: node tests/headcount-reconciliation.test.cjs
+
+      - name: Prompt 3 source revision invalidation tests
+        run: node --test tests/payroll/source-revision-invalidation.test.cjs
+
+      - name: Prompt 4 optimistic concurrency tests
+        run: node --test tests/payroll/optimistic-concurrency.test.cjs
+
+      - name: Prompt 5 manpower reconciliation tests
+        run: node --test tests/prompt5-manpower-reconciliation.test.cjs
+
+      - name: Prompt 13 canonical duplicate tests
+        run: node --test tests/prompt13-canonical-duplicates.test.cjs
+
+      - name: Prompt 15 attendance evidence tests
+        run: node --test tests/payroll/attendance-evidence.test.cjs
+
+      - name: Admin role preview regression tests
+        run: node tests/role-preview.test.cjs
+
+      - name: Google Calendar live edit regression
+        run: node tests/google-calendar-live-edit.test.cjs
+      - name: Calendar procurement date/permission guard regression
+        run: node tests/calendar-procurement-integration.test.cjs
+
+      # Validate live Materials print table columns, repeating headers and page-width allocation.
+      - name: Materials print pagination regression
+        run: node tests/materials-print-layout.test.cjs
+
