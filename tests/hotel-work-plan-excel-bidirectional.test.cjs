@@ -90,6 +90,10 @@ test('no formulas can be replaced, dates parse Excel serial and Thai DD/MM/YYYY'
  assert.equal(ctx.hpIsoDate_('46309'),'2026-10-14')
  assert.throws(()=>ctx.hpIsoDate_('31/02/2026'),/Invalid Excel date/)
 })
+test('manual Excel rich-text notes are concatenated without data loss',()=>{
+ const xml='<worksheet><sheetData><row r="2"><c r="G2" t="inlineStr"><is><r><t>รอ</t></r><r><t>ตรวจ</t></r></is></c></row></sheetData></worksheet>'
+ assert.equal(ctx.hpRaw_(xml,'G2',[]),'รอตรวจ')
+})
 test('bootstrap metadata adds sheet 7 without replacing any original worksheet',()=>{
  const snap=sample()
  const original={
