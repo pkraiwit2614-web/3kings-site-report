@@ -57,7 +57,7 @@ function hpRaw_(xml,address,shared){
  const m=xml.match(hpCellPattern_(address));if(!m)return '';
  const cell=m[0],type=(cell.match(/\bt="([^"]+)"/)||[])[1]||'';
  if(/<f(?:\s|>)/.test(cell))throw Error('Formula detected in editable cell '+address);
- if(type==='inlineStr')return hpUnescape_((cell.match(/<t[^>]*>([\s\S]*?)<\/t>/)||[])[1]||'');
+ if(type==='inlineStr')return (cell.match(/<t(?:\s[^>]*)?>[\s\S]*?<\/t>/g)||[]).map(part=>hpUnescape_(part.replace(/^<t[^>]*>/,'').replace(/<\/t>$/,''))).join('');
  const value=(cell.match(/<v>([\s\S]*?)<\/v>/)||[])[1]||'';
  return type==='s'?(shared[Number(value)]||''):value;
 }
