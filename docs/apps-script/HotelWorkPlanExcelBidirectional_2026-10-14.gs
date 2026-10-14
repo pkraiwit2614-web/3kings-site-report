@@ -140,16 +140,16 @@ function hpCheckExistingSheet_(parts){
  if(!workbook||!rels||!types||!parts[HOTEL_WORK_PLAN_SYNC.TARGET]){
   throw Error('Work Plan XLSX worksheet or metadata missing');
  }
- const sheets=(workbook.match(/<sheet\\b[^>]*\\/>/g)||[])
+ const sheets=(workbook.match(/<sheet\b[^>]*\/>/g)||[])
   .filter(tag=>tag.includes('name="'+HOTEL_WORK_PLAN_SYNC.TAB+'"'));
  if(sheets.length!==1)throw Error('Work Plan sheet name not unique or missing');
- const relationId=(sheets[0].match(/\\br:id="([^"]+)"/)||[])[1];
+ const relationId=(sheets[0].match(/\br:id="([^"]+)"/)||[])[1];
  if(!relationId||!/^[A-Za-z0-9_.-]+$/.test(relationId))throw Error('Work Plan relationship ID invalid');
- const relations=(rels.match(/<Relationship\\b[^>]*\\/>/g)||[])
+ const relations=(rels.match(/<Relationship\b[^>]*\/>/g)||[])
   .filter(tag=>tag.includes('Id="'+relationId+'"'));
  if(relations.length!==1)throw Error('Work Plan relationship missing or ambiguous');
- const target=(relations[0].match(/\\bTarget="([^"]+)"/)||[])[1];
- const type=(relations[0].match(/\\bType="([^"]+)"/)||[])[1];
+ const target=(relations[0].match(/\bTarget="([^"]+)"/)||[])[1];
+ const type=(relations[0].match(/\bType="([^"]+)"/)||[])[1];
  if(target!=='worksheets/sheet7.xml'||type!=='http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet'){
   throw Error('Work Plan relationship points to an unexpected worksheet');
  }
