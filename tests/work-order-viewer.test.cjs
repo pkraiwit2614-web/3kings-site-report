@@ -117,7 +117,8 @@ test('Defect Report highlights only confirmed open Work Orders and never affects
 })
 
 test('Work Order last-change header uses Work Order source editing time, not import time',()=>{
- assert.match(page,/rpc\('defect_report_latest_change_at'\)/)
+ assert.match(page,/rows\.map\(r=>r\.source_modified_at\)/)
+ assert.doesNotMatch(page,/\.rpc\(/)
  assert.match(page,/<span>ข้อมูลอัปเดต<\/span><b>\{dateTimeTH\(latestWorkDetailSourceAt\)\}<\/b>/)
  assert.doesNotMatch(page,/dateTimeTH\(latestImport\)/)
 })
