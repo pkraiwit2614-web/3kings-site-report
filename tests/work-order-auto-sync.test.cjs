@@ -90,3 +90,10 @@ test('Dispatch parser stops at first section break, never imports QA appendix',(
  assert.equal(parsed[0].work_id,'DF-B610-B611-01')
  assert.equal(parsed[0].received_date,null)
 })
+
+test('Work Order importer reads active dispatch worksheet, never historical team ledger',()=>{
+ assert.match(sync,/SHEET_NAME:'ใบแจกงานคงค้าง 151026'/)
+ assert.doesNotMatch(sync,/SHEET_NAME:'ใบแจกงานตามทีม'/)
+ assert.match(sync,/getSheetByName\(WORK_ORDER_AUTO_20261015\.SHEET_NAME\)/)
+ assert.match(sync,/if\(!id\)\{if\(startedDispatch\)break;continue;\}/)
+})

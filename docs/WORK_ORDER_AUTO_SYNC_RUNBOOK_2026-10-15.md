@@ -3,7 +3,7 @@
 ## Unchanged boundaries
 - Canonical Defect/Handover source remains `public.condo_room_status`; never update it here.
 - Work Order frontend is still Viewer + Print; it does not permit manual writes.
-- Only source workbook: `Defect_Work_Order_Updated_2026-10-15.xlsx` in the existing Above/CONDO/Defect Drive folder, sheet `ใบแจกงานตามทีม`. Its Drive ID is held in Script Properties instead of public GitHub source. Do not use an old prototype or a backup workbook.
+- Only source workbook: `Defect_Work_Order_Updated_2026-10-15.xlsx` in the existing Above/CONDO/Defect Drive folder, sheet `ใบแจกงานคงค้าง 151026` (the 52-row active dispatch list; `ใบแจกงานตามทีม` is a historical ledger and must not be imported). Its Drive ID is held in Script Properties instead of public GitHub source. Do not use an old prototype or a backup workbook.
 - Existing source Excel, sheet formulas, Defect Flow, Report, Work Plan, OOO/OOS, Payroll, Materials, existing Apps Script triggers remain unchanged.
 
 ## Page

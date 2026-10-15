@@ -10,7 +10,7 @@
 const WORK_ORDER_AUTO_20261015=Object.freeze({
   TZ:'Asia/Bangkok',
   FILE_NAME:'Defect_Work_Order_Updated_2026-10-15.xlsx',
-  SHEET_NAME:'ใบแจกงานตามทีม',
+  SHEET_NAME:'ใบแจกงานคงค้าง 151026',
   DB_URL:'https://wtqubwdduzedmcvyhbgs.supabase.co',
   RPC:'defect_work_order_sync_import',
   STATE_KEY:'WORK_ORDER_SYNC_SOURCE_REV_20261015',
