@@ -41,7 +41,7 @@ function client({initial='contact_id,category\r\n3KC-0001,ร้านค้า\
     /'1pea9ALaYxhVNvBzuGb615s7_M8rYesic'/g,"'test-file'"
   )
   const compiled=ts.transpileModule(src,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText
-  const testEnv={GOOGLE_CONTACT_BOOK_SERVICE_ACCOUNT_JSON:JSON.stringify({
+  const testEnv={VERCEL_ENV:'production',GOOGLE_CONTACT_BOOK_SERVICE_ACCOUNT_JSON:JSON.stringify({
     client_email:'contact-sync@test-project.iam.gserviceaccount.com',
     private_key:privatePem,token_uri:'https://oauth2.googleapis.com/token'
   })}
