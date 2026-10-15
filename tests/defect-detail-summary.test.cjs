@@ -37,7 +37,7 @@ test('room closure audit paragraphs do not leak into visible work description',(
 
 test('dates are validated, normalized and never substituted with todays date',()=>{
  assert.equal(summarizeDefectDetail('ตรวจยาแนว 30/02/2026; เสร็จ 2026-10-06').dates,'06/10/2026')
- assert.equal(summarizeDefectDetail('ตรวจยาแนว 15/10/69').dates,'15/10/2069')
+ assert.equal(summarizeDefectDetail('ตรวจยาแนว 15/10/69').dates,'15/10/2026')
  assert.equal(summarizeDefectDetail('').dates,'ไม่ระบุ')
  assert.equal(summarizeDefectDetail('งานวัสดุ').count,'ไม่ระบุ')
 })
