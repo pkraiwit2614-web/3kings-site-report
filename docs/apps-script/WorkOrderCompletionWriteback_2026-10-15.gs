@@ -98,6 +98,8 @@ function workOrderWbPutCell20261015_(xml,ref,value){
   const esc=ref.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$&');
   const re=new RegExp('<c\\b(?=[^>]*\\br="'+esc+'")[^>]*(?:\\/>|>[\\s\\S]*?<\\/c>)');
   const prev=row.match(re);
+  // Protect workbook formulas even if an operator adds one to the status/date cells.
+  if(prev&&/<f(?:\\s|>)/.test(prev[0]))throw Error('Refusing to overwrite Excel formula at '+ref);
   const style=prev?(prev[0].match(/\bs="([^"]+)"/)||[])[1]:null;
   const replacement='<c r="'+ref+'"'+(style?' s="'+style+'"':'')+' t="inlineStr"><is><t xml:space="preserve">'+safe+'</t></is></c>';
   row=prev?row.replace(prev[0],replacement):row.replace('</row>',replacement+'</row>');
