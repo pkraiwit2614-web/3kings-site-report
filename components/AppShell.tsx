@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { ReactNode, useEffect, useMemo, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import BrandLogo from '@/components/BrandLogo'
-import {canAccessPath,canChangeOwnPassword,canViewPayroll,resolveAccessRole,type AccessRole} from '@/lib/accessControl'
+import {canAccessPath,canAccessWorkOrder,canChangeOwnPassword,canViewPayroll,resolveAccessRole,type AccessRole} from '@/lib/accessControl'
 import useRolePreview from '@/components/useRolePreview'
 import {ROLE_PREVIEW_LABELS} from '@/lib/rolePreview'
 import ActivityTracker from '@/components/ActivityTracker'
@@ -59,7 +59,7 @@ function roleLabel(role:AccessRole|null){
 
 function navIsActive(path:string,href:string){
   if(href==='/materials') return path==='/materials'||path==='/procurement'
-  if(href==='/defect-flow') return path==='/defect-flow'||path==='/defects'||path==='/hotel-work-plan'||path==='/hotel-room-status'
+  if(href==='/defect-flow') return path==='/defect-flow'||path==='/defects'||path==='/work-order'||path==='/hotel-work-plan'||path==='/hotel-room-status'
   if(href==='/reports/labour') return path==='/reports/labour'
   if(href==='/reports') return path==='/reports'||(path.startsWith('/reports/')&&path!=='/reports/labour')
   return path===href
@@ -223,7 +223,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   const extraActive = extraNav.some(([href]) => navIsActive(path,href))
   const isMaterialsProcurementSection = path==='/materials'||path==='/procurement'
-  const isDefectSection = path==='/defect-flow'||path==='/defects'||path==='/hotel-work-plan'||path==='/hotel-room-status'
+  const isDefectSection = path==='/defect-flow'||path==='/defects'||path==='/work-order'||path==='/hotel-work-plan'||path==='/hotel-room-status'
   const isSiteOperationsSection = path==='/reports'||path==='/reports/labour'
   const isOwnerToolsSection = actualRole==='owner'&&(path==='/users'||path==='/photo-mapping'||path==='/data-health')
 
@@ -247,6 +247,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       {isDefectSection&&<nav className="defect-section-tabs" aria-label="Defect navigation">
         {presentationRole&&canAccessPath(presentationRole,'/defect-flow')&&<Link href="/defect-flow" className={path==='/defect-flow'?'active':''}>Defect Flow</Link>}
         {presentationRole&&canAccessPath(presentationRole,'/defects')&&<Link href="/defects" className={path==='/defects'?'active':''}>Defect Report</Link>}
+        {presentationRole&&canAccessWorkOrder(presentationRole)&&<Link href="/work-order" className={path==='/work-order'?'active':''}>Work Order</Link>}
         {presentationRole&&canAccessPath(presentationRole,'/hotel-work-plan')&&<Link href="/hotel-work-plan" className={path==='/hotel-work-plan'?'active':''}>Work Plan</Link>}
         {presentationRole&&canAccessPath(presentationRole,'/hotel-room-status')&&<Link href="/hotel-room-status" className={path==='/hotel-room-status'?'active':''}>Status | OOO/OOS</Link>}
       </nav>}
