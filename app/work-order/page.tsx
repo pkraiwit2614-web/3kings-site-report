@@ -11,7 +11,7 @@ import './work-order.css'
 
 type WorkOrder={
   work_id:string;room_group:string;building:'A'|'B';contractor:string;
-  defect_item:string;next_action:string|null;supervisor:string|null;
+  defect_item:string;next_action:string|null;
   received_date:string|null;due_date:string|null;work_status:string|null;
   evidence_url:string|null;qa_status:string|null;conflict_note:string|null;
   source_sync_note:string|null;source_modified_at:string;imported_at:string;
@@ -101,7 +101,7 @@ export default function WorkOrderViewer(){
  const reload=useCallback(async()=>{
   const sb=getSupabase()
   const [order,master,latestChange]=await Promise.all([
-   sb.from('defect_work_order_snapshot').select('work_id,room_group,building,contractor,defect_item,next_action,supervisor,received_date,due_date,work_status,evidence_url,qa_status,conflict_note,source_sync_note,source_modified_at,imported_at').eq('source_active',true).order('work_id'),
+   sb.from('defect_work_order_snapshot').select('work_id,room_group,building,contractor,defect_item,next_action,received_date,due_date,work_status,evidence_url,qa_status,conflict_note,source_sync_note,source_modified_at,imported_at').eq('source_active',true).order('work_id'),
    sb.from('condo_room_status').select('room_no,status_group,latest_source,source_note'),
    sb.rpc('defect_report_latest_change_at')
   ])
@@ -139,7 +139,7 @@ export default function WorkOrderViewer(){
   return eligible.filter(r=>{
    if(contractor!=='ALL'&&r.contractor!==contractor)return false
    if(!needle)return true
-   return normalize([r.work_id,r.room_group,roomSearchText(r.room_group),r.defect_item,r.next_action,r.contractor,r.supervisor].filter(Boolean).join(' ')).includes(needle)
+   return normalize([r.work_id,r.room_group,roomSearchText(r.room_group),r.defect_item,r.next_action,r.contractor].filter(Boolean).join(' ')).includes(needle)
   })
  },[eligible,query,contractor])
  const filtered=useMemo(()=>inScope.filter(r=>{
@@ -201,7 +201,7 @@ export default function WorkOrderViewer(){
      {!filtered.length&&<tr><td colSpan={7} className="wo-empty">ไม่พบรายการงานค้างตามตัวกรอง</td><td className="wo-print-only"/></tr>}
     </tbody></table></div>
    </section>
-   <p className="wo-screen-scope">ขอบเขต: {scope} • {filtered.length} รายการ • ผู้คุมอาคาร A: พี่ปู / อาคาร B: บังรุน</p>
+   <p className="wo-screen-scope">ขอบเขต: {scope} • {filtered.length} รายการ</p>
   </>}
  </AppShell>
 }
