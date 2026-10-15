@@ -15,7 +15,6 @@ test('new route stays read only and reads live Defect classification',()=>{
  assert.match(page,/members\.every\(room=>roomMap\.get\(room\)==='Hotel - Incomplete'\)/)
  assert.match(page,/finished\(r\.work_status\)/)
  assert.doesNotMatch(page,/\.insert\(|\.update\(|\.upsert\(|\.delete\(/)
- assert.match(page,/\.rpc\('defect_report_latest_change_at'\)/)
 })
 test('searchable counters, contractors, Combine and Good room aliases',()=>{
  for(const label of ['งานที่กำลังดำเนินการทั้งหมด','อาคาร A','อาคาร B','งานค้างเกิน 7 วัน','ผู้รับเหมา']){
@@ -117,9 +116,9 @@ test('Defect Report highlights only confirmed open Work Orders and never affects
  assert.doesNotMatch(report,/from\('condo_room_status'\)\.update\(/)
 })
 
-test('Work Order last-change header follows Defect Report, not Work Order import time',()=>{
+test('Work Order last-change header uses Work Order source editing time, not import time',()=>{
  assert.match(page,/rpc\('defect_report_latest_change_at'\)/)
- assert.match(page,/<span>ข้อมูลอัปเดต<\/span><b>\{dateTimeTH\(latestDefectChangeAt\)\}<\/b>/)
+ assert.match(page,/<span>ข้อมูลอัปเดต<\/span><b>\{dateTimeTH\(latestWorkDetailSourceAt\)\}<\/b>/)
  assert.doesNotMatch(page,/dateTimeTH\(latestImport\)/)
 })
 test('Hotel notice and overdue counts are derived from the same report fields',()=>{
