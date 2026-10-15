@@ -23,7 +23,7 @@ test('searchable counters, contractors, Combine and Good room aliases',()=>{
  assert.match(page,/roomSearchText/)
  assert.match(page,/Good-0/)
  assert.match(page,/ids\(r\.room_group\)/)
- assert.match(page,/r\.contractor===contractor/)
+ assert.match(page,/r\.contractor!==contractor/)
  assert.match(page,/r\.defect_item,r\.next_action,r\.contractor/)
  assert.match(page,/href=\{r\.evidence_url\}/)
 })
