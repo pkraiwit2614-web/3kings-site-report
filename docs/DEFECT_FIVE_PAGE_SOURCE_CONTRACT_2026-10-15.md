@@ -18,7 +18,7 @@
 ## Eligibility, presentation and reconciliation
 1. Work Order link uses `?room=<canonical-room-id>`; the existing Work Order filtering still shows only unfinished records where all Combine members are `Hotel - Incomplete`. Good01–05 normalize to B101–105 and Combine searches locate any member.
 2. Plan includes one canonical Combine group only when **every member** is either `Hotel - Incomplete` or `Hotel - Awaiting Check` and has explicit `OOO`. `OOS`, `UNKNOWN` and missing status are not OOO authorization. Display OOS separately as pending permission. Never convert missing Hotel state to AVAILABLE.
-3. Day/individual planned dates must fit the hotel OOO period; the page rejects out-of-range edits but the original RP C still needs a separate server-validation review before it can be treated as a server-enforced guarantee.
+3. Day/individual planned dates must fit the hotel OOO period; the page rejects out-of-range edits but the original RPC still needs a separate server-validation review before it can be treated as a server-enforced guarantee.
 4. Distinguish Defect **room** status from unfinished Work Order **item** status. If they disagree, do not force a closure/opening, modify the hotel file or infer actual completion. Flag reconciliation.
 5. Same-page live status refresh uses Supabase subscriptions where available plus focus refresh. Existing Excel synchronization has its own verification; a web database save is not proof that XLSX has been written.
 6. Existing role matrix, RLS and file/Drive permissions remain unchanged. Work Order links are shown only to roles permitted to open that page.
