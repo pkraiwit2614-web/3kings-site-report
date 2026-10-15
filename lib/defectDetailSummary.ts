@@ -8,7 +8,8 @@ function normalizedDate(value: string): string | null {
   let year = Number(iso ? iso[1] : local![3])
   const month = Number(iso ? iso[2] : local![2])
   const day = Number(iso ? iso[3] : local![1])
-  if (year < 100) year += 2000
+  // Thai short Buddhist years (e.g. 69=2569) and short Gregorian years (26=2026).
+  if (year < 100) year += year >= 50 ? 1957 : 2000
   if (year >= 2400) year -= 543
   if (year < 2000 || year > 2099) return null
   const valid = new Date(Date.UTC(year, month - 1, day))
