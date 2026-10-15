@@ -68,4 +68,16 @@ const bad=data.replace('<t>A201</t>','<t>A999</t>');
 const mismatch=ctx.woMirrorPatch_(bad,[],masterMap,settings,67);
 assert.equal(mismatch.count,67);
 assert.ok(mismatch.conflicts.length>0,'Unknown Work Order room cannot be silently synced');
-console.log('Work Order mirror PASS: 263 rooms, 67 rows, zero manual writes, idempotency, safety gates');
+// Google Apps Script requires a ZIP-typed Blob even for XLSX container bytes.
+let unzipped=false;
+ctx.Utilities={
+ newBlob:(bytes,type,name)=>{assert.equal(type,'application/zip');assert.equal(name,'input.xlsx');assert.deepEqual(bytes,[80,75,3,4]);return {bytes,type,name};},
+ unzip:(blob)=>{assert.equal(blob.type,'application/zip');unzipped=true;return [
+   {getName:()=> 'xl/workbook.xml',getDataAsString:()=>'<workbook/>'},
+   {getName:()=> 'xl/sharedStrings.xml',getDataAsString:()=>'<sst/>'}
+ ];}
+};
+const inputBlob={getBytes:()=>[80,75,3,4],getName:()=> 'input.xlsx'};
+ctx.woMirrorOpen_(inputBlob,{});
+assert.equal(unzipped,true);
+console.log('Work Order mirror PASS: 263 rooms, 67 rows, zero manual writes, idempotency, safety gates and ZIP MIME');
