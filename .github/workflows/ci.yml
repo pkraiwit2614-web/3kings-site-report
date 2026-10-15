@@ -26,7 +26,7 @@ jobs:
         run: npm run build
 
       - name: Contact Book CSV, duplicate phone and permission regression
-        run: node --test tests/contact-book.test.cjs
+        run: node --test tests/contact-book.test.cjs tests/contact-book-drive.test.cjs
 
       - name: Hotel Work Plan bidirectional Excel safety
         run: node --test tests/hotel-work-plan-excel-bidirectional.test.cjs
