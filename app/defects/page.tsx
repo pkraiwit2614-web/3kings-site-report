@@ -200,7 +200,12 @@ export default function DefectDetailPage(){
     void loadExtras()
     const reload=()=>{void loadExtras()}
     window.addEventListener('focus',reload)
-    return()=>{alive=false;window.removeEventListener('focus',reload)}
+    const channel=supabase.channel('defect-related-hotel-live')
+     .on('postgres_changes',{event:'*',schema:'public',table:'hotel_work_plan_days'},reload)
+     .on('postgres_changes',{event:'*',schema:'public',table:'hotel_work_plan_rooms'},reload)
+     .on('postgres_changes',{event:'*',schema:'public',table:'hotel_room_availability'},reload)
+     .subscribe()
+    return()=>{alive=false;window.removeEventListener('focus',reload);void supabase.removeChannel(channel)}
   },[])
   const workPlanContext=useMemo(()=>{
     const dates=new Map(hotelPlanDays.map(d=>[d.day_no,d.planned_date]))
