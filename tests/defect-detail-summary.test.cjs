@@ -11,10 +11,10 @@ new Function('module','exports',js)(mod,mod.exports)
 const {summarizeDefectDetail}=mod.exports
 
 test('original work items, documented count, and only first/latest date survive many updates',()=>{
- const detail='Hotel PDF 04/10/2026 ระบุ 13 รายการ. ข้อความกำกับที่อ่านได้: ไม่มีสายรัดผ้าม่าน, มีน้ำหยดที่วาล์ว. ภาพประกอบบางรายการไม่มีคำกำกับ. | ผู้ใช้ยืนยัน 05/10/2026: รอซ่อม.'
+ const detail='Hotel PDF 04/10/2026 ระบุ 13 รายการ. ข้อความกำกับที่อ่านได้: ไม่มีสายรัดผ้าม่าน; มีน้ำหยดที่วาล์ว. ภาพประกอบบางรายการไม่มีคำกำกับ. | ผู้ใช้ยืนยัน 05/10/2026: รอซ่อม.'
     +'\n[อัพเดท 10/10/2026] กำลังแก้ไข\n[ยืนยันล่าสุด 15/10/2026] งาน Pre Fur. เสร็จทั้งหมด'
  const result=summarizeDefectDetail(detail)
- assert.equal(result.work,'ไม่มีสายรัดผ้าม่าน; มีน้ำหยดที่วาล์ว')
+ assert.equal(result.work,'ไม่มีสายรัดผ้าม่าน, มีน้ำหยดที่วาล์ว')
  assert.equal(result.count,'13 รายการ')
  assert.equal(result.dates,'04/10/2026 → 15/10/2026')
  assert.doesNotMatch(result.work,/ผู้ใช้ยืนยัน|Pre Fur.|10\/10/)
