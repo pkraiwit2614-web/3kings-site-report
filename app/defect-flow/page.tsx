@@ -80,7 +80,7 @@ function defectHref({filter,building,q}:{filter?:string;building?:'A'|'B';q?:str
   if(building)params.set('building',building)
   if(q)params.set('q',q)
   const query=params.toString()
-  return `/defects${query?`?${query}`:''}#room-list`
+  return `/defects${query?`?${query}`:''}#report-results`
 }
 
 function SvgStatusCard({x,y,w,item}:{x:number;y:number;w:number;item:StatusItem}){
