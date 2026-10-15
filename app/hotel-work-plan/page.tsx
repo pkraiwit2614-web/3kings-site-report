@@ -107,6 +107,16 @@ export default function HotelWorkPlanPage(){
    }).subscribe()
   return()=>{void s.removeChannel(channel)}
  },[])
+ // Refresh Hotel OOO/OOS presentation independently of any unsaved plan-date input.
+ useEffect(()=>{
+  const s=getSupabase()
+  const channel=s.channel('hotel-work-plan-ooo-live').on('postgres_changes',
+   {event:'*',schema:'public',table:'hotel_room_availability'},()=>{
+    void s.from('hotel_room_availability').select('room_no,availability_status,start_date,end_date')
+      .then(({data,error})=>{if(!error)setHotels((data||[]) as Hotel[])})
+   }).subscribe()
+  return()=>{void s.removeChannel(channel)}
+ },[])
  // Keep the verified Excel readback timestamp fresh while this page remains open.
  // This reads only sync metadata and never touches Work Plan edits or source files.
  useEffect(()=>{
