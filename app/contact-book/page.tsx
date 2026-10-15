@@ -182,7 +182,7 @@ export default function ContactBookPage(){
       <p className={styles.footer}>ข้อมูลมาจาก Contact Book บน Google Drive · เบอร์ที่ระบุว่า “ยังไม่โทรยืนยัน” ควรตรวจสอบกับผู้ติดต่อก่อนใช้งาน</p>
     </>}
     {editing!==undefined&&canManage&&<div className={styles.backdrop} onMouseDown={e=>{if(e.target===e.currentTarget&&!saving)setEditing(undefined)}}>
-      <section className={styles.dialog} role="dialog" aria-modal="true" aria-label={editing?'แก้ไขรายชื่อ':'เพิ่มรายชื่อ'}>
+      <section data-contact-book-editor className={styles.dialog} role="dialog" aria-modal="true" aria-label={editing?'แก้ไขรายชื่อ':'เพิ่มรายชื่อ'}>
         <div className={styles.dialogTop}><div><h2>{editing?'แก้ไขรายชื่อ':'เพิ่มรายชื่อใหม่'}</h2><p>ตรวจสอบข้อมูลก่อนยืนยันบันทึกลง Google Drive</p></div><button type="button" className="button" disabled={saving} onClick={()=>{setEditing(undefined);setConfirm(false)}}>ปิด</button></div>
         <div className={styles.formGrid}>
           <label>ประเภท<select value={form.category} onChange={e=>change('category',e.target.value)}><option>ผู้รับเหมา</option><option>ร้านค้า</option></select></label>
