@@ -76,7 +76,7 @@ export async function POST(request:NextRequest){
     if(source.version!==expected)throw new Error('contact_drive_file_version_conflict')
     const previous=parseContactCsv(source.csv)
     const before=existingId?previous.find(x=>x.contact_id===existingId)||null:null
-    const {rows,record}=putContact(previous,existingId,contact)
+    const {rows,record}=putContact(previous,existingId,contact,'https://drive.google.com/file/d/'+source.fileId+'/view')
     await writeContactCsvDrive(formatContactCsv(rows),source.version)
     committed=true
     const verified=await getContactCsvDrive()
