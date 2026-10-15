@@ -17,7 +17,7 @@ test('new route stays read only and reads live Defect classification',()=>{
  assert.doesNotMatch(page,/\.insert\(|\.update\(|\.upsert\(|\.delete\(|\.rpc\(/)
 })
 test('searchable counters, contractors, Combine and Good room aliases',()=>{
- for(const label of ['งานค้างทั้งหมด','อาคาร A','อาคาร B','เกินกำหนด 7 วัน','กำลังดำเนินการ','ผู้รับเหมา']){
+ for(const label of ['งานที่กำลังดำเนินการทั้งหมด','อาคาร A','อาคาร B','งานค้างเกิน 7 วัน','ผู้รับเหมา']){
   assert.ok(page.includes(label),label)
  }
  assert.match(page,/roomSearchText/)
@@ -94,10 +94,10 @@ test('Work Order print and screen rules are isolated, no explanatory banner is r
  assert.doesNotMatch(page,/ข้อมูลจาก Excel Work Order \(ต้นฉบับแก้ไข/)
  assert.match(page,/className="wo-screen-scope">ขอบเขต:/)
  assert.match(css,/\.wo-screen-scope,/)
- assert.match(page,/รวมตามผู้รับเหมา/)
- assert.match(page,/byContractor\.map/)
- assert.match(page,/for\(const row of filtered\)counts\.set/)
- assert.match(page,/ALL:inScope\.length/)
+ assert.match(page,/kpiContractors\[kind\]\.map/)
+ assert.match(page,/for\(const row of rows\)counts\.set/)
+ assert.doesNotMatch(page,/รวมตามผู้รับเหมา|<th>ผู้คุม<\/th>|IN_PROGRESS/)
+ assert.match(page,/ALL:inScope/)
  assert.match(page,/inScope\.filter\(r=>r\.building==='A'\)/)
  assert.match(page,/const filtered=useMemo\(\(\)=>inScope\.filter/)
  assert.match(page,/displayWorkStatus\(r\.work_status\)/)
@@ -114,4 +114,32 @@ test('Defect Report highlights only confirmed open Work Orders and never affects
  assert.match(report,/workOpenByRoom\.has\(r\.room_no\)\?'true':'false'/)
  assert.match(report,/defect-work-order-link\[data-has-open-work="true"\]/)
  assert.doesNotMatch(report,/from\('condo_room_status'\)\.update\(/)
+})
+
+test('Work Order last-change header follows Defect Report, not Work Order import time',()=>{
+ assert.match(page,/rpc\('defect_report_latest_change_at'\)/)
+ assert.match(page,/<span>ข้อมูลอัปเดต<\/span><b>\{dateTimeTH\(latestDefectChangeAt\)\}<\/b>/)
+ assert.doesNotMatch(page,/dateTimeTH\(latestImport\)/)
+})
+test('Hotel notice and overdue counts are derived from the same report fields',()=>{
+ assert.match(page,/select\('room_no,status_group,latest_source,source_note'\)/)
+ assert.match(page,/hotelNoticeISO\(r\)/)
+ assert.match(page,/HOTEL_NOTICE_DATE_BY_ROOM/)
+ assert.match(page,/elapsedCalendarDays\(notice,todayISO\)/)
+ assert.match(page,/daysForRow\(r\)/)
+ assert.match(page,/elapsed>7/)
+ assert.match(page,/elapsed>4/)
+ assert.match(page,/wo-warning/)
+ assert.match(page,/วันที่แจ้ง :/)
+ assert.match(page,/เหลือเวลา :/)
+ assert.doesNotMatch(page,/overdue\(r\.due_date\)/)
+ assert.doesNotMatch(page,/r\.supervisor|ผู้คุม|<th>ผู้คุม<\/th>/)
+})
+test('Work Order print-only styling hides evidence and retains signoff',()=>{
+ assert.match(page,/<th className="wo-evidence-col">หลักฐาน<\/th>/)
+ assert.match(page,/className="wo-print-only wo-signoff"/)
+ assert.match(css,/\.wo-evidence-col\{display:none!important\}/)
+ assert.match(css,/\.wo-print-only\{display:table-cell!important\}/)
+ assert.match(css,/grid-template-columns:repeat\(4,minmax\(0,1fr\)\)!important/)
+ assert.match(css,/data-print-report="Above Condo — Work Order"/)
 })
