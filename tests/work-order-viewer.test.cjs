@@ -14,7 +14,8 @@ test('new route stays read only and reads live Defect classification',()=>{
  assert.match(page,/from\('condo_room_status'\)\.select/)
  assert.match(page,/members\.every\(room=>roomMap\.get\(room\)==='Hotel - Incomplete'\)/)
  assert.match(page,/finished\(r\.work_status\)/)
- assert.doesNotMatch(page,/\.insert\(|\.update\(|\.upsert\(|\.delete\(|\.rpc\(/)
+ assert.doesNotMatch(page,/\.insert\(|\.update\(|\.upsert\(|\.delete\(/)
+ assert.match(page,/\.rpc\('defect_report_latest_change_at'\)/)
 })
 test('searchable counters, contractors, Combine and Good room aliases',()=>{
  for(const label of ['งานที่กำลังดำเนินการทั้งหมด','อาคาร A','อาคาร B','งานค้างเกิน 7 วัน','ผู้รับเหมา']){
