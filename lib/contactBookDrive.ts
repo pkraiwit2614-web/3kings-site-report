@@ -20,7 +20,7 @@ async function accessToken(){
   if(cachedToken&&cachedToken.expires>Date.now()+60000)return cachedToken.accessToken
   const credentials=readCredentials()
   const now=Math.floor(Date.now()/1000)
-  const claim={iss:credentials.client_email,scope:'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',aud:credentials.token_uri||'https://oauth2.googleapis.com/token',iat:now,exp:now+3500}
+  const claim={iss:credentials.client_email,scope:'https://www.googleapis.com/auth/drive',aud:credentials.token_uri||'https://oauth2.googleapis.com/token',iat:now,exp:now+3500}
   const header=base64url(JSON.stringify({alg:'RS256',typ:'JWT'}))
   const payload=base64url(JSON.stringify(claim))
   const unsigned=header+'.'+payload
