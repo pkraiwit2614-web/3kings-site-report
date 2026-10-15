@@ -81,7 +81,6 @@ export default function WorkOrderViewer(){
  const permitted=canAccessWorkOrder(role)
  const [rows,setRows]=useState<WorkOrder[]>([])
  const [rooms,setRooms]=useState<RoomStatus[]>([])
- const [latestDefectChangeAt,setLatestDefectChangeAt]=useState<string|null>(null)
  const [loading,setLoading]=useState(true)
  const [error,setError]=useState('')
  const [quick,setQuick]=useState<Quick>('ALL')
@@ -100,15 +99,13 @@ export default function WorkOrderViewer(){
 
  const reload=useCallback(async()=>{
   const sb=getSupabase()
-  const [order,master,latestChange]=await Promise.all([
+  const [order,master]=await Promise.all([
    sb.from('defect_work_order_snapshot').select('work_id,room_group,building,contractor,defect_item,next_action,received_date,due_date,work_status,evidence_url,qa_status,conflict_note,source_sync_note,source_modified_at,imported_at').eq('source_active',true).order('work_id'),
-   sb.from('condo_room_status').select('room_no,status_group,latest_source,source_note'),
-   sb.rpc('defect_report_latest_change_at')
+   sb.from('condo_room_status').select('room_no,status_group,latest_source,source_note')
   ])
   if(order.error||master.error)throw new Error(order.error?.message||master.error?.message||'อ่านข้อมูลไม่สำเร็จ')
   setRows((order.data||[]) as WorkOrder[])
   setRooms((master.data||[]) as RoomStatus[])
-  setLatestDefectChangeAt(!latestChange.error&&typeof latestChange.data==='string'?latestChange.data:null)
  },[])
  useEffect(()=>{
   let alive=true
@@ -147,6 +144,7 @@ export default function WorkOrderViewer(){
   if(quick==='OVERDUE'&&!((daysForRow(r)??0)>7))return false
   return true
  }).sort((a,b)=>a.contractor.localeCompare(b.contractor,'th')||a.room_group.localeCompare(b.room_group)||a.work_id.localeCompare(b.work_id)),[inScope,quick,noticeMap,todayISO])
+ const latestWorkDetailSourceAt=rows.map(r=>r.source_modified_at).filter(Boolean).sort().at(-1)||null
  const kpiRows:Record<Quick,WorkOrder[]>={
   ALL:inScope,A:inScope.filter(r=>r.building==='A'),B:inScope.filter(r=>r.building==='B'),
   OVERDUE:inScope.filter(r=>(daysForRow(r)??0)>7)
@@ -158,7 +156,7 @@ export default function WorkOrderViewer(){
  if(!permitted)return <AppShell><section className="panel" role="alert">สิทธิ์ Work Order จำกัดสำหรับทีม 3 Kings ที่ได้รับสิทธิ์ Defect เท่านั้น</section></AppShell>
  return <AppShell>
   <PageHeader title="Above Condo — Work Order" subtitle="รายการงานค้างรายจุด • สำหรับทีม 3 Kings • อ่านอย่างเดียว"
-   action={<div className="update-meta"><span>ข้อมูลอัปเดต</span><b>{dateTimeTH(latestDefectChangeAt)}</b></div>}/>
+   action={<div className="update-meta"><span>ข้อมูลอัปเดต</span><b>{dateTimeTH(latestWorkDetailSourceAt)}</b></div>}/>
   {error&&<div className="panel wo-error" role="alert">ไม่สามารถตรวจข้อมูล Work Order กับ Defect Report ได้: {error} <button type="button" className="button" onClick={()=>{setLoading(true);void reload().then(()=>setError('')).catch(e=>setError(String(e))).finally(()=>setLoading(false))}}>ลองใหม่</button></div>}
   {loading?<div className="panel">กำลังตรวจสอบข้อมูล Work Order ล่าสุด…</div>:!error&&<>
    <section className="wo-kpis" aria-label="กรองรายการตามจำนวนงาน">
