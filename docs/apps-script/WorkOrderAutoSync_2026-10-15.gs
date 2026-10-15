@@ -54,13 +54,15 @@ function workOrderParse20261015_(sheet){
   }
   if(header<0)throw Error('Work Order source columns missing; refuse to overwrite Web snapshot');
   const rows=[],seen={};
+  let startedDispatch=false;
   function field(row,key){const v=row[map[key]];return v==null?'':String(v).trim();}
   for(let i=header+1;i<values.length;i++){
     const row=values[i],id=field(row,'Work ID');
-    if(!id)continue;
+    if(!id){if(startedDispatch)break;continue;}
     if(!/^DF-[A-Za-z0-9()_-]+$/.test(id))throw Error('Unexpected Work ID at row '+(i+1));
     if(seen[id])throw Error('Duplicate Work ID: '+id);
     seen[id]=true;
+    startedDispatch=true;
     const room=field(row,'ห้อง/Combine');
     const building=room.charAt(0);
     if(!/^[AB]$/.test(building)||!/[AB]\d{3}/.test(room))throw Error('Invalid room group at row '+(i+1));
