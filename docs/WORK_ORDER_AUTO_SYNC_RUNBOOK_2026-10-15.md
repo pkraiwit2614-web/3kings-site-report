@@ -27,7 +27,7 @@
 2. In Project Settings → Script Properties, add `WORK_ORDER_FILE_ID` with the actual private Google Drive ID of the approved XLSX. Leave `DEFECT_SYNC_KEY` and `SUPABASE_PUBLISHABLE_KEY` unchanged. Do not copy their values into GitHub or chat.
 3. Run `workOrderDryRun20261015()`. It must return `status:'dry-run',rows:...` and `db.ok:true`, with no edits to Excel or DB.
 4. Run `workOrderSyncNow20261015()` once; verify `status:'success'` and the returned active row count. Compare against the original worksheet and Work Order Web.
-5. Run `installWorkOrderTrigger20261015()`. Its return must have `count:1`. This installs exactly one *independent* hourly trigger. The handler internally runs Mon–Sat 08:00–18:59 Asia/Bangkok and skips Sundays.
+5. Run `installWorkOrderTrigger20261015()`. Its return must have `count:1`. This installs exactly one *independent* trigger that runs every 2 hours. The handler internally runs Mon–Sat 08:00–18:59 Asia/Bangkok and skips Sundays. Apps Script does not guarantee exact wall-clock 08:00/10:00 slots; the interval is relative to trigger scheduling.
 6. Run `workOrderSyncStatus20261015()` to verify `handlerInstalled:true` and a nonempty `lastAcceptedExcelRevision`.
 7. Edit one controlled Work Order cell in the source XLSX and wait for a scheduled run; confirm `lastAcceptedExcelRevision` advances, changes appear in the isolated snapshot and the web, and no unrelated worksheets/tables change. Revert the controlled test edit through normal source-workbook handling when appropriate.
 
