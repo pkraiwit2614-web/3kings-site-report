@@ -119,7 +119,7 @@ export default function HotelRoomStatusPage(){
     const found=new Set<string>()
     for(const item of workOrders){
       if(/เสร็จแล้ว|งดแจก|ยกเลิก/.test(item.work_status||''))continue
-      for(const token of item.room_group.toUpperCase().match(/[AB]\\d{3}/g)||[])
+      for(const token of item.room_group.toUpperCase().match(/[AB]\d{3}/g)||[])
        hotelRoomMembers(token).forEach(member=>found.add(member))
     }
     return found
