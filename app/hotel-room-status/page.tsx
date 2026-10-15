@@ -114,6 +114,17 @@ export default function HotelRoomStatusPage(){
     return open
   },[rooms,workOrders])
 
+  // Stale dispatch rows are reconciliation evidence, not proof that closed rooms reopened.
+  const snapshotWorkByRoom=useMemo(()=>{
+    const found=new Set<string>()
+    for(const item of workOrders){
+      if(/เสร็จแล้ว|งดแจก|ยกเลิก/.test(item.work_status||''))continue
+      for(const token of item.room_group.toUpperCase().match(/[AB]\\d{3}/g)||[])
+       hotelRoomMembers(token).forEach(member=>found.add(member))
+    }
+    return found
+  },[workOrders])
+
   const groups=useMemo(()=>{
     const statusMap=new Map(statuses.map(row=>[row.room_no,row]))
     const roomMap=new Map(rooms.map(row=>[row.room_no,row]))
@@ -218,6 +229,7 @@ export default function HotelRoomStatusPage(){
               {workOrderLoaded&&canAccessWorkOrder(role)?<>
                 {g.members.filter(r=>workOpenByRoom.has(r.room_no)).map(r=><Link key={r.room_no} className="hotel-work-order-link" href={'/work-order?room='+encodeURIComponent(r.room_no)}>{hotelRoomLabel(r.room_no)} → Work Order</Link>)}
                 {g.members.filter(r=>r.status_group==='Hotel - Awaiting Check').map(r=><small key={'review-'+r.room_no}>{hotelRoomLabel(r.room_no)} · รอตรวจรับ</small>)}
+                {g.members.some(r=>snapshotWorkByRoom.has(r.room_no)&&!workOpenByRoom.has(r.room_no))&&<small className="hotel-conflict">มี Work Order ใน Snapshot แต่สถานะห้องไม่ตรงกัน • รอตรวจสอบข้อมูล ไม่เปิดงานซ้ำ</small>}
                 {!g.members.some(r=>workOpenByRoom.has(r.room_no)||r.status_group==='Hotel - Awaiting Check')&&g.members.some(pending)&&<small>สถานะ Defect ยังดำเนินการ • ไม่พบงานค้างที่ยืนยันใน Work Order</small>}
                 {!g.members.some(pending)&&'—'}
               </>:g.members.filter(pending).length?g.members.filter(pending).map(r=>hotelRoomLabel(r.room_no)).join(', '):'—'}
