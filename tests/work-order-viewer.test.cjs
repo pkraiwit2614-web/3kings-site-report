@@ -65,7 +65,7 @@ test('Defect Report and OOO/OOS link to read-only room-scoped Work Order without
  assert.match(report,/รายละเอียดงาน\/Work Order/)
  assert.match(report,/งานทั้งหมด/)
  assert.doesNotMatch(report,/<b>จำนวนงาน:<\/b>/)
- assert.match(report,/canAccessWorkOrder\(role\).*<Link className="defect-work-order-link"/)
+ assert.match(report,/canAccessWorkOrder\(role\)[\s\S]*?<Link className="defect-work-order-link"/)
  assert.match(hotel,/canAccessWorkOrder\(role\)/)
  assert.match(hotel,/from\('defect_work_order_snapshot'\)/)
  assert.match(hotel,/workOpenByRoom/)
