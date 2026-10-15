@@ -9,12 +9,14 @@ const header=read('components/PageHeader.tsx')
 const css=read('app/work-order/work-order.css')
 const migration=read('supabase/migrations/20261015121500_defect_work_order_readonly_snapshot.sql')
 
-test('new route stays read only and reads live Defect classification',()=>{
+test('viewer reads live Defect classification; completion is an authorized RPC only',()=>{
  assert.match(page,/from\('defect_work_order_snapshot'\)\.select/)
  assert.match(page,/from\('condo_room_status'\)\.select/)
  assert.match(page,/members\.every\(room=>roomMap\.get\(room\)==='Hotel - Incomplete'\)/)
  assert.match(page,/finished\(r\.work_status\)/)
- assert.doesNotMatch(page,/\.insert\(|\.update\(|\.upsert\(|\.delete\(|\.rpc\(/)
+ assert.doesNotMatch(page,/\.insert\(|\.update\(|\.upsert\(|\.delete\(/)
+ assert.match(page,/rpc\('defect_work_order_complete'/)
+ assert.match(page,/canEditDefect\(role\)/)
 })
 test('searchable counters, contractors, Combine and Good room aliases',()=>{
  for(const label of ['งานค้างทั้งหมด','อาคาร A','อาคาร B','เกินกำหนด 7 วัน','กำลังดำเนินการ','ผู้รับเหมา']){
