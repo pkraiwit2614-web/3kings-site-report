@@ -1,8 +1,8 @@
-import {createSign,randomUUID} from 'node:crypto'
+import {createSign,createHash} from 'node:crypto'
 import {CONTACT_BOOK_CSV_FILE_ID} from '@/lib/contactBook'
 
 type GoogleServiceAccount = {client_email:string;private_key:string;token_uri?:string}
-type GoogleFile = {id:string;version?:string;modifiedTime?:string;mimeType?:string;name?:string}
+type GoogleFile = {id:string;version?:string;modifiedTime?:string;mimeType?:string;name?:string;md5Checksum?:string;capabilities?:{canEdit?:boolean}}
 let cachedToken:{accessToken:string;expires:number}|null=null
 const FILE='https://www.googleapis.com/drive/v3/files/'+CONTACT_BOOK_CSV_FILE_ID
 
@@ -11,7 +11,8 @@ function readCredentials():GoogleServiceAccount{
   if(!raw)throw new Error('contact_drive_not_configured')
   let value:GoogleServiceAccount
   try{value=JSON.parse(raw)}catch{throw new Error('contact_drive_credentials_invalid')}
-  if(!value.client_email||!value.private_key)throw new Error('contact_drive_credentials_invalid')
+  if(!value.client_email?.endsWith('.gserviceaccount.com')||!value.private_key?.includes('BEGIN PRIVATE KEY'))throw new Error('contact_drive_credentials_invalid')
+  if(value.token_uri && value.token_uri!=='https://oauth2.googleapis.com/token')throw new Error('contact_drive_credentials_invalid')
   return value
 }
 function base64url(value:string|Buffer){return Buffer.from(value).toString('base64url')}
@@ -44,14 +45,21 @@ async function request(url:string,init:RequestInit={}){
   return res
 }
 export async function getContactCsvDrive(){
-  const before=await (await request(FILE+'?fields=id,name,mimeType,version,modifiedTime')).json() as GoogleFile
+  const before=await (await request(FILE+'?fields=id,name,mimeType,version,modifiedTime,md5Checksum,capabilities/canEdit')).json() as GoogleFile
   if(before.id!==CONTACT_BOOK_CSV_FILE_ID||before.mimeType!=='text/csv')throw new Error('contact_drive_file_identity_changed')
   const csv=await (await request(FILE+'?alt=media')).text()
-  const after=await (await request(FILE+'?fields=id,version,modifiedTime')).json() as GoogleFile
+  const after=await (await request(FILE+'?fields=id,version,modifiedTime,md5Checksum')).json() as GoogleFile
   if(String(before.version)!==String(after.version))throw new Error('contact_drive_changed_during_read')
-  return {csv,version:String(after.version),modifiedTime:after.modifiedTime||null}
+  if(before.md5Checksum&&createHash('md5').update(csv,'utf8').digest('hex')!==before.md5Checksum)throw new Error('contact_drive_content_checksum_mismatch')
+  if(before.md5Checksum&&after.md5Checksum&&before.md5Checksum!==after.md5Checksum)throw new Error('contact_drive_changed_during_read')
+  return {csv,version:String(after.version),modifiedTime:after.modifiedTime||null,canEdit:before.capabilities?.canEdit===true}
 }
-export async function writeContactCsvDrive(csv:string){
+export async function writeContactCsvDrive(csv:string,expectedVersion:string){
+  // A second read just before PATCH narrows the external-edit window. Postgres
+  // serializes Web writers; external Google Drive editors must be coordinated.
+  const current=await (await request(FILE+'?fields=id,version,mimeType,capabilities/canEdit')).json() as GoogleFile
+  if(current.id!==CONTACT_BOOK_CSV_FILE_ID||current.mimeType!=='text/csv'||current.capabilities?.canEdit!==true)throw new Error('contact_drive_write_permission_denied')
+  if(String(current.version)!==expectedVersion)throw new Error('contact_drive_file_version_conflict')
   const res=await request('https://www.googleapis.com/upload/drive/v3/files/'+CONTACT_BOOK_CSV_FILE_ID+'?uploadType=media&fields=id,version,modifiedTime',{
     method:'PATCH',headers:{'content-type':'text/csv; charset=utf-8'},body:csv
   })
@@ -59,4 +67,3 @@ export async function writeContactCsvDrive(csv:string){
   if(info.id!==CONTACT_BOOK_CSV_FILE_ID)throw new Error('contact_drive_upload_identity_mismatch')
   return info
 }
-export function newContactLeaseId(){return randomUUID()}
