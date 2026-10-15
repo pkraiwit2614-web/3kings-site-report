@@ -101,7 +101,10 @@ function woMirrorAssertFile_(file,meta,config){
   if(file.getSize()>config.MAX_BYTES)throw Error('File too large for safe Apps Script XLSX sync');
 }
 function woMirrorOpen_(blob,config){
-  const entries=Utilities.unzip(blob),files={};
+  // Google Apps Script Utilities.unzip requires a ZIP-typed Blob even for XLSX files.
+  // Retype a separate in-memory Blob; do not change the original Drive file MIME.
+  const zipBlob=Utilities.newBlob(blob.getBytes(),'application/zip',blob.getName());
+  const entries=Utilities.unzip(zipBlob),files={};
   entries.forEach(b=>{if(files[b.getName()])throw Error('Duplicate ZIP member');files[b.getName()]=b;});
   if(!files['xl/workbook.xml']||!files['xl/sharedStrings.xml'])throw Error('Missing workbook metadata');
   return {entries:entries,files:files,strings:woMirrorStrings_(files['xl/sharedStrings.xml'].getDataAsString())};
