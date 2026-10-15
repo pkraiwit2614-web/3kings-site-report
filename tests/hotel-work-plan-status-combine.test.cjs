@@ -35,6 +35,21 @@ test('filters include Combine peer and Good alias while preserving 267 source qu
  assert.match(plan,/combineStatusConflict/)
  assert.doesNotMatch(plan,/syncAudit|work-sync-audit|ประวัติซิงก์ Excel \/ ข้อมูลขัดแย้ง/)
 })
+test('Work Plan displays filter-relative row numbers and existing Combine symbols without changing source identifiers',()=>{
+ assert.match(plan,/<th>ลำดับ<\/th>/)
+ assert.doesNotMatch(plan,/<th>Seq\.<\/th>/)
+ assert.match(plan,/\{filtered\.map\(\(r,index\)=>\{/)
+ assert.match(plan,/<tr key=\{r\.seq_no\}><td>\{index\+1\}<\/td>/)
+ assert.match(plan,/const combineMembers=hotelRoomMembers\(r\.room_no\)/)
+ assert.match(plan,/className="work-combine-code"/)
+ assert.match(plan,/className="work-combine-badge"/)
+ assert.match(plan,/Combine: \{combineMembers\.join\('\s*\+\s*'\)\}/)
+ assert.match(plan,/p_seq:selected\.seq_no/)
+ assert.match(plan,/setSelectedSeq\(r\.seq_no\)/)
+ assert.match(plan,/\.work-combine-code\{/)
+ assert.match(plan,/\.work-combine-badge\{/)
+})
+
 test('Combine writes are atomic, revision checked, audited and keep other modules untouched',()=>{
  assert.match(plan,/hotel_work_plan_save_combine_room/)
  assert.match(plan,/affectedRows/)
