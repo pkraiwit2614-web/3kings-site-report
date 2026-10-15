@@ -47,7 +47,7 @@ test('scope stays presentation-only: canonical values, print, search and editing
  assert.match(page,/summaryByRoom=useMemo/)
  assert.match(page,/summaryByRoom\.get\(r\.room_no\)\?\.work/)
  assert.match(page,/summaryByRoom\.get\(r\.room_no\)\?\.dates/)
- assert.match(page,/summaryByRoom\.get\(r\.room_no\)\?\.count/)
+ assert.doesNotMatch(page,/<b>จำนวนงาน:/,'count is source metadata, no redundant count shown in Report')
  assert.match(page,/other\.defect_detail/)
  assert.match(page,/\.defect-detail \.defect-detail-text\.is-collapsed/)
  assert.match(page,/r\.next_action\|\|r\.follow_up/)

@@ -7,7 +7,7 @@ import PageHeader from '@/components/PageHeader'
 import useAccessRole from '@/components/useAccessRole'
 import {canEditWorkPlan} from '@/lib/accessControl'
 import {getSupabase} from '@/lib/supabase'
-import {hotelRoomLabel,hotelRoomMembers,normalizeHotelRoom} from '@/lib/hotelRoomGroups'
+import {hotelRoomKey,hotelRoomLabel,hotelRoomMembers,normalizeHotelRoom} from '@/lib/hotelRoomGroups'
 import {statusLabel,statusTone} from '@/lib/defectStatusPresentation'
 
 type Day={day_no:number;planned_date:string|null;note:string|null;revision:number;sync_state:string;updated_by_name:string|null;updated_at:string|null}
@@ -107,6 +107,16 @@ export default function HotelWorkPlanPage(){
    }).subscribe()
   return()=>{void s.removeChannel(channel)}
  },[])
+ // Refresh Hotel OOO/OOS presentation independently of any unsaved plan-date input.
+ useEffect(()=>{
+  const s=getSupabase()
+  const channel=s.channel('hotel-work-plan-ooo-live').on('postgres_changes',
+   {event:'*',schema:'public',table:'hotel_room_availability'},()=>{
+    void s.from('hotel_room_availability').select('room_no,availability_status,start_date,end_date')
+      .then(({data,error})=>{if(!error)setHotels((data||[]) as Hotel[])})
+   }).subscribe()
+  return()=>{void s.removeChannel(channel)}
+ },[])
  // Keep the verified Excel readback timestamp fresh while this page remains open.
  // This reads only sync metadata and never touches Work Plan edits or source files.
  useEffect(()=>{
@@ -141,11 +151,30 @@ export default function HotelWorkPlanPage(){
  const defectFor=(room:string)=>defectMap.get(room)||hotelRoomMembers(room).map(member=>defectMap.get(member)).find(Boolean)
  const planDate=(r:Room)=>r.planned_date_override||days.find(d=>d.day_no===r.day_no)?.planned_date||null
  const statusFor=(room:string)=>hotelRoomMembers(room).map(member=>hotelMap.get(member)).find(Boolean)
- const defectStatusOptions=useMemo(()=>[...new Set(rooms.flatMap(r=>hotelRoomMembers(r.room_no).map(member=>defectMap.get(member)).filter((d):d is Defect=>!!d).map(statusLabel)))].sort((a,b)=>a.localeCompare(b,'th')),[rooms,defectMap])
+ // Excel retains all 267 original rows; only the live view is filtered.
+ const activePlanRooms=useMemo(()=>{
+  const seen=new Set<string>()
+  return rooms.filter(row=>{
+   const members=hotelRoomMembers(row.room_no)
+   if(!members.every(member=>['Hotel - Incomplete','Hotel - Awaiting Check'].includes(defectMap.get(member)?.status_group||'')&&hotelMap.get(member)?.availability_status==='OOO'))return false
+   const key=hotelRoomKey(row.room_no)
+   if(seen.has(key))return false
+   seen.add(key)
+   return true
+  })
+ },[rooms,defectMap,hotelMap])
+ const pendingOosCount=useMemo(()=>new Set(rooms.filter(row=>
+  hotelRoomMembers(row.room_no).some(member=>['Hotel - Incomplete','Hotel - Awaiting Check'].includes(defectMap.get(member)?.status_group||'')&&hotelMap.get(member)?.availability_status==='OOS')
+ ).map(row=>hotelRoomKey(row.room_no))).size,[rooms,defectMap,hotelMap])
+ const dateWithinOOO=(row:Room,date:string)=>hotelRoomMembers(row.room_no).every(member=>{
+  const h=hotelMap.get(member)
+  return h?.availability_status==='OOO'&&Boolean(h.start_date)&&date>=String(h.start_date)&&(!h.end_date||date<=h.end_date)
+ })
+ const defectStatusOptions=useMemo(()=>[...new Set(activePlanRooms.flatMap(r=>hotelRoomMembers(r.room_no).map(member=>defectMap.get(member)).filter((d):d is Defect=>!!d).map(statusLabel)))].sort((a,b)=>a.localeCompare(b,'th')),[activePlanRooms,defectMap])
  const filtered=useMemo(()=>{
   const query=roomSearch.trim().toUpperCase()
   const normalized=normalizeHotelRoom(query)
-  return rooms.filter(r=>{
+  return activePlanRooms.filter(r=>{
    if(r.day_no!==selectedDay||(building!=='ALL'&&!r.room_no.startsWith(building)))return false
    const members=hotelRoomMembers(r.room_no)
    if(query&&!([r.source_room,...members.flatMap(member=>[member,hotelRoomLabel(member)])].some(value=>value.toUpperCase().includes(query))||members.some(member=>member.includes(normalized))))return false
@@ -155,27 +184,35 @@ export default function HotelWorkPlanPage(){
    }))return false
    return true
   })
- },[rooms,selectedDay,building,roomSearch,defectStatusFilter,defectMap])
+ },[activePlanRooms,selectedDay,building,roomSearch,defectStatusFilter,defectMap])
  const duplicates=useMemo(()=>{const count=new Map<string,number>();rooms.forEach(r=>count.set(r.room_no,(count.get(r.room_no)||0)+1));return count},[rooms])
  const openDaySaveReview=()=>{
   if(!editable||!day||saving||saveDialog)return
   const values:DaySaveValues={
-   p_day:day.day_no,p_planned_date:dayDate||null,p_note:dayNote.trim(),p_expected_revision:day.revision,
+   p_day:day.day_no,p_planned_date:dayDate||null,p_note:day.note||'',p_expected_revision:day.revision,
   }
   const changes=buildSaveChanges([
    {label:'วันที่เข้าทำงาน',before:day.planned_date,after:values.p_planned_date,format:v=>dateTH(v)},
    {label:'หมายเหตุการนัดหมาย',before:day.note,after:values.p_note},
   ])
-  const count=rooms.filter(r=>r.day_no===day.day_no).length
+  const count=activePlanRooms.filter(r=>r.day_no===day.day_no).length
+  if(dayDate&&activePlanRooms.filter(r=>r.day_no===day.day_no&&!r.planned_date_override).some(r=>!dateWithinOOO(r,dayDate))){
+   window.alert('วันที่ Day ต้องอยู่ในช่วง OOO ที่โรงแรมยืนยัน กรุณาตรวจข้อมูลช่วงวันที่ในหน้า OOO/OOS')
+   return
+  }
   setSaveDialog({phase:'confirm',intent:{kind:'day',target:'Day '+day.day_no+' · '+count+' รายการ',changes,values}})
  }
  const openRoomSaveReview=()=>{
   if(!editable||!selected||saving||saveDialog)return
   const values:RoomSaveValues={
-   p_seq:selected.seq_no,p_day:roomDay,p_override_date:roomDate||null,p_actual_date:roomActual||null,
-   p_status:roomStatus,p_note:roomNote.trim(),p_expected_revision:selected.revision,
+   p_seq:selected.seq_no,p_day:selected.day_no,p_override_date:roomDate||null,p_actual_date:selected.actual_date,
+   p_status:selected.work_status,p_note:selected.note||'',p_expected_revision:selected.revision,
   }
   const groupRows=rooms.filter(r=>hotelRoomMembers(selected.room_no).includes(r.room_no))
+  if(roomDate&&groupRows.some(r=>!dateWithinOOO(r,roomDate))){
+   window.alert('วันที่เฉพาะห้องต้องอยู่ในช่วง OOO ที่โรงแรมยืนยันสำหรับทุกห้อง Combine')
+   return
+  }
   if(groupRows.length>1)values.p_group_expected=groupRows.map(r=>({seq:r.seq_no,revision:r.revision}))
   const changes=buildSaveChanges([
    {label:'Day',before:String(selected.day_no),after:String(values.p_day),format:v=>'Day '+v},
@@ -224,7 +261,7 @@ export default function HotelWorkPlanPage(){
  const combineStatusConflict=selected&&new Set(hotelRoomMembers(selected.room_no).map(member=>defectMap.get(member)).filter((d):d is Defect=>!!d).map(statusLabel)).size>1
  const workItems=selected?contractorFor(selectedDefect?.defect_detail||null,selected.room_no[0]):[]
  return <AppShell>
-  <PageHeader title="Hotel Work Plan | Day 1–9" subtitle="Above Element · คิวโรงแรม 267 รายการ · วันที่จริงยังไม่กำหนดในไฟล์ต้นฉบับ"
+  <PageHeader title="Hotel Work Plan | Day 1–9" subtitle="Above Element · คัดเฉพาะ Defect ค้าง/รอตรวจและห้องที่โรงแรมยืนยัน OOO · Day 1–9 ตามต้นฉบับ"
    action={<div className="work-head">
     <div className="work-update-meta" role="status" aria-label="ข้อมูลอัปเดตไฟล์ Defect Work Plan" title="เวลาซิงก์ Excel ที่ยืนยันอ่านกลับจาก Google Drive">
      <span>อัพเดทล่าสุด</span>
@@ -236,44 +273,45 @@ export default function HotelWorkPlanPage(){
   {loading?<div className="panel">กำลังโหลดแผนโรงแรม…</div>:<>
    <section className="work-days" aria-label="เลือกแผน Day 1 ถึง Day 9">
     {days.map(d=>{
-     const records=rooms.filter(r=>r.day_no===d.day_no)
+     const records=activePlanRooms.filter(r=>r.day_no===d.day_no)
      const open=records.filter(r=>defectFor(r.room_no)?.status_group==='Hotel - Incomplete').length
      const review=records.filter(r=>defectFor(r.room_no)?.status_group==='Hotel - Awaiting Check').length
      return <button type="button" key={d.day_no} onClick={()=>{setSelectedDay(d.day_no);setSelectedSeq(null)}} className={'work-day '+(selectedDay===d.day_no?'current':'')}>
-      <strong>Day {d.day_no}</strong><span>{records.length} รายการ</span>
+      <strong>Day {d.day_no}</strong><span>{records.length} ชุดห้อง</span>
       <small>ค้าง {open} · รอตรวจ {review}</small>
       <small className="work-date">{dateTH(d.planned_date)}</small>
      </button>
     })}
    </section>
    <section className="panel work-day-editor">
-    <div><h2>Day {selectedDay} <small>({rooms.filter(r=>r.day_no===selectedDay).length} รายการ)</small></h2>
+    <div><h2>Day {selectedDay} <small>({activePlanRooms.filter(r=>r.day_no===selectedDay).length} ชุดห้อง)</small></h2>
      <p className="muted small">วันที่กลางของ Day ใช้กับทุกห้องที่ไม่มีวันที่เฉพาะ · เปลี่ยนแผนไม่เปลี่ยนสถานะ Defect หรือ OOO/OOS</p></div>
     <label>วันที่เข้าทำงาน<input type="date" value={dayDate} disabled={!editable||saving} onChange={e=>setDayDate(e.target.value)}/></label>
-    <label>หมายเหตุการนัดหมาย<input value={dayNote} maxLength={2000} disabled={!editable||saving} onChange={e=>setDayNote(e.target.value)} placeholder="รอโรงแรมยืนยัน / ข้อจำกัด"/></label>
+    <label>หมายเหตุแผนเดิม<input value={dayNote} readOnly disabled title="อ้างอิงอย่างเดียว • หน้านี้แก้เฉพาะวันตามแผน"/></label>
     {editable&&<button type="button" className="button" disabled={saving||!!saveDialog} onClick={openDaySaveReview}>บันทึก Day {selectedDay}</button>}
     {day?.updated_at&&<small className="work-history">แก้ไขล่าสุด {day.updated_by_name||'ผู้ใช้'} · {new Date(day.updated_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})} · {day.sync_state==='pending'?'รอซิงก์ Excel':day.sync_state==='conflict'?'ข้อมูลขัดแย้ง':'ซิงก์แล้ว'}</small>}
    </section>
+   <p className="muted small">แสดง {activePlanRooms.length} ชุดห้องที่อยู่ในสถานะ Defect ค้าง/รอตรวจ และมี OOO ล่าสุด · ห้อง OOS รออนุญาตแยก {pendingOosCount} ชุด · ไม่แสดงห้องที่ OOO ยังไม่ยืนยัน</p>
    <section className="panel work-table">
     <div className="work-filter"><div><h2>รายการห้อง · Day {selectedDay}</h2><small>คลิกเลขห้องเพื่อดูรายละเอียดและผู้รับเหมา</small></div>
      <input aria-label="ค้นหาเลขห้อง" placeholder="ค้นหาห้อง เช่น A212, Good02" value={roomSearch} onChange={e=>setRoomSearch(e.target.value)}/>
      <select aria-label="กรองอาคาร" value={building} onChange={e=>setBuilding(e.target.value)}><option value="ALL">อาคาร A + B</option><option value="A">อาคาร A</option><option value="B">อาคาร B</option></select>
      <select className="work-defect-filter" aria-label="กรองสถานะ Defect ปัจจุบัน" value={defectStatusFilter} onChange={e=>setDefectStatusFilter(e.target.value)}><option value="ALL">ทุกสถานะ Defect</option>{defectStatusOptions.map(label=><option key={label} value={label}>{label}</option>)}</select>
     </div>
-    <div className="table-wrap"><table><thead><tr><th>Seq.</th><th>ห้อง</th><th>วันที่แผน</th><th>วันที่จริง</th><th>สถานะแผน</th><th>Defect ปัจจุบัน</th><th>OOO/OOS</th><th>รายละเอียด</th></tr></thead><tbody>
-    {filtered.map(r=>{
+    <div className="table-wrap"><table><thead><tr><th>ลำดับ</th><th>ห้อง</th><th>วันที่แผน</th><th>วันที่จริง</th><th>สถานะแผน</th><th>Defect ปัจจุบัน</th><th>OOO/OOS</th><th>รายละเอียด</th></tr></thead><tbody>
+    {filtered.map((r,index)=>{
      const df=defectFor(r.room_no),hotel=statusFor(r.room_no)
      const peers=hotelRoomMembers(r.room_no).filter(member=>member!==r.room_no)
-     return <tr key={r.seq_no}><td>{r.seq_no}</td><td><button className="work-room-link" onClick={()=>setSelectedSeq(r.seq_no)}>{hotelRoomLabel(r.room_no)}</button>{peers.length>0&&<small className="work-combine">Combine: {peers.map(hotelRoomLabel).join(', ')}</small>}{duplicates.get(r.room_no)!>1&&<small className="work-duplicate">มีมากกว่า 1 คิว</small>}</td>
+     return <tr key={r.seq_no}><td>{index+1}</td><td><button className="work-room-link" onClick={()=>setSelectedSeq(r.seq_no)}>{hotelRoomLabel(r.room_no)}</button>{peers.length>0&&<sup className="work-combine-symbol" title="ห้อง Combine">c</sup>}{peers.length>0&&<small className="work-combine">Combine: {peers.map(hotelRoomLabel).join(', ')}</small>}{duplicates.get(r.room_no)!>1&&<small className="work-duplicate">มีมากกว่า 1 คิว</small>}</td>
       <td>{dateTH(planDate(r))}</td><td>{dateTH(r.actual_date)}</td><td>{LABELS[r.work_status]||r.work_status}</td>
-      <td><span className={'work-defect-badge '+(df?statusTone(df):'neutral')}>{df?statusLabel(df):'—'}</span></td><td>{HOTEL[hotel?.availability_status||'UNKNOWN']}</td>
+      <td><span className={'work-defect-badge '+(df?statusTone(df):'neutral')}>{df?statusLabel(df):'—'}</span></td><td>{hotel?.availability_status==='OOO'?<><b>OOO</b><small>{hotel.start_date?dateTH(hotel.start_date):'ไม่ระบุวันเริ่ม'} – {hotel.end_date?dateTH(hotel.end_date):'ไม่ระบุวันสิ้นสุด'}</small></>:hotel?.availability_status==='OOS'?'OOS':'—'}</td>
       <td><button className="button" onClick={()=>setSelectedSeq(r.seq_no)}>ดู{editable?' / แก้ไข':''}</button></td></tr>
     })}
     {!filtered.length&&<tr><td colSpan={8}>ไม่พบห้องตามตัวกรอง</td></tr>}
     </tbody></table></div>
    </section>
    {selected&&<section className="panel work-room-detail" id="work-room-detail">
-    <div className="work-room-heading"><div><h2>ห้อง {hotelRoomLabel(selected.room_no)}</h2><small>Seq. {selected.seq_no} · Day {selected.day_no} · Room ID หลัก {selected.room_no}</small></div>
+    <div className="work-room-heading"><div><h2>ห้อง {hotelRoomLabel(selected.room_no)}</h2><small>รหัสอ้างอิง Excel {selected.seq_no} · Day {selected.day_no} · Room ID หลัก {selected.room_no}</small>{hotelRoomMembers(selected.room_no).length>1&&<sup className="work-combine-symbol" title="ห้อง Combine">c</sup>}</div>
      <button className="button" onClick={()=>setSelectedSeq(null)}>ปิดรายละเอียด</button></div>
     <div className="work-facts"><span>วันตามแผน: <b>{dateTH(planDate(selected))}</b></span><span>สถานะห้อง: <b>{HOTEL[statusFor(selected.room_no)?.availability_status||'UNKNOWN']}</b></span>
      <span>สถานะ Defect: <b className={'work-defect-badge '+(selectedDefect?statusTone(selectedDefect):'neutral')}>{selectedDefect?statusLabel(selectedDefect):'—'}</b></span></div>
@@ -284,17 +322,17 @@ export default function HotelWorkPlanPage(){
     {(selectedDefect?.next_action||selectedDefect?.follow_up)&&<p className="muted small">ต้องติดตาม: {selectedDefect.next_action||selectedDefect.follow_up}</p>}
     <p className="muted small">แสดงทีมตามกฎประเภทงานและอาคารเฉพาะรายการที่มีคำระบุประเภทงานชัดเจน · รายการที่ไม่ชัดเจนคง “รอจำแนกผู้รับผิดชอบ” และต้องตรวจยืนยัน Defect ก่อนสั่งงาน</p>
     <div className="work-room-editor">
-      <label>Day<select disabled={!editable||saving} value={roomDay} onChange={e=>setRoomDay(Number(e.target.value))}>{days.map(d=><option key={d.day_no} value={d.day_no}>Day {d.day_no}</option>)}</select></label>
+      <label>กลุ่มคิวตามต้นฉบับ<input value={"Day "+selected.day_no} disabled readOnly/></label>
       <label>วันที่เฉพาะห้อง<input disabled={!editable||saving} type="date" value={roomDate} onChange={e=>setRoomDate(e.target.value)}/></label>
-      <label>วันเข้าจริง<input disabled={!editable||saving} type="date" value={roomActual} onChange={e=>setRoomActual(e.target.value)}/></label>
-      <label>สถานะแผน<select disabled={!editable||saving} value={roomStatus} onChange={e=>setRoomStatus(e.target.value)}>{Object.entries(LABELS).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
-      <label className="work-note">หมายเหตุ<input disabled={!editable||saving} value={roomNote} maxLength={2000} onChange={e=>setRoomNote(e.target.value)}/></label>
+      <label>วันเข้าจริง (ข้อมูลเดิม)<input disabled readOnly type="date" value={selected.actual_date||""}/></label>
+      <label>สถานะแผนเดิม<input disabled readOnly value={LABELS[selected.work_status]||selected.work_status}/></label>
+      <label className="work-note">หมายเหตุเดิม<input disabled readOnly value={selected.note||""}/></label>
     </div>
     {editable&&<button type="button" className="button" disabled={saving||!!saveDialog} onClick={openRoomSaveReview}>บันทึกรายห้อง</button>}
     {selected.updated_at&&<p className="work-history">แก้ไขล่าสุด {selected.updated_by_name||'ผู้ใช้'} · {new Date(selected.updated_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})} · Revision {selected.revision} · {selected.sync_state==='pending'?'รอซิงก์ Excel':selected.sync_state==='conflict'?'ข้อมูลขัดแย้ง':'ซิงก์แล้ว'}</p>}
     <p><Link href={'/defects?q='+encodeURIComponent(selected.room_no)+'#room-list'}>เปิด Defect Report ของห้องนี้</Link></p>
    </section>}
-   <p className="muted small">อ้างอิงลำดับ 267 รายการจาก Hotel Day 1–9 Snapshot 13/10/2026 · สถานะ Defect/OOO/OOS อ้างอิงจากระบบล่าสุด ไม่ใช่ Snapshot · ประวัติการแก้ไขแผนเก็บใน Activity Log</p>
+   <p className="muted small">Excel Day 1–9 ยังคงทั้ง 267 รายการและลำดับอ้างอิงเดิม · หน้าแผนเลือกห้องจาก Defect และ OOO ล่าสุดโดยไม่เขียนทับต้นทาง · ห้อง Combine นับหนึ่งชุด · แก้ไขเฉพาะวันที่ในแผน</p>
   </>}
   {saveDialog&&<div className="work-save-overlay" role="presentation"
     onMouseDown={e=>{if(e.target===e.currentTarget&&saveDialog.phase!=='saving'&&!saving)setSaveDialog(null)}}>
@@ -344,6 +382,8 @@ export default function HotelWorkPlanPage(){
    </section>
   </div>}
   <style jsx>{`
+    .work-combine-symbol{font-size:10px;font-weight:800;margin-left:3px;color:#a45d12;vertical-align:super}
+
     .work-save-overlay{position:fixed;inset:0;z-index:1300;background:rgba(12,25,43,.46);display:grid;place-items:center;padding:16px}
     .work-save-dialog{width:min(510px,100%);max-height:calc(100dvh - 32px);overflow:auto;background:#fff;border:1px solid #d7dee8;border-radius:14px;padding:18px;box-shadow:0 18px 50px rgba(13,31,53,.23)}
     .work-save-titlebar{display:flex;align-items:start;justify-content:space-between;gap:12px}.work-save-titlebar h2{font-size:18px;margin:5px 0 0;color:#172a43}.work-save-state{font-size:11px;font-weight:800;color:#526779}.work-save-state.success{color:#217449}.work-save-state.error{color:#9d3030}.work-save-state.saving{color:#8b6b2b}

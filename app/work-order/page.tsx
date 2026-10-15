@@ -53,6 +53,16 @@ export default function WorkOrderViewer(){
  const [quick,setQuick]=useState<Quick>('ALL')
  const [query,setQuery]=useState('')
  const [contractor,setContractor]=useState('ALL')
+ // Allow read-only room-scoped navigation from Defect Report and OOO/OOS.
+ // Do not change the existing eligible-work-item or permission rules.
+ useEffect(()=>{
+  const params=new URLSearchParams(window.location.search)
+  const requestedRoom=params.get('room')||params.get('q')
+  if(!requestedRoom)return
+  setQuery(requestedRoom)
+  setQuick('ALL')
+  setContractor('ALL')
+ },[])
 
  const reload=useCallback(async()=>{
   const sb=getSupabase()
