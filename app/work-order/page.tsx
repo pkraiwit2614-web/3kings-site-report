@@ -98,6 +98,7 @@ export default function WorkOrderViewer(){
    if(error)throw error
    if(!data?.ok)throw Error(data?.error||'บันทึกสถานะไม่สำเร็จ')
    await reload()
+   setQuick('DONE')
    setConfirmRow(null)
   }catch(e){setSaveError(e instanceof Error?e.message:String(e))}
   finally{setSaving(false)}
@@ -114,13 +115,13 @@ export default function WorkOrderViewer(){
   return (quick==='DONE'?completed:eligible).filter(r=>{
    if(quick==='A'||quick==='B'){if(r.building!==quick)return false}
    if(quick==='OVERDUE'&&!overdue(r.due_date))return false
-   if(quick==='IN_PROGRESS'&&!inProgress(r.work_status))return false
+   if(quick==='IN_PROGRESS'&&finished(r.work_status))return false
    if(contractor!=='ALL'&&r.contractor!==contractor)return false
    if(!needle)return true
    return normalize([r.work_id,r.room_group,roomSearchText(r.room_group),r.defect_item,r.next_action,r.contractor,r.supervisor].filter(Boolean).join(' ')).includes(needle)
   }).sort((a,b)=>a.contractor.localeCompare(b.contractor,'th')||a.room_group.localeCompare(b.room_group)||a.work_id.localeCompare(b.work_id))
  },[eligible,completed,quick,contractor,query])
- const latestImport=rows.map(r=>r.imported_at).filter(Boolean).sort().at(-1)||null
+ const latestImport=rows.flatMap(r=>[r.imported_at,r.web_completed_at]).filter((v):v is string=>Boolean(v)).sort().at(-1)||null
  const counters={
   ALL:eligible.length,
   A:eligible.filter(r=>r.building==='A').length,
