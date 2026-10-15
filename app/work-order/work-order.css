@@ -52,7 +52,6 @@
 @media(max-width:900px){.wo-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.wo-kpi{min-height:84px}}
 @media(max-width:620px){.wo-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.wo-kpi{padding:10px}.wo-kpi b{font-size:23px}.wo-filters{display:grid;grid-template-columns:1fr}.wo-filters label{min-width:0}}
 @media print{
- @page{size:A4 landscape;margin:8mm}
  body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-filters,
  body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-screen-scope,
  body.report-print-mode[data-print-report="Above Condo — Work Order"] .report-print-filters{display:none!important}
