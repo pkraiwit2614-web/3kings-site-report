@@ -5,7 +5,7 @@
 - Defect Report column label only: `วันที่ Hotel แจ้ง` → `วันที่รับแจ้ง`. Shared display helper `lib/defectNoticeDate.ts` preserves existing report values.
 - Original Work Order XLSX: `Defect_Work_Order_Updated_2026-10-15.xlsx`, Google Drive ID supplied privately by `WORK_ORDER_FILE_ID`.
 - Only worksheet `ใบแจกงานคงค้าง 151026` is editable by the completion executor. The `ใบแจกงานตามทีม` sheet is **historical**, not an edit target.
-- Source inspected 15 Oct 2026: 8 worksheets; active worksheet 61 rows × 15 columns, headers on row 5, Work ID in C, status in J, P unused, no pre-existing P merges. A1:O61 dimension. 52 active Work IDs. Reverify before activating after changes to Excel.
+- Source inspected 15 Oct 2026: 8 worksheets; active worksheet 61 rows × 15 columns, headers on row 5, Work ID in C, status in J, P unused, no pre-existing P merges. A1:O61 dimension. The approved dispatch worksheet contains 52 listed Work IDs, but the Web snapshot's `source_active` status is a distinct indicator. Reverify before activating after changes to Excel.
 - No change to Defect Flow, Defect Report data, Work Plan, OOO/OOS, Payroll, Materials, scripts or existing triggers.
 
 ## Rollout order (do not bypass)
@@ -13,7 +13,7 @@
 2. Apply the **two** additive Supabase migrations from this branch to project `wtqubwdduzedmcvyhbgs`, in filename order:
    - `20261015150000_work_order_completion_writeback.sql`: adds isolated columns/RPC queue.
    - `20261015151000_work_order_import_preserve_completion.sql`: makes the existing Excel importer preserve web-confirmed Work ID status, without changing old import guardrails.
-3. Verify `defect_work_order_snapshot` still has 52 `source_active=true` IDs, zero `writeback_state='pending'` rows, existing read RLS and no change to `condo_room_status`. Verify a no-login attempt to completion returns `AUTH_REQUIRED` or permission denied. Verify protected roles and existing Role Matrix remain unchanged.
+3. Reconcile Work IDs and statuses against the latest importer before deployment. On 15 Oct 2026 preflight the database had 52 TOTAL, 26 `source_active=true` and 26 inactive (23 already marked completed, 3 sent to juristic); **do not assume all 52 Excel rows should be active**. Verify no unintended room status changes, existing read RLS, and zero `writeback_state='pending'` rows. Verify a no-login attempt to completion returns `AUTH_REQUIRED` or permission denied. Verify protected roles and existing Role Matrix remain unchanged.
 4. In the **existing 3 Kings Apps Script project** containing `WorkOrderAutoSync_2026-10-15.gs`, ADD (do not replace) the new file `docs/apps-script/WorkOrderCompletionWriteback_2026-10-15.gs`. It calls the existing `workOrderConfig20261015_()` and uses existing `WORK_ORDER_FILE_ID`, `SUPABASE_PUBLISHABLE_KEY`, `DEFECT_SYNC_KEY`. Never post key values to GitHub or chats.
 5. Run `workOrderCompletionDryRun20261015()` first; expected `status:"dry-run"`; when queue is empty `queued:0,verified:0,errors:[]`. It does not change original XLSX.
 6. Check `installWorkOrderCompletionTrigger20261015()` returns `count:1` (independent 5-minute trigger). Confirm through Apps Script UI/trigger list; preserve original 2-hour import trigger and all unrelated triggers.
