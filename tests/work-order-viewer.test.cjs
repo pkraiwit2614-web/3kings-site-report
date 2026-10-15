@@ -47,6 +47,7 @@ test('internal Defect permission honors matrix and hotel roles remain blocked',(
  assert.doesNotMatch(migration,/UPDATE public\.condo_room_status|DELETE FROM public\.condo_room_status|ALTER TABLE public\.condo_room_status/i)
 })
 test('public repository migration never embeds private Work Order rows or evidence links',()=>{
- assert.doesNotMatch(migration,/DF-A[0-9]|DF-B[0-9]|drive\\.google\\.com\\/file\\/d\\//)
+ assert.doesNotMatch(migration,/DF-[AB][0-9]/)
+ assert.ok(!migration.includes('drive.google.com/file/d/'))
  assert.match(migration,/Data is loaded privately/)
 })
