@@ -68,3 +68,8 @@
 .wo-confirm-panel p{font-size:13px;line-height:1.55}
 .wo-dialog-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
 @media print{body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-modal-backdrop,body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-status-select{display:none!important}}
+.wo-print-status{display:none}
+.update-meta{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;line-height:1.25;margin-right:2px}
+.update-meta span{font-size:8.5px;color:var(--muted);font-weight:700}
+.update-meta b{font-size:10px;color:var(--navy);font-weight:800;white-space:nowrap}
+@media print{body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-print-status{display:inline!important;font-weight:700}}
