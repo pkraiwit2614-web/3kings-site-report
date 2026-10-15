@@ -106,16 +106,22 @@ function workOrderWbPutCell20261015_(xml,ref,value){
   return xml.replace(workOrderWbRow20261015_(xml,rowNo),row);
 }
 function workOrderWbBaseline20261015_(file){
-  const props=PropertiesService.getScriptProperties();
-  const key='WORK_ORDER_WB_BASELINE_'+file.getId();
-  if(props.getProperty(key))return;
+  // Backup identity is the approved same-folder filename; no new Script Property.
   const parents=file.getParents();if(!parents.hasNext())throw Error('Workbook has no parent folder');
   const parent=parents.next(),folders=parent.getFoldersByName('Backup');
   const folder=folders.hasNext()?folders.next():parent.createFolder('Backup');
-  const copy=folder.getFilesByName('BACKUP_before_WorkOrderWebCompletion_2026-10-15_'+file.getName());
-  const backup=copy.hasNext()?copy.next():file.makeCopy('BACKUP_before_WorkOrderWebCompletion_2026-10-15_'+file.getName(),folder);
-  if(!backup?.getId())throw Error('Work Order baseline backup missing');
-  props.setProperty(key,backup.getId());
+  const name='BACKUP_before_WorkOrderWebCompletion_2026-10-15_'+file.getName();
+  const copies=folder.getFilesByName(name);
+  if(copies.hasNext()){
+    const existing=copies.next();
+    if(existing.getMimeType()!==WORK_ORDER_WB_20261015.MIME||existing.getSize()<1)
+      throw Error('Existing Work Order backup invalid; manual review required');
+    return {created:false};
+  }
+  const backup=file.makeCopy(name,folder);
+  if(!backup?.getId()||backup.getMimeType()!==WORK_ORDER_WB_20261015.MIME)
+    throw Error('Work Order baseline backup missing');
+  return {created:true};
 }
 function workOrderWbApply20261015_(config,change,dryRun){
   const file=DriveApp.getFileById(config.id);
