@@ -72,3 +72,20 @@ test('Server sync source isolation, guards, and business-only writes',()=>{
  assert.doesNotMatch(sql,/https:\/\/drive\.google\.com\/file\/d\//)
  assert.doesNotMatch(sql,/DF-[AB][0-9]{3}-[0-9]/)
 })
+
+test('Dispatch parser stops at first section break, never imports QA appendix',()=>{
+ const context=vm.createContext({Date,JSON,console,Utilities:{formatDate:()=> '2026-10-15'}})
+ vm.runInContext(sync,context)
+ const headers=['ลำดับ','ผู้รับเหมา','Work ID','ห้อง/Combine','รายการ Defect','งานที่ต้องทำต่อ',
+ 'ผู้คุม','วันรับแจ้งจริง','ครบ 7 วัน','สถานะล่าสุด','หลักฐานต้นฉบับ',
+ 'สถานะห้อง (Web ผ่าน Defect Master)','ผลตรวจแจกงาน','ซิงก์ต้นทางล่าสุด','ข้อขัดแย้ง / Combine']
+ const valid=['1','RSE','DF-B610-B611-01','B610+B611','ไฟไม่ติด','ตรวจไฟ','บังรุน','รอยืนยัน','','ยังไม่เริ่ม','','','ตรวจรายการ','15/10/2569','']
+ const qaRow=['2','3 Kings','DF-A212-08','A212','รายการรอตรวจภาพ','รอเอกสาร','พี่ปู','','','ยังไม่เริ่ม','','','รอตรวจ','','']
+ const fakeSheet={getDataRange(){return {getValues(){return [
+  ['Defect | Work Order'],headers,valid,['','','','','','',''],['QA APPENDIX'],qaRow
+ ]}}}}
+ const parsed=vm.runInContext('workOrderParse20261015_',context)(fakeSheet)
+ assert.equal(parsed.length,1)
+ assert.equal(parsed[0].work_id,'DF-B610-B611-01')
+ assert.equal(parsed[0].received_date,null)
+})
