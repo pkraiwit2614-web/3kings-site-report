@@ -181,9 +181,14 @@ function workOrderPreflight20261015(){
     error:'A required property is missing; no property was modified'};
   const file=DriveApp.getFileById(props.getProperty('WORK_ORDER_FILE_ID'));
   const handlers=ScriptApp.getProjectTriggers().map(t=>t.getHandlerFunction());
-  return {ok:file.getName()===WORK_ORDER_AUTO_20261015.FILE_NAME
+  const parents=file.getParents();
+  const parentName=parents.hasNext()?parents.next().getName():null;
+  const locatedInBackup=parentName==='Backup';
+  return {ok:!locatedInBackup
+      &&file.getName()===WORK_ORDER_AUTO_20261015.FILE_NAME
       &&file.getMimeType()==='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    ...status,fileName:file.getName(),mimeType:file.getMimeType(),
+    ...status,sourceFolderName:parentName,sourceInBackup:locatedInBackup,
+    fileName:file.getName(),mimeType:file.getMimeType(),
     fileModifiedAt:file.getLastUpdated().toISOString(),
     sourceImportTriggerCount:handlers.filter(x=>x===WORK_ORDER_AUTO_20261015.HANDLER).length,
     completionTriggerCount:handlers.filter(x=>x==='syncWorkOrderCompletion20261015').length};
