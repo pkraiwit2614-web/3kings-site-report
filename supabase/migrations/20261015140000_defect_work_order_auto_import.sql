@@ -31,7 +31,8 @@ BEGIN
   IF NOT private.drive_sync_key_valid(p_sync_key) THEN
     RETURN jsonb_build_object('ok',false,'error','invalid_sync_key');
   END IF;
-  IF p_source_file_id IS DISTINCT FROM '18P3OFYtOLsslCtDujlSQVf9IQSuplKcx'
+  IF encode(sha256(convert_to(coalesce(p_source_file_id,''),'UTF8')),'hex')
+        IS DISTINCT FROM '962738100f241f1bde034952744f2009333a0767d9560da405692a52c67835b5'
      OR p_source_file_name IS DISTINCT FROM 'Defect_Work_Order_Updated_2026-10-15.xlsx'
   THEN
     RETURN jsonb_build_object('ok',false,'error','unapproved_work_order_source');
@@ -71,8 +72,8 @@ BEGIN
   -- Every member of each listed room/group must exist in the 263-room master.
   SELECT count(*) INTO v_unknown_room
   FROM jsonb_to_recordset(p_rows) x(room_group text)
-  CROSS JOIN LATERAL regexp_matches(x.room_group,'[AB][0-9]{3}','g') m
-  WHERE NOT EXISTS (SELECT 1 FROM public.condo_room_status c WHERE c.room_no=m[1]);
+  CROSS JOIN LATERAL regexp_matches(x.room_group,'[AB][0-9]{3}','g') AS matched(room_token)
+  WHERE NOT EXISTS (SELECT 1 FROM public.condo_room_status c WHERE c.room_no=matched.room_token[1]);
   IF v_unknown_room <> 0 THEN
     RETURN jsonb_build_object('ok',false,'error','unknown_room_in_source','count',v_unknown_room);
   END IF;
