@@ -137,7 +137,7 @@ export default function HotelWorkPlanPage(){
  },[selected?.seq_no,selected?.revision])
  const defectMap=useMemo(()=>new Map(defects.map(d=>[d.room_no,d])),[defects])
  const hotelMap=useMemo(()=>new Map(hotels.map(d=>[d.room_no,d])),[hotels])
- // Preserve every original Seq./Day row; Combine affects lookup and explicitly confirmed edits only.
+ // Keep original seq_no and Day as stable source IDs; only display row numbering follows the active filters.
  const defectFor=(room:string)=>defectMap.get(room)||hotelRoomMembers(room).map(member=>defectMap.get(member)).find(Boolean)
  const planDate=(r:Room)=>r.planned_date_override||days.find(d=>d.day_no===r.day_no)?.planned_date||null
  const statusFor=(room:string)=>hotelRoomMembers(room).map(member=>hotelMap.get(member)).find(Boolean)
@@ -260,11 +260,11 @@ export default function HotelWorkPlanPage(){
      <select aria-label="กรองอาคาร" value={building} onChange={e=>setBuilding(e.target.value)}><option value="ALL">อาคาร A + B</option><option value="A">อาคาร A</option><option value="B">อาคาร B</option></select>
      <select className="work-defect-filter" aria-label="กรองสถานะ Defect ปัจจุบัน" value={defectStatusFilter} onChange={e=>setDefectStatusFilter(e.target.value)}><option value="ALL">ทุกสถานะ Defect</option>{defectStatusOptions.map(label=><option key={label} value={label}>{label}</option>)}</select>
     </div>
-    <div className="table-wrap"><table><thead><tr><th>Seq.</th><th>ห้อง</th><th>วันที่แผน</th><th>วันที่จริง</th><th>สถานะแผน</th><th>Defect ปัจจุบัน</th><th>OOO/OOS</th><th>รายละเอียด</th></tr></thead><tbody>
-    {filtered.map(r=>{
+    <div className="table-wrap"><table><thead><tr><th>ลำดับ</th><th>ห้อง</th><th>วันที่แผน</th><th>วันที่จริง</th><th>สถานะแผน</th><th>Defect ปัจจุบัน</th><th>OOO/OOS</th><th>รายละเอียด</th></tr></thead><tbody>
+    {filtered.map((r,index)=>{
      const df=defectFor(r.room_no),hotel=statusFor(r.room_no)
-     const peers=hotelRoomMembers(r.room_no).filter(member=>member!==r.room_no)
-     return <tr key={r.seq_no}><td>{r.seq_no}</td><td><button className="work-room-link" onClick={()=>setSelectedSeq(r.seq_no)}>{hotelRoomLabel(r.room_no)}</button>{peers.length>0&&<small className="work-combine">Combine: {peers.map(hotelRoomLabel).join(', ')}</small>}{duplicates.get(r.room_no)!>1&&<small className="work-duplicate">มีมากกว่า 1 คิว</small>}</td>
+     const combineMembers=hotelRoomMembers(r.room_no)
+     return <tr key={r.seq_no}><td>{index+1}</td><td><button className="work-room-link" onClick={()=>setSelectedSeq(r.seq_no)}>{hotelRoomLabel(r.room_no)}</button>{combineMembers.length>1&&<><span className="work-combine-code" title="ห้อง Combine">c</span><small className="work-combine-badge" title="ห้อง Combine — รายละเอียดงานของทุกเลขห้องในกลุ่มนี้ใช้ชุดเดียวกัน">Combine: {combineMembers.join(' + ')}</small></>}{duplicates.get(r.room_no)!>1&&<small className="work-duplicate">มีมากกว่า 1 คิว</small>}</td>
       <td>{dateTH(planDate(r))}</td><td>{dateTH(r.actual_date)}</td><td>{LABELS[r.work_status]||r.work_status}</td>
       <td><span className={'work-defect-badge '+(df?statusTone(df):'neutral')}>{df?statusLabel(df):'—'}</span></td><td>{HOTEL[hotel?.availability_status||'UNKNOWN']}</td>
       <td><button className="button" onClick={()=>setSelectedSeq(r.seq_no)}>ดู{editable?' / แก้ไข':''}</button></td></tr>
@@ -273,7 +273,7 @@ export default function HotelWorkPlanPage(){
     </tbody></table></div>
    </section>
    {selected&&<section className="panel work-room-detail" id="work-room-detail">
-    <div className="work-room-heading"><div><h2>ห้อง {hotelRoomLabel(selected.room_no)}</h2><small>Seq. {selected.seq_no} · Day {selected.day_no} · Room ID หลัก {selected.room_no}</small></div>
+    <div className="work-room-heading"><div><h2>ห้อง {hotelRoomLabel(selected.room_no)}{hotelRoomMembers(selected.room_no).length>1&&<span className="work-combine-code" title="ห้อง Combine">c</span>}</h2>{hotelRoomMembers(selected.room_no).length>1&&<small className="work-combine-badge">Combine: {hotelRoomMembers(selected.room_no).join(' + ')}</small>}<small>Seq. {selected.seq_no} · Day {selected.day_no} · Room ID หลัก {selected.room_no}</small></div>
      <button className="button" onClick={()=>setSelectedSeq(null)}>ปิดรายละเอียด</button></div>
     <div className="work-facts"><span>วันตามแผน: <b>{dateTH(planDate(selected))}</b></span><span>สถานะห้อง: <b>{HOTEL[statusFor(selected.room_no)?.availability_status||'UNKNOWN']}</b></span>
      <span>สถานะ Defect: <b className={'work-defect-badge '+(selectedDefect?statusTone(selectedDefect):'neutral')}>{selectedDefect?statusLabel(selectedDefect):'—'}</b></span></div>
@@ -367,7 +367,7 @@ export default function HotelWorkPlanPage(){
     .work-room-editor{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin:15px 0 10px}.work-note{grid-column:1/-1}
 .work-defect-badge{display:inline-flex;align-items:center;justify-content:center;max-width:230px;white-space:normal;text-align:center;border:1px solid transparent;border-radius:999px;padding:5px 8px;font-size:9px;font-weight:750;line-height:1.35}
     .work-defect-badge.danger{background:#fdeceb;border-color:#f1cdca;color:#9e312d}.work-defect-badge.warn{background:#fff3dc;border-color:#f0dfb8;color:#85570d}.work-defect-badge.good{background:#e9f6ef;border-color:#cfe9da;color:#196645}.work-defect-badge.neutral{background:#f0f2f4;border-color:#d8dde2;color:#5f6873}
-    .work-combine{display:block;color:#406a83;font-size:9px}.work-combine-detail{border:1px solid #d6e4f0;background:#f5f9fc;padding:10px;border-radius:8px;font-size:11px}.work-combine-detail>div{display:flex;flex-wrap:wrap;gap:6px;margin:7px 0}.work-combine-detail button{border:1px solid #bad0df;background:white;border-radius:7px;padding:5px 8px;cursor:pointer;font:inherit;font-weight:700;color:#1b567d}.work-combine-detail small{display:block;color:#52697f;margin-top:4px}.work-combine-detail .work-combine-conflict{color:#9e312d;font-weight:800}
+    .work-combine-code{display:inline-block;margin-left:1px;color:#385d9d;font-size:7px;font-weight:900;line-height:1;vertical-align:super}.work-combine-badge{display:inline-flex;margin-top:5px;padding:2px 6px;border-radius:999px;background:#eef3ff;border:1px solid #c9d7f5;color:#385d9d;font-size:7.5px;font-weight:850;line-height:1.25;white-space:nowrap}.work-table td .work-combine-badge{display:flex;width:max-content;max-width:100%;white-space:normal}.work-room-heading .work-combine-badge{display:flex;width:max-content}.work-combine-detail{border:1px solid #d6e4f0;background:#f5f9fc;padding:10px;border-radius:8px;font-size:11px}.work-combine-detail>div{display:flex;flex-wrap:wrap;gap:6px;margin:7px 0}.work-combine-detail button{border:1px solid #bad0df;background:white;border-radius:7px;padding:5px 8px;cursor:pointer;font:inherit;font-weight:700;color:#1b567d}.work-combine-detail small{display:block;color:#52697f;margin-top:4px}.work-combine-detail .work-combine-conflict{color:#9e312d;font-weight:800}
     .work-combine-warning{border:1px solid #ead6ab;background:#fff9ea;padding:10px;border-radius:8px;font-size:11px;margin-bottom:10px}.work-combine-warning p{margin:5px 0;line-height:1.4}
     @media(max-width:1200px){.work-days{grid-template-columns:repeat(5,minmax(0,1fr))}.work-day-editor{grid-template-columns:1fr 1fr}.work-day-editor>div{grid-column:1/-1}}
     @media(max-width:650px){.work-days{grid-template-columns:repeat(3,minmax(0,1fr))}.work-day-editor,.work-room-editor{grid-template-columns:1fr}.work-note{grid-column:auto}.work-filter input,.work-filter select{flex:1 1 100%}.work-tasks>div{flex-direction:column}.work-tasks strong{flex:auto;text-align:left}}
@@ -383,7 +383,7 @@ export default function HotelWorkPlanPage(){
       .work-table thead{display:table-header-group!important}
       .work-table tbody tr{break-inside:avoid!important;page-break-inside:avoid!important}
       .work-table th:last-child,.work-table td:last-child{display:none!important}
-      .work-room-link{text-decoration:none!important;color:inherit!important;cursor:default!important}
+      .work-room-link{text-decoration:none!important;color:inherit!important;cursor:default!important}.work-combine-code{font-size:6.5px}.work-combine-badge{font-size:7px}
     }
   `}</style>
  </AppShell>
