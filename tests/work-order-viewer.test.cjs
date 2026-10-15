@@ -21,7 +21,8 @@ test('searchable counters, contractors, Combine and Good room aliases',()=>{
   assert.ok(page.includes(label),label)
  }
  assert.match(page,/roomSearchText/)
- assert.match(page,/Good-0/)
+ assert.match(page,/hotelRoomLabel/)
+ assert.match(read('lib/hotelRoomGroups.ts'),/Good-0/)
  assert.match(page,/ids\(r\.room_group\)/)
  assert.match(page,/r\.contractor!==contractor/)
  assert.match(page,/r\.defect_item,r\.next_action,r\.contractor/)
