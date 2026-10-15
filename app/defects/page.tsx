@@ -317,8 +317,8 @@ export default function DefectDetailPage(){
                <div className={`defect-detail-text ${isLongDefectDetail(summaryByRoom.get(r.room_no)?.work||'')&&!expandedDetails[r.room_no]?'is-collapsed':''}`}>{summaryByRoom.get(r.room_no)?.work||'ไม่ระบุ'}</div>
                {isLongDefectDetail(summaryByRoom.get(r.room_no)?.work||'')&&<button type="button" className="defect-detail-toggle" aria-expanded={!!expandedDetails[r.room_no]} aria-label={`${expandedDetails[r.room_no]?'ย่อรายละเอียด':'ดูรายละเอียดทั้งหมด'} ห้อง ${r.room_no}`} onClick={()=>setExpandedDetails(previous=>({...previous,[r.room_no]:!previous[r.room_no]}))}>{expandedDetails[r.room_no]?'ย่อรายละเอียด':'ดูทั้งหมด'}</button>}
                <div className="defect-summary-meta"><b>วันที่งาน/อัปเดต:</b> {summaryByRoom.get(r.room_no)?.dates||'ไม่ระบุ'}</div>
-               {canAccessWorkOrder(role)&&<Link className="defect-work-order-link" href={'/work-order?room='+encodeURIComponent(r.room_no)}>ดู Work Order →</Link>}
-             </>:<span className="muted">—</span>}</td>
+             </>:<span className="muted">—</span>}
+             {canAccessWorkOrder(role)&&<Link className="defect-work-order-link" href={'/work-order?room='+encodeURIComponent(r.room_no)}>ดู Work Order →</Link>}</td>
             <td className="center"><span className={`state-badge ${statusTone(r)}`}>{statusLabel(r)}</span></td>
             <td className="work-plan-cell">{(workPlanContext.get(r.room_no)||[]).map((label,i)=><small key={i}>{label}</small>)}<small>{roomHotelContext.get(r.room_no)||'สถานะโรงแรม: —'}</small><Link href={'/hotel-work-plan?room='+encodeURIComponent(r.room_no)}>ดูแผน</Link></td>
             <td>{r.next_action||r.follow_up||'-'}</td>
