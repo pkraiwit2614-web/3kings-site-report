@@ -126,6 +126,7 @@ export default function DefectDetailPage(){
   const [loadError,setLoadError]=useState(false)
   const [rows,setRows]=useState<RoomRow[]>([])
   const [workOrders,setWorkOrders]=useState<{room_group:string;work_status:string|null}[]>([])
+  const [workOrderReadState,setWorkOrderReadState]=useState<'loading'|'ready'|'error'>('loading')
   const [latestDefectChangeAt,setLatestDefectChangeAt]=useState<string|null>(null)
   const [loading,setLoading]=useState(true)
   const [filter,setFilter]=useState('')
@@ -211,13 +212,16 @@ export default function DefectDetailPage(){
   // Work Order links remain visible for authorized users. Highlight only items that
   // the Work Order viewer would actually show as outstanding, including Combine rooms.
   useEffect(()=>{
-    if(!canAccessWorkOrder(role)){setWorkOrders([]);return}
+    if(!canAccessWorkOrder(role)){setWorkOrders([]);setWorkOrderReadState('ready');return}
     let active=true
     const supabase=getSupabase()
     const loadOrders=async()=>{
       const {data,error}=await supabase.from('defect_work_order_snapshot')
         .select('room_group,work_status').eq('source_active',true)
-      if(active)setWorkOrders(error?[]:(data||[]) as {room_group:string;work_status:string|null}[])
+      if(active){
+        setWorkOrders(error?[]:(data||[]) as {room_group:string;work_status:string|null}[])
+        setWorkOrderReadState(error?'error':'ready')
+      }
     }
     void loadOrders()
     const reload=()=>{void loadOrders()}
@@ -264,9 +268,17 @@ export default function DefectDetailPage(){
     return result
   },[hotelAvailability,rows])
 
+  // The Flow diagram arrives before async room data. Scroll only after the requested
+  // filtered results are rendered; keep the legacy #room-list deep link intact.
   useEffect(()=>{
-    if(!loading&&window.location.hash==='#room-list')window.setTimeout(()=>document.getElementById('room-list')?.scrollIntoView({behavior:'smooth',block:'start'}),80)
-  },[loading])
+    if(loading)return
+    const target=window.location.hash.slice(1)
+    if(target!=='room-list'&&target!=='report-results')return
+    const frame=window.requestAnimationFrame(()=>{
+      document.getElementById(target)?.scrollIntoView({behavior:'auto',block:'start'})
+    })
+    return()=>window.cancelAnimationFrame(frame)
+  },[loading,filter,building,q,rows.length])
 
   const active=useMemo(()=>categories.find(c=>c.id===filter)||null,[filter])
   const sourceDate=latestDefectChangeAt
@@ -333,7 +345,7 @@ export default function DefectDetailPage(){
         </div>
       </section>
 
-      <section className="panel detail-panel">
+      <section className="panel detail-panel" id="report-results">
         <div className="detail-head">
           <div><h2>รายชื่อห้อง</h2><p>แสดง {filtered.length} ห้อง</p></div>
           <div className="legend"><span><i className="customer-dot"/>มีลูกค้า</span><span><i className="no-customer-dot"/>ไม่มีลูกค้า</span><span><i className="bad-dot"/>เพิ่งได้รับแจ้ง Defect</span><span><i className="warn-dot"/>Defect เสร็จแล้ว • รอตรวจรับ</span><span><i className="good-dot"/>ตรวจรับแล้ว / Hotel ตรวจแล้ว</span></div>
@@ -346,13 +358,21 @@ export default function DefectDetailPage(){
             <td>{r.owner_name||<span className="muted">—</span>}</td>
             <td className="center"><span className={`customer-badge ${r.customer_status==='มีลูกค้า'?'customer':'no-customer'}`}>{r.customer_status}</span></td>
             <td className="center"><span className={`program-badge ${r.hotel_participation==='ร่วมโรงแรม'?'hotel':'nonhotel'}`}>{r.hotel_participation}</span></td>
-            <td className="defect-detail">{r.defect_detail?<>
-               <div className="defect-summary-work-label">งานทั้งหมด</div>
-               <div className={`defect-detail-text ${isLongDefectDetail(summaryByRoom.get(r.room_no)?.work||'')&&!expandedDetails[r.room_no]?'is-collapsed':''}`}>{summaryByRoom.get(r.room_no)?.work||'ไม่ระบุ'}</div>
-               {isLongDefectDetail(summaryByRoom.get(r.room_no)?.work||'')&&<button type="button" className="defect-detail-toggle" aria-expanded={!!expandedDetails[r.room_no]} aria-label={`${expandedDetails[r.room_no]?'ย่อรายละเอียด':'ดูรายละเอียดทั้งหมด'} ห้อง ${r.room_no}`} onClick={()=>setExpandedDetails(previous=>({...previous,[r.room_no]:!previous[r.room_no]}))}>{expandedDetails[r.room_no]?'ย่อรายละเอียด':'ดูทั้งหมด'}</button>}
-               <div className="defect-summary-meta"><b>วันที่งาน/อัปเดต:</b> {summaryByRoom.get(r.room_no)?.dates||'ไม่ระบุ'}</div>
-             </>:<span className="muted">—</span>}
-             {canAccessWorkOrder(role)&&<Link className="defect-work-order-link" data-has-open-work={workOpenByRoom.has(r.room_no)?'true':'false'} href={'/work-order?room='+encodeURIComponent(r.room_no)}>ดู Work Order →</Link>}</td>
+            <td className="defect-detail">
+              <div className="defect-summary-work-label">งานทั้งหมด :</div>
+              {r.defect_detail?.trim()?<>
+                <div className={`defect-detail-text ${isLongDefectDetail(summaryByRoom.get(r.room_no)?.work||'')&&!expandedDetails[r.room_no]?'is-collapsed':''}`}>{summaryByRoom.get(r.room_no)?.work||'-'}</div>
+                {isLongDefectDetail(summaryByRoom.get(r.room_no)?.work||'')&&<button type="button" className="defect-detail-toggle" aria-expanded={!!expandedDetails[r.room_no]} aria-label={`${expandedDetails[r.room_no]?'ย่อรายละเอียด':'ดูรายละเอียดทั้งหมด'} ห้อง ${r.room_no}`} onClick={()=>setExpandedDetails(previous=>({...previous,[r.room_no]:!previous[r.room_no]}))}>{expandedDetails[r.room_no]?'ย่อรายละเอียด':'ดูทั้งหมด'}</button>}
+              </>:<div className="defect-detail-text muted">-</div>}
+              <div className="defect-summary-meta"><b>วันที่งาน/อัพเดท :</b> {r.defect_detail?.trim()?summaryByRoom.get(r.room_no)?.dates||'-':'-'}</div>
+              <div className="defect-summary-meta"><b>ดู Work Order :</b>{' '}
+                {r.defect_detail?.trim()&&canAccessWorkOrder(role)
+                  ?(workOpenByRoom.has(r.room_no)
+                    ?<Link className="defect-work-order-link" data-has-open-work={workOpenByRoom.has(r.room_no)?'true':'false'} href={'/work-order?room='+encodeURIComponent(r.room_no)}>ดู Work Order →</Link>
+                    :<button type="button" className="defect-work-order-link" data-has-open-work="false" onClick={()=>window.alert(workOrderReadState==='ready'?'Work Order ไม่มี\\nห้อง '+hotelRoomLabel(r.room_no):'ยังไม่สามารถตรวจสอบ Work Order ได้ กรุณาลองใหม่')}>ดู Work Order →</button>)
+                  :'-'}
+              </div>
+            </td>
             <td className="center"><span className={`state-badge ${statusTone(r)}`}>{statusLabel(r)}</span></td>
             <td className="work-plan-cell">{(workPlanContext.get(r.room_no)||[]).map((label,i)=><small key={i}>{label}</small>)}<small>{roomHotelContext.get(r.room_no)||'สถานะโรงแรม: —'}</small><Link href={'/hotel-work-plan?room='+encodeURIComponent(r.room_no)}>ดูแผน</Link></td>
             <td>{r.next_action||r.follow_up||'-'}</td>
@@ -363,9 +383,9 @@ export default function DefectDetailPage(){
     </>}
 
     <style jsx>{`
-      .defect-work-order-link{display:inline-block;margin-top:5px;font-size:10px;font-weight:700;text-decoration:underline;text-underline-offset:2px}.defect-work-order-link[data-has-open-work="true"]{color:#b42318!important}
+      .defect-work-order-link{display:inline-block;margin:0;padding:0;border:0;background:none;color:var(--blue);font:inherit;font-size:10px;font-weight:700;text-decoration:underline;text-underline-offset:2px;cursor:pointer}.defect-work-order-link[data-has-open-work="true"]{color:#b42318!important}
       .header-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}.update-meta{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;line-height:1.25;margin-right:2px}.update-meta span{font-size:8.5px;color:var(--muted);font-weight:700}.update-meta b{font-size:10px;color:var(--navy);font-weight:800;white-space:nowrap}.drive-button{background:#f3f8ff;border-color:#bfd7ec;color:#245e8b;white-space:nowrap}
-      .selected-status{scroll-margin-top:16px;display:grid;grid-template-columns:minmax(230px,1fr) minmax(570px,1.9fr);align-items:center;gap:16px;padding:15px 17px;border:1px solid var(--line);border-left:6px solid #8b949e;border-radius:14px;background:var(--surface);margin-bottom:12px}.selected-status.hotel{border-left-color:#2f6fb0;background:#f5f9fe}.selected-status.danger{border-left-color:#d84d45;background:#fff8f7}.selected-status.warn{border-left-color:#e2ad32;background:#fffaf0}.selected-status.good{border-left-color:#2e9a6a;background:#f6fbf8}.selected-copy>span{font-size:9px;font-weight:800;color:var(--muted)}.selected-copy h2{margin:3px 0;font-size:18px;color:var(--navy);line-height:1.3}.selected-copy p{margin:0;font-size:10px;color:var(--muted)}
+      .detail-panel#report-results{scroll-margin-top:16px}.selected-status{scroll-margin-top:16px;display:grid;grid-template-columns:minmax(230px,1fr) minmax(570px,1.9fr);align-items:center;gap:16px;padding:15px 17px;border:1px solid var(--line);border-left:6px solid #8b949e;border-radius:14px;background:var(--surface);margin-bottom:12px}.selected-status.hotel{border-left-color:#2f6fb0;background:#f5f9fe}.selected-status.danger{border-left-color:#d84d45;background:#fff8f7}.selected-status.warn{border-left-color:#e2ad32;background:#fffaf0}.selected-status.good{border-left-color:#2e9a6a;background:#f6fbf8}.selected-copy>span{font-size:9px;font-weight:800;color:var(--muted)}.selected-copy h2{margin:3px 0;font-size:18px;color:var(--navy);line-height:1.3}.selected-copy p{margin:0;font-size:10px;color:var(--muted)}
       .selected-breakdown{display:grid;grid-template-columns:repeat(5,minmax(92px,1fr));gap:7px}.break-card{min-height:66px;border:1px solid var(--line);border-radius:11px;background:#fff;padding:8px 9px;text-align:center;display:flex;flex-direction:column;justify-content:center;color:var(--text);font:inherit;cursor:pointer;transition:.15s ease}.break-card:hover{transform:translateY(-1px);box-shadow:0 5px 14px rgba(25,42,63,.08)}.break-card span{display:block;font-size:8.5px;font-weight:800;color:var(--muted)}.break-card b{display:block;margin-top:2px;font-size:21px;line-height:1;color:var(--navy);font-variant-numeric:tabular-nums}.break-card small{display:block;margin-top:3px;font-size:8px;color:var(--muted)}.break-card.customer{background:#edf7ff;border:2px solid #bad9ef}.break-card.customer span,.break-card.customer b{color:#2a6997}.break-card.customer.active{border-color:#4b9bd3;box-shadow:inset 0 0 0 1px #4b9bd3,0 5px 14px rgba(75,155,211,.12)}.break-card.no-customer{background:#f1f3f5;border:2px solid #d4dae0}.break-card.no-customer span,.break-card.no-customer b{color:#606a76}.break-card.no-customer.active{border-color:#7f8790;box-shadow:inset 0 0 0 1px #7f8790,0 5px 14px rgba(95,104,115,.12)}.break-card.building.active{background:#eef6fc;border-color:#8bbbdc;box-shadow:inset 0 0 0 1px #8bbbdc}.break-card.total{background:#17243a;border:2px solid #17243a}.break-card.total span,.break-card.total b,.break-card.total small{color:#fff}.break-card.total.active{border-color:#d5a94b;box-shadow:inset 0 0 0 1px #d5a94b,0 5px 16px rgba(23,36,58,.16)}
       .filter-panel{padding:12px;margin-bottom:12px}.detail-toolbar{margin:0}.detail-toolbar input{min-width:320px}.detail-toolbar select{max-width:320px}.detail-panel{padding-bottom:0}.detail-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:10px}.detail-head h2{margin:0;font-size:17px}.detail-head p{margin:3px 0 0;font-size:10px;color:var(--muted)}
       .legend{display:flex;gap:9px;flex-wrap:wrap;font-size:8.5px;color:var(--muted)}.legend span{display:flex;align-items:center;gap:4px}.legend i{width:8px;height:8px;border-radius:50%}.customer-dot{background:#4b9bd3}.no-customer-dot{background:#7f8790}.bad-dot{background:#d84d45}.warn-dot{background:#e2ad32}.good-dot{background:#2e9a6a}
