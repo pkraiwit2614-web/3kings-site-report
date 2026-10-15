@@ -89,6 +89,7 @@ test('Work Plan uses current Defect and confirmed Hotel OOO for a date-only sche
 
 test('Five Work Order UI-only improvements keep existing read-only boundaries',()=>{
  const helper=read('lib/defectNoticeDate.ts')
+ const report=read('app/defects/page.tsx')
  assert.match(page,/ข้อมูลอัปเดต/)
  assert.doesNotMatch(page,/className="wo-info"/)
  assert.doesNotMatch(page,/<th>ผู้คุม<\/th>/)
