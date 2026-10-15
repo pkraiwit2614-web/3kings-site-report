@@ -80,6 +80,13 @@ const categories:Category[]=[
 const DEFECT_DONE_FOLDER='https://drive.google.com/drive/folders/1GJy5xu2eQMbv4MIKnQC5df7m_CpyocXK'
 
 
+function dateTimeTH(value:string|null|undefined){
+  if(!value)return '-'
+  const d=new Date(value)
+  if(Number.isNaN(d.getTime()))return '-'
+  return new Intl.DateTimeFormat('th-TH',{timeZone:'Asia/Bangkok',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(d)+' น.'
+}
+
 function isLongDefectDetail(text:string){
   return text.length>110||text.split(/\r?\n/).length>3
 }
