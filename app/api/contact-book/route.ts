@@ -42,7 +42,7 @@ function message(error:unknown){
   if(text.includes('contact_not_found'))return {error:'contact_not_found',status:404}
   if(text.includes('invalid_')||text.includes('required_fields')||text.includes('field_too_long'))return {error:text,status:400}
   if(text.includes('version_conflict')||text.includes('changed_during_read'))return {error:'contact_book_source_changed_reload',status:409}
-  if(text.includes('not_configured')||text.includes('not_shared_or_denied'))return {error:text,status:503}
+  if(text.includes('not_configured')||text.includes('not_shared_or_denied')||text.includes('write_permission_denied'))return {error:text,status:503}
   return {error:text.startsWith('contact_')?text:'contact_book_request_failed',status:503}
 }
 export async function GET(request:NextRequest){
@@ -51,7 +51,7 @@ export async function GET(request:NextRequest){
   try{
     const source=await getContactCsvDrive()
     const rows=parseContactCsv(source.csv)
-    return respond({rows,sourceVersion:source.version,updatedAt:source.modifiedTime,source:'drive_csv'})
+    return respond({rows,sourceVersion:source.version,updatedAt:source.modifiedTime,driveWritable:source.canEdit,source:'drive_csv'})
   }catch(error){const result=message(error);return respond(result,result.status)}
 }
 export async function POST(request:NextRequest){
@@ -77,7 +77,7 @@ export async function POST(request:NextRequest){
     const previous=parseContactCsv(source.csv)
     const before=existingId?previous.find(x=>x.contact_id===existingId)||null:null
     const {rows,record}=putContact(previous,existingId,contact)
-    await writeContactCsvDrive(formatContactCsv(rows))
+    await writeContactCsvDrive(formatContactCsv(rows),source.version)
     committed=true
     const verified=await getContactCsvDrive()
     const reread=parseContactCsv(verified.csv)
