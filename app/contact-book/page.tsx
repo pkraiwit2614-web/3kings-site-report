@@ -25,7 +25,7 @@ function errorInThai(code:string){
   if(code==='duplicate_contact_phone'||code.startsWith('duplicate_contact_phone:'))return 'เบอร์โทรซ้ำกับรายชื่ออื่น กรุณาตรวจสอบก่อนบันทึก'
   if(code==='contact_book_busy')return 'มีผู้ใช้อื่นกำลังบันทึกรายชื่อ กรุณาลองใหม่หลังโหลดข้อมูลล่าสุด'
   if(code==='contact_book_source_changed_reload')return 'ไฟล์ต้นทางถูกแก้ไขแล้ว กรุณาโหลดใหม่ก่อนบันทึก เพื่อป้องกันการเขียนทับข้อมูล'
-  if(code==='contact_drive_not_configured'||code==='contact_drive_file_not_shared_or_denied')return 'การเชื่อมต่อ Drive ยังไม่พร้อม จึงยังไม่บันทึกข้อมูล'
+  if(code==='contact_drive_not_configured'||code==='contact_drive_file_not_shared_or_denied'||code==='contact_drive_write_permission_denied')return 'การเชื่อมต่อ Drive ยังไม่พร้อม หรือไม่มีสิทธิ์แก้ไขไฟล์ จึงยังไม่บันทึกข้อมูล'
   if(code==='contact_required_fields')return 'กรอกชื่อบริษัท ชื่อผู้ติดต่อ ประเภทงานและโครงการให้ครบ'
   if(code==='invalid_contact_phone'||code==='invalid_secondary_phone')return 'รูปแบบเบอร์โทรไม่ถูกต้อง'
   if(code==='contact_drive_verification_failed_refresh_before_retry')return 'เขียนไฟล์แล้วแต่ยืนยันข้อมูลกลับไม่ได้ กรุณาโหลดล่าสุดก่อนลองอีกครั้ง'
@@ -39,6 +39,7 @@ export default function ContactBookPage(){
   const [permissions,setPermissions]=useState<PermissionSnapshot|null>(null)
   const [rows,setRows]=useState<ContactEntry[]>([])
   const [version,setVersion]=useState('')
+  const [driveWritable,setDriveWritable]=useState(false)
   const [updatedAt,setUpdatedAt]=useState<string|null>(null)
   const [loading,setLoading]=useState(true)
   const [saving,setSaving]=useState(false)
@@ -53,6 +54,7 @@ export default function ContactBookPage(){
   const [confirm,setConfirm]=useState(false)
   const canView=!!role&&!!permissions&&canAccessPath(role,'/contact-book',permissions)
   const canManage=!!role&&!!permissions&&permissionDecision(role,'contact_book','manage',false,permissions)&&canView
+  const canWrite=canManage&&driveWritable
 
   const reload=useCallback(async()=>{
     setLoading(true);setError('')
@@ -63,8 +65,8 @@ export default function ContactBookPage(){
       const response=await fetch('/api/contact-book',{headers:{authorization:'Bearer '+token},cache:'no-store'})
       const result=await response.json()
       if(!response.ok)throw new Error(result.error||'contact_book_request_failed')
-      setRows(result.rows||[]);setVersion(String(result.sourceVersion||''));setUpdatedAt(result.updatedAt||null)
-    }catch(e){setError(errorInThai(e instanceof Error?e.message:String(e)))}finally{setLoading(false)}
+      setRows(result.rows||[]);setVersion(String(result.sourceVersion||''));setUpdatedAt(result.updatedAt||null);setDriveWritable(result.driveWritable===true)
+    }catch(e){setDriveWritable(false);setError(errorInThai(e instanceof Error?e.message:String(e)))}finally{setLoading(false)}
   },[])
 
   useEffect(()=>{
@@ -102,7 +104,7 @@ export default function ContactBookPage(){
   }
   const change=(key:keyof EditableContact,value:string)=>setForm(v=>({...v,[key]:value}))
   async function save(){
-    if(!canManage||saving||duplicate||!confirm)return
+    if(!canWrite||saving||duplicate||!confirm)return
     setSaving(true);setError('');setSuccess('')
     try{
       const session=await getSupabase().auth.getSession()
@@ -129,6 +131,7 @@ export default function ContactBookPage(){
     {!ready||!permissions?<p className="panel">กำลังตรวจสอบสิทธิ์…</p>
     :!canView?<p className="panel" role="alert">ไม่มีสิทธิ์เข้าถึง Contact Book</p>
     :<>
+      {canManage&&!driveWritable&&!loading&&<p role="alert" className={styles.error}>อ่านข้อมูลได้ แต่ยังไม่มีสิทธิ์เขียนไฟล์ Drive — กรุณาตรวจสอบการเชื่อมต่อก่อนเพิ่มหรือแก้ไขรายชื่อ</p>}
       <section className={styles.filters} aria-label="ค้นหา Contact Book">
         <div className={styles.filterRow}>
           <label className={styles.searchLabel}>ค้นหาชื่อบริษัท / เบอร์โทร / งาน / โครงการ
@@ -156,7 +159,7 @@ export default function ContactBookPage(){
           <span>{loading?'กำลังโหลดข้อมูล…':`แสดง ${filtered.length} จาก ${rows.length} รายชื่อ`}</span>
           <div className={styles.actions}>
             <button className="button" disabled={loading} onClick={()=>void reload()}>โหลดข้อมูลล่าสุด</button>
-            {canManage&&<button className="button primary" disabled={loading||!version} onClick={()=>edit(null)}>+ เพิ่มรายชื่อ</button>}
+            {canManage&&<button className="button primary" disabled={loading||!version||!driveWritable} onClick={()=>edit(null)}>+ เพิ่มรายชื่อ</button>}
           </div>
         </div>
       </section>
@@ -172,7 +175,7 @@ export default function ContactBookPage(){
                 <td>{item.contact_name||'-'}</td>
                 <td><a className={styles.phone} href={`tel:${normalizedPhone(item.phone)}`}>{item.phone}</a>{item.secondary_phone&&<small>{item.secondary_phone}</small>}</td>
                 <td><small>{item.verified_status}</small>{item.review_note&&<small>{item.review_note}</small>}</td>
-                {canManage&&<td className={styles.editCol}><button className="button" onClick={()=>edit(item)}>แก้ไข</button></td>}
+                {canManage&&<td className={styles.editCol}><button className="button" disabled={!driveWritable} onClick={()=>edit(item)}>แก้ไข</button></td>}
               </tr>)}
               {!loading&&filtered.length===0&&<tr><td colSpan={canManage?7:6} style={{textAlign:'center',padding:22}}>ไม่พบข้อมูลตามเงื่อนไข</td></tr>}
             </tbody>
@@ -181,7 +184,7 @@ export default function ContactBookPage(){
       </section>
       <p className={styles.footer}>ข้อมูลมาจาก Contact Book บน Google Drive · เบอร์ที่ระบุว่า “ยังไม่โทรยืนยัน” ควรตรวจสอบกับผู้ติดต่อก่อนใช้งาน</p>
     </>}
-    {editing!==undefined&&canManage&&<div className={styles.backdrop} onMouseDown={e=>{if(e.target===e.currentTarget&&!saving)setEditing(undefined)}}>
+    {editing!==undefined&&canWrite&&<div className={styles.backdrop} onMouseDown={e=>{if(e.target===e.currentTarget&&!saving)setEditing(undefined)}}>
       <section data-contact-book-editor className={styles.dialog} role="dialog" aria-modal="true" aria-label={editing?'แก้ไขรายชื่อ':'เพิ่มรายชื่อ'}>
         <div className={styles.dialogTop}><div><h2>{editing?'แก้ไขรายชื่อ':'เพิ่มรายชื่อใหม่'}</h2><p>ตรวจสอบข้อมูลก่อนยืนยันบันทึกลง Google Drive</p></div><button type="button" className="button" disabled={saving} onClick={()=>{setEditing(undefined);setConfirm(false)}}>ปิด</button></div>
         <div className={styles.formGrid}>
