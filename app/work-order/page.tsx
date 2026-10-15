@@ -170,7 +170,7 @@ export default function WorkOrderViewer(){
       <td>{canComplete&&!finished(r.work_status)?<select className="wo-status-select" aria-label={'สถานะงาน '+r.work_id} value="progress" onChange={e=>{if(e.target.value==='done'){setSaveError('');setConfirmRow(r)}}}><option value="progress">กำลังดำเนินการ</option><option value="done">เสร็จแล้ว</option></select>:<b>{finished(r.work_status)?'เสร็จแล้ว':'กำลังดำเนินการ'}</b>}{canComplete&&!finished(r.work_status)&&<span className="wo-print-status">กำลังดำเนินการ</span>}{r.web_completed_at&&<small>บันทึกเสร็จ: {dateTimeTH(r.web_completed_at)}</small>}{r.writeback_state==='pending'&&<small className="wo-pending">รออัปเดต Excel</small>}{r.writeback_state==='error'&&<small className="wo-overdue">Excel ซิงก์ไม่สำเร็จ</small>}{r.writeback_state==='synced'&&<small className="wo-synced">อัปเดต Excel แล้ว</small>}</td>
       <td>{r.evidence_url?.startsWith('https://drive.google.com/')?<a target="_blank" rel="noreferrer" href={r.evidence_url}>เปิดภาพ / PDF</a>:<small>รอหลักฐาน</small>}</td>
      </tr>)}
-     {!filtered.length&&<tr><td colSpan={6} className="wo-empty">ไม่พบรายการงานค้างตามเงื่อนไขที่เลือก</td></tr>}
+     {!filtered.length&&<tr><td colSpan={7} className="wo-empty">ไม่พบรายการงานค้างตามเงื่อนไขที่เลือก</td></tr>}
     </tbody></table></div>
    </section>
    <p className="wo-supervisors">ผู้คุมงานอาคาร A – พี่ปู | อาคาร B – บังรุน</p>
