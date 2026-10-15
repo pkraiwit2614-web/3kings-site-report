@@ -27,12 +27,13 @@
 .wo-table td b,.wo-table td small{display:block}
 .wo-table td small{font-size:10px;color:#68798c;margin-top:5px}
 .wo-table td .wo-conflict,.wo-table td .wo-overdue{color:#b34b35;font-weight:700}
-.wo-table th:nth-child(1){width:16%}
-.wo-table th:nth-child(2){width:21%}
-.wo-table th:nth-child(3){width:24%}
-.wo-table th:nth-child(4){width:12%}
+.wo-table th:nth-child(1){width:15%}
+.wo-table th:nth-child(2){width:19%}
+.wo-table th:nth-child(3){width:23%}
+.wo-table th:nth-child(4){width:11%}
 .wo-table th:nth-child(5){width:15%}
-.wo-table th:nth-child(6){width:12%}
+.wo-table th:nth-child(6){width:11%}
+.wo-table th:nth-child(7){width:6%}
 .wo-table a{font-weight:700;color:#1561a7}
 .wo-empty{text-align:center!important;color:#65758a!important;padding:30px!important}
 .wo-error{border-color:#c55342}
