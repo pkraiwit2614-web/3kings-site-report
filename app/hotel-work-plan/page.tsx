@@ -7,7 +7,7 @@ import PageHeader from '@/components/PageHeader'
 import useAccessRole from '@/components/useAccessRole'
 import {canEditWorkPlan} from '@/lib/accessControl'
 import {getSupabase} from '@/lib/supabase'
-import {hotelRoomLabel,hotelRoomMembers,normalizeHotelRoom} from '@/lib/hotelRoomGroups'
+import {hotelRoomKey,hotelRoomLabel,hotelRoomMembers,normalizeHotelRoom} from '@/lib/hotelRoomGroups'
 import {statusLabel,statusTone} from '@/lib/defectStatusPresentation'
 
 type Day={day_no:number;planned_date:string|null;note:string|null;revision:number;sync_state:string;updated_by_name:string|null;updated_at:string|null}
@@ -141,11 +141,31 @@ export default function HotelWorkPlanPage(){
  const defectFor=(room:string)=>defectMap.get(room)||hotelRoomMembers(room).map(member=>defectMap.get(member)).find(Boolean)
  const planDate=(r:Room)=>r.planned_date_override||days.find(d=>d.day_no===r.day_no)?.planned_date||null
  const statusFor=(room:string)=>hotelRoomMembers(room).map(member=>hotelMap.get(member)).find(Boolean)
- const defectStatusOptions=useMemo(()=>[...new Set(rooms.flatMap(r=>hotelRoomMembers(r.room_no).map(member=>defectMap.get(member)).filter((d):d is Defect=>!!d).map(statusLabel)))].sort((a,b)=>a.localeCompare(b,'th')),[rooms,defectMap])
+ // Excel retains all 267 original rows; only the live view is filtered.
+ const actionable=(room:string)=>['Hotel - Incomplete','Hotel - Awaiting Check'].includes(defectMap.get(room)?.status_group||'')
+ const activePlanRooms=useMemo(()=>{
+  const seen=new Set<string>()
+  return rooms.filter(row=>{
+   const members=hotelRoomMembers(row.room_no)
+   if(!members.every(member=>['Hotel - Incomplete','Hotel - Awaiting Check'].includes(defectMap.get(member)?.status_group||'')&&hotelMap.get(member)?.availability_status==='OOO'))return false
+   const key=hotelRoomKey(row.room_no)
+   if(seen.has(key))return false
+   seen.add(key)
+   return true
+  })
+ },[rooms,defectMap,hotelMap])
+ const pendingOosCount=useMemo(()=>new Set(rooms.filter(row=>
+  hotelRoomMembers(row.room_no).some(member=>['Hotel - Incomplete','Hotel - Awaiting Check'].includes(defectMap.get(member)?.status_group||'')&&hotelMap.get(member)?.availability_status==='OOS')
+ ).map(row=>hotelRoomKey(row.room_no))).size,[rooms,defectMap,hotelMap])
+ const dateWithinOOO=(row:Room,date:string)=>hotelRoomMembers(row.room_no).every(member=>{
+  const h=hotelMap.get(member)
+  return h?.availability_status==='OOO'&&Boolean(h.start_date)&&date>=String(h.start_date)&&(!h.end_date||date<=h.end_date)
+ })
+ const defectStatusOptions=useMemo(()=>[...new Set(activePlanRooms.flatMap(r=>hotelRoomMembers(r.room_no).map(member=>defectMap.get(member)).filter((d):d is Defect=>!!d).map(statusLabel)))].sort((a,b)=>a.localeCompare(b,'th')),[activePlanRooms,defectMap])
  const filtered=useMemo(()=>{
   const query=roomSearch.trim().toUpperCase()
   const normalized=normalizeHotelRoom(query)
-  return rooms.filter(r=>{
+  return activePlanRooms.filter(r=>{
    if(r.day_no!==selectedDay||(building!=='ALL'&&!r.room_no.startsWith(building)))return false
    const members=hotelRoomMembers(r.room_no)
    if(query&&!([r.source_room,...members.flatMap(member=>[member,hotelRoomLabel(member)])].some(value=>value.toUpperCase().includes(query))||members.some(member=>member.includes(normalized))))return false
@@ -155,27 +175,35 @@ export default function HotelWorkPlanPage(){
    }))return false
    return true
   })
- },[rooms,selectedDay,building,roomSearch,defectStatusFilter,defectMap])
+ },[activePlanRooms,selectedDay,building,roomSearch,defectStatusFilter,defectMap])
  const duplicates=useMemo(()=>{const count=new Map<string,number>();rooms.forEach(r=>count.set(r.room_no,(count.get(r.room_no)||0)+1));return count},[rooms])
  const openDaySaveReview=()=>{
   if(!editable||!day||saving||saveDialog)return
   const values:DaySaveValues={
-   p_day:day.day_no,p_planned_date:dayDate||null,p_note:dayNote.trim(),p_expected_revision:day.revision,
+   p_day:day.day_no,p_planned_date:dayDate||null,p_note:day.note||'',p_expected_revision:day.revision,
   }
   const changes=buildSaveChanges([
    {label:'วันที่เข้าทำงาน',before:day.planned_date,after:values.p_planned_date,format:v=>dateTH(v)},
    {label:'หมายเหตุการนัดหมาย',before:day.note,after:values.p_note},
   ])
-  const count=rooms.filter(r=>r.day_no===day.day_no).length
+  const count=activePlanRooms.filter(r=>r.day_no===day.day_no).length
+  if(dayDate&&activePlanRooms.filter(r=>r.day_no===day.day_no&&!r.planned_date_override).some(r=>!dateWithinOOO(r,dayDate))){
+   window.alert('วันที่ Day ต้องอยู่ในช่วง OOO ที่โรงแรมยืนยัน กรุณาตรวจข้อมูลช่วงวันที่ในหน้า OOO/OOS')
+   return
+  }
   setSaveDialog({phase:'confirm',intent:{kind:'day',target:'Day '+day.day_no+' · '+count+' รายการ',changes,values}})
  }
  const openRoomSaveReview=()=>{
   if(!editable||!selected||saving||saveDialog)return
   const values:RoomSaveValues={
-   p_seq:selected.seq_no,p_day:roomDay,p_override_date:roomDate||null,p_actual_date:roomActual||null,
-   p_status:roomStatus,p_note:roomNote.trim(),p_expected_revision:selected.revision,
+   p_seq:selected.seq_no,p_day:selected.day_no,p_override_date:roomDate||null,p_actual_date:selected.actual_date,
+   p_status:selected.work_status,p_note:selected.note||'',p_expected_revision:selected.revision,
   }
   const groupRows=rooms.filter(r=>hotelRoomMembers(selected.room_no).includes(r.room_no))
+  if(roomDate&&groupRows.some(r=>!dateWithinOOO(r,roomDate))){
+   window.alert('วันที่เฉพาะห้องต้องอยู่ในช่วง OOO ที่โรงแรมยืนยันสำหรับทุกห้อง Combine')
+   return
+  }
   if(groupRows.length>1)values.p_group_expected=groupRows.map(r=>({seq:r.seq_no,revision:r.revision}))
   const changes=buildSaveChanges([
    {label:'Day',before:String(selected.day_no),after:String(values.p_day),format:v=>'Day '+v},
