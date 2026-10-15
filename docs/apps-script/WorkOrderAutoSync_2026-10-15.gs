@@ -128,7 +128,10 @@ function workOrderRun20261015_(dryRun,force){
     if(DriveApp.getFileById(c.id).getLastUpdated().toISOString()!==revision)
       throw Error('Work Order Excel changed during reading; retry later');
     const result=workOrderPost20261015_(c,file,revision,rows,dryRun);
-    if(!dryRun)c.props.setProperty(WORK_ORDER_AUTO_20261015.STATE_KEY,revision);
+    // Preserve the existing optimization if this property was already configured.
+    // A full 50-slot Apps Script settings UI must NOT cause a new property to be added.
+    if(!dryRun&&c.props.getProperty(WORK_ORDER_AUTO_20261015.STATE_KEY)!==null)
+      c.props.setProperty(WORK_ORDER_AUTO_20261015.STATE_KEY,revision);
     const summary={status:dryRun?'dry-run':'success',rows:rows.length,modified:revision,db:result};
     console.log(JSON.stringify(summary));
     return summary;
@@ -159,4 +162,34 @@ function workOrderSyncStatus20261015(){
   return {handlerInstalled:handlers.includes(WORK_ORDER_AUTO_20261015.HANDLER),
     lastAcceptedExcelRevision:props.getProperty(WORK_ORDER_AUTO_20261015.STATE_KEY)||null,
     sourceConfigured:Boolean(props.getProperty('WORK_ORDER_FILE_ID'))};
+}
+
+/**
+ * Verify the LIVE bound Apps Script project without logging any tokens or secret values.
+ * Does not add or modify properties, triggers, source Excel, or database records.
+ */
+function workOrderPreflight20261015(){
+  const props=PropertiesService.getScriptProperties();
+  const keys=props.getKeys();
+  const required=['WORK_ORDER_FILE_ID','SUPABASE_PUBLISHABLE_KEY','DEFECT_SYNC_KEY'];
+  const configured=Object.fromEntries(required.map(k=>[k,Boolean(props.getProperty(k))]));
+  const status={propertyCount:keys.length,requiredConfigured:configured,
+    revisionCachePresent:Boolean(props.getProperty(WORK_ORDER_AUTO_20261015.STATE_KEY)),
+    converterPresent:typeof openSpreadsheetFromExcel_==='function'
+      &&typeof cleanupTempSpreadsheet_==='function'};
+  if(!Object.values(configured).every(Boolean))return {ok:false,...status,
+    error:'A required property is missing; no property was modified'};
+  const file=DriveApp.getFileById(props.getProperty('WORK_ORDER_FILE_ID'));
+  const handlers=ScriptApp.getProjectTriggers().map(t=>t.getHandlerFunction());
+  const parents=file.getParents();
+  const parentName=parents.hasNext()?parents.next().getName():null;
+  const locatedInBackup=parentName==='Backup';
+  return {ok:!locatedInBackup
+      &&file.getName()===WORK_ORDER_AUTO_20261015.FILE_NAME
+      &&file.getMimeType()==='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    ...status,sourceFolderName:parentName,sourceInBackup:locatedInBackup,
+    fileName:file.getName(),mimeType:file.getMimeType(),
+    fileModifiedAt:file.getLastUpdated().toISOString(),
+    sourceImportTriggerCount:handlers.filter(x=>x===WORK_ORDER_AUTO_20261015.HANDLER).length,
+    completionTriggerCount:handlers.filter(x=>x==='syncWorkOrderCompletion20261015').length};
 }

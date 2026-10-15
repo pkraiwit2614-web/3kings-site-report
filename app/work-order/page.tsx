@@ -4,7 +4,8 @@ import {useCallback,useEffect,useMemo,useState} from 'react'
 import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
 import useAccessRole from '@/components/useAccessRole'
-import {canAccessWorkOrder} from '@/lib/accessControl'
+import {canAccessWorkOrder,canEditDefect} from '@/lib/accessControl'
+import {hotelNoticeDateTH} from '@/lib/defectNoticeDate'
 import {getSupabase} from '@/lib/supabase'
 import {hotelRoomLabel,hotelRoomMembers} from '@/lib/hotelRoomGroups'
 import './work-order.css'
@@ -15,16 +16,17 @@ type WorkOrder={
   received_date:string|null;due_date:string|null;work_status:string|null;
   evidence_url:string|null;qa_status:string|null;conflict_note:string|null;
   source_sync_note:string|null;source_modified_at:string;imported_at:string;
+  web_completed_at:string|null;writeback_state:string|null;writeback_error:string|null;
 }
-type RoomStatus={room_no:string;status_group:string|null}
-type Quick='ALL'|'A'|'B'|'OVERDUE'|'IN_PROGRESS'
+type RoomStatus={room_no:string;status_group:string|null;latest_source:string|null;source_note:string|null}
+type Quick='ALL'|'A'|'B'|'OVERDUE'|'IN_PROGRESS'|'DONE'
 
 const dateTH=(v:string|null|undefined)=>v&&/^\d{4}-\d{2}-\d{2}$/.test(v)?v.slice(8,10)+'/'+v.slice(5,7)+'/'+v.slice(0,4):'รอยืนยัน'
 function dateTimeTH(v:string|null|undefined){
  if(!v)return '—'
  const d=new Date(v)
  if(Number.isNaN(d.getTime()))return '—'
- return new Intl.DateTimeFormat('th-TH',{timeZone:'Asia/Bangkok',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(d)+' น.'
+ return new Intl.DateTimeFormat('th-TH',{timeZone:'Asia/Bangkok',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(d)+' น.'
 }
 const ids=(group:string):string[]=>[...new Set((group.toUpperCase().match(/[AB]\d{3}/g)||[]).flatMap(room=>hotelRoomMembers(room)))]
 const isCombine=(group:string)=>ids(group).some(room=>hotelRoomMembers(room).length>1)
@@ -46,6 +48,7 @@ function groupLabel(group:string){
 export default function WorkOrderViewer(){
  const {role}=useAccessRole()
  const permitted=canAccessWorkOrder(role)
+ const canComplete=permitted&&canEditDefect(role)
  const [rows,setRows]=useState<WorkOrder[]>([])
  const [rooms,setRooms]=useState<RoomStatus[]>([])
  const [loading,setLoading]=useState(true)
@@ -53,12 +56,15 @@ export default function WorkOrderViewer(){
  const [quick,setQuick]=useState<Quick>('ALL')
  const [query,setQuery]=useState('')
  const [contractor,setContractor]=useState('ALL')
+ const [confirmRow,setConfirmRow]=useState<WorkOrder|null>(null)
+ const [saving,setSaving]=useState(false)
+ const [saveError,setSaveError]=useState('')
 
  const reload=useCallback(async()=>{
   const sb=getSupabase()
   const [order,master]=await Promise.all([
-   sb.from('defect_work_order_snapshot').select('work_id,room_group,building,contractor,defect_item,next_action,supervisor,received_date,due_date,work_status,evidence_url,qa_status,conflict_note,source_sync_note,source_modified_at,imported_at').eq('source_active',true).order('work_id'),
-   sb.from('condo_room_status').select('room_no,status_group')
+   sb.from('defect_work_order_snapshot').select('work_id,room_group,building,contractor,defect_item,next_action,supervisor,received_date,due_date,work_status,evidence_url,qa_status,conflict_note,source_sync_note,source_modified_at,imported_at,web_completed_at,writeback_state,writeback_error').eq('source_active',true).order('work_id'),
+   sb.from('condo_room_status').select('room_no,status_group,latest_source,source_note')
   ])
   if(order.error||master.error)throw new Error(order.error?.message||master.error?.message||'อ่านข้อมูลไม่สำเร็จ')
   setRows((order.data||[]) as WorkOrder[])
@@ -76,43 +82,64 @@ export default function WorkOrderViewer(){
  },[reload])
 
  const roomMap=useMemo(()=>new Map(rooms.map(r=>[r.room_no,r.status_group])),[rooms])
+ const noticeMap=useMemo(()=>new Map(rooms.map(r=>[r.room_no,r])),[rooms])
+ const receivedFor=(group:string)=>{
+  const values=ids(group).map(room=>({room,date:hotelNoticeDateTH(noticeMap.get(room)||{room_no:room})}))
+  const known=values.filter(x=>x.date!=='—')
+  if(!known.length)return 'รอยืนยัน'
+  if(known.length===values.length&&new Set(known.map(x=>x.date)).size===1)return known[0].date
+  return values.map(x=>x.room+': '+x.date).join(' / ')
+ }
+ const complete=async()=>{
+  if(!confirmRow||saving||!canComplete)return
+  setSaving(true);setSaveError('')
+  try{
+   const {data,error}=await getSupabase().rpc('defect_work_order_complete',{p_work_id:confirmRow.work_id})
+   if(error)throw error
+   if(!data?.ok)throw Error(data?.error||'บันทึกสถานะไม่สำเร็จ')
+   await reload()
+   setQuick('DONE')
+   setConfirmRow(null)
+  }catch(e){setSaveError(e instanceof Error?e.message:String(e))}
+  finally{setSaving(false)}
+ }
  const eligible=useMemo(()=>rows.filter(r=>{
   if(finished(r.work_status))return false
   const members=ids(r.room_group)
   return members.length>0&&members.every(room=>roomMap.get(room)==='Hotel - Incomplete')
  }),[rows,roomMap])
- const excluded=rows.length-eligible.length
+ const completed=useMemo(()=>rows.filter(r=>finished(r.work_status)),[rows])
  const teams=useMemo(()=>[...new Set(eligible.map(r=>r.contractor))].sort((a,b)=>a.localeCompare(b,'th')),[eligible])
  const filtered=useMemo(()=>{
   const needle=normalize(query)
-  return eligible.filter(r=>{
+  return (quick==='DONE'?completed:eligible).filter(r=>{
    if(quick==='A'||quick==='B'){if(r.building!==quick)return false}
    if(quick==='OVERDUE'&&!overdue(r.due_date))return false
-   if(quick==='IN_PROGRESS'&&!inProgress(r.work_status))return false
+   if(quick==='IN_PROGRESS'&&finished(r.work_status))return false
    if(contractor!=='ALL'&&r.contractor!==contractor)return false
    if(!needle)return true
    return normalize([r.work_id,r.room_group,roomSearchText(r.room_group),r.defect_item,r.next_action,r.contractor,r.supervisor].filter(Boolean).join(' ')).includes(needle)
   }).sort((a,b)=>a.contractor.localeCompare(b.contractor,'th')||a.room_group.localeCompare(b.room_group)||a.work_id.localeCompare(b.work_id))
- },[eligible,quick,contractor,query])
- const latestImport=rows.map(r=>r.imported_at).filter(Boolean).sort().at(-1)||null
- const sourceTime=rows.map(r=>r.source_modified_at).filter(Boolean).sort().at(-1)||null
+ },[eligible,completed,quick,contractor,query])
+ const latestImport=rows.flatMap(r=>[r.imported_at,r.web_completed_at]).filter((v):v is string=>Boolean(v)).sort().at(-1)||null
  const counters={
   ALL:eligible.length,
   A:eligible.filter(r=>r.building==='A').length,
   B:eligible.filter(r=>r.building==='B').length,
   OVERDUE:eligible.filter(r=>overdue(r.due_date)).length,
-  IN_PROGRESS:eligible.filter(r=>inProgress(r.work_status)).length
+  IN_PROGRESS:eligible.length,
+  DONE:completed.length
  }
- const labels:Record<Quick,string>={ALL:'งานค้างทั้งหมด',A:'อาคาร A',B:'อาคาร B',OVERDUE:'เกินกำหนด 7 วัน',IN_PROGRESS:'กำลังดำเนินการ'}
+ const labels:Record<Quick,string>={ALL:'งานค้างทั้งหมด',A:'อาคาร A',B:'อาคาร B',OVERDUE:'เกินกำหนด 7 วัน',IN_PROGRESS:'กำลังดำเนินการ',DONE:'เสร็จแล้ว'}
  const scope=labels[quick]+' • '+(contractor==='ALL'?'ทุกผู้รับเหมา':contractor)+(query?' • ค้นหา '+query:'')
  if(!permitted)return <AppShell><section className="panel" role="alert">สิทธิ์ Work Order จำกัดสำหรับทีม 3 Kings ที่ได้รับสิทธิ์ Defect เท่านั้น</section></AppShell>
  return <AppShell>
-  <PageHeader title="Above Condo — Work Order" subtitle="รายการงานค้างรายจุด • สำหรับทีม 3 Kings • อ่านอย่างเดียว"
-   action={<div className="update-meta"><span>อัพเดทล่าสุด</span><b>{dateTimeTH(latestImport)}</b></div>}/>
+  <PageHeader title="Above Condo — Work Order" subtitle="รายการรายจุดตาม Work ID • ทีม 3 Kings"
+   action={<div className="update-meta"><span>ข้อมูลอัปเดต</span><b>{dateTimeTH(latestImport)}</b></div>}/>
   {error&&<div className="panel wo-error" role="alert">ไม่สามารถตรวจข้อมูล Work Order กับ Defect Report ได้: {error} <button type="button" className="button" onClick={()=>{setLoading(true);void reload().then(()=>setError('')).catch(e=>setError(String(e))).finally(()=>setLoading(false))}}>ลองใหม่</button></div>}
   {loading?<div className="panel">กำลังตรวจสอบข้อมูล Work Order ล่าสุด…</div>:!error&&<>
    <section className="wo-kpis" aria-label="กรองรายการตามจำนวนงาน">
-    {(['ALL','A','B','OVERDUE','IN_PROGRESS'] as Quick[]).map(kind=><button key={kind} type="button" aria-pressed={quick===kind} className={'wo-kpi '+(quick===kind?'selected ':'')+(kind==='OVERDUE'?'late':'')} onClick={()=>setQuick(kind)}>
+    {(['ALL','A','B','OVERDUE','IN_PROGRESS','DONE'] as Quick[]).map(kind=><button key={kind} type="button" aria-pressed={quick===kind} className={'wo-kpi '+(quick===kind?'selected ':'')+(kind==='OVERDUE'?'late':'')} onClick={()=>setQuick(kind)}>
      <span>{labels[kind]}</span><b>{counters[kind]}</b><small>รายการงาน</small>
     </button>)}
    </section>
@@ -127,28 +154,33 @@ export default function WorkOrderViewer(){
     </label>
     {(query||quick!=='ALL'||contractor!=='ALL')&&<button type="button" className="button" onClick={()=>{setQuery('');setQuick('ALL');setContractor('ALL')}}>ล้างตัวกรอง</button>}
    </section>
-   <p className="wo-print-scope">ขอบเขต: {scope} • {filtered.length} รายการ • ผู้คุมอาคาร A: พี่ปู / อาคาร B: บังรุน</p>
-   <div className="wo-info">ข้อมูลจาก Excel Work Order (ต้นฉบับแก้ไข {dateTimeTH(sourceTime)}) • อัพเดทเมื่อ Apps Script นำเข้าสำเร็จ • สถานะห้องตรวจเทียบกับ Defect Report ล่าสุดก่อนแสดงและพิมพ์ • ต้องตรวจรายละเอียด/ภาพก่อนแจกงานจริง
-   {excluded>0&&<strong> • ซ่อน {excluded} รายการที่สถานะไม่ใช่งานค้าง หรือข้อมูลห้อง/Combine ไม่ตรงกับ Defect Report</strong>}</div>
+   <p className="wo-print-scope">ขอบเขต: {scope} • {filtered.length} รายการ</p>
    <section className="panel wo-sheet">
     <div className="wo-sheet-title"><h2>รายการสำหรับตรวจและแจกงาน</h2><span>แสดง {filtered.length} รายการ • {scope}</span></div>
     <div className="table-wrap wo-table-wrap"><table className="wo-table"><thead><tr>
      <th>ห้อง / Work ID</th><th>รายละเอียด Defect</th><th>งานที่ต้องทำต่อ</th><th>ผู้รับเหมา</th>
-     <th>ผู้คุม</th><th>รับแจ้ง / ครบ 7 วัน</th><th>สถานะงาน / ตรวจสอบ</th><th>หลักฐาน</th>
+     <th>วันที่รับแจ้ง / ครบ 7 วัน</th><th>สถานะงาน</th><th>หลักฐาน</th>
     </tr></thead><tbody>
      {filtered.map(r=><tr key={r.work_id}>
       <td><div className="wo-room-label"><b>{groupLabel(r.room_group)}</b>{isCombine(r.room_group)&&<span className="wo-combine-code" title="ห้อง Combine">c</span>}</div>{isCombine(r.room_group)&&<span className="wo-combine-badge" title="ห้อง Combine ใช้งานชุดเดียวกัน">Combine: {ids(r.room_group).join(' + ')}</span>}<small>{r.work_id}</small></td>
       <td>{r.defect_item}</td>
       <td>{r.next_action||'รอระบุรายละเอียด'}{r.conflict_note&&<small className="wo-conflict">ตรวจข้อขัดแย้ง: {r.conflict_note}</small>}</td>
       <td><b>{r.contractor}</b></td>
-      <td>{r.supervisor||'—'}</td>
-      <td><small>รับแจ้ง: {dateTH(r.received_date)}</small><small>ครบ 7 วัน: {dateTH(r.due_date)}</small>{overdue(r.due_date)&&<small className="wo-overdue">เกินกำหนด</small>}</td>
-      <td><b>{r.work_status||'รอตรวจ'}</b><small>{r.qa_status||'รอตรวจรายการ'}</small></td>
+      <td><small>วันที่รับแจ้ง: {receivedFor(r.room_group)}</small><small>ครบ 7 วัน: {dateTH(r.due_date)}</small>{overdue(r.due_date)&&<small className="wo-overdue">เกินกำหนด 7 วัน</small>}</td>
+      <td>{canComplete&&!finished(r.work_status)?<select className="wo-status-select" aria-label={'สถานะงาน '+r.work_id} value="progress" onChange={e=>{if(e.target.value==='done'){setSaveError('');setConfirmRow(r)}}}><option value="progress">กำลังดำเนินการ</option><option value="done">เสร็จแล้ว</option></select>:<b>{finished(r.work_status)?'เสร็จแล้ว':'กำลังดำเนินการ'}</b>}{canComplete&&!finished(r.work_status)&&<span className="wo-print-status">กำลังดำเนินการ</span>}{r.web_completed_at&&<small>บันทึกเสร็จ: {dateTimeTH(r.web_completed_at)}</small>}{r.writeback_state==='pending'&&<small className="wo-pending">รออัปเดต Excel</small>}{r.writeback_state==='error'&&<small className="wo-overdue">Excel ซิงก์ไม่สำเร็จ</small>}{r.writeback_state==='synced'&&<small className="wo-synced">อัปเดต Excel แล้ว</small>}</td>
       <td>{r.evidence_url?.startsWith('https://drive.google.com/')?<a target="_blank" rel="noreferrer" href={r.evidence_url}>เปิดภาพ / PDF</a>:<small>รอหลักฐาน</small>}</td>
      </tr>)}
-     {!filtered.length&&<tr><td colSpan={8} className="wo-empty">ไม่พบรายการงานค้างตามเงื่อนไขที่เลือก</td></tr>}
+     {!filtered.length&&<tr><td colSpan={7} className="wo-empty">ไม่พบรายการงานค้างตามเงื่อนไขที่เลือก</td></tr>}
     </tbody></table></div>
    </section>
+   <p className="wo-supervisors">ผู้คุมงานอาคาร A – พี่ปู | อาคาร B – บังรุน</p>
   </>}
+  {confirmRow&&<div className="wo-modal-backdrop" role="presentation"><div className="wo-confirm-panel" role="dialog" aria-modal="true" aria-labelledby="wo-complete-title">
+   <h2 id="wo-complete-title">ยืนยันงานเสร็จแล้ว</h2><p><b>{confirmRow.work_id}</b> — {groupLabel(confirmRow.room_group)}</p>
+   <p>{confirmRow.defect_item}</p>
+   <p>บันทึกวันที่และเวลาปัจจุบัน และส่งให้ซิงก์ Excel ตาม Work ID โดยไม่ปิด Defect ของทั้งห้อง</p>
+   {saveError&&<p className="wo-overdue" role="alert">{saveError}</p>}
+   <div className="wo-dialog-actions"><button type="button" className="button" disabled={saving} onClick={()=>setConfirmRow(null)}>ยกเลิก</button><button type="button" className="button primary" disabled={saving} onClick={()=>void complete()}>{saving?'กำลังบันทึก…':'ยืนยัน เสร็จแล้ว'}</button></div>
+  </div></div>}
  </AppShell>
 }
