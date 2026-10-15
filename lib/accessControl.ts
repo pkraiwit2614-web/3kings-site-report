@@ -32,6 +32,10 @@ export function resolveAccessRole(profileRole:string|undefined|null,userId:strin
 export function canAccessPath(role:AccessRole,path:string,snapshot?:PermissionSnapshot|null){
   if(cleanPath(path)==='/no-access')return true
   const module=moduleForPath(path)
+  if(module==='contact_book'){
+    const source=snapshot===undefined?(typeof window!=='undefined'?browserPermissions:null):snapshot
+    return Boolean(source?.rows.some(x=>x.role===role&&x.module==='contact_book'&&x.level!=='none'))
+  }
   if(module)return permissionDecision(role,module,'view',legacyCanAccessPath(role,path),snapshot)
   return legacyCanAccessPath(role,path)
 }
@@ -115,6 +119,7 @@ export function moduleForPath(path:string):string|null{
   if(p==='/wallpaper')return 'dashboard'
   if(p.startsWith('/schedule'))return 'schedule'
   if(p==='/reports'||p.startsWith('/reports/'))return 'reports'
+  if(p==='/contact-book')return 'contact_book'
   if(p==='/materials')return 'materials'
   if(p==='/procurement')return 'procurement'
   if(p==='/calendar')return 'calendar'
