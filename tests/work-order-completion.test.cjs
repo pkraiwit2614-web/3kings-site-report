@@ -60,6 +60,9 @@ test('Apps Script syntax, guarded Drive source and independent trigger',()=>{
  assert.match(gas,/getHandlerFunction\(\)===name/)
  assert.doesNotMatch(gas,/condo_room_status|HotelOOO|PayRoll/i)
  assert.equal(gas.includes('setProperty('),false)
+ assert.match(gas,/Pinned Work Order source is inside Backup/)
+ assert.match(gas,/parent.getName\(\)==='Backup'/)
+
  const importer=read('docs/apps-script/WorkOrderAutoSync_2026-10-15.gs')
  assert.ok(importer.includes('function workOrderPreflight20261015('))
  assert.ok(importer.includes('getProperty(WORK_ORDER_AUTO_20261015.STATE_KEY)!==null'))
