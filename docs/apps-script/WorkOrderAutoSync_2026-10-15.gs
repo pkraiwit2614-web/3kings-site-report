@@ -5,7 +5,7 @@
  * Script Properties (reuse existing): SUPABASE_PUBLISHABLE_KEY, DEFECT_SYNC_KEY.
  * Script Property to add ONCE: WORK_ORDER_FILE_ID = the approved private XLSX Drive file ID.
  * No edits to the original Excel; no updates to condo_room_status.
- * Schedule: Mon–Sat 08:00–18:59 Asia/Bangkok, hourly, no Sunday sync.
+ * Schedule: Mon–Sat 08:00–18:59 Asia/Bangkok, every 2 hours, no Sunday sync.
  */
 const WORK_ORDER_AUTO_20261015=Object.freeze({
   TZ:'Asia/Bangkok',
@@ -150,7 +150,7 @@ function installWorkOrderTrigger20261015(){
   const name=WORK_ORDER_AUTO_20261015.HANDLER;
   const existing=ScriptApp.getProjectTriggers().filter(t=>t.getHandlerFunction()===name);
   existing.forEach(t=>ScriptApp.deleteTrigger(t));
-  ScriptApp.newTrigger(name).timeBased().everyHours(1).create();
+  ScriptApp.newTrigger(name).timeBased().everyHours(2).create();
   return {handler:name,count:ScriptApp.getProjectTriggers().filter(t=>t.getHandlerFunction()===name).length};
 }
 function workOrderSyncStatus20261015(){
