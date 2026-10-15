@@ -49,6 +49,9 @@ jobs:
       - name: Defect canonical source contract
         run: node tests/defect-canonical-source.test.cjs
 
+      - name: Defect Report update timestamp source and security regression
+        run: node --test tests/defect-report-last-change.test.cjs
+
       - name: Defect work, first/latest dates, count and print safety
         run: node --test tests/defect-detail-summary.test.cjs
 
