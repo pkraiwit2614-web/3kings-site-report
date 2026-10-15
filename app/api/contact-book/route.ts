@@ -95,6 +95,6 @@ export async function POST(request:NextRequest){
     const result=message(error)
     return respond({...result,refreshBeforeRetry:committed},committed?503:result.status)
   }finally{
-    if(lease)await client.rpc('contact_book_release_write',{p_lease:lease}).catch(()=>null)
+    if(lease){try{await client.rpc('contact_book_release_write',{p_lease:lease})}catch{/* stale leases expire after 2 minutes */}}
   }
 }
