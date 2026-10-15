@@ -233,7 +233,7 @@ export default function DefectDetailPage(){
     const open=new Set<string>()
     for(const item of workOrders){
       if(/เสร็จแล้ว|งดแจก|ยกเลิก/.test(item.work_status||''))continue
-      const members=[...new Set((item.room_group.toUpperCase().match(/[AB]\\d{3}/g)||[])
+      const members=[...new Set((item.room_group.toUpperCase().match(/[AB]\d{3}/g)||[])
         .flatMap(room=>hotelRoomMembers(room)))]
       if(members.length&&members.every(room=>roomStatus.get(room)==='Hotel - Incomplete'))
         members.forEach(room=>open.add(room))
