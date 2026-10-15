@@ -9,6 +9,7 @@ import PrintButton from '@/components/PrintButton'
 import useAccessRole from '@/components/useAccessRole'
 import {getSupabase} from '@/lib/supabase'
 import {hotelRoomKey,hotelRoomLabel,hotelRoomMembers,normalizeHotelRoom} from '@/lib/hotelRoomGroups'
+import {canAccessWorkOrder} from '@/lib/accessControl'
 
 type Room={
   room_no:string;building:string;floor:number|null;hotel_participation:string;owner_name:string|null;customer_status:string|null;follow_up:string|null;
@@ -21,6 +22,7 @@ type HotelStatus={
   source_sync_state:'pending'|'synced';source_synced_revision:number
 }
 type RoomGroup={key:string;members:Room[];hotel:HotelStatus|null;ownHotel:HotelStatus|null;inferred:boolean;conflict:boolean;inHotel:boolean}
+type WorkOrderRef={room_group:string;work_status:string|null}
 const pending=(r:Room)=>(
   ['Hotel - Incomplete','Hotel - Awaiting Check','Hotel - Awaiting Room Inspection','Non-Hotel - Pending Handover'].includes(r.status_group||'')
 )
@@ -39,6 +41,9 @@ export default function HotelRoomStatusPage(){
   const canEdit=canEditHotel(role)
   const [rooms,setRooms]=useState<Room[]>([])
   const [statuses,setStatuses]=useState<HotelStatus[]>([])
+  const [workOrders,setWorkOrders]=useState<WorkOrderRef[]>([])
+  const [workOrderLoaded,setWorkOrderLoaded]=useState(false)
+  const [workOrderError,setWorkOrderError]=useState('')
   const [loading,setLoading]=useState(true)
   const [error,setError]=useState('')
   const [query,setQuery]=useState('')
@@ -72,6 +77,38 @@ export default function HotelRoomStatusPage(){
     window.addEventListener('focus',onFocus)
     return()=>{active=false;window.removeEventListener('focus',onFocus)}
   },[refresh])
+
+  // Work Order is an internal-only, read-only view; hotel users retain their current permissions.
+  useEffect(()=>{
+    if(!canAccessWorkOrder(role)){setWorkOrders([]);setWorkOrderLoaded(false);return}
+    let active=true
+    const loadOrders=async()=>{
+      const {data,error}=await getSupabase().from('defect_work_order_snapshot')
+       .select('room_group,work_status').eq('source_active',true)
+      if(!active)return
+      if(error){setWorkOrderError(error.message);setWorkOrderLoaded(false);return}
+      setWorkOrders((data||[]) as WorkOrderRef[]);setWorkOrderLoaded(true);setWorkOrderError('')
+    }
+    void loadOrders()
+    const onFocus=()=>{void loadOrders()}
+    window.addEventListener('focus',onFocus)
+    const timer=window.setInterval(()=>{void loadOrders()},300_000)
+    return()=>{active=false;window.removeEventListener('focus',onFocus);window.clearInterval(timer)}
+  },[role])
+
+  // Match the existing Work Order eligibility rule, including Combine membership.
+  const workOpenByRoom=useMemo(()=>{
+    const status=new Map(rooms.map(r=>[r.room_no,r.status_group]))
+    const open=new Set<string>()
+    for(const item of workOrders){
+      if(/เสร็จแล้ว|งดแจก|ยกเลิก/.test(item.work_status||''))continue
+      const members=[...new Set((item.room_group.toUpperCase().match(/[AB]\\d{3}/g)||[])
+       .flatMap(room=>hotelRoomMembers(room)))]
+      if(members.length&&members.every(room=>status.get(room)==='Hotel - Incomplete'))
+       members.forEach(room=>open.add(room))
+    }
+    return open
+  },[rooms,workOrders])
 
   const groups=useMemo(()=>{
     const statusMap=new Map(statuses.map(row=>[row.room_no,row]))
@@ -157,6 +194,7 @@ export default function HotelRoomStatusPage(){
       {invalidDateRange&&<p role="alert" className="small" style={{color:'#a63329',marginTop:6}}>วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่มต้น</p>}
       <p className="small muted" style={{marginTop:8}}>สถานะรอตรวจสอบไม่ใช่การยืนยันว่าห้องพร้อมให้บริการ • หนึ่งรายการต่อหนึ่ง Room ID (263 ห้อง) • ค้นหาห้องใดจะแสดงสมาชิก Combine ทั้งชุด • สถานะที่อ้างอิงคู่ยังไม่ใช่ข้อมูลที่บันทึกแล้ว • ความขัดแย้งเก่าต้องตรวจสอบ Data Reconciliation</p>
     </section>
+    {workOrderError&&canAccessWorkOrder(role)&&<p className="small" role="alert">ตรวจข้อมูล Work Order ไม่สำเร็จ จึงยังไม่แสดงลิงก์งานค้าง: {workOrderError}</p>}
     {error&&<div className="panel" role="alert" style={{color:'#a63329',marginBottom:12}}>โหลดข้อมูลล้มเหลว: {error}</div>}
     {loading?<div className="panel">กำลังโหลดสถานะห้อง…</div>:!error&&<>
       <section className="panel" style={{padding:12}}>
@@ -165,14 +203,21 @@ export default function HotelRoomStatusPage(){
           <th>ห้อง / Combine</th><th>สถานะ Hotel</th><th>ช่วงวันที่</th><th>สาเหตุ</th><th>Defect ค้าง / รอตรวจรับ</th><th>แก้ไขล่าสุด</th><th>จัดการ</th>
         </tr></thead><tbody>
           {filtered.map(g=><tr key={g.key}>
-            <td><b>{hotelRoomLabel(g.key)}</b>
+            <td><b>{hotelRoomLabel(g.key)}</b>{hotelRoomMembers(g.key).length>1&&<sup className="hotel-combine-symbol" title="ห้อง Combine">c</sup>}
               {hotelRoomMembers(g.key).length>1&&<small>⌁ ห้อง Combine: {hotelRoomMembers(g.key).filter(r=>r!==g.key).join(', ')}</small>}
               {!g.inHotel&&<small>ไม่ร่วมโรงแรม</small>}
             </td>
             <td><span className={'hotel-status-badge status-'+(g.hotel?.availability_status||'UNKNOWN').toLowerCase()}>{statusText(g.hotel)}</span>{g.inferred&&<small>อ้างอิงสถานะคู่ Combine • รอยืนยันห้องนี้</small>}{g.conflict&&<small className="hotel-conflict">สถานะต้นทางของชุด Combine ไม่ตรงกัน • ตรวจสอบก่อน</small>}</td>
             <td>{g.hotel?.start_date?displayRangeDate(g.hotel.start_date):'—'}{g.hotel?.end_date?' ถึง '+displayRangeDate(g.hotel.end_date):''}</td>
             <td>{g.hotel?.reason||'—'}{g.hotel?.hotel_remark&&<small>Hotel Remark: {g.hotel.hotel_remark}</small>}</td>
-            <td>{g.members.filter(pending).length?g.members.filter(pending).map(r=>r.room_no).join(', '):'—'}</td>
+            <td>
+              {workOrderLoaded&&canAccessWorkOrder(role)?<>
+                {g.members.filter(r=>workOpenByRoom.has(r.room_no)).map(r=><Link key={r.room_no} className="hotel-work-order-link" href={'/work-order?room='+encodeURIComponent(r.room_no)}>{hotelRoomLabel(r.room_no)} → Work Order</Link>)}
+                {g.members.filter(r=>r.status_group==='Hotel - Awaiting Check').map(r=><small key={'review-'+r.room_no}>{hotelRoomLabel(r.room_no)} · รอตรวจรับ</small>)}
+                {!g.members.some(r=>workOpenByRoom.has(r.room_no)||r.status_group==='Hotel - Awaiting Check')&&g.members.some(pending)&&<small>สถานะ Defect ยังดำเนินการ • ไม่พบงานค้างที่ยืนยันใน Work Order</small>}
+                {!g.members.some(pending)&&'—'}
+              </>:g.members.filter(pending).length?g.members.filter(pending).map(r=>hotelRoomLabel(r.room_no)).join(', '):'—'}
+            </td>
             <td>{g.ownHotel? <>{g.ownHotel.updated_by_name}<small>{dateTH(g.ownHotel.updated_at)}</small><small>{g.ownHotel.source_sync_state==='pending'?'รอบันทึก Excel':'Excel ตรงกับ Revision '+g.ownHotel.source_synced_revision}</small></>:g.inferred?'ยังไม่มีรายการยืนยันสำหรับห้องนี้':'—'}</td>
             <td><button type="button" className="button" onClick={()=>choose(g)}>ดู{canEdit?' / แก้ไข':''}</button></td>
           </tr>)}
@@ -202,6 +247,8 @@ export default function HotelRoomStatusPage(){
       </section>}
     </>}
     <style jsx>{`
+      .hotel-combine-symbol{font-size:10px;font-weight:800;vertical-align:super;margin-left:3px;color:#a45d12}
+      .hotel-work-order-link{display:block;font-size:10px;font-weight:700;text-decoration:underline;text-underline-offset:2px;margin:3px 0}
       .hotel-header-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}.hotel-update-meta{display:grid;gap:2px;text-align:right;line-height:1.25}.hotel-update-meta span{font-size:8.5px;color:var(--muted);font-weight:700}.hotel-update-meta b{font-size:10px;color:var(--navy);font-weight:800;white-space:nowrap}.hotel-search-toolbar{flex-wrap:wrap;gap:8px;margin-bottom:0}.hotel-search-toolbar input{flex:1 1 225px;min-width:190px;max-width:420px;min-height:34px}.hotel-search-toolbar select{flex:0 1 155px;min-width:120px;padding:7px 9px}.hotel-date-range-filter{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px}.hotel-date-range-filter>b{font-size:11px;white-space:nowrap}.hotel-date-range-filter label{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700}.hotel-date-range-filter input{width:148px;min-width:0;min-height:34px;border:1px solid #cad2de;border-radius:7px;background:#fff;padding:5px 7px;font:inherit}.hotel-date-range-filter small{font-size:10px;color:var(--muted)}.hotel-status-table{max-height:68vh;overflow:auto} .hotel-status-table th{position:sticky;top:0;z-index:3}.hotel-conflict{color:#9e312d!important;font-weight:800}@media print{.hotel-status-table{max-height:none;overflow:visible}.hotel-status-table thead{display:table-header-group}}.hotel-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.hotel-kpi{border:1px solid #d9e0e7;border-radius:10px;background:#f6f8fa;padding:10px;text-align:left;cursor:pointer} .hotel-kpi.chosen{outline:2px solid var(--navy);outline-offset:1px}.hotel-kpi.status-available,.hotel-status-badge.status-available{background:#e4f5e9;color:#176238;border-color:#82cca0}.hotel-kpi.status-ooo,.hotel-status-badge.status-ooo{background:#ffebeb;color:#a0222a;border-color:#eaa7a9}.hotel-kpi.status-oos,.hotel-status-badge.status-oos{background:#fff1d6;color:#925711;border-color:#eac27a}.hotel-kpi.status-unknown,.hotel-status-badge.status-unknown{background:#eceff3;color:#506071;border-color:#bfc8d2}.hotel-status-badge{display:inline-flex;align-items:center;padding:5px 9px;border:1px solid;border-radius:7px;font-weight:800;white-space:nowrap} .hotel-kpi span,.hotel-kpi small{display:block;color:inherit;font-size:10px} .hotel-kpi b{display:block;font-size:24px;margin:4px 0;color:inherit}.hotel-pending{background:#fff8e7;border:1px solid #efdcab;padding:12px;border-radius:10px;margin:12px 0;font-size:11px}.hotel-pending p{margin:7px 0 0;line-height:1.5}.hotel-editor{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px}.hotel-editor label{display:grid;gap:5px;font-size:11px;font-weight:700}.hotel-editor input,.hotel-editor select,.hotel-editor textarea{width:100%;border:1px solid #cad2de;border-radius:8px;background:#fff;padding:8px;font:inherit}.hotel-editor .full{grid-column:1/-1}.hotel-editor button{grid-column:1/-1;justify-self:start}
       @media(max-width:760px){.hotel-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.hotel-editor{grid-template-columns:1fr}}
     `}</style>
