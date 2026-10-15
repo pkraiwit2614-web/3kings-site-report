@@ -6,6 +6,15 @@
 .wo-kpi.selected{border-color:#172a43;background:#ebf1f9;box-shadow:inset 0 0 0 1px #172a43}
 .wo-kpi.late b{color:#ad4337}
 .wo-kpi:focus-visible{outline:3px solid #4091dc;outline-offset:2px}
+.wo-kpi-contractors{grid-column:1/-1;min-height:0;display:flex;flex-direction:row;align-items:center;gap:16px;flex-wrap:wrap;cursor:default}
+.wo-kpi-contractors>div:first-child{min-width:125px;display:flex;flex-direction:column;gap:4px}
+.wo-kpi-contractors b{font-size:21px}
+.wo-kpi-team-list{display:flex;align-items:center;flex:1;flex-wrap:wrap;gap:7px}
+.wo-kpi-team{display:inline-flex;align-items:center;gap:8px;padding:5px 9px;border:1px solid #dce4ed;background:#f5f8fc;border-radius:8px;font-size:11px}
+.wo-kpi-team strong{font-weight:800}
+.wo-kpi-team b{font-size:16px;color:#172a43;font-variant-numeric:tabular-nums}
+.wo-screen-scope{margin:8px 0 0;font-size:11px;color:#5f6e7e;line-height:1.5}
+.wo-print-only{display:none}
 .wo-filters{display:flex;align-items:end;flex-wrap:wrap;gap:12px;margin-bottom:12px;padding:13px}
 .wo-filters label{display:flex;flex-direction:column;gap:6px;flex:1;min-width:175px;font-weight:700;font-size:12px;color:#334b63}
 .wo-filters label:first-child{flex:2}
@@ -40,14 +49,27 @@
 .wo-table a{font-weight:700;color:#1561a7}
 .wo-empty{text-align:center!important;color:#65758a!important;padding:30px!important}
 .wo-error{border-color:#c55342}
-.wo-print-scope{display:none;margin:0 0 8px;font-size:11px;font-weight:700}
 @media(max-width:900px){.wo-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.wo-kpi{min-height:84px}}
 @media(max-width:620px){.wo-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.wo-kpi{padding:10px}.wo-kpi b{font-size:23px}.wo-filters{display:grid;grid-template-columns:1fr}.wo-filters label{min-width:0}}
 @media print{
- body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-kpis,
+ @page{size:A4 landscape;margin:8mm}
  body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-filters,
- body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-info{display:none!important}
- body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-print-scope{display:block!important}
+ body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-screen-scope,
+ body.report-print-mode[data-print-report="Above Condo — Work Order"] .report-print-filters{display:none!important}
+ body.report-print-mode[data-print-report="Above Condo — Work Order"] .report-print-header{margin-bottom:4mm!important;padding-bottom:2mm!important}
+ body.report-print-mode[data-print-report="Above Condo — Work Order"] .report-print-brand{margin-bottom:2mm!important}
+ body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-kpis{display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:1.8mm!important;margin:0 0 3mm!important;break-inside:avoid!important}
+ body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-kpi{min-height:0!important;padding:2mm!important;gap:.7mm!important;box-shadow:none!important;break-inside:avoid!important;page-break-inside:avoid!important;pointer-events:none}
+ body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-kpi span{font-size:7px!important}
+ body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-kpi b{font-size:15px!important}
+ body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-kpi small{font-size:6.5px!important}
+ body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-kpi-contractors{grid-column:1/-1!important;display:flex!important;flex-direction:row!important;align-items:center!important}
+ body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-kpi-contractors b{font-size:12px!important}
+ body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-kpi-team{padding:1mm 2mm!important;font-size:7px!important;gap:2mm!important}
+ body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-kpi-team b{font-size:9px!important}
+ body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-print-only{display:table-cell!important}
+ body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-signoff{font-size:6.8px!important;line-height:1.7!important;white-space:normal!important}
+ body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-signoff div{white-space:nowrap}
  body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-sheet{padding:0!important;border:0!important;box-shadow:none!important}
  body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-sheet-title{margin-bottom:3mm!important}
  body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-sheet-title h2{font-size:13px!important}
@@ -56,8 +78,19 @@
  body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-combine-code{font-size:6.5px!important;top:-2px!important}
  body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-combine-badge{font-size:6.8px!important;padding:1px 3px!important}
  body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-table{min-width:0!important;width:100%!important;table-layout:fixed!important}
+ body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-table thead{display:table-header-group!important}
+ body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-table th:nth-child(1){width:10%}
+ body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-table th:nth-child(2){width:15%}
+ body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-table th:nth-child(3){width:18%}
+ body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-table th:nth-child(4){width:9%}
+ body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-table th:nth-child(5){width:7%}
+ body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-table th:nth-child(6){width:11%}
+ body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-table th:nth-child(7){width:13%}
+ body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-table th:nth-child(8){width:7%}
+ body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-table th:nth-child(9){width:10%}
  body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-table th{font-size:7.3px!important;padding:4px 3px!important}
  body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-table td{font-size:7.7px!important;line-height:1.22!important;padding:4px 3px!important}
  body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-table td small{font-size:6.8px!important;line-height:1.2!important}
- body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-table tr{break-inside:avoid!important;page-break-inside:avoid!important}
+ body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-table tbody tr,
+ body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-table tbody td{break-inside:avoid!important;page-break-inside:avoid!important}
 }
