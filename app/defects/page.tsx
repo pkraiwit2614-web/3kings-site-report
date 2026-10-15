@@ -369,7 +369,7 @@ export default function DefectDetailPage(){
                 {r.defect_detail?.trim()&&canAccessWorkOrder(role)
                   ?(workOpenByRoom.has(r.room_no)
                     ?<Link className="defect-work-order-link" data-has-open-work={workOpenByRoom.has(r.room_no)?'true':'false'} href={'/work-order?room='+encodeURIComponent(r.room_no)}>ดู Work Order →</Link>
-                    :<button type="button" className="defect-work-order-link" data-has-open-work="false" onClick={()=>window.alert(workOrderReadState==='ready'?'Work Order ไม่มี\\nห้อง '+hotelRoomLabel(r.room_no):'ยังไม่สามารถตรวจสอบ Work Order ได้ กรุณาลองใหม่')}>ดู Work Order →</button>)
+                    :<button type="button" className="defect-work-order-link" data-has-open-work="false" onClick={()=>window.alert(workOrderReadState==='ready'?'Work Order ไม่มี\nห้อง '+hotelRoomLabel(r.room_no):'ยังไม่สามารถตรวจสอบ Work Order ได้ กรุณาลองใหม่')}>ดู Work Order →</button>)
                   :'-'}
               </div>
             </td>
