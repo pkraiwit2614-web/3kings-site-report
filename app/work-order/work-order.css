@@ -91,6 +91,6 @@
  body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-table th{font-size:7.3px!important;padding:4px 3px!important}
  body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-table td{font-size:7.7px!important;line-height:1.22!important;padding:4px 3px!important}
  body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-table td small{font-size:6.8px!important;line-height:1.2!important}
- body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-table tbody tr,
+ body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-table tr{break-inside:avoid!important;page-break-inside:avoid!important}
  body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-table tbody td{break-inside:avoid!important;page-break-inside:avoid!important}
 }
