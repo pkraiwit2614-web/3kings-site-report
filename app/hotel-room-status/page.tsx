@@ -75,7 +75,11 @@ export default function HotelRoomStatusPage(){
     void load()
     const onFocus=()=>{void load()}
     window.addEventListener('focus',onFocus)
-    return()=>{active=false;window.removeEventListener('focus',onFocus)}
+    const channel=getSupabase().channel('hotel-room-status-live')
+      .on('postgres_changes',{event:'*',schema:'public',table:'condo_room_status'},onFocus)
+      .on('postgres_changes',{event:'*',schema:'public',table:'hotel_room_availability'},onFocus)
+      .subscribe()
+    return()=>{active=false;window.removeEventListener('focus',onFocus);void getSupabase().removeChannel(channel)}
   },[refresh])
 
   // Work Order is an internal-only, read-only view; hotel users retain their current permissions.
