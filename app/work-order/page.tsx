@@ -5,6 +5,7 @@ import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
 import useAccessRole from '@/components/useAccessRole'
 import {canAccessWorkOrder} from '@/lib/accessControl'
+import {hotelNoticeDateTH} from '@/lib/defectNoticeDate'
 import {getSupabase} from '@/lib/supabase'
 import {hotelRoomLabel,hotelRoomMembers} from '@/lib/hotelRoomGroups'
 import './work-order.css'
@@ -16,7 +17,7 @@ type WorkOrder={
   evidence_url:string|null;qa_status:string|null;conflict_note:string|null;
   source_sync_note:string|null;source_modified_at:string;imported_at:string;
 }
-type RoomStatus={room_no:string;status_group:string|null}
+type RoomStatus={room_no:string;status_group:string|null;latest_source:string|null;source_note:string|null}
 type Quick='ALL'|'A'|'B'|'OVERDUE'|'IN_PROGRESS'
 
 const dateTH=(v:string|null|undefined)=>v&&/^\d{4}-\d{2}-\d{2}$/.test(v)?v.slice(8,10)+'/'+v.slice(5,7)+'/'+v.slice(0,4):'รอยืนยัน'
@@ -24,7 +25,7 @@ function dateTimeTH(v:string|null|undefined){
  if(!v)return '—'
  const d=new Date(v)
  if(Number.isNaN(d.getTime()))return '—'
- return new Intl.DateTimeFormat('th-TH',{timeZone:'Asia/Bangkok',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(d)+' น.'
+ return new Intl.DateTimeFormat('th-TH',{timeZone:'Asia/Bangkok',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(d)+' น.'
 }
 const ids=(group:string):string[]=>[...new Set((group.toUpperCase().match(/[AB]\d{3}/g)||[]).flatMap(room=>hotelRoomMembers(room)))]
 const isCombine=(group:string)=>ids(group).some(room=>hotelRoomMembers(room).length>1)
@@ -68,7 +69,7 @@ export default function WorkOrderViewer(){
   const sb=getSupabase()
   const [order,master]=await Promise.all([
    sb.from('defect_work_order_snapshot').select('work_id,room_group,building,contractor,defect_item,next_action,supervisor,received_date,due_date,work_status,evidence_url,qa_status,conflict_note,source_sync_note,source_modified_at,imported_at').eq('source_active',true).order('work_id'),
-   sb.from('condo_room_status').select('room_no,status_group')
+   sb.from('condo_room_status').select('room_no,status_group,latest_source,source_note')
   ])
   if(order.error||master.error)throw new Error(order.error?.message||master.error?.message||'อ่านข้อมูลไม่สำเร็จ')
   setRows((order.data||[]) as WorkOrder[])
@@ -86,12 +87,19 @@ export default function WorkOrderViewer(){
  },[reload])
 
  const roomMap=useMemo(()=>new Map(rooms.map(r=>[r.room_no,r.status_group])),[rooms])
+ const noticeMap=useMemo(()=>new Map(rooms.map(r=>[r.room_no,r])),[rooms])
+ const receivedFor=(group:string)=>{
+  const values=ids(group).map(room=>({room,date:hotelNoticeDateTH(noticeMap.get(room)||{room_no:room})}))
+  const known=values.filter(x=>x.date!=='—')
+  if(!known.length)return 'รอยืนยัน'
+  if(known.length===values.length&&new Set(known.map(x=>x.date)).size===1)return known[0].date
+  return values.map(x=>x.room+': '+x.date).join(' / ')
+ }
  const eligible=useMemo(()=>rows.filter(r=>{
   if(finished(r.work_status))return false
   const members=ids(r.room_group)
   return members.length>0&&members.every(room=>roomMap.get(room)==='Hotel - Incomplete')
  }),[rows,roomMap])
- const excluded=rows.length-eligible.length
  const teams=useMemo(()=>[...new Set(eligible.map(r=>r.contractor))].sort((a,b)=>a.localeCompare(b,'th')),[eligible])
  const filtered=useMemo(()=>{
   const needle=normalize(query)
@@ -105,7 +113,6 @@ export default function WorkOrderViewer(){
   }).sort((a,b)=>a.contractor.localeCompare(b.contractor,'th')||a.room_group.localeCompare(b.room_group)||a.work_id.localeCompare(b.work_id))
  },[eligible,quick,contractor,query])
  const latestImport=rows.map(r=>r.imported_at).filter(Boolean).sort().at(-1)||null
- const sourceTime=rows.map(r=>r.source_modified_at).filter(Boolean).sort().at(-1)||null
  const counters={
   ALL:eligible.length,
   A:eligible.filter(r=>r.building==='A').length,
@@ -118,7 +125,7 @@ export default function WorkOrderViewer(){
  if(!permitted)return <AppShell><section className="panel" role="alert">สิทธิ์ Work Order จำกัดสำหรับทีม 3 Kings ที่ได้รับสิทธิ์ Defect เท่านั้น</section></AppShell>
  return <AppShell>
   <PageHeader title="Above Condo — Work Order" subtitle="รายการงานค้างรายจุด • สำหรับทีม 3 Kings • อ่านอย่างเดียว"
-   action={<div className="update-meta"><span>อัพเดทล่าสุด</span><b>{dateTimeTH(latestImport)}</b></div>}/>
+   action={<div className="update-meta"><span>ข้อมูลอัปเดต</span><b>{dateTimeTH(latestImport)}</b></div>}/>
   {error&&<div className="panel wo-error" role="alert">ไม่สามารถตรวจข้อมูล Work Order กับ Defect Report ได้: {error} <button type="button" className="button" onClick={()=>{setLoading(true);void reload().then(()=>setError('')).catch(e=>setError(String(e))).finally(()=>setLoading(false))}}>ลองใหม่</button></div>}
   {loading?<div className="panel">กำลังตรวจสอบข้อมูล Work Order ล่าสุด…</div>:!error&&<>
    <section className="wo-kpis" aria-label="กรองรายการตามจำนวนงาน">
@@ -137,28 +144,26 @@ export default function WorkOrderViewer(){
     </label>
     {(query||quick!=='ALL'||contractor!=='ALL')&&<button type="button" className="button" onClick={()=>{setQuery('');setQuick('ALL');setContractor('ALL')}}>ล้างตัวกรอง</button>}
    </section>
-   <p className="wo-print-scope">ขอบเขต: {scope} • {filtered.length} รายการ • ผู้คุมอาคาร A: พี่ปู / อาคาร B: บังรุน</p>
-   <div className="wo-info">ข้อมูลจาก Excel Work Order (ต้นฉบับแก้ไข {dateTimeTH(sourceTime)}) • อัพเดทเมื่อ Apps Script นำเข้าสำเร็จ • สถานะห้องตรวจเทียบกับ Defect Report ล่าสุดก่อนแสดงและพิมพ์ • ต้องตรวจรายละเอียด/ภาพก่อนแจกงานจริง
-   {excluded>0&&<strong> • ซ่อน {excluded} รายการที่สถานะไม่ใช่งานค้าง หรือข้อมูลห้อง/Combine ไม่ตรงกับ Defect Report</strong>}</div>
+   <p className="wo-print-scope">ขอบเขต: {scope} • {filtered.length} รายการ</p>
    <section className="panel wo-sheet">
     <div className="wo-sheet-title"><h2>รายการสำหรับตรวจและแจกงาน</h2><span>แสดง {filtered.length} รายการ • {scope}</span></div>
     <div className="table-wrap wo-table-wrap"><table className="wo-table"><thead><tr>
      <th>ห้อง / Work ID</th><th>รายละเอียด Defect</th><th>งานที่ต้องทำต่อ</th><th>ผู้รับเหมา</th>
-     <th>ผู้คุม</th><th>รับแจ้ง / ครบ 7 วัน</th><th>สถานะงาน / ตรวจสอบ</th><th>หลักฐาน</th>
+     <th>วันที่รับแจ้ง / ครบ 7 วัน</th><th>สถานะงาน / ตรวจสอบ</th><th>หลักฐาน</th>
     </tr></thead><tbody>
      {filtered.map(r=><tr key={r.work_id}>
       <td><div className="wo-room-label"><b>{groupLabel(r.room_group)}</b>{isCombine(r.room_group)&&<span className="wo-combine-code" title="ห้อง Combine">c</span>}</div>{isCombine(r.room_group)&&<span className="wo-combine-badge" title="ห้อง Combine ใช้งานชุดเดียวกัน">Combine: {ids(r.room_group).join(' + ')}</span>}<small>{r.work_id}</small></td>
       <td>{r.defect_item}</td>
       <td>{r.next_action||'รอระบุรายละเอียด'}{r.conflict_note&&<small className="wo-conflict">ตรวจข้อขัดแย้ง: {r.conflict_note}</small>}</td>
       <td><b>{r.contractor}</b></td>
-      <td>{r.supervisor||'—'}</td>
-      <td><small>รับแจ้ง: {dateTH(r.received_date)}</small><small>ครบ 7 วัน: {dateTH(r.due_date)}</small>{overdue(r.due_date)&&<small className="wo-overdue">เกินกำหนด</small>}</td>
+      <td><small>วันที่รับแจ้ง: {receivedFor(r.room_group)}</small><small>ครบ 7 วัน: {dateTH(r.due_date)}</small>{overdue(r.due_date)&&<small className="wo-overdue">เกินกำหนด 7 วัน</small>}</td>
       <td><b>{r.work_status||'รอตรวจ'}</b><small>{r.qa_status||'รอตรวจรายการ'}</small></td>
       <td>{r.evidence_url?.startsWith('https://drive.google.com/')?<a target="_blank" rel="noreferrer" href={r.evidence_url}>เปิดภาพ / PDF</a>:<small>รอหลักฐาน</small>}</td>
      </tr>)}
-     {!filtered.length&&<tr><td colSpan={8} className="wo-empty">ไม่พบรายการงานค้างตามเงื่อนไขที่เลือก</td></tr>}
+     {!filtered.length&&<tr><td colSpan={7} className="wo-empty">ไม่พบรายการงานค้างตามเงื่อนไขที่เลือก</td></tr>}
     </tbody></table></div>
    </section>
+   <p className="wo-supervisors">ผู้คุมงานอาคาร A – พี่ปู | อาคาร B – บังรุน</p>
   </>}
  </AppShell>
 }
