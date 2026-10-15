@@ -116,12 +116,6 @@ function hotelNoticeDateTH(r:RoomRow){
   return `${m[3]}/${m[2]}/${String(buddhistYear).slice(-2)}`
 }
 
-function latestSourceDate(rows:RoomRow[]){
-  const values=rows.map(r=>r.source_modified_at).filter(Boolean) as string[]
-  if(!values.length)return null
-  return values.reduce((latest,current)=>new Date(current)>new Date(latest)?current:latest)
-}
-
 function isLongDefectDetail(text:string){
   return text.length>110||text.split(/\r?\n/).length>3
 }
@@ -131,6 +125,7 @@ export default function DefectDetailPage(){
   const showDashboard=role!==null&&canAccessPath(role,'/')
   const [loadError,setLoadError]=useState(false)
   const [rows,setRows]=useState<RoomRow[]>([])
+  const [latestDefectChangeAt,setLatestDefectChangeAt]=useState<string|null>(null)
   const [loading,setLoading]=useState(true)
   const [filter,setFilter]=useState('')
   const [building,setBuilding]=useState('ALL')
@@ -154,10 +149,15 @@ export default function DefectDetailPage(){
     const supabase=getSupabase()
     const loader=createLiveLoader({
       load:async(signal)=>{
-        const {data,error}=await supabase.from('condo_room_status').select('room_no,building,floor,owner_name,hotel_participation,customer_status,current_status,status_group,follow_up,priority,next_action,defect_detail,latest_source,source_note,source_modified_at').order('building').order('floor').order('room_no').abortSignal(signal)
-        requireSuccessfulReads([{error}])
+        const [roomRead,latestChangeRead]=await Promise.all([
+          supabase.from('condo_room_status').select('room_no,building,floor,owner_name,hotel_participation,customer_status,current_status,status_group,follow_up,priority,next_action,defect_detail,latest_source,source_note,source_modified_at').order('building').order('floor').order('room_no').abortSignal(signal),
+          supabase.rpc('defect_report_latest_change_at').abortSignal(signal),
+        ])
+        requireSuccessfulReads([{error:roomRead.error}])
         if(!alive||signal.aborted)return
-        setRows((data||[]) as RoomRow[])
+        setRows((roomRead.data||[]) as RoomRow[])
+        // A failed timestamp read must not substitute a stale source-file date.
+        setLatestDefectChangeAt(!latestChangeRead.error && typeof latestChangeRead.data==='string'?latestChangeRead.data:null)
         setLoadError(false)
       },
       onError:()=>{if(alive)setLoadError(true)},
@@ -230,7 +230,7 @@ export default function DefectDetailPage(){
   },[loading])
 
   const active=useMemo(()=>categories.find(c=>c.id===filter)||null,[filter])
-  const sourceDate=useMemo(()=>latestSourceDate(rows),[rows])
+  const sourceDate=latestDefectChangeAt
   const summaryByRoom=useMemo(()=>new Map(rows.map(r=>[r.room_no,summarizeDefectDetail(r.defect_detail)])),[rows])
   const baseRows=useMemo(()=>active?rows.filter(active.predicate):rows,[rows,active])
   const customerCount=baseRows.filter(r=>r.customer_status==='มีลูกค้า').length
