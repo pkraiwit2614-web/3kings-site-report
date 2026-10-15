@@ -109,7 +109,9 @@ function workOrderWbBaseline20261015_(file){
   // Backup identity is the approved same-folder filename; no new Script Property.
   const parents=file.getParents();if(!parents.hasNext())throw Error('Workbook has no parent folder');
   const parent=parents.next(),folders=parent.getFoldersByName('Backup');
-  const folder=folders.hasNext()?folders.next():parent.createFolder('Backup');
+  // Never generate nested Backup/Backup when the pinned source is already in Backup.
+  const folder=parent.getName()==='Backup'?parent:
+    (folders.hasNext()?folders.next():parent.createFolder('Backup'));
   const name='BACKUP_before_WorkOrderWebCompletion_2026-10-15_'+file.getName();
   const copies=folder.getFilesByName(name);
   if(copies.hasNext()){
@@ -127,6 +129,9 @@ function workOrderWbApply20261015_(config,change,dryRun){
   const file=DriveApp.getFileById(config.id);
   if(file.getName()!==WORK_ORDER_AUTO_20261015.FILE_NAME||file.getMimeType()!==WORK_ORDER_WB_20261015.MIME)
     throw Error('Work Order file ID/name/MIME validation failed');
+  const parents=file.getParents();
+  if(!parents.hasNext()||parents.next().getName()==='Backup')
+    throw Error('Pinned Work Order source is inside Backup or has no parent: reconcile canonical Excel before writeback');
   if(!/^DF-[A-Za-z0-9()_-]+$/.test(change.work_id))throw Error('Invalid Work ID');
   const completed=new Date(change.web_completed_at);
   if(isNaN(completed.getTime())||completed.getTime()>Date.now()+300000)throw Error('Invalid completed timestamp');
