@@ -102,7 +102,7 @@ export function putContact(rows:ContactEntry[],id:string|null,input:EditableCont
     const contact_id='3KC-'+String(number).padStart(4,'0')
     record={...Object.fromEntries(CONTACT_FIELDS.map(f=>[f,''])) as ContactEntry,...clean,contact_id,
       verified_status:'เพิ่มผ่านเว็บไซต์ รอตรวจสอบ',
-      source_file:'Contact Book Web App',source_url:CONTACT_BOOK_SOURCE_URL,
+      source_file:'Contact Book Web App',source_url:sourceUrl,
       source_reference_date:thaiDate()}
     list.push(record)
   }
