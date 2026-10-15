@@ -49,6 +49,9 @@ jobs:
       - name: Defect canonical source contract
         run: node tests/defect-canonical-source.test.cjs
 
+      - name: Defect work, first/latest dates, count and print safety
+        run: node --test tests/defect-detail-summary.test.cjs
+
       - name: Defect Excel writeback XML and queue safety
         run: node tests/defect-excel-writeback.test.cjs
 
