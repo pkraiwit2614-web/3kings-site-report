@@ -49,7 +49,7 @@ function workSummary(description: string): string {
   text = text
     .replace(/^\s*Hotel\s+list\s+ล่าสุด\s+\d{1,2}\/\d{1,2}\/\d{2,4}\s*[:：]\s*/i, '')
     .replace(/\.\s*หลักฐานเสริม\s+(?:doc|เอกสาร)\s+\d{1,2}\/\d{1,2}\/\d{2,4}\s*[:：]\s*/gi, '; ')
-    .replace(/\s*(?:ภาพประกอบบางรายการ|ภาพประกอบที่ไม่มีคำกำกับ|ใหม่กว่า\s*update|เอกสารระบุ\s*#?รายการ).*$/is, '')
+    .replace(/\s*(?:ภาพประกอบบางรายการ|ภาพประกอบที่ไม่มีคำกำกับ|ใหม่กว่า\s*update|เอกสารระบุ\s*#?รายการ)[\s\S]*$/i, '')
     .trim()
   if (!caption && /^(?:Hotel PDF|โรงแรมแจ้ง|User update|Updated|Update|ผู้ใช้ยืนยัน)\b/i.test(text)) {
     return 'ไม่ระบุรายการงานที่ยืนยัน'
