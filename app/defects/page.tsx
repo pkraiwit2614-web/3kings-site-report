@@ -9,6 +9,7 @@ import PageHeader from '@/components/PageHeader'
 import DefectCombineRoomEnhancer from '@/components/DefectCombineRoomEnhancer'
 import {hotelRoomLabel,hotelRoomMembers,normalizeHotelRoom} from '@/lib/hotelRoomGroups'
 import {statusLabel,statusTone} from '@/lib/defectStatusPresentation'
+import {hotelNoticeDateTH} from '@/lib/defectNoticeDate'
 import {summarizeDefectDetail} from '@/lib/defectDetailSummary'
 import DefectInputPanel from '@/components/DefectInputPanel'
 import { getSupabase } from '@/lib/supabase'
@@ -78,43 +79,6 @@ const categories:Category[]=[
 
 const DEFECT_DONE_FOLDER='https://drive.google.com/drive/folders/1GJy5xu2eQMbv4MIKnQC5df7m_CpyocXK'
 
-const HOTEL_NOTICE_DATE_BY_ROOM:Record<string,string>={
-  A202:'2026-09-21',
-  A211:'2026-09-24',
-  A313:'2026-09-26',
-  A314:'2026-09-26',
-  A326:'2026-09-26',
-  A410:'2026-09-27',
-  A412:'2026-09-27',
-  A501:'2026-09-16',
-  A616:'2026-09-27',
-  B212:'2026-09-22',
-  B214:'2026-09-23',
-}
-
-function dateTimeTH(value:string|null|undefined){
-  if(!value)return '-'
-  const d=new Date(value)
-  if(Number.isNaN(d.getTime()))return '-'
-  return new Intl.DateTimeFormat('th-TH',{timeZone:'Asia/Bangkok',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(d)+' น.'
-}
-
-function hotelNoticeDateTH(r:RoomRow){
-  const sourceText=[r.latest_source,r.source_note].filter(Boolean).join(' ')
-  const sourceDate=sourceText.match(/(\d{1,2})\/(\d{1,2})\/(20\d{2})/)
-  if(sourceDate){
-    const day=sourceDate[1].padStart(2,'0')
-    const month=sourceDate[2].padStart(2,'0')
-    const buddhistYear=Number(sourceDate[3])+543
-    return `${day}/${month}/${String(buddhistYear).slice(-2)}`
-  }
-  const value=HOTEL_NOTICE_DATE_BY_ROOM[r.room_no]
-  if(!value)return '—'
-  const m=value.match(/^(\d{4})-(\d{2})-(\d{2})$/)
-  if(!m)return '—'
-  const buddhistYear=Number(m[1])+543
-  return `${m[3]}/${m[2]}/${String(buddhistYear).slice(-2)}`
-}
 
 function isLongDefectDetail(text:string){
   return text.length>110||text.split(/\r?\n/).length>3
@@ -299,7 +263,7 @@ export default function DefectDetailPage(){
           <div><h2>รายชื่อห้อง</h2><p>แสดง {filtered.length} ห้อง</p></div>
           <div className="legend"><span><i className="customer-dot"/>มีลูกค้า</span><span><i className="no-customer-dot"/>ไม่มีลูกค้า</span><span><i className="bad-dot"/>เพิ่งได้รับแจ้ง Defect</span><span><i className="warn-dot"/>Defect เสร็จแล้ว • รอตรวจรับ</span><span><i className="good-dot"/>ตรวจรับแล้ว / Hotel ตรวจแล้ว</span></div>
         </div>
-        <div className="table-wrap defect-table"><table><thead><tr><th>ห้อง</th><th className="center">อาคาร</th><th className="center">วันที่ Hotel แจ้ง</th><th>ชื่อลูกค้า/เจ้าของ</th><th className="center">ลูกค้า</th><th className="center">โรงแรม</th><th>รายละเอียดงาน</th><th className="center">สถานะ</th><th>Work Plan / Hotel Status</th><th>ต้องทำต่อ</th></tr></thead><tbody>
+        <div className="table-wrap defect-table"><table><thead><tr><th>ห้อง</th><th className="center">อาคาร</th><th className="center">วันที่รับแจ้ง</th><th>ชื่อลูกค้า/เจ้าของ</th><th className="center">ลูกค้า</th><th className="center">โรงแรม</th><th>รายละเอียดงาน</th><th className="center">สถานะ</th><th>Work Plan / Hotel Status</th><th>ต้องทำต่อ</th></tr></thead><tbody>
           {filtered.map(r=><tr key={r.room_no}>
             <td className="room-cell"><b>{hotelRoomLabel(r.room_no)}</b><small>ชั้น {r.floor??'-'}</small></td>
             <td className="center"><b>{r.building}</b></td>
