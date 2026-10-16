@@ -43,3 +43,10 @@ test('Hotel-joined B408 remains Pending Handover, not a false Hotel inspection',
   assert.match(report,/hotel_participation==='ร่วมโรงแรม'&&r\.status_group==='Non-Hotel - Pending Handover'/)
   assert.match(src,/const hotelRows=useMemo\(\(\)=>rows\.filter\(r=>r\.hotel_participation==='ร่วมโรงแรม'\)/)
 })
+
+test('Defect Report and other status consumers label Hotel-joined pending acceptance precisely',()=>{
+  const display=fs.readFileSync(path.join(__dirname,'../lib/defectStatusPresentation.ts'),'utf8')
+  assert.match(display,/status_group==='Non-Hotel - Pending Handover'/)
+  assert.match(display,/hotel_participation==='ร่วมโรงแรม'\?'Defect เสร็จแล้ว • รอลูกค้าตรวจรับ'/)
+  assert.match(display,/'Defect เสร็จแล้ว • รอลูกค้า \/ Hotel ตรวจรับ'/)
+})
