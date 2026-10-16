@@ -65,7 +65,7 @@ test('all historically recorded source jobs are displayed consistently without t
 
 test('A217/A218 visit-only notes keep the source truth without displaying a visit as a repair item',()=>{
  const original='เข้าเก็บ Defect วันนี้ 02/10/2026; รายการย่อยยังไม่ระบุ'
-   +'\\n14/10/2026 — ปิดรอบ Defect โดยปริยายตามกฎเกิน 7 วัน: ซ่อมเสร็จ 05/10/2026'
+   +'\n14/10/2026 — ปิดรอบ Defect โดยปริยายตามกฎเกิน 7 วัน: ซ่อมเสร็จ 05/10/2026'
  const result=summarizeDefectDetail(original)
  assert.equal(result.work,'รายการย่อยยังไม่ระบุ')
  assert.equal(result.dates,'02/10/2026 → 14/10/2026')
