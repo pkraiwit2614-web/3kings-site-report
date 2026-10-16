@@ -11,6 +11,7 @@ import {hotelRoomLabel,hotelRoomMembers,normalizeHotelRoom} from '@/lib/hotelRoo
 import {statusLabel,statusTone} from '@/lib/defectStatusPresentation'
 import {summarizeDefectDetail} from '@/lib/defectDetailSummary'
 import DefectInputPanel from '@/components/DefectInputPanel'
+import DefectReportTabs from '@/components/DefectReportTabs'
 import { getSupabase } from '@/lib/supabase'
 import { createLiveLoader, requireSuccessfulReads } from '@/lib/liveLoader'
 
@@ -306,6 +307,7 @@ export default function DefectDetailPage(){
         {showDashboard&&<Link href="/?section=defect#dashboard-defect" className="button">← Dashboard</Link>}
       </div>}
     />
+    <DefectReportTabs active="condo" />
     <section className="panel filter-panel compact-filter-shell">
         <div className="toolbar detail-toolbar compact-filter">
           <input value={q} onChange={e=>setQ(e.target.value)} placeholder="ค้นหา เช่น B101, Good01, Good-01, A521" aria-label="ค้นหาเลขห้อง ชื่อเจ้าของ สถานะ หรือรายละเอียดงาน หลายคำคั่นด้วย comma"/>
