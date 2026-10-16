@@ -235,8 +235,8 @@ function HotelBuildingFlow({top,building,rows}:{top:number;building:'A'|'B';rows
       const mismatch=stream.list.filter(r=>!HOTEL_STATUS_KEYS.some(group=>r.status_group===group)).length
       const statusItems:StatusItem[]=[
         {label:'Hotel Checked',lines:['Hotel Engineer','ตรวจแล้ว'],count:stage(GROUP.checked),tone:'good',href:defectHref({filter:stream.filter+'-checked',building})},
-        {label:'Awaiting Check',lines:['Defect เสร็จแล้ว','รอ Hotel ตรวจรับ'],count:stage(GROUP.awaiting),tone:'warn',href:defectHref({filter:stream.filter+'-awaiting-receive',building})},
-        {label:'Awaiting Room',lines:['ยังไม่ตรวจห้อง','ยังไม่มี Defect'],count:stage(GROUP.roomInspection),tone:'warn',href:defectHref({filter:stream.filter,building,q:'ยังไม่ตรวจห้อง'})},
+        {label:'Awaiting Check',lines:['Defect เสร็จแล้ว','รอ Hotel ตรวจรับ'],count:stage(GROUP.awaiting),tone:'warn',href:defectHref({filter:stream.filter+'-awaiting',building})},
+        {label:'Awaiting Room',lines:['ยังไม่ตรวจห้อง','ยังไม่มี Defect'],count:stage(GROUP.roomInspection),tone:'warn'},
         {label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:stage(GROUP.incomplete),tone:'danger',href:defectHref({filter:stream.filter+'-incomplete',building})},
         {label:'Review Needed',lines:['สถานะไม่ตรงกลุ่ม','รอตรวจสอบข้อมูล'],count:mismatch,tone:'neutral'},
       ]
@@ -260,7 +260,7 @@ function HotelFlowDiagram({rows,synced}:{rows:FlowRow[];synced:string|null}){
   const customer=rows.filter(r=>r.customer_status==='มีลูกค้า').length
   const noCustomer=rows.filter(r=>r.customer_status==='ไม่มีลูกค้า').length
   const footer:StatusItem[]=[
-    {label:'Hotel Checked',lines:['Hotel Engineer ตรวจแล้ว'],count:stage(GROUP.checked),tone:'good',href:defectHref({filter:'hotel'})},
+    {label:'Hotel Checked',lines:['Hotel Engineer ตรวจแล้ว'],count:stage(GROUP.checked),tone:'good',href:defectHref({filter:'status-hotel-checked'})},
     {label:'Awaiting Check',lines:['Defect เสร็จ / รอ Hotel ตรวจ'],count:stage(GROUP.awaiting),tone:'warn'},
     {label:'Awaiting Room',lines:['ยังไม่ตรวจห้อง'],count:stage(GROUP.roomInspection),tone:'warn'},
     {label:'New Defect',lines:['เพิ่งได้รับแจ้ง Defect','และกำลังดำเนินการ'],count:stage(GROUP.incomplete),tone:'danger'},
