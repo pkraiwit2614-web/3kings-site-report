@@ -51,6 +51,11 @@ function workSummary(description: string): string {
     .replace(/\.\s*หลักฐานเสริม\s+(?:doc|เอกสาร)\s+\d{1,2}\/\d{1,2}\/\d{2,4}\s*[:：]\s*/gi, '; ')
     .replace(/\s*(?:ภาพประกอบบางรายการ|ภาพประกอบที่ไม่มีคำกำกับ|ใหม่กว่า\s*update|เอกสารระบุ\s*#?รายการ)[\s\S]*$/i, '')
     .trim()
+  // Some rooms record a site visit but explicitly state that no individual
+  // defect items were provided. Never display the visit itself as a work item.
+  if (/^เข้าเก็บ\s+Defect\s+วันนี้\s+\d{1,2}\/\d{1,2}\/\d{2,4}\s*;\s*รายการย่อยยังไม่ระบุ\s*$/i.test(text)) {
+    return 'รายการย่อยยังไม่ระบุ'
+  }
   if (!caption && /^(?:Hotel PDF|โรงแรมแจ้ง|User update|Updated|Update|ผู้ใช้ยืนยัน)\b/i.test(text)) {
     return 'ไม่ระบุรายการงานที่ยืนยัน'
   }
