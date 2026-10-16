@@ -89,7 +89,7 @@ test('Defect Report keeps the same display sections and full printable text for 
  assert.match(page,/\.defect-summary-meta\{display:block;font-size:9px;line-height:1\.35/)
  assert.match(page,/\.defect-detail-text\{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1\.45/)
  assert.match(css,/\.detail-panel \.defect-table \.defect-summary-meta\{margin-top:1px!important;line-height:1\.16!important\}/)
- assert.match(css,/\.defect-detail \.defect-detail-text\.is-collapsed\{display:block!important/) // Report expands on print
+ assert.match(page,/\.defect-detail \.defect-detail-text\.is-collapsed\{display:block!important/) // Report expands on print
 })
 
 test('Flow deep link reaches rendered report table, Work Order missing popup is guarded, print hides only next-action column',()=>{
