@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import { getSupabase } from '@/lib/supabase'
+import { HOTEL_COMBINE_GROUPS } from '@/lib/hotelRoomGroups'
 
 type RoomSource={
   room_no:string
@@ -16,39 +17,7 @@ type CombineMeta={
   detail:string|null
 }
 
-const COMBINE_GROUPS:string[][]=[
-  ['A213','A214'],
-  ['A217','A218'],
-  ['A221','A222'],
-  ['A223','A224','A225'],
-  ['A308','A309'],
-  ['A313','A314'],
-  ['A317','A318'],
-  ['A402','A403'],
-  ['A404','A405'],
-  ['A413','A414'],
-  ['A417','A418'],
-  ['A506','A507'],
-  ['A508','A509'],
-  ['A513','A514'],
-  ['A521','A522'],
-  ['A602','A603'],
-  ['A604','A605'],
-  ['A606','A607'],
-  ['A608','A609'],
-  ['A613','A614'],
-  ['A621','A622'],
-  ['A623','A624'],
-  ['A702','A703'],
-  ['A704','A705'],
-  ['A706','A707'],
-  ['A708','A709'],
-  ['A713','A714'],
-  ['A717','A718'],
-  ['B610','B611'],
-  ['B614','B615'],
-  ['B712','B713'],
-]
+const COMBINE_GROUPS:string[][]=HOTEL_COMBINE_GROUPS.map(group=>[...group])
 
 function mergedDetail(rows:RoomSource[]){
   const details=[...new Set(rows.map(r=>r.defect_detail?.trim()).filter((x):x is string=>Boolean(x)))]
