@@ -1,3 +1,8 @@
+/* Match Defect Report's two-line update timestamp; scoped to Work Order only. */
+.wo-update-meta{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;line-height:1.25;margin-right:2px}
+.wo-update-meta span{font-size:8.5px;color:var(--muted);font-weight:700}
+.wo-update-meta b{font-size:10px;color:var(--navy);font-weight:800;white-space:nowrap}
+@media(max-width:760px){.wo-update-meta{align-items:flex-start}}
 .wo-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 0 12px}
 .wo-kpi{appearance:none;min-width:0;min-height:118px;text-align:left;display:flex;flex-direction:column;gap:6px;align-items:stretch;cursor:pointer;border:1px solid #d9e0e7;border-radius:12px;background:#fff;color:#24384f;padding:13px 14px;box-shadow:0 2px 8px rgba(20,40,60,.045)}
 .wo-kpi-head{display:flex;align-items:flex-start;justify-content:space-between;gap:7px}

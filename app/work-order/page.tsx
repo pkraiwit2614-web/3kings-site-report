@@ -156,7 +156,7 @@ export default function WorkOrderViewer(){
  if(!permitted)return <AppShell><section className="panel" role="alert">สิทธิ์ Work Order จำกัดสำหรับทีม 3 Kings ที่ได้รับสิทธิ์ Defect เท่านั้น</section></AppShell>
  return <AppShell>
   <PageHeader title="Above Condo — Work Order" subtitle="รายการงานค้างรายจุด • สำหรับทีม 3 Kings • อ่านอย่างเดียว"
-   action={<div className="update-meta"><span>ข้อมูลอัปเดต</span><b>{dateTimeTH(latestWorkDetailSourceAt)}</b></div>}/>
+   action={<div className="wo-update-meta"><span>ข้อมูลอัปเดต</span><b>{dateTimeTH(latestWorkDetailSourceAt)}</b></div>}/>
   {error&&<div className="panel wo-error" role="alert">ไม่สามารถตรวจข้อมูล Work Order กับ Defect Report ได้: {error} <button type="button" className="button" onClick={()=>{setLoading(true);void reload().then(()=>setError('')).catch(e=>setError(String(e))).finally(()=>setLoading(false))}}>ลองใหม่</button></div>}
   {loading?<div className="panel">กำลังตรวจสอบข้อมูล Work Order ล่าสุด…</div>:!error&&<>
    <section className="wo-kpis" aria-label="กรองรายการตามจำนวนงาน">
