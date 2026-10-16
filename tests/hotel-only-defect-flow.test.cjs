@@ -5,11 +5,11 @@ const path=require('node:path')
 
 const src=fs.readFileSync(path.join(__dirname,'../app/defect-flow/page.tsx'),'utf8')
 
-test('Sales Defect Flow remains the default and original diagram stays available',()=>{
+test('Flow รวม remains default and retains original diagram'),()=>{
   assert.match(src,/useState<'sales'\|'hotel'>\('sales'\)/)
   assert.match(src,/<BuildingFlow top=\{190\} building="A" data=\{a\}\/>/)
   assert.match(src,/<BuildingFlow top=\{570\} building="B" data=\{b\}\/>/)
-  assert.match(src,/>Flow ฝ่ายขาย<\/button>/)
+  assert.match(src,/>Flow รวม<\/button>/)
   assert.match(src,/>Flow โรงแรม<\/button>/)
 })
 
@@ -20,11 +20,26 @@ test('Hotel Flow is a view of canonical room status and never changes the source
   assert.doesNotMatch(src,/\.from\('condo_room_status'\)\.(insert|update|upsert|delete)\(/)
 })
 
-test('Hotel Flow flags non-hotel status classifications instead of inferring completion',()=>{
-  assert.match(src,/const HOTEL_STATUS_KEYS=\[GROUP\.checked,GROUP\.awaiting,GROUP\.roomInspection,GROUP\.incomplete,GROUP\.pending\]/)
+test('Hotel Flow reuses the Sales hotel status cards and has no custom status boxes',()=>{
+  assert.match(src,/function hotelStatusItems\(/)
+  assert.match(src,/const hotelCustomer=hotelStatusItems\(data,building,true\)/)
+  assert.match(src,/const hotelNoCustomer=hotelStatusItems\(data,building,false\)/)
+  assert.match(src,/statusRow\(stream\.y\+31,hotelStatusItems\(data,building,stream\.customer\)\)/)
+  const hotel=src.slice(src.indexOf('function HotelBuildingFlow('),src.indexOf('type FlowFooterSummary='))
+  assert.doesNotMatch(hotel,/Review Needed|Pending Handover|statusItems:StatusItem/)
   assert.match(src,/const review=rows\.length-covered/)
-  assert.match(src,/!HOTEL_STATUS_KEYS\.some\(group=>r\.status_group===group\)/)
-  assert.match(src,/สถานะไม่ตรงกลุ่ม/)
+})
+
+test('Flow โรงแรม footer shares Flow รวม status definitions and every card links to Report',()=>{
+  assert.match(src,/function flowFooterItems\(/)
+  assert.match(src,/const footerItems=flowFooterItems\(endpoints\)/)
+  assert.match(src,/const footer=flowFooterItems\(\{/)
+  assert.match(src,/\},true\)/)
+  assert.match(src,/return <a key=\{item\.label\} href=\{item\.href\} className="flow-link" aria-label=/)
+  const defs=src.slice(src.indexOf('function flowFooterItems('),src.indexOf('function HotelFlowDiagram('))
+  for(const label of ['Hotel Checked','Customer Accepted','Awaiting Acceptance','New Defect'])
+    assert.ok(defs.includes("label:'"+label+"'"))
+  assert.doesNotMatch(defs,/Review Needed|Pending Handover/)
 })
 
 test('Export and search use active Hotel view without altering Sales defaults',()=>{
@@ -33,14 +48,14 @@ test('Export and search use active Hotel view without altering Sales defaults',(
   assert.match(src,/onClick=\{\(\)=>changeView\('hotel'\)\}/)
 })
 
-test('Hotel-joined B408 remains Pending Handover, not a false Hotel inspection',()=>{
+test('Hotel-joined B408 remains in shared Awaiting Acceptance status rather than extra Pending Handover box',()=>{
   const report=fs.readFileSync(path.join(__dirname,'../app/defects/page.tsx'),'utf8')
-  assert.match(src,/count:stage\(GROUP\.pending\)/)
-  assert.match(src,/รอลูกค้าตรวจรับ/)
-  assert.match(src,/stream\.filter\+'-pending'/)
-  assert.match(report,/id:'hotel-customer-pending'/)
-  assert.match(report,/id:'hotel-nocustomer-pending'/)
-  assert.match(report,/hotel_participation==='ร่วมโรงแรม'&&r\.status_group==='Non-Hotel - Pending Handover'/)
+  assert.match(src,/count:data\.customerHotelPending\+data\.customerHotelAwaiting/)
+  assert.match(src,/awaitingAcceptance:stage\(GROUP\.awaiting\)\+stage\(GROUP\.pending\)/)
+  assert.match(report,/id:'hotel-status-awaiting-acceptance'/)
+  assert.match(report,/hotel_participation==='ร่วมโรงแรม'&&\(r\.status_group==='Hotel - Awaiting Check'\|\|r\.status_group==='Non-Hotel - Pending Handover'\)/)
+  for(const filter of ['hotel-status-awaiting-sale','hotel-status-awaiting-room','hotel-status-handover-complete','hotel-status-awaiting-acceptance','hotel-status-incomplete'])
+    assert.ok(report.includes("id:'"+filter+"'"),'missing Report filter '+filter)
   assert.match(src,/const hotelRows=useMemo\(\(\)=>rows\.filter\(r=>r\.hotel_participation==='ร่วมโรงแรม'\)/)
 })
 
