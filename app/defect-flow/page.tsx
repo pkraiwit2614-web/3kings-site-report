@@ -220,7 +220,10 @@ function BuildingFlow({top,building,data}:{top:number;building:'A'|'B';data:Retu
  * Read-only projection: never writes or modifies the sales Flow or condo_room_status.
  * Unmatched status groups are shown as reconciliation items, not silently reclassified.
  */
-const HOTEL_STATUS_KEYS=[GROUP.checked,GROUP.awaiting,GROUP.roomInspection,GROUP.incomplete] as const
+// Joining the Hotel is independent of the customer's handover lifecycle.
+// Hotel-participating rooms can legitimately remain Pending Handover (e.g. B408).
+// Keep the canonical status_group unchanged; distinguish the two dimensions here.
+const HOTEL_STATUS_KEYS=[GROUP.checked,GROUP.awaiting,GROUP.roomInspection,GROUP.incomplete,GROUP.pending] as const
 
 function HotelBuildingFlow({top,building,rows}:{top:number;building:'A'|'B';rows:FlowRow[]}){
   const list=rows.filter(r=>r.building===building)
@@ -238,6 +241,7 @@ function HotelBuildingFlow({top,building,rows}:{top:number;building:'A'|'B';rows
         {label:'Awaiting Check',lines:['Defect เสร็จแล้ว','รอ Hotel ตรวจรับ'],count:stage(GROUP.awaiting),tone:'warn',href:defectHref({filter:stream.filter+'-awaiting',building})},
         {label:'Awaiting Room',lines:['ยังไม่ตรวจห้อง','ยังไม่มี Defect'],count:stage(GROUP.roomInspection),tone:'warn'},
         {label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:stage(GROUP.incomplete),tone:'danger',href:defectHref({filter:stream.filter+'-incomplete',building})},
+        {label:'Pending Handover',lines:['Defect แก้ไขเสร็จ','รอลูกค้าตรวจรับ'],count:stage(GROUP.pending),tone:'warn',href:defectHref({filter:stream.filter+'-pending',building})},
         {label:'Review Needed',lines:['สถานะไม่ตรงกลุ่ม','รอตรวจสอบข้อมูล'],count:mismatch,tone:'neutral'},
       ]
       return <g key={stream.key}>
@@ -264,6 +268,7 @@ function HotelFlowDiagram({rows,synced}:{rows:FlowRow[];synced:string|null}){
     {label:'Awaiting Check',lines:['Defect เสร็จ / รอ Hotel ตรวจ'],count:stage(GROUP.awaiting),tone:'warn'},
     {label:'Awaiting Room',lines:['ยังไม่ตรวจห้อง'],count:stage(GROUP.roomInspection),tone:'warn'},
     {label:'New Defect',lines:['เพิ่งได้รับแจ้ง Defect','และกำลังดำเนินการ'],count:stage(GROUP.incomplete),tone:'danger'},
+    {label:'Pending Handover',lines:['รอลูกค้า','ตรวจรับ'],count:stage(GROUP.pending),tone:'warn'},
     {label:'Review Needed',lines:['ข้อมูลขัดแย้ง','รอตรวจสอบ'],count:review,tone:'neutral'},
   ]
   return <>
@@ -275,7 +280,7 @@ function HotelFlowDiagram({rows,synced}:{rows:FlowRow[];synced:string|null}){
       <rect x={488} y={101} width={160} height={36} rx={9} fill={COLORS.customer}/><text x={568} y={124} textAnchor="middle" fill="#286e9d">มีลูกค้า = ห้องที่ขายแล้ว</text>
       <rect x={658} y={101} width={180} height={36} rx={9} fill={COLORS.noCustomer}/><text x={748} y={124} textAnchor="middle" fill={COLORS.neutral}>ไม่มีลูกค้า = ห้องที่ยังไม่ขาย</text>
       <rect x={848} y={101} width={292} height={36} rx={9} fill={COLORS.hotel}/><text x={994} y={124} textAnchor="middle" fill="#6b4aa2">ร่วมโรงแรม = เข้าร่วม Hotel</text>
-      <rect x={1150} y={101} width={330} height={36} rx={9} fill={COLORS.warnSoft}/><text x={1315} y={124} textAnchor="middle" fill={COLORS.neutral}>ข้อมูลไม่ตรงกัน = รอตรวจสอบ</text>
+      <rect x={1150} y={101} width={330} height={36} rx={9} fill={COLORS.warnSoft}/><text x={1315} y={124} textAnchor="middle" fill={COLORS.neutral}>รอตรวจรับ ≠ Hotel ตรวจแล้ว</text>
     </g>
     {[[44,230,'1. สถานะลูกค้า'],[356,230,'2. ห้องร่วมโรงแรม'],[670,1204,'3. สถานะปัจจุบัน']].map(([x,w,label])=><g key={String(label)}><rect x={Number(x)} y={149} width={Number(w)} height={34} rx={9} fill={COLORS.navy2}/><text x={Number(x)+Number(w)/2} y={172} textAnchor="middle" fontSize={14} fontWeight={900} fill="#fff">{label}</text></g>)}
     <HotelBuildingFlow top={190} building="A" rows={rows}/>
