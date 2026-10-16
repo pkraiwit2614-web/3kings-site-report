@@ -92,6 +92,21 @@ test('Defect Report keeps the same display sections and full printable text for 
  assert.match(page,/\.defect-detail \.defect-detail-text\.is-collapsed\{display:block!important/) // Report expands on print
 })
 
+test('Combine room decorator never erases Report work headings, dates, Work Order links or print controls',()=>{
+ const enhancer=fs.readFileSync(path.join(__dirname,'../components/DefectCombineRoomEnhancer.tsx'),'utf8')
+ const report=fs.readFileSync(path.join(__dirname,'../app/defects/page.tsx'),'utf8')
+ assert.doesNotMatch(enhancer,/detailCell\\.textContent\\s*=/,'a Combine badge cannot replace the entire React details cell')
+ assert.doesNotMatch(enhancer,/row\\.cells\\[6\\]\\.textContent\\s*=/)
+ assert.match(enhancer,/code\\.textContent='c'/,'preserve existing Combine indicator')
+ assert.match(enhancer,/combine-room-badge/,'preserve existing Combine room label')
+ assert.match(report,/className="defect-summary-work-label">งานทั้งหมด :/)
+ assert.match(report,/className="defect-summary-meta"><b>วันที่งาน\\/อัพเดท :<\\/b>/)
+ assert.match(report,/className="defect-summary-meta"><b>ดู Work Order :<\\/b>/)
+ assert.match(report,/summaryByRoom\\.get\\(r\\.room_no\\)\\?\\.work/)
+ assert.match(report,/summaryByRoom\\.get\\(r\\.room_no\\)\\?\\.dates/)
+ assert.match(report,/isLongDefectDetail/)
+})
+
 test('Flow deep link reaches rendered report table, Work Order missing popup is guarded, print hides only next-action column',()=>{
  const flow=fs.readFileSync(path.join(__dirname,'../app/defect-flow/page.tsx'),'utf8')
  const report=fs.readFileSync(path.join(__dirname,'../app/defects/page.tsx'),'utf8')
