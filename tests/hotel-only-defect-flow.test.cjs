@@ -5,7 +5,7 @@ const path=require('node:path')
 
 const src=fs.readFileSync(path.join(__dirname,'../app/defect-flow/page.tsx'),'utf8')
 
-test('Flow รวม remains default and retains original diagram'),()=>{
+test('Flow รวม remains default and retains original diagram',()=>{
   assert.match(src,/useState<'sales'\|'hotel'>\('sales'\)/)
   assert.match(src,/<BuildingFlow top=\{190\} building="A" data=\{a\}\/>/)
   assert.match(src,/<BuildingFlow top=\{570\} building="B" data=\{b\}\/>/)
