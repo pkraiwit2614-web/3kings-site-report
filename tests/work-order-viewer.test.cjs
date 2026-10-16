@@ -155,3 +155,36 @@ test('Work Order update header matches Report typography without changing the da
  assert.match(page,/month:'short'/)
  assert.match(page,/rows\.map\(r=>r\.source_modified_at\)/)
 })
+
+
+test('inactive but unfinished Work IDs are visible only in read-only reconciliation, never dispatch totals',()=>{
+ assert.match(page,/\.eq\('source_active',true\)/)
+ assert.match(page,/\.eq\('source_active',false\)/)
+ assert.match(page,/reviewLostFromDispatch=useMemo/)
+ assert.match(page,/reviewBlockedByRoomStatus=useMemo/)
+ assert.match(page,/reviewLostFromDispatch\.map/)
+ assert.match(page,/reviewBlockedByRoomStatus\.map/)
+ assert.match(page,/const eligible=useMemo\(\(\)=>rows\.filter/)
+ assert.match(page,/const counters:Record<Quick,number>=\{ALL:kpiRows\.ALL\.length/)
+ assert.match(page,/ไม่เปิดงานหรือปิดงานจากเว็บโดยอัตโนมัติ/)
+ assert.doesNotMatch(page,/\.update\(|\.insert\(|\.delete\(|\.upsert\(/)
+})
+
+test('all five Defect surfaces retain scoped search, status, building, dates, day and reset filters',()=>{
+ const report=read('app/defects/page.tsx')
+ const flow=read('app/defect-flow/page.tsx')
+ const plan=read('app/hotel-work-plan/page.tsx')
+ const hotel=read('app/hotel-room-status/page.tsx')
+ // Work Order — room/Good search, contractor, A/B, overdue, clear
+ for(const term of ['setQuick(kind)','setQuery(e.target.value)','setContractor(e.target.value)','setQuick(\'ALL\')','setContractor(\'ALL\')','roomSearchText','hotelRoomMembers'])assert.ok(page.includes(term),term)
+ // Defect Report — room/owner/detail, customer, status, building and reset
+ for(const term of ['setQ(e.target.value)','setBuilding(e.target.value)','setFilter(e.target.value)','setCustomerFilter','setBuilding(\'ALL\')'])assert.ok(report.includes(term),term)
+ // Flow — grouping, room search and deep-link to filtered Report
+ for(const term of ['setRoomSearch(e.target.value)','setRoomSearch(\'\')','defectHref({building})'])assert.ok(flow.includes(term),term)
+ // Hotel Work Plan — day selector, building, room search, Defect status and confirmed OOO guard
+ for(const term of ['setSelectedDay(d.day_no)','setRoomSearch(e.target.value)','setBuilding(e.target.value)','setDefectStatusFilter(e.target.value)','hotelRoomMembers','availability_status===\'OOO\''])assert.ok(plan.includes(term),term)
+ // OOO/OOS — search, building, status buttons/select, date-range and reset
+ for(const term of ['setQuery(e.target.value)','setBuilding(e.target.value)','setStateFilter(e.target.value)','setRangeStart(e.target.value)','setRangeEnd(e.target.value)','setRangeStart(\'\')','setRangeEnd(\'\')'])assert.ok(hotel.includes(term),term)
+ assert.match(hotel,/invalidDateRange/)
+ assert.match(hotel,/hotelRoomMembers/)
+})
