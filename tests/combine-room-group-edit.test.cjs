@@ -13,7 +13,10 @@ const marker=read('components/DefectCombineRoomEnhancer.tsx')
 
 // The canonical identity and the existing Combine "c" indicator stay unchanged.
 assert.match(groups, /"A213",\s*"A214"/)
-assert.match(groups, /"A223",\s*"A224",\s*"A225"/)
+assert.match(groups, /"A517",\s*"A518"/)
+assert.match(groups, /"A617",\s*"A618"/)
+for(const room of ['A223','A224','A225','A313','A314','A623','A624']) assert.doesNotMatch(groups,new RegExp('"'+room+'"'))
+assert.match(marker,/HOTEL_COMBINE_GROUPS\.map/)
 assert.match(marker, /code\.textContent='c'/)
 assert.match(hotel, /<b>{hotelRoomLabel\(g\.key\)}<\/b>/)
 assert.match(hotel, /return \{key:room\.room_no,members/)
