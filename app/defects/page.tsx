@@ -63,6 +63,12 @@ const categories:Category[]=[
   {id:'status-pending-handover',label:'Defect เสร็จแล้ว • รอลูกค้า / Hotel ตรวจรับ',tone:'warn',predicate:r=>r.status_group==='Non-Hotel - Pending Handover'},
   {id:'status-handover-complete',label:'ลูกค้าตรวจรับเรียบร้อยแล้ว',tone:'good',predicate:r=>r.status_group==='Non-Hotel - Handover Complete'},
   {id:'status-awaiting-sale',label:'Awaiting Sale / ยังไม่มีลูกค้า',tone:'neutral',predicate:r=>r.status_group==='Non-Hotel - Awaiting Sale'},
+  // Hotel-only status filters used by the shared Flow footer.
+  {id:'hotel-status-awaiting-sale',label:'ร่วมโรงแรม • Awaiting Sale',tone:'neutral',predicate:r=>r.hotel_participation==='ร่วมโรงแรม'&&r.status_group==='Non-Hotel - Awaiting Sale'},
+  {id:'hotel-status-awaiting-room',label:'ร่วมโรงแรม • ยังไม่ตรวจห้อง',tone:'warn',predicate:r=>r.hotel_participation==='ร่วมโรงแรม'&&r.status_group==='Hotel - Awaiting Room Inspection'},
+  {id:'hotel-status-handover-complete',label:'ร่วมโรงแรม • ลูกค้าตรวจรับเรียบร้อยแล้ว',tone:'good',predicate:r=>r.hotel_participation==='ร่วมโรงแรม'&&r.status_group==='Non-Hotel - Handover Complete'},
+  {id:'hotel-status-awaiting-acceptance',label:'ร่วมโรงแรม • Defect เสร็จแล้ว • รอตรวจรับ',tone:'warn',predicate:r=>r.hotel_participation==='ร่วมโรงแรม'&&(r.status_group==='Hotel - Awaiting Check'||r.status_group==='Non-Hotel - Pending Handover')},
+  {id:'hotel-status-incomplete',label:'ร่วมโรงแรม • เพิ่งได้รับแจ้ง Defect',tone:'danger',predicate:r=>r.hotel_participation==='ร่วมโรงแรม'&&r.status_group==='Hotel - Incomplete'},
   {id:'hotel-customer-incomplete',label:'มีลูกค้า • ร่วมโรงแรม • เพิ่งได้รับแจ้ง Defect',tone:'danger',predicate:r=>r.customer_status==='มีลูกค้า'&&r.hotel_participation==='ร่วมโรงแรม'&&r.status_group==='Hotel - Incomplete'},
   {id:'hotel-customer-awaiting',label:'มีลูกค้า • ร่วมโรงแรม • Defect เสร็จแล้ว รอตรวจรับ',tone:'warn',predicate:r=>r.customer_status==='มีลูกค้า'&&r.hotel_participation==='ร่วมโรงแรม'&&r.status_group==='Hotel - Awaiting Check'},
   {id:'hotel-customer-awaiting-receive',label:'มีลูกค้า • ร่วมโรงแรม • Defect เสร็จแล้ว รอลูกค้า / Hotel ตรวจรับ',tone:'warn',predicate:r=>r.customer_status==='มีลูกค้า'&&r.hotel_participation==='ร่วมโรงแรม'&&(r.status_group==='Hotel - Awaiting Check'||r.status_group==='Non-Hotel - Pending Handover')},
