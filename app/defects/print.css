@@ -77,6 +77,8 @@
   .detail-panel .defect-table .program-badge,
   .detail-panel .defect-table .state-badge{padding:1px 2px!important;font-size:7px!important;line-height:1.12!important}
   .detail-panel .defect-table .defect-detail-text{line-height:1.16!important;overflow-wrap:anywhere!important}
+  .detail-panel .defect-table .defect-summary-work-label{margin-bottom:1px!important}
+  .detail-panel .defect-table .defect-summary-meta{margin-top:1px!important;line-height:1.16!important}
   .detail-panel .defect-table .work-plan-cell{
     min-width:0!important;
     max-width:none!important;
