@@ -147,11 +147,11 @@ test('Work Order print-only styling hides evidence and retains signoff',()=>{
 
 test('Work Order update header matches Report typography without changing the data source',()=>{
  const report=read('app/defects/page.tsx')
- assert.match(page,/className="wo-update-meta"><span>ข้อมูลอัปเดต<\\/span><b>\\{dateTimeTH\\(latestWorkDetailSourceAt\\)\\}<\\/b>/)
- assert.match(css,/\\.wo-update-meta\\{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;line-height:1.25;margin-right:2px\\}/)
- assert.match(css,/\\.wo-update-meta span\\{font-size:8\\.5px;color:var\\(--muted\\);font-weight:700\\}/)
- assert.match(css,/\\.wo-update-meta b\\{font-size:10px;color:var\\(--navy\\);font-weight:800;white-space:nowrap\\}/)
- assert.match(report,/\\.update-meta\\{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;line-height:1.25;margin-right:2px\\}/)
+ assert.match(page,/className="wo-update-meta"><span>ข้อมูลอัปเดต<\/span><b>\{dateTimeTH\(latestWorkDetailSourceAt\)\}<\/b>/)
+ assert.match(css,/\.wo-update-meta\{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;line-height:1.25;margin-right:2px\}/)
+ assert.match(css,/\.wo-update-meta span\{font-size:8\.5px;color:var\(--muted\);font-weight:700\}/)
+ assert.match(css,/\.wo-update-meta b\{font-size:10px;color:var\(--navy\);font-weight:800;white-space:nowrap\}/)
+ assert.match(report,/\.update-meta\{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;line-height:1.25;margin-right:2px\}/)
  assert.match(page,/month:'short'/)
- assert.match(page,/rows\\.map\\(r=>r\\.source_modified_at\\)/)
+ assert.match(page,/rows\.map\(r=>r\.source_modified_at\)/)
 })
