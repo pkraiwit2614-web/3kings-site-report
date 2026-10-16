@@ -65,7 +65,7 @@ test('all historically recorded source jobs are displayed consistently without t
 
 test('A217/A218 visit-only notes keep the source truth without displaying a visit as a repair item',()=>{
  const original='เข้าเก็บ Defect วันนี้ 02/10/2026; รายการย่อยยังไม่ระบุ'
-   +'\\n14/10/2026 — ปิดรอบ Defect โดยปริยายตามกฎเกิน 7 วัน: ซ่อมเสร็จ 05/10/2026'
+   +'\n14/10/2026 — ปิดรอบ Defect โดยปริยายตามกฎเกิน 7 วัน: ซ่อมเสร็จ 05/10/2026'
  const result=summarizeDefectDetail(original)
  assert.equal(result.work,'รายการย่อยยังไม่ระบุ')
  assert.equal(result.dates,'02/10/2026 → 14/10/2026')
@@ -95,15 +95,15 @@ test('Defect Report keeps the same display sections and full printable text for 
 test('Combine room decorator never erases Report work headings, dates, Work Order links or print controls',()=>{
  const enhancer=fs.readFileSync(path.join(__dirname,'../components/DefectCombineRoomEnhancer.tsx'),'utf8')
  const report=fs.readFileSync(path.join(__dirname,'../app/defects/page.tsx'),'utf8')
- assert.doesNotMatch(enhancer,/detailCell\\.textContent\\s*=/,'a Combine badge cannot replace the entire React details cell')
- assert.doesNotMatch(enhancer,/row\\.cells\\[6\\]\\.textContent\\s*=/)
- assert.match(enhancer,/code\\.textContent='c'/,'preserve existing Combine indicator')
+ assert.doesNotMatch(enhancer,/detailCell\.textContent\s*=/,'a Combine badge cannot replace the entire React details cell')
+ assert.doesNotMatch(enhancer,/row\.cells\[6\]\.textContent\s*=/)
+ assert.match(enhancer,/code\.textContent='c'/,'preserve existing Combine indicator')
  assert.match(enhancer,/combine-room-badge/,'preserve existing Combine room label')
  assert.match(report,/className="defect-summary-work-label">งานทั้งหมด :/)
- assert.match(report,/className="defect-summary-meta"><b>วันที่งาน\\/อัพเดท :<\\/b>/)
- assert.match(report,/className="defect-summary-meta"><b>ดู Work Order :<\\/b>/)
- assert.match(report,/summaryByRoom\\.get\\(r\\.room_no\\)\\?\\.work/)
- assert.match(report,/summaryByRoom\\.get\\(r\\.room_no\\)\\?\\.dates/)
+  assert.ok(report.includes('className="defect-summary-meta"><b>วันที่งาน/อัพเดท :</b>'))
+  assert.ok(report.includes('className="defect-summary-meta"><b>ดู Work Order :</b>'))
+ assert.match(report,/summaryByRoom\.get\(r\.room_no\)\?\.work/)
+ assert.match(report,/summaryByRoom\.get\(r\.room_no\)\?\.dates/)
  assert.match(report,/isLongDefectDetail/)
 })
 

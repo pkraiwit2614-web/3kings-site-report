@@ -13,17 +13,8 @@ export const HOTEL_COMBINE_GROUPS: readonly (readonly string[])[] = [
     "A222"
   ],
   [
-    "A223",
-    "A224",
-    "A225"
-  ],
-  [
     "A308",
     "A309"
-  ],
-  [
-    "A313",
-    "A314"
   ],
   [
     "A317",
@@ -57,6 +48,7 @@ export const HOTEL_COMBINE_GROUPS: readonly (readonly string[])[] = [
     "A513",
     "A514"
   ],
+  ["A517", "A518"],
   [
     "A521",
     "A522"
@@ -81,13 +73,10 @@ export const HOTEL_COMBINE_GROUPS: readonly (readonly string[])[] = [
     "A613",
     "A614"
   ],
+  ["A617", "A618"],
   [
     "A621",
     "A622"
-  ],
-  [
-    "A623",
-    "A624"
   ],
   [
     "A702",
