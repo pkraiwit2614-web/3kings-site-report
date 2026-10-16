@@ -63,6 +63,35 @@ test('all historically recorded source jobs are displayed consistently without t
  assert.doesNotMatch(result.work,/งานอื่นเสร็จแล้ว|คงค้างเฉพาะ/)
 })
 
+test('A217/A218 visit-only notes keep the source truth without displaying a visit as a repair item',()=>{
+ const original='เข้าเก็บ Defect วันนี้ 02/10/2026; รายการย่อยยังไม่ระบุ'
+   +'\\n14/10/2026 — ปิดรอบ Defect โดยปริยายตามกฎเกิน 7 วัน: ซ่อมเสร็จ 05/10/2026'
+ const result=summarizeDefectDetail(original)
+ assert.equal(result.work,'รายการย่อยยังไม่ระบุ')
+ assert.equal(result.dates,'02/10/2026 → 14/10/2026')
+ assert.equal(result.count,'ไม่ระบุ')
+ assert.doesNotMatch(result.work,/เข้าเก็บ|ปิดรอบ|ซ่อมเสร็จ/)
+})
+
+test('A313/A314 preserve the documented system job and latest update date without treating follow-up as another job',()=>{
+ const original='งานระบบ — สะดืออ่าง'
+   +'\\n[อัพเดท 15/10/2026 จากผู้ใช้] น้ำรั่วใต้อ่างล้างหน้า; รอขอพงษ์ตรวจงานระบบ — Combine A313+A314'
+ const result=summarizeDefectDetail(original)
+ assert.equal(result.work,'งานระบบ — สะดืออ่าง')
+ assert.equal(result.dates,'15/10/2026')
+ assert.doesNotMatch(result.work,/รอขอพงษ์|Combine/)
+})
+
+test('Defect Report keeps the same display sections and full printable text for every room',()=>{
+ const page=fs.readFileSync(path.join(__dirname,'../app/defects/page.tsx'),'utf8')
+ const css=fs.readFileSync(path.join(__dirname,'../app/defects/print.css'),'utf8')
+ assert.match(page,/\.defect-summary-work-label\{display:block;margin-bottom:2px/)
+ assert.match(page,/\.defect-summary-meta\{display:block;font-size:9px;line-height:1\.35/)
+ assert.match(page,/\.defect-detail-text\{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1\.45/)
+ assert.match(css,/\.detail-panel \.defect-table \.defect-summary-meta\{margin-top:1px!important;line-height:1\.16!important\}/)
+ assert.match(page,/\.defect-detail \.defect-detail-text\.is-collapsed\{display:block!important/) // Report expands on print
+})
+
 test('Flow deep link reaches rendered report table, Work Order missing popup is guarded, print hides only next-action column',()=>{
  const flow=fs.readFileSync(path.join(__dirname,'../app/defect-flow/page.tsx'),'utf8')
  const report=fs.readFileSync(path.join(__dirname,'../app/defects/page.tsx'),'utf8')
