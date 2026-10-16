@@ -161,13 +161,8 @@ function buildingCounts(rows:FlowRow[],building:'A'|'B'){
   }
 }
 
-function BuildingFlow({top,building,data}:{top:number;building:'A'|'B';data:ReturnType<typeof buildingCounts>}){
-  const soldY=top+60,unsoldY=top+220
-  const b1=top+52,b2=top+128,b3=top+212,b4=top+288
-  const customerHotelHref=defectHref({filter:'hotel-customer',building})
-  const customerNonHref=defectHref({filter:'nonhotel-customer',building})
-  const noHotelHref=defectHref({filter:'hotel-nocustomer',building})
-  const noNonHref=defectHref({filter:'nonhotel-no-customer',building})
+function hotelStatusItems(data:ReturnType<typeof buildingCounts>,building:'A'|'B',customer:boolean):StatusItem[]{
+  // The Hotel Flow must reuse the exact status boxes from the hotel branches of Flow รวม.
   const hotelCustomer:StatusItem[]=[
     {label:'Hotel Checked',lines:['Hotel Engineer','ตรวจแล้ว'],count:data.customerHotelChecked,tone:'good',href:defectHref({filter:'hotel-customer-checked',building})},
     ...(data.customerHotelHandover>0?[{label:'Customer Accepted',lines:['ลูกค้าตรวจรับเรียบร้อยแล้ว'],count:data.customerHotelHandover,tone:'good' as Tone,href:defectHref({filter:'hotel-customer',building,q:'ลูกค้าตรวจรับเรียบร้อยแล้ว'})}]:[]),
@@ -181,6 +176,18 @@ function BuildingFlow({top,building,data}:{top:number;building:'A'|'B';data:Retu
     {label:'Awaiting Acceptance',lines:['Defect เสร็จแล้ว','รอลูกค้า / Hotel ตรวจรับ'],count:data.noHotelAwaiting+data.noHotelPending,tone:'warn',href:defectHref({filter:'hotel-nocustomer-awaiting-receive',building})},
     {label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:data.noHotelIncomplete,tone:'danger',href:defectHref({filter:'hotel-nocustomer-incomplete',building})},
   ]
+  return customer?hotelCustomer:hotelNoCustomer
+}
+
+function BuildingFlow({top,building,data}:{top:number;building:'A'|'B';data:ReturnType<typeof buildingCounts>}){
+  const soldY=top+60,unsoldY=top+220
+  const b1=top+52,b2=top+128,b3=top+212,b4=top+288
+  const customerHotelHref=defectHref({filter:'hotel-customer',building})
+  const customerNonHref=defectHref({filter:'nonhotel-customer',building})
+  const noHotelHref=defectHref({filter:'hotel-nocustomer',building})
+  const noNonHref=defectHref({filter:'nonhotel-no-customer',building})
+  const hotelCustomer=hotelStatusItems(data,building,true)
+  const hotelNoCustomer=hotelStatusItems(data,building,false)
   const nonHotelCustomer:StatusItem[]=[
     {label:'Customer Accepted',lines:['ลูกค้าตรวจรับเรียบร้อยแล้ว'],count:data.customerNonHandover,tone:'good',href:defectHref({filter:'nonhotel-customer-complete',building})},
     {label:'Awaiting Acceptance',lines:['Defect เสร็จแล้ว','รอลูกค้า / Hotel ตรวจรับ'],count:data.customerNonPending+data.customerNonChecked,tone:'warn',href:defectHref({filter:'nonhotel-customer-awaiting-receive',building})},
@@ -218,15 +225,16 @@ function BuildingFlow({top,building,data}:{top:number;building:'A'|'B';data:Retu
 /**
  * Hotel presentation of the existing canonical Defect Flow.
  * Read-only projection: never writes or modifies the sales Flow or condo_room_status.
- * Unmatched status groups are shown as reconciliation items, not silently reclassified.
+ * Unmatched status groups are indicated in coverage text, not converted to invented status boxes.
  */
 // Joining the Hotel is independent of the customer's handover lifecycle.
 // Hotel-participating rooms can legitimately remain Pending Handover (e.g. B408).
 // Keep the canonical status_group unchanged; distinguish the two dimensions here.
-const HOTEL_STATUS_KEYS=[GROUP.checked,GROUP.awaiting,GROUP.roomInspection,GROUP.incomplete,GROUP.pending] as const
+const HOTEL_STATUS_KEYS=[GROUP.checked,GROUP.awaiting,GROUP.roomInspection,GROUP.incomplete,GROUP.pending,GROUP.handover,GROUP.awaitingSale] as const
 
 function HotelBuildingFlow({top,building,rows}:{top:number;building:'A'|'B';rows:FlowRow[]}){
   const list=rows.filter(r=>r.building===building)
+  const data=buildingCounts(rows,building)
   const streams=[
     {key:'sold',label:'มีลูกค้า (ขายแล้ว)',customer:true,y:top+62,filter:'hotel-customer',list:list.filter(r=>r.customer_status==='มีลูกค้า')},
     {key:'unsold',label:'ไม่มีลูกค้า (ยังไม่ขาย)',customer:false,y:top+217,filter:'hotel-nocustomer',list:list.filter(r=>r.customer_status==='ไม่มีลูกค้า')},
@@ -234,25 +242,31 @@ function HotelBuildingFlow({top,building,rows}:{top:number;building:'A'|'B';rows
   return <g>
     <g><rect x={28} y={top} width={330} height={44} rx={12} fill={COLORS.navy}/><text x={48} y={top+29} fontSize={20} fontWeight={900} fill="#fff">ตึก {building} — {list.length} ห้องร่วมโรงแรม</text></g>
     {streams.map(stream=>{
-      const stage=(group:string)=>stream.list.filter(r=>r.status_group===group).length
-      const mismatch=stream.list.filter(r=>!HOTEL_STATUS_KEYS.some(group=>r.status_group===group)).length
-      const statusItems:StatusItem[]=[
-        {label:'Hotel Checked',lines:['Hotel Engineer','ตรวจแล้ว'],count:stage(GROUP.checked),tone:'good',href:defectHref({filter:stream.filter+'-checked',building})},
-        {label:'Awaiting Check',lines:['Defect เสร็จแล้ว','รอ Hotel ตรวจรับ'],count:stage(GROUP.awaiting),tone:'warn',href:defectHref({filter:stream.filter+'-awaiting',building})},
-        {label:'Awaiting Room',lines:['ยังไม่ตรวจห้อง','ยังไม่มี Defect'],count:stage(GROUP.roomInspection),tone:'warn'},
-        {label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:stage(GROUP.incomplete),tone:'danger',href:defectHref({filter:stream.filter+'-incomplete',building})},
-        {label:'Pending Handover',lines:['Defect แก้ไขเสร็จ','รอลูกค้าตรวจรับ'],count:stage(GROUP.pending),tone:'warn',href:defectHref({filter:stream.filter+'-pending',building})},
-        {label:'Review Needed',lines:['สถานะไม่ตรงกลุ่ม','รอตรวจสอบข้อมูล'],count:mismatch,tone:'neutral'},
-      ]
       return <g key={stream.key}>
         <SvgCustomerCard x={44} y={stream.y} label={stream.label} count={stream.list.length} formula={'ร่วมโรงแรม '+stream.list.length+' ห้อง'} customer={stream.customer} href={defectHref({filter:stream.filter,building})}/>
         <Arrow x1={274} y1={stream.y+60} x2={352} y2={stream.y+60}/>
         <SvgBranchCard x={356} y={stream.y+30} label="ร่วมโรงแรม" count={stream.list.length} kind="hotel" href={defectHref({filter:stream.filter,building})}/>
         <Arrow x1={586} y1={stream.y+60} x2={656} y2={stream.y+60}/>
-        {statusRow(stream.y+31,statusItems)}
+        {statusRow(stream.y+31,hotelStatusItems(data,building,stream.customer))}
       </g>
     })}
   </g>
+}
+
+type FlowFooterSummary={
+  awaitingSale:number;roomInspection:number;checked:number;handover:number;awaitingAcceptance:number;incomplete:number
+}
+
+function flowFooterItems(v:FlowFooterSummary,hotelOnly=false):StatusItem[]{
+  // One set of statuses/labels/tones for Flow รวม and Flow โรงแรม.
+  return [
+    ...(v.awaitingSale>0?[{label:'Awaiting Sale',lines:['Awaiting Sale'],count:v.awaitingSale,tone:'neutral' as Tone,href:defectHref({filter:hotelOnly?'hotel-status-awaiting-sale':'status-awaiting-sale'})}]:[]),
+    ...(v.roomInspection>0?[{label:'Awaiting Room',lines:['ยังไม่ตรวจห้อง'],count:v.roomInspection,tone:'warn' as Tone,href:defectHref(hotelOnly?{filter:'hotel-status-awaiting-room'}:{filter:'hotel-customer',q:'ยังไม่ตรวจห้อง'})}]:[]),
+    {label:'Hotel Checked',lines:['Hotel Engineer ตรวจแล้ว'],count:v.checked,tone:'good',href:defectHref({filter:'status-hotel-checked'})},
+    {label:'Customer Accepted',lines:['ลูกค้าตรวจรับเรียบร้อยแล้ว'],count:v.handover,tone:'good',href:defectHref({filter:hotelOnly?'hotel-status-handover-complete':'status-handover-complete'})},
+    {label:'Awaiting Acceptance',lines:['Defect เสร็จแล้ว • รอตรวจรับ'],count:v.awaitingAcceptance,tone:'warn',href:defectHref({filter:hotelOnly?'hotel-status-awaiting-acceptance':'status-awaiting-acceptance'})},
+    {label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:v.incomplete,tone:'danger',href:defectHref({filter:hotelOnly?'hotel-status-incomplete':'status-incomplete'})},
+  ]
 }
 
 function HotelFlowDiagram({rows,synced}:{rows:FlowRow[];synced:string|null}){
@@ -263,24 +277,25 @@ function HotelFlowDiagram({rows,synced}:{rows:FlowRow[];synced:string|null}){
   const review=rows.length-covered
   const customer=rows.filter(r=>r.customer_status==='มีลูกค้า').length
   const noCustomer=rows.filter(r=>r.customer_status==='ไม่มีลูกค้า').length
-  const footer:StatusItem[]=[
-    {label:'Hotel Checked',lines:['Hotel Engineer ตรวจแล้ว'],count:stage(GROUP.checked),tone:'good',href:defectHref({filter:'status-hotel-checked'})},
-    {label:'Awaiting Check',lines:['Defect เสร็จ / รอ Hotel ตรวจ'],count:stage(GROUP.awaiting),tone:'warn'},
-    {label:'Awaiting Room',lines:['ยังไม่ตรวจห้อง'],count:stage(GROUP.roomInspection),tone:'warn'},
-    {label:'New Defect',lines:['เพิ่งได้รับแจ้ง Defect','และกำลังดำเนินการ'],count:stage(GROUP.incomplete),tone:'danger'},
-    {label:'Pending Handover',lines:['รอลูกค้า','ตรวจรับ'],count:stage(GROUP.pending),tone:'warn'},
-    {label:'Review Needed',lines:['ข้อมูลขัดแย้ง','รอตรวจสอบ'],count:review,tone:'neutral'},
-  ]
+  const footer=flowFooterItems({
+    awaitingSale:stage(GROUP.awaitingSale),
+    roomInspection:stage(GROUP.roomInspection),
+    checked:stage(GROUP.checked),
+    handover:stage(GROUP.handover),
+    awaitingAcceptance:stage(GROUP.awaiting)+stage(GROUP.pending),
+    incomplete:stage(GROUP.incomplete),
+  },true)
+  
   return <>
     <text x={28} y={50} fontSize={31} fontWeight={900} fill={COLORS.navy}>สรุปเส้นทาง Handover / Defect — สำหรับโรงแรม</text>
-    <text x={28} y={81} fontSize={15} fontWeight={700} fill={COLORS.muted}>เฉพาะห้องร่วมโรงแรม • ตึก A และ B • คำนวณจากข้อมูล Defect ชุดเดียวกับ Flow ฝ่ายขาย</text>
+    <text x={28} y={81} fontSize={15} fontWeight={700} fill={COLORS.muted}>เฉพาะห้องร่วมโรงแรม • ตึก A และ B • คำนวณจากข้อมูล Defect ชุดเดียวกับ Flow รวม</text>
     <text x={1888} y={36} textAnchor="end" fontSize={12} fontWeight={700} fill={COLORS.muted}>อ้างอิง: Web App / Supabase — condo_room_status</text>
     <text x={1888} y={54} textAnchor="end" fontSize={12} fontWeight={700} fill={COLORS.muted}>Sync ล่าสุด {dateTimeTH(synced)}</text>
     <g fontSize={12} fontWeight={800}>
       <rect x={488} y={101} width={160} height={36} rx={9} fill={COLORS.customer}/><text x={568} y={124} textAnchor="middle" fill="#286e9d">มีลูกค้า = ห้องที่ขายแล้ว</text>
       <rect x={658} y={101} width={180} height={36} rx={9} fill={COLORS.noCustomer}/><text x={748} y={124} textAnchor="middle" fill={COLORS.neutral}>ไม่มีลูกค้า = ห้องที่ยังไม่ขาย</text>
       <rect x={848} y={101} width={292} height={36} rx={9} fill={COLORS.hotel}/><text x={994} y={124} textAnchor="middle" fill="#6b4aa2">ร่วมโรงแรม = เข้าร่วม Hotel</text>
-      <rect x={1150} y={101} width={330} height={36} rx={9} fill={COLORS.warnSoft}/><text x={1315} y={124} textAnchor="middle" fill={COLORS.neutral}>รอตรวจรับ ≠ Hotel ตรวจแล้ว</text>
+
     </g>
     {[[44,230,'1. สถานะลูกค้า'],[356,230,'2. ห้องร่วมโรงแรม'],[670,1204,'3. สถานะปัจจุบัน']].map(([x,w,label])=><g key={String(label)}><rect x={Number(x)} y={149} width={Number(w)} height={34} rx={9} fill={COLORS.navy2}/><text x={Number(x)+Number(w)/2} y={172} textAnchor="middle" fontSize={14} fontWeight={900} fill="#fff">{label}</text></g>)}
     <HotelBuildingFlow top={190} building="A" rows={rows}/>
@@ -292,7 +307,7 @@ function HotelFlowDiagram({rows,synced}:{rows:FlowRow[];synced:string|null}){
     {footer.map((item,i)=>{
       const x=706+i*196.2,w=180,c=toneColor(item.tone),multiLine=item.lines.length>1
       const card=<g><rect x={x} y={1009} width={w} height={55} rx={10} fill={c.soft} stroke={c.main} strokeWidth={2}/><text x={x+w/2} y={multiLine?1029:1034} textAnchor="middle" fontSize={24} fontWeight={900} fill={c.main}>{item.count}</text><text x={x+w/2} y={multiLine?1046:1053} textAnchor="middle" fontSize={multiLine?9:10.5} fontWeight={800} fill={COLORS.text}>{item.lines.map((line,j)=><tspan key={item.label+j} x={x+w/2} dy={j===0?0:11}>{line}</tspan>)}</text></g>
-      return item.href?<a key={item.label} href={item.href} className="flow-link">{card}</a>:<g key={item.label}>{card}</g>
+      return <a key={item.label} href={item.href} className="flow-link" aria-label={`เปิดรายละเอียด ${item.lines.join(' ')} ${item.count} ห้อง`}>{card}</a>
     })}
   </>
 }
@@ -385,14 +400,7 @@ export default function DefectFlowPage(){
     img.src=url
   }
 
-  const footerItems:StatusItem[]=[
-    ...(endpoints.awaitingSale>0?[{label:'Awaiting Sale',lines:['Awaiting Sale'],count:endpoints.awaitingSale,tone:'neutral' as Tone,href:defectHref({filter:'status-awaiting-sale'})}]:[]),
-    ...(endpoints.roomInspection>0?[{label:'Awaiting Room',lines:['ยังไม่ตรวจห้อง'],count:endpoints.roomInspection,tone:'warn' as Tone,href:defectHref({filter:'hotel-customer',q:'ยังไม่ตรวจห้อง'})}]:[]),
-    {label:'Hotel Checked',lines:['Hotel Engineer ตรวจแล้ว'],count:endpoints.checked,tone:'good',href:defectHref({filter:'status-hotel-checked'})},
-    {label:'Customer Accepted',lines:['ลูกค้าตรวจรับเรียบร้อยแล้ว'],count:endpoints.handover,tone:'good',href:defectHref({filter:'status-handover-complete'})},
-    {label:'Awaiting Acceptance',lines:['Defect เสร็จแล้ว • รอตรวจรับ'],count:endpoints.awaitingAcceptance,tone:'warn',href:defectHref({filter:'status-awaiting-acceptance'})},
-    {label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:endpoints.incomplete,tone:'danger',href:defectHref({filter:'status-incomplete'})},
-  ]
+  const footerItems=flowFooterItems(endpoints)
 
   return <AppShell>
     <div className="flow-page-header">
@@ -404,7 +412,7 @@ export default function DefectFlowPage(){
       </div>}/>
     </div>
     <nav className="flow-view-tabs" aria-label="เลือกมุมมอง Defect Flow">
-      <button type="button" className={'flow-view-tab '+(view==='sales'?'active':'')} aria-pressed={view==='sales'} onClick={()=>changeView('sales')}>Flow ฝ่ายขาย</button>
+      <button type="button" className={'flow-view-tab '+(view==='sales'?'active':'')} aria-pressed={view==='sales'} onClick={()=>changeView('sales')}>Flow รวม</button>
       <button type="button" className={'flow-view-tab '+(view==='hotel'?'active':'')} aria-pressed={view==='hotel'} onClick={()=>changeView('hotel')}>Flow โรงแรม</button>
     </nav>
     <form className="panel filter-panel compact-filter-shell flow-room-search-panel" onSubmit={e=>{e.preventDefault();if(roomSearch.trim())window.location.assign('/defects?'+(view==='hotel'?'filter=hotel&':'')+'q='+encodeURIComponent(roomSearch.trim())+'#room-list')}}>
