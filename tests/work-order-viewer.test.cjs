@@ -155,3 +155,31 @@ test('Work Order update header matches Report typography without changing the da
  assert.match(page,/month:'short'/)
  assert.match(page,/rows\.map\(r=>r\.source_modified_at\)/)
 })
+
+test('inactive but unfinished Work IDs are visible only in read-only reconciliation, never dispatch totals',()=>{
+ assert.match(page,/\.eq\('source_active',true\)/)
+ assert.match(page,/\.eq\('source_active',false\)/)
+ assert.match(page,/reviewLostFromDispatch=useMemo/)
+ assert.match(page,/reviewBlockedByRoomStatus=useMemo/)
+ assert.match(page,/reviewLostFromDispatch\.map/)
+ assert.match(page,/reviewBlockedByRoomStatus\.map/)
+ assert.match(page,/const eligible=useMemo\(\(\)=>rows\.filter/)
+ assert.match(page,/const counters:Record<Quick,number>=\{ALL:kpiRows\.ALL\.length/)
+ assert.match(page,/ไม่เปิดงานหรือปิดงานจากเว็บโดยอัตโนมัติ/)
+ assert.doesNotMatch(page,/\.update\(|\.insert\(|\.delete\(|\.upsert\(/)
+})
+
+
+test('read-only discrepancies use current room classification and preserve role, print and Combine boundaries',()=>{
+ assert.match(page,/if\(!permitted\)return <AppShell>/)
+ assert.match(page,/const permitted=canAccessWorkOrder\(role\)/)
+ assert.match(acl,/\['owner','admin','viewer_editor'\]\.includes\(role\)/)
+ assert.match(acl,/permissionDecision\(role,'defect','view'/)
+ assert.match(page,/members\.every\(room=>roomMap\.get\(room\)==='Hotel - Incomplete'\)/)
+ assert.match(page,/flatMap\(room=>hotelRoomMembers\(room\)\)/)
+ assert.match(page,/!members\.length\|\|!members\.every/)
+ assert.match(page,/finished\(r\.work_status\)/)
+ assert.match(page,/<details className="panel wo-reconciliation">/)
+ assert.match(css,/body\.report-print-mode\[data-print-report="Above Condo — Work Order"\] \.wo-reconciliation,/)
+ assert.doesNotMatch(page,/\.rpc\(|\.insert\(|\.update\(|\.delete\(|\.upsert\(/)
+})
