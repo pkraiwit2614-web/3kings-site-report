@@ -306,8 +306,13 @@ export default function DefectDetailPage(){
     const selected=active?scopedRows.filter(active.predicate):scopedRows
     return combineMode?uniqueUnits(selected):selected
   },[scopedRows,active,combineMode])
-  const customerCount=baseRows.filter(r=>r.customer_status==='มีลูกค้า').length
-  const noCustomerCount=baseRows.filter(r=>r.customer_status==='ไม่มีลูกค้า').length
+  const groupCustomerStatus=(unit:RoomRow)=>{
+    const statuses=new Set(scopedRows.filter(r=>hotelRoomKey(r.room_no)===hotelRoomKey(unit.room_no)).map(r=>r.customer_status))
+    return statuses.size===1?[...statuses][0]:'รอตรวจสอบ'
+  }
+  const customerCount=baseRows.filter(r=>combineMode?groupCustomerStatus(r)==='มีลูกค้า':r.customer_status==='มีลูกค้า').length
+  const noCustomerCount=baseRows.filter(r=>combineMode?groupCustomerStatus(r)==='ไม่มีลูกค้า':r.customer_status==='ไม่มีลูกค้า').length
+  const customerReviewCount=combineMode?baseRows.length-customerCount-noCustomerCount:0
   const aCount=baseRows.filter(r=>r.building==='A').length
   const bCount=baseRows.filter(r=>r.building==='B').length
   const totalCount=baseRows.length
@@ -356,6 +361,7 @@ export default function DefectDetailPage(){
     <DefectInputPanel />
 
     {loading?<div className="panel">กำลังโหลดข้อมูลห้อง…</div>:<>
+      {combineMode&&customerReviewCount>0&&<div className="panel" role="status" style={{padding:'10px 14px',border:'1px solid #e8c88d',background:'#fff9ee',marginBottom:10,fontSize:12}}>มีชุดห้องที่สถานะลูกค้าในคู่ Combine ไม่ตรงกัน {customerReviewCount} ชุด — แสดงเป็นหนึ่งชุดตามสถานะ Defect จริง โดยไม่ปรับฐานข้อมูลต้นฉบับ</div>}
       <section className={`selected-status ${active?.tone||'neutral'}`} id="room-list">
         <div className="selected-copy">
           <span>{active?'รายการที่เลือก':'รายละเอียดทุกห้อง'}</span>
@@ -382,7 +388,7 @@ export default function DefectDetailPage(){
             <td className="center"><b>{r.building}</b></td>
             <td className="center"><span className="notice-date" title="วันที่ตาม Hotel Defect Notice">{hotelNoticeDateTH(r)}</span></td>
             <td>{r.owner_name||<span className="muted">—</span>}</td>
-            <td className="center"><span className={`customer-badge ${r.customer_status==='มีลูกค้า'?'customer':'no-customer'}`}>{r.customer_status}</span></td>
+            <td className="center">{combineMode&&groupCustomerStatus(r)==='รอตรวจสอบ'?<span className="customer-badge no-customer">รอตรวจสอบ ({combinedMembers(r.room_no).map(other=>other.room_no+': '+other.customer_status).join(' / ')})</span>:<span className={`customer-badge ${r.customer_status==='มีลูกค้า'?'customer':'no-customer'}`}>{r.customer_status}</span>}</td>
             <td className="center"><span className={`program-badge ${r.hotel_participation==='ร่วมโรงแรม'?'hotel':'nonhotel'}`}>{r.hotel_participation}</span></td>
             <td className="defect-detail">
               {combineMode&&combinedMembers(r.room_no).length>1&&<div className="defect-summary-work-label">ห้อง {r.room_no}</div>}
@@ -423,7 +429,7 @@ export default function DefectDetailPage(){
       .filter-panel{padding:12px;margin-bottom:12px}.detail-toolbar{margin:0}.detail-toolbar input{min-width:320px}.detail-toolbar select{max-width:320px}.detail-panel{padding-bottom:0}.detail-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:10px}.detail-head h2{margin:0;font-size:17px}.detail-head p{margin:3px 0 0;font-size:10px;color:var(--muted)}
       .legend{display:flex;gap:9px;flex-wrap:wrap;font-size:8.5px;color:var(--muted)}.legend span{display:flex;align-items:center;gap:4px}.legend i{width:8px;height:8px;border-radius:50%}.customer-dot{background:#4b9bd3}.no-customer-dot{background:#7f8790}.bad-dot{background:#d84d45}.warn-dot{background:#e2ad32}.good-dot{background:#2e9a6a}
       .defect-table{max-height:680px;margin:0 -19px}.defect-table table{min-width:1500px}.defect-table th,.defect-table td{vertical-align:middle}.defect-table th.center,.defect-table td.center{text-align:center}.defect-table td{font-size:11.5px}.room-cell b{display:inline-block;color:var(--navy);font-size:12.5px}.room-cell small{display:block;font-size:8.5px;color:var(--muted)}.notice-date{font-size:10px;font-weight:800;color:var(--navy);white-space:nowrap;font-variant-numeric:tabular-nums}.defect-detail{min-width:240px;max-width:360px;white-space:normal;line-height:1.45}.defect-detail-text{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.45}.defect-detail-text.is-collapsed{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}.defect-detail-toggle{display:inline-block;margin-top:4px;padding:0;border:0;background:none;color:var(--blue);font:inherit;font-weight:700;text-decoration:underline;cursor:pointer}.defect-detail-toggle:focus-visible{outline:2px solid var(--blue);outline-offset:3px;border-radius:2px}.combine-member-detail{margin-top:8px;padding-top:7px;border-top:1px dashed var(--line);font-size:10px}.combine-member-detail .defect-detail-text{white-space:pre-wrap;overflow-wrap:anywhere}.defect-summary-work-label{display:block;margin-bottom:2px;font-size:9px;font-weight:800;color:var(--navy)}.defect-summary-meta{display:block;font-size:9px;line-height:1.35;color:var(--muted);margin-top:3px}.defect-summary-meta b{font-weight:750;color:var(--navy)}.work-plan-cell{min-width:140px;max-width:200px;white-space:normal}.work-plan-cell small{display:block;font-size:9px;line-height:1.5}.work-plan-cell a{font-size:9px}
-      .customer-badge,.program-badge,.state-badge{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;padding:5px 8px;font-size:9px;font-weight:750;border:1px solid transparent;white-space:nowrap}.customer-badge.customer{background:#edf7ff;border-color:#c5dfef;color:#2b6994}.customer-badge.no-customer{background:#f0f2f4;border-color:#d7dce1;color:#606a75}.program-badge.hotel{background:#f2edfb;border-color:#dacdf0;color:#5d3d9d}.program-badge.nonhotel{background:#f0f2f4;border-color:#d8dde2;color:#5f6873}.state-badge.danger{background:#fdeceb;border-color:#f1cdca;color:#9e312d}.state-badge.warn{background:#fff3dc;border-color:#f0dfb8;color:#85570d}.state-badge.good{background:#e9f6ef;border-color:#cfe9da;color:#196645}.state-badge.neutral{background:#f0f2f4;border-color:#d8dde2;color:#5f6873}
+       .customer-badge,.program-badge,.state-badge{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;padding:5px 8px;font-size:9px;font-weight:750;border:1px solid transparent;white-space:nowrap}.customer-badge.customer{background:#edf7ff;border-color:#c5dfef;color:#2b6994}.customer-badge.no-customer{background:#f0f2f4;border-color:#d7dce1;color:#606a75}.program-badge.hotel{background:#f2edfb;border-color:#dacdf0;color:#5d3d9d}.program-badge.nonhotel{background:#f0f2f4;border-color:#d8dde2;color:#5f6873}.state-badge.danger{background:#fdeceb;border-color:#f1cdca;color:#9e312d}.state-badge.warn{background:#fff3dc;border-color:#f0dfb8;color:#85570d}.state-badge.good{background:#e9f6ef;border-color:#cfe9da;color:#196645}.state-badge.neutral{background:#f0f2f4;border-color:#d8dde2;color:#5f6873}
       @media print{.defect-detail .defect-detail-text,.defect-detail .defect-detail-text.is-collapsed{display:block!important;-webkit-line-clamp:unset!important;max-height:none!important;overflow:visible!important;white-space:pre-wrap!important}.defect-detail-toggle{display:none!important}}
        @media(max-width:1050px){.selected-status{grid-template-columns:1fr}.selected-breakdown{grid-template-columns:repeat(5,1fr)}}
       @media(max-width:760px){.header-actions{justify-content:flex-start}.update-meta{width:100%;align-items:flex-start}.selected-breakdown{grid-template-columns:repeat(2,1fr)}.break-card.total{grid-column:1/-1}.detail-toolbar input{min-width:0}.detail-toolbar select{max-width:none}.detail-head{align-items:flex-start;flex-direction:column}}
