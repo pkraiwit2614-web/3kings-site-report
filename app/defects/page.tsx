@@ -10,7 +10,7 @@ import DefectCombineRoomEnhancer from '@/components/DefectCombineRoomEnhancer'
 import DefectReportTabs from '@/components/DefectReportTabs'
 import {hotelRoomLabel,hotelRoomMembers,normalizeHotelRoom} from '@/lib/hotelRoomGroups'
 import {flowCombineKey} from '@/lib/flowCombineOne'
-import {statusLabel,statusTone} from '@/lib/defectStatusPresentation'
+import {DEFECT_AWAITING_ACCEPTANCE_LABEL,statusLabel,statusTone} from '@/lib/defectStatusPresentation'
 import {summarizeDefectDetail} from '@/lib/defectDetailSummary'
 import DefectInputPanel from '@/components/DefectInputPanel'
 import { getSupabase } from '@/lib/supabase'
@@ -58,31 +58,31 @@ const categories:Category[]=[
   {id:'nonhotel-customer',label:'มีลูกค้า • ไม่ร่วมโรงแรม',tone:'neutral',predicate:r=>r.customer_status==='มีลูกค้า'&&r.hotel_participation==='ไม่ร่วมโรงแรม'},
   {id:'nonhotel-no-customer',label:'ไม่มีลูกค้า • ไม่ร่วมโรงแรม',tone:'neutral',predicate:r=>r.customer_status==='ไม่มีลูกค้า'&&r.hotel_participation==='ไม่ร่วมโรงแรม'},
   {id:'status-incomplete',label:'เพิ่งได้รับแจ้ง Defect',tone:'danger',predicate:r=>r.status_group==='Hotel - Incomplete'},
-  {id:'status-awaiting-hotel',label:'Defect เสร็จแล้ว • รอลูกค้า / Hotel ตรวจรับ',tone:'warn',predicate:r=>r.status_group==='Hotel - Awaiting Check'},
-  {id:'status-awaiting-acceptance',label:'Defect เสร็จแล้ว • รอลูกค้า / Hotel ตรวจรับ',tone:'warn',predicate:isAwaitingAcceptance},
+  {id:'status-awaiting-hotel',label:DEFECT_AWAITING_ACCEPTANCE_LABEL,tone:'warn',predicate:r=>r.status_group==='Hotel - Awaiting Check'},
+  {id:'status-awaiting-acceptance',label:DEFECT_AWAITING_ACCEPTANCE_LABEL,tone:'warn',predicate:isAwaitingAcceptance},
   {id:'status-hotel-checked',label:'Hotel Engineer ตรวจแล้ว',tone:'good',predicate:r=>r.status_group==='Hotel - Checked Complete'&&r.hotel_participation==='ร่วมโรงแรม'},
-  {id:'status-pending-handover',label:'Defect เสร็จแล้ว • รอลูกค้า / Hotel ตรวจรับ',tone:'warn',predicate:r=>r.status_group==='Non-Hotel - Pending Handover'},
+  {id:'status-pending-handover',label:DEFECT_AWAITING_ACCEPTANCE_LABEL,tone:'warn',predicate:r=>r.status_group==='Non-Hotel - Pending Handover'},
   {id:'status-handover-complete',label:'ลูกค้าตรวจรับเรียบร้อยแล้ว',tone:'good',predicate:r=>r.status_group==='Non-Hotel - Handover Complete'},
   {id:'status-awaiting-sale',label:'Awaiting Sale / ยังไม่มีลูกค้า',tone:'neutral',predicate:r=>r.status_group==='Non-Hotel - Awaiting Sale'},
   // Hotel-only status filters used by the shared Flow footer.
   {id:'hotel-status-awaiting-sale',label:'ร่วมโรงแรม • Awaiting Sale',tone:'neutral',predicate:r=>r.hotel_participation==='ร่วมโรงแรม'&&r.status_group==='Non-Hotel - Awaiting Sale'},
   {id:'hotel-status-awaiting-room',label:'ร่วมโรงแรม • ยังไม่ตรวจห้อง',tone:'warn',predicate:r=>r.hotel_participation==='ร่วมโรงแรม'&&r.status_group==='Hotel - Awaiting Room Inspection'},
   {id:'hotel-status-handover-complete',label:'ร่วมโรงแรม • ลูกค้าตรวจรับเรียบร้อยแล้ว',tone:'good',predicate:r=>r.hotel_participation==='ร่วมโรงแรม'&&r.status_group==='Non-Hotel - Handover Complete'},
-  {id:'hotel-status-awaiting-acceptance',label:'ร่วมโรงแรม • Defect เสร็จแล้ว • รอตรวจรับ',tone:'warn',predicate:r=>r.hotel_participation==='ร่วมโรงแรม'&&(r.status_group==='Hotel - Awaiting Check'||r.status_group==='Non-Hotel - Pending Handover')},
+  {id:'hotel-status-awaiting-acceptance',label:'ร่วมโรงแรม • '+DEFECT_AWAITING_ACCEPTANCE_LABEL,tone:'warn',predicate:r=>r.hotel_participation==='ร่วมโรงแรม'&&(r.status_group==='Hotel - Awaiting Check'||r.status_group==='Non-Hotel - Pending Handover')},
   {id:'hotel-status-incomplete',label:'ร่วมโรงแรม • เพิ่งได้รับแจ้ง Defect',tone:'danger',predicate:r=>r.hotel_participation==='ร่วมโรงแรม'&&r.status_group==='Hotel - Incomplete'},
   {id:'hotel-customer-incomplete',label:'มีลูกค้า • ร่วมโรงแรม • เพิ่งได้รับแจ้ง Defect',tone:'danger',predicate:r=>r.customer_status==='มีลูกค้า'&&r.hotel_participation==='ร่วมโรงแรม'&&r.status_group==='Hotel - Incomplete'},
-  {id:'hotel-customer-awaiting',label:'มีลูกค้า • ร่วมโรงแรม • Defect เสร็จแล้ว รอตรวจรับ',tone:'warn',predicate:r=>r.customer_status==='มีลูกค้า'&&r.hotel_participation==='ร่วมโรงแรม'&&r.status_group==='Hotel - Awaiting Check'},
-  {id:'hotel-customer-awaiting-receive',label:'มีลูกค้า • ร่วมโรงแรม • Defect เสร็จแล้ว รอลูกค้า / Hotel ตรวจรับ',tone:'warn',predicate:r=>r.customer_status==='มีลูกค้า'&&r.hotel_participation==='ร่วมโรงแรม'&&(r.status_group==='Hotel - Awaiting Check'||r.status_group==='Non-Hotel - Pending Handover')},
+  {id:'hotel-customer-awaiting',label:'มีลูกค้า • ร่วมโรงแรม • '+DEFECT_AWAITING_ACCEPTANCE_LABEL,tone:'warn',predicate:r=>r.customer_status==='มีลูกค้า'&&r.hotel_participation==='ร่วมโรงแรม'&&r.status_group==='Hotel - Awaiting Check'},
+  {id:'hotel-customer-awaiting-receive',label:'มีลูกค้า • ร่วมโรงแรม • '+DEFECT_AWAITING_ACCEPTANCE_LABEL,tone:'warn',predicate:r=>r.customer_status==='มีลูกค้า'&&r.hotel_participation==='ร่วมโรงแรม'&&(r.status_group==='Hotel - Awaiting Check'||r.status_group==='Non-Hotel - Pending Handover')},
   {id:'hotel-customer-checked',label:'มีลูกค้า • ร่วมโรงแรม • Hotel Engineer ตรวจแล้ว',tone:'good',predicate:r=>r.customer_status==='มีลูกค้า'&&r.hotel_participation==='ร่วมโรงแรม'&&r.status_group==='Hotel - Checked Complete'},
-  {id:'hotel-customer-pending',label:'มีลูกค้า • ร่วมโรงแรม • รอลูกค้าตรวจรับ',tone:'warn',predicate:r=>r.customer_status==='มีลูกค้า'&&r.hotel_participation==='ร่วมโรงแรม'&&r.status_group==='Non-Hotel - Pending Handover'},
+  {id:'hotel-customer-pending',label:'มีลูกค้า • ร่วมโรงแรม • '+DEFECT_AWAITING_ACCEPTANCE_LABEL,tone:'warn',predicate:r=>r.customer_status==='มีลูกค้า'&&r.hotel_participation==='ร่วมโรงแรม'&&r.status_group==='Non-Hotel - Pending Handover'},
   {id:'hotel-nocustomer-incomplete',label:'ไม่มีลูกค้า • ร่วมโรงแรม • เพิ่งได้รับแจ้ง Defect',tone:'danger',predicate:r=>r.customer_status==='ไม่มีลูกค้า'&&r.hotel_participation==='ร่วมโรงแรม'&&r.status_group==='Hotel - Incomplete'},
-  {id:'hotel-nocustomer-awaiting',label:'ไม่มีลูกค้า • ร่วมโรงแรม • Defect เสร็จแล้ว รอตรวจรับ',tone:'warn',predicate:r=>r.customer_status==='ไม่มีลูกค้า'&&r.hotel_participation==='ร่วมโรงแรม'&&r.status_group==='Hotel - Awaiting Check'},
-  {id:'hotel-nocustomer-awaiting-receive',label:'ไม่มีลูกค้า • ร่วมโรงแรม • Defect เสร็จแล้ว รอลูกค้า / Hotel ตรวจรับ',tone:'warn',predicate:r=>r.customer_status==='ไม่มีลูกค้า'&&r.hotel_participation==='ร่วมโรงแรม'&&(r.status_group==='Hotel - Awaiting Check'||r.status_group==='Non-Hotel - Pending Handover')},
+  {id:'hotel-nocustomer-awaiting',label:'ไม่มีลูกค้า • ร่วมโรงแรม • '+DEFECT_AWAITING_ACCEPTANCE_LABEL,tone:'warn',predicate:r=>r.customer_status==='ไม่มีลูกค้า'&&r.hotel_participation==='ร่วมโรงแรม'&&r.status_group==='Hotel - Awaiting Check'},
+  {id:'hotel-nocustomer-awaiting-receive',label:'ไม่มีลูกค้า • ร่วมโรงแรม • '+DEFECT_AWAITING_ACCEPTANCE_LABEL,tone:'warn',predicate:r=>r.customer_status==='ไม่มีลูกค้า'&&r.hotel_participation==='ร่วมโรงแรม'&&(r.status_group==='Hotel - Awaiting Check'||r.status_group==='Non-Hotel - Pending Handover')},
   {id:'hotel-nocustomer-checked',label:'ไม่มีลูกค้า • ร่วมโรงแรม • Hotel Engineer ตรวจแล้ว',tone:'good',predicate:r=>r.customer_status==='ไม่มีลูกค้า'&&r.hotel_participation==='ร่วมโรงแรม'&&r.status_group==='Hotel - Checked Complete'},
-  {id:'hotel-nocustomer-pending',label:'ไม่มีลูกค้า • ร่วมโรงแรม • รอลูกค้าตรวจรับ',tone:'warn',predicate:r=>r.customer_status==='ไม่มีลูกค้า'&&r.hotel_participation==='ร่วมโรงแรม'&&r.status_group==='Non-Hotel - Pending Handover'},
+  {id:'hotel-nocustomer-pending',label:'ไม่มีลูกค้า • ร่วมโรงแรม • '+DEFECT_AWAITING_ACCEPTANCE_LABEL,tone:'warn',predicate:r=>r.customer_status==='ไม่มีลูกค้า'&&r.hotel_participation==='ร่วมโรงแรม'&&r.status_group==='Non-Hotel - Pending Handover'},
   {id:'nonhotel-customer-complete',label:'มีลูกค้า • ไม่ร่วมโรงแรม • ลูกค้าตรวจรับเรียบร้อยแล้ว',tone:'good',predicate:r=>r.customer_status==='มีลูกค้า'&&r.hotel_participation==='ไม่ร่วมโรงแรม'&&r.status_group==='Non-Hotel - Handover Complete'},
-  {id:'nonhotel-customer-pending',label:'มีลูกค้า • ไม่ร่วมโรงแรม • Defect เสร็จแล้ว รอตรวจรับ',tone:'warn',predicate:r=>r.customer_status==='มีลูกค้า'&&r.hotel_participation==='ไม่ร่วมโรงแรม'&&r.status_group==='Non-Hotel - Pending Handover'},
-  {id:'nonhotel-customer-awaiting-receive',label:'มีลูกค้า • ไม่ร่วมโรงแรม • Defect เสร็จแล้ว รอลูกค้า / Hotel ตรวจรับ',tone:'warn',predicate:r=>r.customer_status==='มีลูกค้า'&&r.hotel_participation==='ไม่ร่วมโรงแรม'&&(r.status_group==='Non-Hotel - Pending Handover'||r.status_group==='Hotel - Checked Complete')},
+  {id:'nonhotel-customer-pending',label:'มีลูกค้า • ไม่ร่วมโรงแรม • '+DEFECT_AWAITING_ACCEPTANCE_LABEL,tone:'warn',predicate:r=>r.customer_status==='มีลูกค้า'&&r.hotel_participation==='ไม่ร่วมโรงแรม'&&r.status_group==='Non-Hotel - Pending Handover'},
+  {id:'nonhotel-customer-awaiting-receive',label:'มีลูกค้า • ไม่ร่วมโรงแรม • '+DEFECT_AWAITING_ACCEPTANCE_LABEL,tone:'warn',predicate:r=>r.customer_status==='มีลูกค้า'&&r.hotel_participation==='ไม่ร่วมโรงแรม'&&(r.status_group==='Non-Hotel - Pending Handover'||r.status_group==='Hotel - Checked Complete')},
   {id:'nonhotel-nosale',label:'ไม่มีลูกค้า • ไม่ร่วมโรงแรม • Awaiting Sale',tone:'neutral',predicate:r=>r.customer_status==='ไม่มีลูกค้า'&&r.hotel_participation==='ไม่ร่วมโรงแรม'&&r.status_group==='Non-Hotel - Awaiting Sale'},
 ]
 
@@ -386,7 +386,7 @@ export default function DefectDetailPage(){
       <section className="panel detail-panel" id="report-results">
         <div className="detail-head">
           <div><h2>รายชื่อห้อง {combineMode?'— Flow Combine = 1':''}</h2><p>แสดง {filtered.length} {combineMode?'ชุดห้อง (ร่วมและไม่ร่วมโรงแรม)':'ห้อง'}</p></div>
-          <div className="legend"><span><i className="customer-dot"/>มีลูกค้า</span><span><i className="no-customer-dot"/>ไม่มีลูกค้า</span><span><i className="bad-dot"/>เพิ่งได้รับแจ้ง Defect</span><span><i className="warn-dot"/>Defect เสร็จแล้ว • รอตรวจรับ</span><span><i className="good-dot"/>ตรวจรับแล้ว / Hotel ตรวจแล้ว</span></div>
+          <div className="legend"><span><i className="customer-dot"/>มีลูกค้า</span><span><i className="no-customer-dot"/>ไม่มีลูกค้า</span><span><i className="bad-dot"/>เพิ่งได้รับแจ้ง Defect</span><span><i className="warn-dot"/>{DEFECT_AWAITING_ACCEPTANCE_LABEL}</span><span><i className="good-dot"/>ตรวจรับแล้ว / Hotel ตรวจแล้ว</span></div>
         </div>
         <div className="table-wrap defect-table"><table><thead><tr><th>ห้อง</th><th className="center">อาคาร</th><th className="center">วันที่ Hotel แจ้ง</th><th>ชื่อลูกค้า/เจ้าของ</th><th className="center">ลูกค้า</th><th className="center">โรงแรม</th><th>รายละเอียดงาน/Work Order</th><th className="center">สถานะ</th><th>Work Plan / Hotel Status</th><th>ต้องทำต่อ</th></tr></thead><tbody>
           {filtered.map(r=><tr key={r.room_no}>

@@ -10,7 +10,7 @@ const groups=read('lib/hotelRoomGroups.ts')
 const css=read('app/defects/print.css')
 
 test('Work Plan and Defect Report use the exact same label, tone, and color system',()=>{
- assert.match(report,/import \{statusLabel,statusTone\} from '@\/lib\/defectStatusPresentation'/)
+ assert.match(report,/import \{DEFECT_AWAITING_ACCEPTANCE_LABEL,statusLabel,statusTone\} from '@\/lib\/defectStatusPresentation'/)
  assert.match(plan,/import \{statusLabel,statusTone\} from '@\/lib\/defectStatusPresentation'/)
  assert.match(report,/state-badge \$\{statusTone\(r\)\}/)
  assert.match(plan,/work-defect-badge '+/)
