@@ -69,8 +69,9 @@ test('Hotel-joined B408 remains in shared Awaiting Acceptance status rather than
 test('Defect Report and other status consumers label Hotel-joined pending acceptance precisely',()=>{
   const display=fs.readFileSync(path.join(__dirname,'../lib/defectStatusPresentation.ts'),'utf8')
   assert.match(display,/status_group==='Non-Hotel - Pending Handover'/)
-  assert.match(display,/hotel_participation==='ร่วมโรงแรม'\?'Defect เสร็จแล้ว • รอลูกค้าตรวจรับ'/)
-  assert.match(display,/'Defect เสร็จแล้ว • รอลูกค้า \/ Hotel ตรวจรับ'/)
+  assert.match(display,/if\(r.status_group==='Non-Hotel - Pending Handover'\)return DEFECT_AWAITING_ACCEPTANCE_LABEL/)
+  assert.match(display,/export const DEFECT_AWAITING_ACCEPTANCE_LABEL='Defect เสร็จแล้ว • รอลูกค้า \/ Hotel ตรวจรับ'/)
+  assert.doesNotMatch(display,/รอลูกค้าตรวจรับ/)
 })
 
 test('Flow Combine=1 groups only Hotel members and links to the grouped Report',()=>{
@@ -86,4 +87,23 @@ test('Flow Combine=1 groups only Hotel members and links to the grouped Report',
   assert.match(report,/combineMode\?uniqueUnits\(matched\):matched/)
   assert.match(report,/combineMode\?memberLabel\(r\.room_no\):hotelRoomLabel\(r\.room_no\)/)
   assert.match(report,/other\.room_no!==r\.room_no/)
+})
+
+test('all awaiting-acceptance UI text uses the shared canonical label without touching workflow groups',()=>{
+  const report=fs.readFileSync(path.join(__dirname,'../app/defects/page.tsx'),'utf8')
+  const flow=fs.readFileSync(path.join(__dirname,'../app/defect-flow/page.tsx'),'utf8')
+  const dashboard=fs.readFileSync(path.join(__dirname,'../components/DashboardCondoDefectSummary.tsx'),'utf8')
+  const label='DEFECT_AWAITING_ACCEPTANCE_LABEL'
+  assert.match(report,/import \{DEFECT_AWAITING_ACCEPTANCE_LABEL,statusLabel,statusTone\}/)
+  assert.ok(report.includes('label:'+label))
+  assert.ok(report.includes("label:'ร่วมโรงแรม • '+"+label))
+  assert.ok(report.includes('{'+label+'}</span>'))
+  assert.match(flow,/const awaitingAcceptanceLines=DEFECT_AWAITING_ACCEPTANCE_LABEL/)
+  assert.match(flow,/lines:awaitingAcceptanceLines/)
+  assert.equal((dashboard.match(/label:DEFECT_AWAITING_ACCEPTANCE_LABEL/g)||[]).length,2)
+  for(const source of [report,flow,dashboard]){
+    assert.doesNotMatch(source,/Defect เสร็จแล้ว • รอตรวจรับ|Defect เสร็จแล้ว รอตรวจรับ|Defect เสร็จ \/ รอ Hotel ตรวจ|label:'Pending Handover'/)
+  }
+  assert.match(report,/id:'hotel-customer-pending'/)
+  assert.match(report,/id:'hotel-status-awaiting-acceptance'/)
 })
