@@ -47,3 +47,14 @@ Seven pinned Superpowers Skills are vendored verbatim under `docs/vendor/superpo
 Local validation: `node scripts/validate-agent-skills.mjs && node scripts/validate-superpowers-integration.mjs`. Original source files and Git blob hashes are pinned at commit `bb92a77741419a4ab5f06e711a283343f1ada0c3`.
 
 Only instructions for compatible coding agents have been added: no Supabase/Apps Script/Next.js runtime code, hidden hooks, auto-start plugin, network telemetry, dependencies or unapproved deployments. These cannot force ordinary ChatGPT chats to auto-load or act as a server-side SOP Gate.
+
+## 3 Kings Task Observer — ChatGPT/Codex adapter (review branch)
+
+- `.agents/skills/3kings-task-observer/SKILL.md`: read-only observer for corrections, repeated failure patterns, missing checks and skill candidates.
+- `docs/agent-skills/task-observer-integration.json`: **17** explicit one-to-one links; preserves each existing mode and requires the live SOP Gate first.
+- `scripts/validate-task-observer.mjs`: checks link coverage, read-only privilege, attribution, non-install caveats, and private-log policy. GitHub Actions validates it on agent-related PRs.
+- `.agents/skills/3kings-task-observer/references/`: private observation handoff template and ChatGPT compatibility matrix.
+
+**Compatibility:** A compatible repository-aware coding agent can read these instructions; ChatGPT with GitHub can read them on request; native ChatGPT Skills may require an eligible workspace and separate installation. This PR is **not** a globally installed ChatGPT Skill or background observer. No observation logs go in this public repository, and the observer neither alters the 17 live Drive SOPs nor the Next.js/DB/Excel/Production application.
+
+Upstream adapted methodology: Eoghan Henn / rebelytics, [one-skill-to-rule-them-all](https://github.com/rebelytics/one-skill-to-rule-them-all), CC BY 4.0; reviewed fork [SquidyInk/task-observer](https://github.com/SquidyInk/task-observer).
