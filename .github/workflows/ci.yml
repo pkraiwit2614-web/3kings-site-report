@@ -52,6 +52,9 @@ jobs:
       - name: Defect canonical source contract
         run: node tests/defect-canonical-source.test.cjs
 
+      - name: Hotel-only Combine=1 Flow regression
+        run: node --test tests/hotel-combine-one-tab.test.cjs
+
       - name: Internal Work Order Viewer and Print safety
         run: node --test tests/work-order-viewer.test.cjs
 
