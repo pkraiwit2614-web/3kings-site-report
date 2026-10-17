@@ -48,3 +48,28 @@ test('unknown routes do not serve management actions',async()=>{
   const x=await worker.fetch(new Request('https://example.test/api/dispatch',{method:'POST'}),{},null)
   assert.equal(x.status,404)
 })
+
+test('modern Supabase secret key is sent as apikey only, never as JWT bearer',async()=>{
+  const previousFetch=global.fetch
+  let calls=0
+  global.fetch=async (url,init)=>{
+    assert.match(String(url),/^https:\/\/wtqubwdduzedmcvyhbgs\.supabase\.co\/rest\/v1\/drive_sync_runs\?/)
+    assert.equal(init.headers.apikey,'sb_secret_unit_test')
+    assert.equal('authorization' in init.headers,false)
+    calls++
+    return new Response('[]',{status:200,headers:{'content-type':'application/json'}})
+  }
+  try{
+    await worker.scheduled({},{
+      AUTOPILOT_ENABLED:'true',
+      SUPABASE_URL:'https://wtqubwdduzedmcvyhbgs.supabase.co',
+      SUPABASE_SERVER_KEY:'sb_secret_unit_test',
+      LINE_CHANNEL_ACCESS_TOKEN:'unit-test-token',
+      LINE_OWNER_USER_ID:'U'+'a'.repeat(32),
+      LINE_MAIN_GROUP_ID:'C'+'b'.repeat(32)
+    },{})
+    assert.equal(calls,1)
+  } finally {
+    global.fetch=previousFetch
+  }
+})
