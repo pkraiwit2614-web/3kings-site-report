@@ -130,3 +130,6 @@ jobs:
 
       - name: LINE AutoPilot webhook signature and private/site routing
         run: node --test tests/line-autopilot-webhook.test.cjs
+
+      - name: LINE AutoPilot five alert types, strict recipient and no-send safeguards
+        run: node --test tests/line-autopilot-five-types.test.cjs
