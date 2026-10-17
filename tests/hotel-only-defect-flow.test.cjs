@@ -6,7 +6,7 @@ const path=require('node:path')
 const src=fs.readFileSync(path.join(__dirname,'../app/defect-flow/page.tsx'),'utf8')
 
 test('Flow รวม remains default and retains original diagram',()=>{
-  assert.match(src,/useState<'sales'\|'hotel'>\('sales'\)/)
+  assert.match(src,/useState<'sales'\|'hotel'\|'combine'>\('sales'\)/)
   assert.match(src,/<BuildingFlow top=\{190\} building="A" data=\{a\}\/>/)
   assert.match(src,/<BuildingFlow top=\{570\} building="B" data=\{b\}\/>/)
   assert.match(src,/>Flow รวม<\/button>/)
@@ -16,7 +16,7 @@ test('Flow รวม remains default and retains original diagram',()=>{
 test('Hotel Flow is a view of canonical room status and never changes the source query',()=>{
   assert.match(src,/from\('condo_room_status'\)\.select\('room_no,building,customer_status,hotel_participation,status_group,synced_at'\)/)
   assert.match(src,/const hotelRows=useMemo\(\(\)=>rows\.filter\(r=>r\.hotel_participation==='ร่วมโรงแรม'\),\[rows\]\)/)
-  assert.match(src,/<HotelFlowDiagram rows=\{hotelRows\} synced=\{displayedSync\}\/>/)
+  assert.match(src,/<HotelFlowDiagram rows=\{view==='combine'\?hotelCombineRows:hotelRows\}/)
   assert.doesNotMatch(src,/\.from\('condo_room_status'\)\.(insert|update|upsert|delete)\(/)
 })
 
@@ -24,7 +24,7 @@ test('Hotel Flow reuses the Sales hotel status cards and has no custom status bo
   assert.match(src,/function hotelStatusItems\(/)
   assert.match(src,/const hotelCustomer=hotelStatusItems\(data,building,true\)/)
   assert.match(src,/const hotelNoCustomer=hotelStatusItems\(data,building,false\)/)
-  assert.match(src,/statusRow\(stream\.y\+31,hotelStatusItems\(data,building,stream\.customer\)\)/)
+  assert.match(src,/statusRow\(stream\.y\+31,hotelStatusItems\(data,building,stream\.customer\)\.map\(/)
   const hotel=src.slice(src.indexOf('function HotelBuildingFlow('),src.indexOf('type FlowFooterSummary='))
   assert.doesNotMatch(hotel,/Review Needed|Pending Handover|statusItems:StatusItem/)
   assert.match(src,/const review=rows\.length-covered/)
@@ -50,8 +50,8 @@ test('Hotel footer excludes non-hotel Customer Accepted while Flow รวม kee
 })
 
 test('Export and search use active Hotel view without altering Sales defaults',()=>{
-  assert.match(src,/view==='hotel'\?'hotel-defect-flow-':'handover-defect-flow-'/)
-  assert.match(src,/view==='hotel'\?'filter=hotel&':''/)
+  assert.match(src,/view==='combine'\?'hotel-combine-one-flow-':view==='hotel'\?'hotel-defect-flow-':'handover-defect-flow-'/)
+  assert.match(src,/view!=='sales'\?'filter=hotel&':''/)
   assert.match(src,/onClick=\{\(\)=>changeView\('hotel'\)\}/)
 })
 
@@ -71,4 +71,19 @@ test('Defect Report and other status consumers label Hotel-joined pending accept
   assert.match(display,/status_group==='Non-Hotel - Pending Handover'/)
   assert.match(display,/hotel_participation==='ร่วมโรงแรม'\?'Defect เสร็จแล้ว • รอลูกค้าตรวจรับ'/)
   assert.match(display,/'Defect เสร็จแล้ว • รอลูกค้า \/ Hotel ตรวจรับ'/)
+})
+
+test('Flow Combine=1 groups only Hotel members and links to the grouped Report',()=>{
+  const report=fs.readFileSync(path.join(__dirname,'../app/defects/page.tsx'),'utf8')
+  assert.match(src,/>Flow Combine = 1<\/button>/)
+  assert.match(src,/const hotelCombineRows=useMemo\(/)
+  assert.match(src,/hotelRoomKey\(row\.room_no\)/)
+  assert.match(src,/status_group:incomplete\|\|statusConflict\?null:first\.status_group/)
+  assert.match(src,/customer_status:incomplete\|\|customerConflict\?'รอตรวจสอบ':first\.customer_status/)
+  assert.match(src,/withCombineHref\(href:string\|undefined,combineMode:boolean\)/)
+  assert.match(src,/\+'combine=1'\+hash/)
+  assert.match(report,/params\.get\('combine'\)==='1'/)
+  assert.match(report,/combineMode\?uniqueUnits\(matched\):matched/)
+  assert.match(report,/combineMode\?memberLabel\(r\.room_no\):hotelRoomLabel\(r\.room_no\)/)
+  assert.match(report,/other\.room_no!==r\.room_no/)
 })
