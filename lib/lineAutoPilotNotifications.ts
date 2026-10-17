@@ -44,6 +44,14 @@ export type PreparedAutoPilotAlert = {
   inspectedAt: string
 }
 
+export const LINE_AUTOPILOT_SOP_FILES: Readonly<Record<AutoPilotKind,string>> = Object.freeze({
+  sync_failure: '1vxRICglzUJe6Dv3CHf7CETAu4ixwIVCUEzgCQzcgM9E',
+  defect_overdue: '1Q2pUOCsKO6oXUnlRV-jhD8F9JEJAU0T7hWkIhVcM09U',
+  po_materials: '1WQ2AQFnx-_jE5JKJZryYBCAMKPN8eyQ7vGqggeIPtS0',
+  daily_site_report: '1-ATm6Wexyjr86YkkIaQrszSIl3ig6A1H',
+  weekly_recap: '1hGJ1UhnGyqRJVTBv6DWZK73Rt8pRF1ebohAwPIDgZjM',
+})
+
 export const LINE_AUTOPILOT_SCOPE = Object.freeze({
   sync_failure: Object.freeze({
     label: 'Sync ล้มเหลว',
@@ -87,6 +95,8 @@ export function prepareLineAutoPilotNotification(
     alert.evidence.sopVerified !== true) return null
 
   const ev = alert.evidence
+  if (ev.sopFileId !== LINE_AUTOPILOT_SOP_FILES[alert.kind]) return null
+  if (alert.projectCode && !/^[A-Z0-9-]{2,32}$/.test(alert.projectCode)) return null
   const approvedSource = ev.sourceIds.length > 0 && ev.sourceIds.length <= 12 &&
     ev.sourceIds.every(id => /^[A-Za-z0-9_-]{12,150}$/.test(id))
   if (!approvedSource || !/^[A-Za-z0-9_-]{12,150}$/.test(ev.sopFileId) ||
