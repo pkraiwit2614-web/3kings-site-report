@@ -81,7 +81,7 @@ test('Flow Combine=1 groups only Hotel members and links to the grouped Report',
   assert.match(src,/status_group:incomplete\|\|statusConflict\?null:first\.status_group/)
   assert.match(src,/customer_status:incomplete\|\|customerConflict\?'รอตรวจสอบ':first\.customer_status/)
   assert.match(src,/withCombineHref\(href:string\|undefined,combineMode:boolean\)/)
-  assert.match(src,/\+'combine=1'\+hash/)
+  assert.match(src,/\+'combine=1#report-results'/)
   assert.match(report,/params\.get\('combine'\)==='1'/)
   assert.match(report,/combineMode\?uniqueUnits\(matched\):matched/)
   assert.match(report,/combineMode\?memberLabel\(r\.room_no\):hotelRoomLabel\(r\.room_no\)/)
