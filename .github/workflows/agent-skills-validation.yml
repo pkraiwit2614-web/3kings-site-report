@@ -24,3 +24,5 @@ jobs:
         run: node scripts/validate-agent-skills.mjs
       - name: Verify 7 Superpowers methods and 17 SOP mappings
         run: node scripts/validate-superpowers-integration.mjs
+      - name: Validate read-only Task Observer and all 17 mappings
+        run: node scripts/validate-task-observer.mjs
