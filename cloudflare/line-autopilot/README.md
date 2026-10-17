@@ -45,3 +45,11 @@ Configure using Cloudflare Workers dashboard > 3kings-line-autopilot > Settings 
 Rollback: set AUTOPILOT_ENABLED=false first; then disable only this Worker's Cron if necessary. Do not touch 3kings-i18n-qa, existing n8n flows, Data... folders, Labour, Payroll, or old Defect/Materials sheets.
 
 Current status: Cloudflare deployment and Supabase isolated migration verified; LINE secret, recipients, live sends and HTTP E2E not yet verified.
+
+## Approved group onboarding (prepared, disabled)
+- LINE OA group IDs do not come from a group name or bot token. A group message to the actual Messaging API webhook contains source.groupId.
+- The signed webhook receiver can collect candidates only when LINE_GROUP_DISCOVERY_ENABLED=true, and only after independently verifying membership using LINE GET /v2/bot/group/{groupId}/summary.
+- Stores groupId and verified groupName as **unapproved** candidates in private line_autopilot.group_candidates, RLS/service_role only. This does not enable LINE sending or auto-approve groups.
+- To populate, LINE Developers webhook must temporarily or permanently point to this Worker, then a message must be sent in the approved company group. Since n8n URL might have unrelated automations, **do not change it until the user explicitly approves cutover**.
+- Verify candidate name with user, approve specific group, store LINE_MAIN_GROUP_ID as a Worker Secret. Never infer or auto-fallback to another group.
+- Candidate capture and active notification sending are independent: AUTOPILOT_ENABLED stays false during discovery.
