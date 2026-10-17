@@ -9,7 +9,7 @@ const catalog=require('../docs/agent-skills/manifest.json')
 const moduleShim={exports:{}}
 vm.runInNewContext(code,{module:moduleShim,exports:moduleShim.exports,require:(p)=>{
  if(p==='node:crypto')return require('node:crypto')
- if(p==='@/docs/agent-skills/manifest.json')return {default:catalog,...catalog}
+ if(p==='@/docs/agent-skills/manifest.json')return catalog
  throw Error('unexpected import '+p)
 },URL})
 const gate=moduleShim.exports
