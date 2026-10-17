@@ -25,6 +25,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Flow PNG font parity regression
+        run: node --test tests/flow-export-png-font.test.cjs
+
       - name: Hotel Work Plan bidirectional Excel safety
         run: node --test tests/hotel-work-plan-excel-bidirectional.test.cjs
 

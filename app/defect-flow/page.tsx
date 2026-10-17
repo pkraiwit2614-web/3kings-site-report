@@ -9,6 +9,7 @@ import PageHeader from '@/components/PageHeader'
 import { getSupabase } from '@/lib/supabase'
 import {flowCombineKey} from '@/lib/flowCombineOne'
 import {DEFECT_AWAITING_ACCEPTANCE_LABEL} from '@/lib/defectStatusPresentation'
+import {embedRenderedSvgFonts} from '@/lib/embedRenderedSvgFonts'
 
 type FlowRow={
   room_no:string
@@ -426,7 +427,18 @@ export default function DefectFlowPage(){
     const svg=svgRef.current
     if(!svg)return
     const clone=svg.cloneNode(true) as SVGSVGElement
+    // Keep the existing explicit SVG group font assignment for legacy flow regressions.
     clone.querySelector('g[font-family]')?.setAttribute('font-family',window.getComputedStyle(svg).fontFamily)
+    try {
+      // The display uses next/font; an SVG rasterized as an image cannot
+      // otherwise see the page's @font-face rules.
+      await embedRenderedSvgFonts(svg,clone)
+    } catch (error) {
+      console.error('Flow PNG font embedding failed',error)
+      window.alert('ส่งออก PNG ไม่สำเร็จ: ไม่สามารถโหลดฟอนต์เดียวกับหน้าเว็บได้ กรุณาลองใหม่')
+      return
+    }
+    clone.style.removeProperty('width') // Export at the fixed 1920×1080 viewBox, regardless of UI zoom.
     clone.setAttribute('xmlns','http://www.w3.org/2000/svg')
     clone.setAttribute('width','1920');clone.setAttribute('height','1080')
     const xml=new XMLSerializer().serializeToString(clone)
@@ -444,6 +456,10 @@ export default function DefectFlowPage(){
         a.href=href;a.download=(view==='hotel-combine'?'hotel-combine-one-flow-':view==='combine'?'full-combine-one-flow-':view==='hotel'?'hotel-defect-flow-':'handover-defect-flow-')+new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Bangkok'})+'.png';a.click()
         window.setTimeout(()=>URL.revokeObjectURL(href),1000)
       },'image/png',1)
+    }
+    img.onerror=()=>{
+      URL.revokeObjectURL(url)
+      window.alert('ส่งออก PNG ไม่สำเร็จ: ไม่สามารถแปลงแผนภาพเป็นรูปภาพได้')
     }
     img.src=url
   }

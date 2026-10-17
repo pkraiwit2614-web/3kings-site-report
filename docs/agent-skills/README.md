@@ -58,3 +58,7 @@ Only instructions for compatible coding agents have been added: no Supabase/Apps
 **Compatibility:** A compatible repository-aware coding agent can read these instructions; ChatGPT with GitHub can read them on request; native ChatGPT Skills may require an eligible workspace and separate installation. This PR is **not** a globally installed ChatGPT Skill or background observer. No observation logs go in this public repository, and the observer neither alters the 17 live Drive SOPs nor the Next.js/DB/Excel/Production application.
 
 Upstream adapted methodology: Eoghan Henn / rebelytics, [one-skill-to-rule-them-all](https://github.com/rebelytics/one-skill-to-rule-them-all), CC BY 4.0; reviewed fork [SquidyInk/task-observer](https://github.com/SquidyInk/task-observer).
+
+## Private Observer store (2026-10-17)
+
+See `docs/agent-skills/private-observer-routing.md` for the verified **name-only** Drive discovery path and safe append/readback protocol. The actual Google Drive folder/document IDs and their contents stay private and are NOT published in GitHub. The owner-approved weekly Monday review is a separate ChatGPT scheduled task; its first-run Drive access remains unverified. No server runtime changes, no 17-SOP rewrites, no auto-capture across ordinary ChatGPT chats.

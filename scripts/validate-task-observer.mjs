@@ -12,6 +12,7 @@ const rootSkill=".agents/skills/3kings-task-observer/";
 const source=read(rootSkill+"SKILL.md");
 const contract=read(rootSkill+"references/observation-contract.md");
 const compatibility=read(rootSkill+"references/chatgpt-compatibility.md");
+const privateRouting=read("docs/agent-skills/private-observer-routing.md");
 const agents=read("AGENTS.md");
 const workflow=read(".github/workflows/agent-skills-validation.yml");
 const errors=[];
@@ -42,6 +43,12 @@ for(const phrase of ["SOP Gate","live Google Drive SOP","17","No universal ChatG
 check(contract.includes("NOT PERSISTED"),"No ChatGPT handoff marking");
 check(compatibility.includes("GitHub commit is NOT an installation"),"Missing ChatGPT non-install boundary");
 check(agents.includes("3kings-task-observer"),"AGENTS.md does not activate observer for agent tasks");
+check(source.includes("docs/agent-skills/private-observer-routing.md"),"Observer missing private Drive routing ref");
+check(agents.includes("docs/agent-skills/private-observer-routing.md"),"AGENTS.md missing private Drive routing ref");
+for(const name of ["3Kings Construction","0-SOP & AI Commands","1-Task Observer (Private)","01_Observation Log (Private)","02_Weekly Review & Decision Log (Private)"]) check(privateRouting.includes(name),"Missing private storage discovery name: "+name);
+check(!/https:\/\/(?:docs\.google\.com\/document\/d\/|drive\.google\.com\/drive\/folders\/)/i.test(privateRouting),"Private direct Drive URLs prohibited in public router");
+check(privateRouting.includes("NOT PERSISTED"),"Private store fallback missing");
+
 check(workflow.includes("node scripts/validate-task-observer.mjs"),"Agent Skills CI does not run observer validator");
 check(!fs.existsSync(path.join(root,"skill-observations")),"Public repo contains observation logs");
 check(!fs.existsSync(path.join(root,"skill-updates")),"Public repo contains unreviewed staged skill updates");
