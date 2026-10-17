@@ -7,7 +7,7 @@ import {canAccessPath} from '@/lib/accessControl'
 import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
 import { getSupabase } from '@/lib/supabase'
-import {hotelRoomKey,hotelRoomMembers} from '@/lib/hotelRoomGroups'
+import {flowCombineKey} from '@/lib/flowCombineOne'
 
 type FlowRow={
   room_no:string
@@ -189,31 +189,32 @@ function hotelStatusItems(data:ReturnType<typeof buildingCounts>,building:'A'|'B
   return customer?hotelCustomer:hotelNoCustomer
 }
 
-function BuildingFlow({top,building,data}:{top:number;building:'A'|'B';data:ReturnType<typeof buildingCounts>}){
+function BuildingFlow({top,building,data,combineMode=false}:{top:number;building:'A'|'B';data:ReturnType<typeof buildingCounts>;combineMode?:boolean}){
+  const link=(href:string|undefined)=>withCombineHref(href,combineMode)
   const soldY=top+60,unsoldY=top+220
   const b1=top+52,b2=top+128,b3=top+212,b4=top+288
-  const customerHotelHref=defectHref({filter:'hotel-customer',building})
-  const customerNonHref=defectHref({filter:'nonhotel-customer',building})
-  const noHotelHref=defectHref({filter:'hotel-nocustomer',building})
-  const noNonHref=defectHref({filter:'nonhotel-no-customer',building})
-  const hotelCustomer=hotelStatusItems(data,building,true)
-  const hotelNoCustomer=hotelStatusItems(data,building,false)
+  const customerHotelHref=link(defectHref({filter:'hotel-customer',building}))
+  const customerNonHref=link(defectHref({filter:'nonhotel-customer',building}))
+  const noHotelHref=link(defectHref({filter:'hotel-nocustomer',building}))
+  const noNonHref=link(defectHref({filter:'nonhotel-no-customer',building}))
+  const hotelCustomer=hotelStatusItems(data,building,true).map(item=>({...item,href:link(item.href)}))
+  const hotelNoCustomer=hotelStatusItems(data,building,false).map(item=>({...item,href:link(item.href)}))
   const nonHotelCustomer:StatusItem[]=[
-    {label:'Customer Accepted',lines:['ลูกค้าตรวจรับเรียบร้อยแล้ว'],count:data.customerNonHandover,tone:'good',href:defectHref({filter:'nonhotel-customer-complete',building})},
-    {label:'Awaiting Acceptance',lines:['Defect เสร็จแล้ว','รอลูกค้า / Hotel ตรวจรับ'],count:data.customerNonPending+data.customerNonChecked,tone:'warn',href:defectHref({filter:'nonhotel-customer-awaiting-receive',building})},
+    {label:'Customer Accepted',lines:['ลูกค้าตรวจรับเรียบร้อยแล้ว'],count:data.customerNonHandover,tone:'good',href:link(defectHref({filter:'nonhotel-customer-complete',building}))},
+    {label:'Awaiting Acceptance',lines:['Defect เสร็จแล้ว','รอลูกค้า / Hotel ตรวจรับ'],count:data.customerNonPending+data.customerNonChecked,tone:'warn',href:link(defectHref({filter:'nonhotel-customer-awaiting-receive',building}))},
   ]
   const nonHotelNoCustomer:StatusItem[]=data.noNonAwaitingSale>0?[
-    {label:'Awaiting Sale',lines:['Awaiting Sale','ยังไม่มีลูกค้า'],count:data.noNonAwaitingSale,tone:'neutral',href:defectHref({filter:'nonhotel-nosale',building})},
+    {label:'Awaiting Sale',lines:['Awaiting Sale','ยังไม่มีลูกค้า'],count:data.noNonAwaitingSale,tone:'neutral',href:link(defectHref({filter:'nonhotel-nosale',building}))},
   ]:[
     {label:'Clear',lines:['ไม่มีห้องคงค้าง'],count:0,tone:'good'},
   ]
   return <g>
-    <a href={defectHref({building})} className="flow-link" aria-label={`เปิดรายละเอียดตึก ${building}`}>
+    <a href={link(defectHref({building}))} className="flow-link" aria-label={`เปิดรายละเอียดตึก ${building}`}>
       <g><rect x={28} y={top} width={330} height={44} rx={12} fill={COLORS.navy}/><text x={48} y={top+29} fontSize={20} fontWeight={900} fill="#fff">ตึก {building} — {data.total} ห้อง</text></g>
     </a>
 
-    <SvgCustomerCard x={44} y={soldY} label="มีลูกค้า (ขายแล้ว)" count={data.customer} formula={`${data.customerHotel} + ${data.customerNon} = ${data.customer}`} customer href={defectHref({filter:'customer',building})}/>
-    <SvgCustomerCard x={44} y={unsoldY} label="ไม่มีลูกค้า (ยังไม่ขาย)" count={data.noCustomer} formula={`${data.noHotel} + ${data.noNon} = ${data.noCustomer}`} customer={false} href={defectHref({filter:'no-customer',building})}/>
+    <SvgCustomerCard x={44} y={soldY} label="มีลูกค้า (ขายแล้ว)" count={data.customer} formula={`${data.customerHotel} + ${data.customerNon} = ${data.customer}`} customer href={link(defectHref({filter:'customer',building}))}/>
+    <SvgCustomerCard x={44} y={unsoldY} label="ไม่มีลูกค้า (ยังไม่ขาย)" count={data.noCustomer} formula={`${data.noHotel} + ${data.noNon} = ${data.noCustomer}`} customer={false} href={link(defectHref({filter:'no-customer',building}))}/>
 
     <Arrow x1={274} y1={soldY+60} x2={352} y2={b1+30}/><Arrow x1={274} y1={soldY+60} x2={352} y2={b2+30}/>
     <Arrow x1={274} y1={unsoldY+60} x2={352} y2={b3+30}/><Arrow x1={274} y1={unsoldY+60} x2={352} y2={b4+30}/>
@@ -368,45 +369,49 @@ export default function DefectFlowPage(){
   },[])
 
   const hotelRows=useMemo(()=>rows.filter(r=>r.hotel_participation==='ร่วมโรงแรม'),[rows])
-  const hotelCombineRows=useMemo(()=>{
+  // Flow Combine = 1 is exactly Flow รวม with a display-only room-count transform.
+  // Hotel groups follow the 16 confirmed Hotel Engineer pairs (144 => 128);
+  // non-hotel groups retain the existing Condo Combine mapping.
+  const combineGroups=useMemo(()=>{
     const groups=new Map<string,FlowRow[]>()
-    for(const row of hotelRows){
-      const key=hotelRoomKey(row.room_no)
+    for(const row of rows){
+      const key=row.hotel_participation+'|'+flowCombineKey(row.room_no,row.hotel_participation)
       groups.set(key,[...(groups.get(key)||[]),row])
     }
-    return [...groups.values()].map(members=>{
-      const first=members[0]
-      // Keep verified Defect status distinct from independently conflicting customer data.
-      const incomplete=members.length!==hotelRoomMembers(first.room_no).length
-      const statusConflict=members.some(r=>r.status_group!==first.status_group)
-      const customerConflict=members.some(r=>r.customer_status!==first.customer_status)
-      return {...first,
-        status_group:incomplete||statusConflict?null:first.status_group,
-        customer_status:incomplete||customerConflict?'รอตรวจสอบ':first.customer_status,
-      }
-    })
-  },[hotelRows])
-  const combineWarnings=useMemo(()=>hotelCombineRows.filter(group=>group.customer_status==='รอตรวจสอบ').map(group=>{
-    const members=hotelRows.filter(row=>hotelRoomKey(row.room_no)===hotelRoomKey(group.room_no))
-    return members.map(r=>r.room_no).join(' / ')
-  }),[hotelCombineRows,hotelRows])
-  const a=useMemo(()=>buildingCounts(rows,'A'),[rows])
-  const b=useMemo(()=>buildingCounts(rows,'B'),[rows])
+    return [...groups.values()]
+  },[rows])
+  const combineRows=useMemo(()=>combineGroups.map(members=>{
+    const first=members[0]
+    const statusConflict=members.some(r=>r.status_group!==first.status_group)
+    const customerConflict=members.some(r=>r.customer_status!==first.customer_status)
+    return {...first,
+      status_group:statusConflict?null:first.status_group,
+      customer_status:customerConflict?'รอตรวจสอบ':first.customer_status,
+    }
+  }),[combineGroups])
+  const combineWarnings=useMemo(()=>combineGroups.filter(members=>
+    members.some(r=>r.status_group!==members[0].status_group||r.customer_status!==members[0].customer_status)
+  ).map(members=>members.map(r=>r.room_no).join(' / ')),[combineGroups])
+  const flowRows=view==='combine'?combineRows:rows
+  const combineHotelCount=combineRows.filter(r=>r.hotel_participation==='ร่วมโรงแรม').length
+  const combineNonHotelCount=combineRows.filter(r=>r.hotel_participation==='ไม่ร่วมโรงแรม').length
+  const a=useMemo(()=>buildingCounts(flowRows,'A'),[flowRows])
+  const b=useMemo(()=>buildingCounts(flowRows,'B'),[flowRows])
   const synced=useMemo(()=>latestDate(rows),[rows])
-  const displayedSync=useMemo(()=>latestDate(view==='sales'?rows:hotelRows),[view,hotelRows,rows])
+  const displayedSync=useMemo(()=>latestDate(view==='hotel'?hotelRows:rows),[view,hotelRows,rows])
   const endpoints=useMemo(()=>{
-    const checkedRows=rows.filter(r=>r.status_group===GROUP.checked)
+    const checkedRows=flowRows.filter(r=>r.status_group===GROUP.checked)
     const legacyNonHotelChecked=checkedRows.filter(r=>r.hotel_participation==='ไม่ร่วมโรงแรม').length
     return {
-      awaitingSale:rows.filter(r=>r.status_group===GROUP.awaitingSale).length,
-      roomInspection:rows.filter(r=>r.status_group===GROUP.roomInspection).length,
+      awaitingSale:flowRows.filter(r=>r.status_group===GROUP.awaitingSale).length,
+      roomInspection:flowRows.filter(r=>r.status_group===GROUP.roomInspection).length,
       checked:checkedRows.length-legacyNonHotelChecked,
-      handover:rows.filter(r=>r.status_group===GROUP.handover).length,
-      awaitingAcceptance:rows.filter(r=>r.status_group===GROUP.awaiting).length+rows.filter(r=>r.status_group===GROUP.pending).length+legacyNonHotelChecked,
-      incomplete:rows.filter(r=>r.status_group===GROUP.incomplete).length,
+      handover:flowRows.filter(r=>r.status_group===GROUP.handover).length,
+      awaitingAcceptance:flowRows.filter(r=>r.status_group===GROUP.awaiting).length+flowRows.filter(r=>r.status_group===GROUP.pending).length+legacyNonHotelChecked,
+      incomplete:flowRows.filter(r=>r.status_group===GROUP.incomplete).length,
       legacyNonHotelChecked,
     }
-  },[rows])
+  },[flowRows])
   const coverage=endpoints.awaitingSale+endpoints.roomInspection+endpoints.checked+endpoints.handover+endpoints.awaitingAcceptance+endpoints.incomplete
 
   const exportPng=async()=>{
@@ -435,11 +440,11 @@ export default function DefectFlowPage(){
     img.src=url
   }
 
-  const footerItems=flowFooterItems(endpoints)
+  const footerItems=flowFooterItems(endpoints).map(item=>({...item,href:withCombineHref(item.href,view==='combine')}))
 
   return <AppShell>
     <div className="flow-page-header">
-      <PageHeader title="Live Handover / Defect Flow" subtitle={view==='combine'?'Above Condo A + B • ห้องร่วมโรงแรม • Combine = 1':view==='hotel'?'Above Condo A + B • เฉพาะห้องร่วมโรงแรม':'Above Condo A + B'} action={<div className="flow-toolbar">
+      <PageHeader title="Live Handover / Defect Flow" subtitle={view==='combine'?'Above Condo A + B • ร่วมและไม่ร่วมโรงแรม • Combine = 1':view==='hotel'?'Above Condo A + B • เฉพาะห้องร่วมโรงแรม':'Above Condo A + B'} action={<div className="flow-toolbar">
         <div className="sync-meta"><span>Sync ล่าสุด</span><b>{dateTimeTH(displayedSync)}</b></div>
         {showDashboard&&<Link href="/?section=defect#dashboard-defect" className="button flow-dashboard-button" data-defect-flow-dashboard="true" aria-label="กลับไปที่ข้อมูล Defect ใน Dashboard">← Dashboard</Link>}
         <button type="button" className="button flow-export-button" onClick={exportPng} disabled={loading||!!error}>Export PNG</button>
@@ -451,7 +456,7 @@ export default function DefectFlowPage(){
       <button type="button" className={'flow-view-tab '+(view==='hotel'?'active':'')} aria-pressed={view==='hotel'} onClick={()=>changeView('hotel')}>Flow โรงแรม</button>
       <button type="button" className={'flow-view-tab '+(view==='combine'?'active':'')} aria-pressed={view==='combine'} onClick={()=>changeView('combine')}>Flow Combine = 1</button>
     </nav>
-    {view==='combine'&&combineWarnings.length>0&&<div className="panel flow-combine-warning" role="status">ข้อมูลสถานะลูกค้าในคู่ Combine ยังไม่ตรงกัน: {combineWarnings.join(', ')} • นับคู่ละ 1 ชุด และคงสถานะ Defect ที่ตรงกันตามฐานข้อมูล • <Link href={withCombineHref(defectHref({filter:'hotel',q:combineWarnings[0].split(' / ')[0]}),true)||'/defects'}>ตรวจสอบรายละเอียดห้อง →</Link></div>}
+    {view==='combine'&&combineWarnings.length>0&&<div className="panel flow-combine-warning" role="status">ข้อมูลสถานะลูกค้าหรือ Defect ของคู่ Combine ไม่ตรงกัน: {combineWarnings.join(', ')} • นับคู่ละ 1 ชุด และคงสถานะ Defect ที่ตรงกันตามฐานข้อมูล • <Link href={withCombineHref(defectHref({q:combineWarnings[0].split(' / ')[0]}),true)||'/defects'}>ตรวจสอบรายละเอียดห้อง →</Link></div>}
     <form className="panel filter-panel compact-filter-shell flow-room-search-panel" onSubmit={e=>{e.preventDefault();if(roomSearch.trim())window.location.assign('/defects?'+(view!=='sales'?'filter=hotel&':'')+(view==='combine'?'combine=1&':'')+'q='+encodeURIComponent(roomSearch.trim())+'#room-list')}}>
       <div className="toolbar detail-toolbar compact-filter flow-room-search-toolbar">
         <input value={roomSearch} onChange={e=>setRoomSearch(e.target.value)} placeholder="ค้นหา เช่น B101, Good01, Good-01, A521" aria-label="ค้นหาเลขห้อง ชื่อเจ้าของ สถานะ หรือรายละเอียดงาน หลายคำคั่นด้วย comma"/>
@@ -473,9 +478,9 @@ export default function DefectFlowPage(){
         <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#718095"/></marker></defs>
         <rect width="1920" height="1080" fill="#ffffff"/>
         <g fontFamily="inherit">
-          {view==='hotel'||view==='combine'?<HotelFlowDiagram rows={view==='combine'?hotelCombineRows:hotelRows} synced={displayedSync} combineMode={view==='combine'}/>:<>
-          <text x={28} y={50} fontSize={31} fontWeight={900} fill={COLORS.navy}>สรุปเส้นทาง Handover / Defect — ตึก A และ B</text>
-          <text x={28} y={81} fontSize={15} fontWeight={700} fill={COLORS.muted}>สถานะลูกค้า → ร่วม/ไม่ร่วมโรงแรม → สถานะปัจจุบัน</text>
+          {view==='hotel'?<HotelFlowDiagram rows={hotelRows} synced={displayedSync}/>:<>
+          <text x={28} y={50} fontSize={31} fontWeight={900} fill={COLORS.navy}>{view==='combine'?'สรุปเส้นทาง Handover / Defect — Flow Combine = 1':'สรุปเส้นทาง Handover / Defect — ตึก A และ B'}</text>
+          <text x={28} y={81} fontSize={15} fontWeight={700} fill={COLORS.muted}>สถานะลูกค้า → ร่วม/ไม่ร่วมโรงแรม → สถานะปัจจุบัน{view==='combine'?` • ร่วมโรงแรม ${combineHotelCount} ชุด • ไม่ร่วมโรงแรม ${combineNonHotelCount} ชุด`:''}</text>
           <text x={1888} y={36} textAnchor="end" fontSize={12} fontWeight={700} fill={COLORS.muted}>อ้างอิง: Web App / Supabase — condo_room_status</text>
           <text x={1888} y={54} textAnchor="end" fontSize={12} fontWeight={700} fill={COLORS.muted}>Sync ล่าสุด {dateTimeTH(synced)}</text>
 
@@ -488,12 +493,12 @@ export default function DefectFlowPage(){
 
           {[[44,230,'1. สถานะลูกค้า'],[356,230,'2. ร่วม / ไม่ร่วมโรงแรม'],[670,1204,'3. สถานะปัจจุบัน']].map(([x,w,label])=><g key={String(label)}><rect x={Number(x)} y={149} width={Number(w)} height={34} rx={9} fill={COLORS.navy2}/><text x={Number(x)+Number(w)/2} y={172} textAnchor="middle" fontSize={14} fontWeight={900} fill="#fff">{label}</text></g>)}
 
-          <BuildingFlow top={190} building="A" data={a}/>
-          <BuildingFlow top={570} building="B" data={b}/>
+          <BuildingFlow top={190} building="A" data={a} combineMode={view==='combine'}/>
+          <BuildingFlow top={570} building="B" data={b} combineMode={view==='combine'}/>
 
-          <text x={44} y={1000} fontSize={18} fontWeight={900} fill={coverage===rows.length?COLORS.navy:COLORS.danger}>Coverage Check — {coverage===rows.length?'ครบ':'ต้องตรวจสอบ'} {coverage} / {rows.length} ห้อง</text>
-          <text x={44} y={1028} fontSize={13} fontWeight={800} fill={COLORS.muted}>ตึก A {a.total} ห้อง + ตึก B {b.total} ห้อง = {rows.length} ห้อง</text>
-          <text x={44} y={1051} fontSize={12} fontWeight={700} fill={COLORS.muted}>A: {a.customerHotel} + {a.customerNon} + {a.noHotel} + {a.noNon} = {a.total} • B: {b.customerHotel} + {b.customerNon} + {b.noHotel} + {b.noNon} = {b.total}</text>
+          <text x={44} y={1000} fontSize={18} fontWeight={900} fill={coverage===flowRows.length?COLORS.navy:COLORS.danger}>Coverage Check — {coverage===flowRows.length?'ครบ':'ต้องตรวจสอบ'} {coverage} / {flowRows.length} {view==='combine'?'ชุดห้อง':'ห้อง'}</text>
+          <text x={44} y={1028} fontSize={13} fontWeight={800} fill={COLORS.muted}>ตึก A {a.total} ห้อง + ตึก B {b.total} ห้อง = {flowRows.length} {view==='combine'?'ชุดห้อง':'ห้อง'}</text>
+          <text x={44} y={1051} fontSize={12} fontWeight={700} fill={view==='combine'&&combineHotelCount!==128?COLORS.danger:COLORS.muted}>{view==='combine'?`ยืนยันตามไฟล์ช่างโรงแรม: ร่วมโรงแรม ${combineHotelCount}/128 ชุด • ไม่ร่วมโรงแรม ${combineNonHotelCount} ชุด`:`A: ${a.customerHotel} + ${a.customerNon} + ${a.noHotel} + ${a.noNon} = ${a.total} • B: ${b.customerHotel} + ${b.customerNon} + ${b.noHotel} + ${b.noNon} = ${b.total}`}</text>
           <text x={706} y={999} fontSize={17} fontWeight={900} fill={COLORS.navy}>สถานะปลายทางรวมทั้งโครงการ</text>
           {footerItems.map((item,i)=>{
             const x=706+i*196.2,w=180,c=toneColor(item.tone),multiLine=item.lines.length>1
