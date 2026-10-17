@@ -27,9 +27,9 @@ test('17 unique agent shortcut definitions are preserved',()=>{
  assert.equal(new Set(catalog.shortcuts.map(s=>s.number)).size,17)
  assert.equal(catalog.shortcuts.filter(s=>s.mode==='read_only').length,7)
 })
-test('only 13/14 can invoke phase-2 inspection',()=>{
+test('only 2/4/13/14 can invoke phase-2 inspection',()=>{
  for(const c of catalog.shortcuts){
-   if([13,14].includes(c.number))assert.doesNotThrow(()=>gate.validateAction(c,'inspect'))
+   if([2,4,13,14].includes(c.number))assert.doesNotThrow(()=>gate.validateAction(c,'inspect'))
    else assert.throws(()=>gate.validateAction(c,'inspect'),/BLOCK_ACTION_NOT_READ_ONLY/)
  }
 })
@@ -68,7 +68,7 @@ test('unknown ID, unknown mode and malformed SOP URL rejected',()=>{
 test('route is owner-authenticated and accepts no mutation payload or non-owner access',()=>{
  const route=fs.readFileSync('app/api/agent/read-only/route.ts','utf8')
  for(const v of ['getUser(token)','OWNER_USER_ID','readPermissionSnapshot','FORBIDDEN_MATRIX','BLOCK_UNSUPPORTED_FIELD',
-   'createLiveSopSource','evaluateSopGate','inspectSync','inspectProduction'])
+   'createLiveSopSource','evaluateSopGate','inspectSync','inspectProduction','inspectDefectCounts','inspectDefectSevenDays'])
    assert.ok(route.includes(v),v)
  assert.equal(/\.insert\(|\.upsert\(|\.update\(|\.delete\(|\.rpc\(['"]drive_sync_replace/.test(route),false)
 })
