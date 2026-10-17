@@ -18,6 +18,8 @@ function collectPrintFilters(){
   const controls=Array.from(document.querySelectorAll('.main input:not([type="hidden"]), .main select'))
 
   controls.forEach(control=>{
+    // Contact Book's editing dialog must never appear in printed filter summaries.
+    if(control.closest('[data-contact-book-editor]'))return
     if(control instanceof HTMLInputElement){
       const value=control.value.trim()
       if(!value)return
