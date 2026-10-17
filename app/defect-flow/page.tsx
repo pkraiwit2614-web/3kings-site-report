@@ -8,6 +8,7 @@ import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
 import { getSupabase } from '@/lib/supabase'
 import {flowCombineKey} from '@/lib/flowCombineOne'
+import {DEFECT_AWAITING_ACCEPTANCE_LABEL} from '@/lib/defectStatusPresentation'
 
 type FlowRow={
   room_no:string
@@ -20,6 +21,7 @@ type FlowRow={
 
 type Tone='good'|'warn'|'danger'|'neutral'
 type StatusItem={label:string;lines:string[];count:number;tone:Tone;href?:string}
+const awaitingAcceptanceLines=DEFECT_AWAITING_ACCEPTANCE_LABEL.replace(' • ',' •\n').split('\n')
 
 const GROUP={
   checked:'Hotel - Checked Complete',
@@ -177,13 +179,13 @@ function hotelStatusItems(data:ReturnType<typeof buildingCounts>,building:'A'|'B
     {label:'Hotel Checked',lines:['Hotel Engineer','ตรวจแล้ว'],count:data.customerHotelChecked,tone:'good',href:defectHref({filter:'hotel-customer-checked',building})},
     ...(data.customerHotelHandover>0?[{label:'Customer Accepted',lines:['ลูกค้าตรวจรับเรียบร้อยแล้ว'],count:data.customerHotelHandover,tone:'good' as Tone,href:defectHref({filter:'hotel-customer',building,q:'ลูกค้าตรวจรับเรียบร้อยแล้ว'})}]:[]),
     ...(data.customerHotelRoomInspection>0?[{label:'Awaiting Room',lines:['ยังไม่ตรวจห้อง','ยังไม่มี Defect'],count:data.customerHotelRoomInspection,tone:'warn' as Tone,href:defectHref({filter:'hotel-customer',building,q:'ยังไม่ตรวจห้อง'})}]:[]),
-    {label:'Awaiting Acceptance',lines:['Defect เสร็จแล้ว','รอลูกค้า / Hotel ตรวจรับ'],count:data.customerHotelPending+data.customerHotelAwaiting,tone:'warn',href:defectHref({filter:'hotel-customer-awaiting-receive',building})},
+    {label:'Awaiting Acceptance',lines:awaitingAcceptanceLines,count:data.customerHotelPending+data.customerHotelAwaiting,tone:'warn',href:defectHref({filter:'hotel-customer-awaiting-receive',building})},
     {label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:data.customerHotelIncomplete,tone:'danger',href:defectHref({filter:'hotel-customer-incomplete',building})},
   ]
   const hotelNoCustomer:StatusItem[]=[
     {label:'Hotel Checked',lines:['Hotel Engineer','ตรวจแล้ว'],count:data.noHotelChecked,tone:'good',href:defectHref({filter:'hotel-nocustomer-checked',building})},
     ...(data.noHotelHandover>0?[{label:'Customer Accepted',lines:['ลูกค้าตรวจรับเรียบร้อยแล้ว'],count:data.noHotelHandover,tone:'good' as Tone,href:defectHref({filter:'hotel-nocustomer',building,q:'ลูกค้าตรวจรับเรียบร้อยแล้ว'})}]:[]),
-    {label:'Awaiting Acceptance',lines:['Defect เสร็จแล้ว','รอลูกค้า / Hotel ตรวจรับ'],count:data.noHotelAwaiting+data.noHotelPending,tone:'warn',href:defectHref({filter:'hotel-nocustomer-awaiting-receive',building})},
+    {label:'Awaiting Acceptance',lines:awaitingAcceptanceLines,count:data.noHotelAwaiting+data.noHotelPending,tone:'warn',href:defectHref({filter:'hotel-nocustomer-awaiting-receive',building})},
     {label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:data.noHotelIncomplete,tone:'danger',href:defectHref({filter:'hotel-nocustomer-incomplete',building})},
   ]
   return customer?hotelCustomer:hotelNoCustomer
@@ -201,7 +203,7 @@ function BuildingFlow({top,building,data,combineMode=false}:{top:number;building
   const hotelNoCustomer=hotelStatusItems(data,building,false).map(item=>({...item,href:link(item.href)}))
   const nonHotelCustomer:StatusItem[]=[
     {label:'Customer Accepted',lines:['ลูกค้าตรวจรับเรียบร้อยแล้ว'],count:data.customerNonHandover,tone:'good',href:link(defectHref({filter:'nonhotel-customer-complete',building}))},
-    {label:'Awaiting Acceptance',lines:['Defect เสร็จแล้ว','รอลูกค้า / Hotel ตรวจรับ'],count:data.customerNonPending+data.customerNonChecked,tone:'warn',href:link(defectHref({filter:'nonhotel-customer-awaiting-receive',building}))},
+    {label:'Awaiting Acceptance',lines:awaitingAcceptanceLines,count:data.customerNonPending+data.customerNonChecked,tone:'warn',href:link(defectHref({filter:'nonhotel-customer-awaiting-receive',building}))},
   ]
   const nonHotelNoCustomer:StatusItem[]=data.noNonAwaitingSale>0?[
     {label:'Awaiting Sale',lines:['Awaiting Sale','ยังไม่มีลูกค้า'],count:data.noNonAwaitingSale,tone:'neutral',href:link(defectHref({filter:'nonhotel-nosale',building}))},
@@ -276,7 +278,7 @@ function flowFooterItems(v:FlowFooterSummary,hotelOnly=false):StatusItem[]{
     ...(v.roomInspection>0?[{label:'Awaiting Room',lines:['ยังไม่ตรวจห้อง'],count:v.roomInspection,tone:'warn' as Tone,href:defectHref(hotelOnly?{filter:'hotel-status-awaiting-room'}:{filter:'hotel-customer',q:'ยังไม่ตรวจห้อง'})}]:[]),
     {label:'Hotel Checked',lines:['Hotel Engineer ตรวจแล้ว'],count:v.checked,tone:'good',href:defectHref({filter:'status-hotel-checked'})},
     ...(!hotelOnly?[{label:'Customer Accepted',lines:['ลูกค้าตรวจรับเรียบร้อยแล้ว'],count:v.handover,tone:'good' as Tone,href:defectHref({filter:'status-handover-complete'})}]:[]),
-    {label:'Awaiting Acceptance',lines:['Defect เสร็จแล้ว • รอตรวจรับ'],count:v.awaitingAcceptance,tone:'warn',href:defectHref({filter:hotelOnly?'hotel-status-awaiting-acceptance':'status-awaiting-acceptance'})},
+    {label:'Awaiting Acceptance',lines:awaitingAcceptanceLines,count:v.awaitingAcceptance,tone:'warn',href:defectHref({filter:hotelOnly?'hotel-status-awaiting-acceptance':'status-awaiting-acceptance'})},
     {label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:v.incomplete,tone:'danger',href:defectHref({filter:hotelOnly?'hotel-status-incomplete':'status-incomplete'})},
   ]
 }
