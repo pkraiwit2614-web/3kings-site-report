@@ -425,6 +425,8 @@ export default function DefectFlowPage(){
     const svg=svgRef.current
     if(!svg)return
     const clone=svg.cloneNode(true) as SVGSVGElement
+    // Keep the existing explicit SVG group font assignment for legacy flow regressions.
+    clone.querySelector('g[font-family]')?.setAttribute('font-family',window.getComputedStyle(svg).fontFamily)
     try {
       // The display uses next/font; an SVG rasterized as an image cannot
       // otherwise see the page's @font-face rules.
