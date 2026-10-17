@@ -74,12 +74,14 @@ export async function inspectDefectSevenDays(client:SupabaseClient,clock=new Dat
     .limit(1000)
   if(error||!data)return {status:'UNVERIFIED',checks:[{name:'work_order_dates',status:'READ_FAILED'}],
     note:'Cannot verify Defect ageing or hotel follow-up.'}
-  const bangkokDate=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',
-    month:'2-digit',day:'2-digit'}).format(clock)
+  const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Bangkok',year:'numeric',
+    month:'2-digit',day:'2-digit'}).formatToParts(clock)
+  const part=(type:string)=>parts.find(p=>p.type===type)?.value||''
+  const bangkokDate=part('year')+'-'+part('month')+'-'+part('day')
   const todayEpoch=Date.parse(bangkokDate+'T00:00:00Z')
   if(!Number.isFinite(todayEpoch))return {status:'UNVERIFIED',checks:[],note:'Bangkok date unavailable'}
   const candidates=data.filter(r=>{
-    if(!r.source_active||r.work_status!=='ยังไม่เริ่ม'||!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(r.received_date||'')))return false
+    if(!r.source_active||r.work_status!=='ยังไม่เริ่ม'||!/^\d{4}-\d{2}-\d{2}$/.test(String(r.received_date||'')))return false
     const stamp=Date.parse(r.received_date+'T00:00:00Z')
     return Number.isFinite(stamp)&&todayEpoch-stamp>7*86400000
   }).map(r=>({workId:r.work_id,roomGroup:r.room_group,receivedDate:r.received_date}))
