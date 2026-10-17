@@ -289,6 +289,7 @@ function HotelFlowDiagram({rows,synced,combineMode=false}:{rows:FlowRow[];synced
   const review=rows.length-covered
   const customer=rows.filter(r=>r.customer_status==='มีลูกค้า').length
   const noCustomer=rows.filter(r=>r.customer_status==='ไม่มีลูกค้า').length
+  const customerReview=rows.length-customer-noCustomer
   const footer=flowFooterItems({
     awaitingSale:stage(GROUP.awaitingSale),
     roomInspection:stage(GROUP.roomInspection),
@@ -314,7 +315,7 @@ function HotelFlowDiagram({rows,synced,combineMode=false}:{rows:FlowRow[];synced
     <HotelBuildingFlow top={565} building="B" rows={rows} combineMode={combineMode}/>
     <text x={44} y={999} fontSize={18} fontWeight={900} fill={review===0&&customer+noCustomer===rows.length?COLORS.navy:COLORS.danger}>{combineMode?'ห้องร่วมโรงแรม (Combine = 1)':'ห้องร่วมโรงแรมรวม'} {rows.length} {combineMode?'ชุดห้อง':'ห้อง'} {review>0?'• รอตรวจสอบ '+review+' ห้อง':''}</text>
     <text x={44} y={1026} fontSize={13} fontWeight={800} fill={COLORS.muted}>ตึก A {a.length} + ตึก B {b.length} = {rows.length} {combineMode?'ชุดห้อง':'ห้อง'}</text>
-    <text x={44} y={1049} fontSize={12} fontWeight={700} fill={COLORS.muted}>สถานะ Defect ที่ตรงกลุ่ม {covered} ห้อง • รอตรวจสอบ {review} ห้อง • มีลูกค้า {customer} / ไม่มีลูกค้า {noCustomer}</text>
+    <text x={44} y={1049} fontSize={12} fontWeight={700} fill={COLORS.muted}>สถานะ Defect ที่ตรงกลุ่ม {covered} {combineMode?'ชุดห้อง':'ห้อง'} • รอตรวจสอบ Defect {review} • มีลูกค้า {customer} / ไม่มีลูกค้า {noCustomer}{combineMode&&customerReview>0?` • สถานะลูกค้าขัดแย้ง ${customerReview} ชุด`:''}</text>
     <text x={706} y={999} fontSize={17} fontWeight={900} fill={COLORS.navy}>สถานะปลายทางเฉพาะห้องร่วมโรงแรม {combineMode?'(Combine = 1)':''}</text>
     {footer.map((item,i)=>{
       const x=706+i*196.2,w=180,c=toneColor(item.tone),multiLine=item.lines.length>1
@@ -375,9 +376,14 @@ export default function DefectFlowPage(){
     }
     return [...groups.values()].map(members=>{
       const first=members[0]
-      // Conflicting/missing members are visibly pending review, never assigned a guessed status.
-      const inconsistent=members.length!==hotelRoomMembers(first.room_no).length||members.some(r=>r.status_group!==first.status_group||r.customer_status!==first.customer_status)
-      return inconsistent?{...first,status_group:null}:first
+      // Keep verified Defect status distinct from independently conflicting customer data.
+      const incomplete=members.length!==hotelRoomMembers(first.room_no).length
+      const statusConflict=members.some(r=>r.status_group!==first.status_group)
+      const customerConflict=members.some(r=>r.customer_status!==first.customer_status)
+      return {...first,
+        status_group:incomplete||statusConflict?null:first.status_group,
+        customer_status:incomplete||customerConflict?'รอตรวจสอบ':first.customer_status,
+      }
     })
   },[hotelRows])
   const a=useMemo(()=>buildingCounts(rows,'A'),[rows])
