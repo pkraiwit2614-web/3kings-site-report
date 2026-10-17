@@ -31,6 +31,8 @@ Identify exact affected Skill number(s), repeatability, supporting evidence refe
 
 Read `references/chatgpt-compatibility.md` before setting up a runtime or claiming coverage. Persistent logs live ONLY in a user-approved **private** workspace such as access-controlled 3 Kings Drive, not this PUBLIC GitHub repository. The observation store must be accessible to the executing agent and to the review process. Without a verified private writable store, collect a **session handoff in the response only** using `references/observation-contract.md` and label it NOT PERSISTED; do not claim it was stored or will appear in the next chat. Never create or commit observation logs, personal information, credentials, Drive file IDs, webhook payloads or raw Defect/Payroll data in this repository.
 
+**Private Google Drive routing (verified folder naming only):** read `docs/agent-skills/private-observer-routing.md` whenever an authorized Google Drive connector exists. Locate the private folder/documents by names at run time, verify owner-only permissions, read the private operating rules, then append only actual evidence-backed observations using revision checks and readback. Do not commit file IDs/URLs or raw observations to GitHub. An Agent without a verified writable connector MUST produce a NOT PERSISTED handoff rather than claiming successful cross-chat storage.
+
 No universal ChatGPT hook, filesystem watcher, cloud polling, automatic skill installation, telemetry, auto self-edit, or automatic cross-chat observation is included. A scheduled review is valid only after the scheduler's read/write access to the private store is verified separately.
 
 ## Review and changes
