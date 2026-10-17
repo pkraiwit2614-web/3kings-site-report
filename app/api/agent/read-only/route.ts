@@ -4,7 +4,7 @@ import {OWNER_USER_ID,resolveAccessRole} from '@/lib/accessControl'
 import {readPermissionSnapshot} from '@/lib/permissionServer'
 import {AgentGateError,resolveCommand,validateAction,evaluateSopGate,type AgentMode} from '@/lib/agentCore'
 import {createLiveSopSource} from '@/lib/agentGoogleDrive'
-import {inspectSync,inspectProduction} from '@/lib/agentReadOnlyChecks'
+import {inspectSync,inspectProduction,inspectDefectCounts,inspectDefectSevenDays} from '@/lib/agentReadOnlyChecks'
 
 export const runtime='nodejs'
 export const dynamic='force-dynamic'
@@ -50,6 +50,6 @@ export async function POST(request:NextRequest){
   const gate=await evaluateSopGate(command.number,mode as AgentMode,source)
   if(!gate.ok)return respond({gate,inspection:null},424)
   if(mode==='preflight')return respond({gate,inspection:null,note:'Preflight only. No action executed or audit record persisted.'},200)
-  const inspection=command.number===13?await inspectSync(client):await inspectProduction()
+  const inspection=command.number===2?await inspectDefectCounts(client):command.number===4?await inspectDefectSevenDays(client):command.number===13?await inspectSync(client):await inspectProduction()
   return respond({gate,inspection,note:'Read-only checks. No source, database, trigger, or deployment mutation.'},200)
 }
