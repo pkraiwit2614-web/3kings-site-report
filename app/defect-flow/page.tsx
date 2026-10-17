@@ -263,7 +263,7 @@ function flowFooterItems(v:FlowFooterSummary,hotelOnly=false):StatusItem[]{
     ...(v.awaitingSale>0?[{label:'Awaiting Sale',lines:['Awaiting Sale'],count:v.awaitingSale,tone:'neutral' as Tone,href:defectHref({filter:hotelOnly?'hotel-status-awaiting-sale':'status-awaiting-sale'})}]:[]),
     ...(v.roomInspection>0?[{label:'Awaiting Room',lines:['ยังไม่ตรวจห้อง'],count:v.roomInspection,tone:'warn' as Tone,href:defectHref(hotelOnly?{filter:'hotel-status-awaiting-room'}:{filter:'hotel-customer',q:'ยังไม่ตรวจห้อง'})}]:[]),
     {label:'Hotel Checked',lines:['Hotel Engineer ตรวจแล้ว'],count:v.checked,tone:'good',href:defectHref({filter:'status-hotel-checked'})},
-    {label:'Customer Accepted',lines:['ลูกค้าตรวจรับเรียบร้อยแล้ว'],count:v.handover,tone:'good',href:defectHref({filter:hotelOnly?'hotel-status-handover-complete':'status-handover-complete'})},
+    ...(!hotelOnly?[{label:'Customer Accepted',lines:['ลูกค้าตรวจรับเรียบร้อยแล้ว'],count:v.handover,tone:'good' as Tone,href:defectHref({filter:'status-handover-complete'})}]:[]),
     {label:'Awaiting Acceptance',lines:['Defect เสร็จแล้ว • รอตรวจรับ'],count:v.awaitingAcceptance,tone:'warn',href:defectHref({filter:hotelOnly?'hotel-status-awaiting-acceptance':'status-awaiting-acceptance'})},
     {label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:v.incomplete,tone:'danger',href:defectHref({filter:hotelOnly?'hotel-status-incomplete':'status-incomplete'})},
   ]
