@@ -42,6 +42,13 @@ test('Flow โรงแรม footer shares Flow รวม status definitions an
   assert.doesNotMatch(defs,/Review Needed|Pending Handover/)
 })
 
+test('Hotel footer excludes non-hotel Customer Accepted while Flow รวม keeps its card',()=>{
+  const defs=src.slice(src.indexOf('function flowFooterItems('),src.indexOf('function HotelFlowDiagram('))
+  assert.match(defs,/\.\.\.\(!hotelOnly\?\[\{label:'Customer Accepted'/)
+  assert.match(src,/const footerItems=flowFooterItems\(endpoints\)/)
+  assert.match(src,/const footer=flowFooterItems\(\{[\s\S]*?\},true\)/)
+})
+
 test('Export and search use active Hotel view without altering Sales defaults',()=>{
   assert.match(src,/view==='hotel'\?'hotel-defect-flow-':'handover-defect-flow-'/)
   assert.match(src,/view==='hotel'\?'filter=hotel&':''/)
