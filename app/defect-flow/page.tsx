@@ -433,7 +433,7 @@ export default function DefectFlowPage(){
       canvas.toBlob(png=>{
         if(!png)return
         const href=URL.createObjectURL(png);const a=document.createElement('a')
-        a.href=href;a.download=(view==='combine'?'hotel-combine-one-flow-':view==='hotel'?'hotel-defect-flow-':'handover-defect-flow-')+new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Bangkok'})+'.png';a.click()
+        a.href=href;a.download=(view==='combine'?'full-combine-one-flow-':view==='hotel'?'hotel-defect-flow-':'handover-defect-flow-')+new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Bangkok'})+'.png';a.click()
         window.setTimeout(()=>URL.revokeObjectURL(href),1000)
       },'image/png',1)
     }
@@ -457,7 +457,7 @@ export default function DefectFlowPage(){
       <button type="button" className={'flow-view-tab '+(view==='combine'?'active':'')} aria-pressed={view==='combine'} onClick={()=>changeView('combine')}>Flow Combine = 1</button>
     </nav>
     {view==='combine'&&combineWarnings.length>0&&<div className="panel flow-combine-warning" role="status">ข้อมูลสถานะลูกค้าหรือ Defect ของคู่ Combine ไม่ตรงกัน: {combineWarnings.join(', ')} • นับคู่ละ 1 ชุด และคงสถานะ Defect ที่ตรงกันตามฐานข้อมูล • <Link href={withCombineHref(defectHref({q:combineWarnings[0].split(' / ')[0]}),true)||'/defects'}>ตรวจสอบรายละเอียดห้อง →</Link></div>}
-    <form className="panel filter-panel compact-filter-shell flow-room-search-panel" onSubmit={e=>{e.preventDefault();if(roomSearch.trim())window.location.assign('/defects?'+(view!=='sales'?'filter=hotel&':'')+(view==='combine'?'combine=1&':'')+'q='+encodeURIComponent(roomSearch.trim())+'#room-list')}}>
+    <form className="panel filter-panel compact-filter-shell flow-room-search-panel" onSubmit={e=>{e.preventDefault();if(roomSearch.trim())window.location.assign('/defects?'+(view==='hotel'?'filter=hotel&':'')+(view==='combine'?'combine=1&':'')+'q='+encodeURIComponent(roomSearch.trim())+'#room-list')}}>
       <div className="toolbar detail-toolbar compact-filter flow-room-search-toolbar">
         <input value={roomSearch} onChange={e=>setRoomSearch(e.target.value)} placeholder="ค้นหา เช่น B101, Good01, Good-01, A521" aria-label="ค้นหาเลขห้อง ชื่อเจ้าของ สถานะ หรือรายละเอียดงาน หลายคำคั่นด้วย comma"/>
         <button className="button primary" type="submit" disabled={!roomSearch.trim()}>ค้นหา → Defect Detail</button>
@@ -474,7 +474,7 @@ export default function DefectFlowPage(){
     </div>
 
     {loading?<div className="panel flow-loading">กำลังโหลด Handover / Defect Flow…</div>:error?<div className="panel flow-error">โหลดข้อมูลไม่ได้: {error}</div>:<section className="flow-stage panel">
-      <svg ref={svgRef} className="flow-svg" style={{fontFamily:'inherit',width:`${diagramZoom}%`}} viewBox="0 0 1920 1080" role="img" aria-label={view==='combine'?'Hotel combine-one Defect Flow Building A and B':view==='hotel'?'Hotel-only Handover Defect Flow Building A and B':'Live Handover Defect Flow Building A and B'} xmlns="http://www.w3.org/2000/svg">
+      <svg ref={svgRef} className="flow-svg" style={{fontFamily:'inherit',width:`${diagramZoom}%`}} viewBox="0 0 1920 1080" role="img" aria-label={view==='combine'?'Full Handover Defect Combine-one Flow Building A and B':view==='hotel'?'Hotel-only Handover Defect Flow Building A and B':'Live Handover Defect Flow Building A and B'} xmlns="http://www.w3.org/2000/svg">
         <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#718095"/></marker></defs>
         <rect width="1920" height="1080" fill="#ffffff"/>
         <g fontFamily="inherit">
