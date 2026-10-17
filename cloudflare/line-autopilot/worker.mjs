@@ -39,7 +39,11 @@ async function verifyWebhook(body,signature,secret){
   return equalSignature(b64(await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(body))),signature);
 }
 function supabaseHeaders(env){
-  return {apikey:env.SUPABASE_SERVER_KEY,authorization:'Bearer '+env.SUPABASE_SERVER_KEY,
+  const key=env.SUPABASE_SERVER_KEY;
+  // Modern Supabase sb_secret_ keys are not JWTs: Bearer would cause Invalid JWT.
+  // Legacy service_role JWT remains supported during gradual migration.
+  return {apikey:key,
+    ...(key.startsWith('sb_secret_')?{}:{authorization:'Bearer '+key}),
     'content-type':'application/json'};
 }
 async function sb(env,path,body){
