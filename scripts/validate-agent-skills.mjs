@@ -29,7 +29,7 @@ for (let i = 1; i <= 17; i++) {
  if (v.mode==="read_only" && !s.includes("No persistent mutations")) errors.push("Read-only guard missing: "+v.name);
 }
 const folders=fs.readdirSync(skillRoot,{withFileTypes:true}).filter(x=>x.isDirectory()).map(x=>x.name);
-const expected=new Set(["3kings-sop-gate",...entries.map(x=>x.name)]);
+const expected=new Set(["3kings-sop-gate","3kings-task-observer",...entries.map(x=>x.name)]);
 for(const f of folders){if(f.startsWith("3kings-") && !f.startsWith("3kings-sp-") && !expected.has(f))errors.push("Unregistered skill "+f);}
 const forbidden=[/service_role\s*[:=]\s*['"]/i,/BEGIN PRIVATE KEY/,/SUPABASE_SERVICE_ROLE_KEY\s*=/];
 for(const f of ["AGENTS.md","docs/agent-skills/README.md","docs/agent-skills/manifest.json"]){
