@@ -8,6 +8,7 @@ on:
       - 'lib/agentReadOnlyChecks.ts'
       - 'app/api/agent/read-only/route.ts'
       - 'tests/agent-core-readonly.test.cjs'
+      - 'tests/agent-readonly-inspectors.test.cjs'
       - '.github/workflows/agent-core-readonly.yml'
 jobs:
   agent-core-test:
@@ -22,5 +23,5 @@ jobs:
         with:
           node-version: '22'
       - run: npm ci --no-audit --no-fund
-      - run: node --test tests/agent-core-readonly.test.cjs
+      - run: node --test tests/agent-core-readonly.test.cjs tests/agent-readonly-inspectors.test.cjs
       - run: npm run build
