@@ -65,6 +65,9 @@ test('Flow and Report keep full-sector coverage and use the shared grouping',()=
   assert.match(flow,/const flowRows=view==='combine'\?combineRows:rows/)
   assert.match(flow,/const key=row.hotel_participation\+'\|'\+flowCombineKey/)
   assert.match(flow,/combineMode=\{view==='combine'\}/)
+  // Search from full Combine Flow must not force a hotel-only Report filter.
+  assert.match(flow,/view==='hotel'\?'filter=hotel&':''/)
+  assert.doesNotMatch(flow,/view!=='sales'\?'filter=hotel&':''/)
   assert.match(report,/const scopedRows=rows/)
   assert.match(report,/flowCombineKey\(r.room_no,r.hotel_participation\)/)
   assert.doesNotMatch(report,/combineMode\?rows\.filter\(r=>r.hotel_participation==='ร่วมโรงแรม'\)/)
