@@ -89,8 +89,8 @@ function withCombineHref(href:string|undefined,combineMode:boolean){
   if(!href||!combineMode)return href
   const hashIndex=href.indexOf('#')
   const path=hashIndex>=0?href.slice(0,hashIndex):href
-  const hash=hashIndex>=0?href.slice(hashIndex):''
-  return path+(path.includes('?')?'&':'?')+'combine=1'+hash
+  // Land on the real result table, not the summary/status cards above it.
+  return path+(path.includes('?')?'&':'?')+'combine=1#report-results'
 }
 
 function SvgStatusCard({x,y,w,item}:{x:number;y:number;w:number;item:StatusItem}){
