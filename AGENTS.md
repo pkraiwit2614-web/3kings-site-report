@@ -21,3 +21,9 @@ Before interpreting any of the 17 standard 3 Kings shortcut commands:
 - Never commit private Google Drive document IDs, credentials, access tokens or secrets.
 
 The SOP original in Drive outranks a summary in this repository. Changes to this routing system must be reviewed on a branch; do not silently change application runtime or CI gates.
+
+## Seven guarded Superpowers process Skills
+
+For any of the 17 SOP shortcuts, **first** run the current 3 Kings SOP Gate and open the live current SOP from Drive. Then consult `docs/agent-skills/superpowers-integration.json`; load the relevant `.agents/skills/3kings-sp-*/SKILL.md` adapter and its vendored method. Verification-before-completion applies to all 17; systematic-debugging applies to actual anomalies; planning/worktrees/TDD/code review to authorized app code work; writing-skills only to Skill maintenance.
+
+Vendor methods are subordinate to the real 3 Kings SOP, user scope and RBAC/RLS. A read-only command stays read-only. No auto-installing plugins, bootstraps, hooks, telemetry, subagents or running third-party scripts. No inferred merge/deploy. Repository Agent Skills do not create a server-side SOP enforcement gate or automatically install across ordinary ChatGPT chats.

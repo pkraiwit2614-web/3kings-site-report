@@ -39,3 +39,11 @@ The six central rules and official 17 command titles have been cross-checked wit
 These files support capable coding agents that read repository instructions and Agent Skills (e.g., Codex). They **do not auto-install** in ordinary ChatGPT conversations, nor can they enforce a server-side write lock. A later API/Gateway/Executor implementation needs distinct scope, risk review, authentication and tests. No new deployment permission is granted.
 
 No changes to the existing SOP files in Google Drive or to the existing repository application runtime are included.
+
+## Superpowers selected methodology (17 SOP routes)
+
+Seven pinned Superpowers Skills are vendored verbatim under `docs/vendor/superpowers/skills/` (MIT license in `docs/vendor/superpowers/LICENSE`). Seven guarded Agent Skill adapters live in `.agents/skills/3kings-sp-*/`. The `superpowers-integration.json` registry maps the seven process methods against all 17 original SOP shortcuts without changing their existing read-only/document-only/write/code/deploy classes.
+
+Local validation: `node scripts/validate-agent-skills.mjs && node scripts/validate-superpowers-integration.mjs`. Original source files and Git blob hashes are pinned at commit `bb92a77741419a4ab5f06e711a283343f1ada0c3`.
+
+Only instructions for compatible coding agents have been added: no Supabase/Apps Script/Next.js runtime code, hidden hooks, auto-start plugin, network telemetry, dependencies or unapproved deployments. These cannot force ordinary ChatGPT chats to auto-load or act as a server-side SOP Gate.

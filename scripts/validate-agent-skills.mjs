@@ -30,7 +30,7 @@ for (let i = 1; i <= 17; i++) {
 }
 const folders=fs.readdirSync(skillRoot,{withFileTypes:true}).filter(x=>x.isDirectory()).map(x=>x.name);
 const expected=new Set(["3kings-sop-gate",...entries.map(x=>x.name)]);
-for(const f of folders){if(f.startsWith("3kings-") && !expected.has(f))errors.push("Unregistered skill "+f);}
+for(const f of folders){if(f.startsWith("3kings-") && !f.startsWith("3kings-sp-") && !expected.has(f))errors.push("Unregistered skill "+f);}
 const forbidden=[/service_role\s*[:=]\s*['"]/i,/BEGIN PRIVATE KEY/,/SUPABASE_SERVICE_ROLE_KEY\s*=/];
 for(const f of ["AGENTS.md","docs/agent-skills/README.md","docs/agent-skills/manifest.json"]){
  const content=fs.readFileSync(path.join(root,f),"utf8");
