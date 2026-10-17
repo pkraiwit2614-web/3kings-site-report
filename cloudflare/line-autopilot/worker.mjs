@@ -134,6 +134,44 @@ async function collectSyncFailures(env){
   }
   return {checked:rows.length,delivered,uncertain};
 }
+async function discoverSignedGroups(env,events){
+  // This capability collects unapproved candidates only, never authorizes routing.
+  // It is separate from AUTOPILOT_ENABLED and cannot send outbound LINE messages.
+  if(env.LINE_GROUP_DISCOVERY_ENABLED!=='true'
+    || !env.SUPABASE_SERVER_KEY || !env.LINE_CHANNEL_ACCESS_TOKEN
+    || !/^https:\/\/[a-z0-9.-]+\.supabase\.co$/.test(env.SUPABASE_URL||''))
+    return 0;
+  const candidates=[...new Set(events.filter(event=>
+    ['message','join'].includes(event?.type)
+    && event?.source?.type==='group'
+    && validId(event?.source?.groupId,'C')
+    && typeof event?.timestamp==='number'
+    && Math.abs(Date.now()-event.timestamp)<=600000
+  ).map(event=>event.source.groupId))].slice(0,5);
+  let recorded=0;
+  for(const groupId of candidates){
+    try{
+      // LINE Group Summary independently validates the token and membership.
+      const response=await fetch('https://api.line.me/v2/bot/group/'
+        +encodeURIComponent(groupId)+'/summary',{
+        headers:{authorization:'Bearer '+env.LINE_CHANNEL_ACCESS_TOKEN},
+        signal:AbortSignal.timeout(6000)
+      });
+      if(!response.ok)continue;
+      const summary=await response.json();
+      if(summary?.groupId!==groupId || typeof summary.groupName!=='string'
+        || summary.groupName.trim().length<1)continue;
+      const stored=await sb(env,'/rest/v1/rpc/line_autopilot_record_group_candidate',{
+        p_group_id:groupId,p_group_name:summary.groupName.slice(0,120)
+      });
+      if(stored===true)recorded++;
+    }catch{
+      // Do not log member identifiers, access tokens or event bodies.
+      console.warn('line_group_discovery_failed');
+    }
+  }
+  return recorded;
+}
 export default {
   async fetch(request,env){
     const url=new URL(request.url);
@@ -159,7 +197,13 @@ export default {
         return json({error:'invalid_events'},400);
       if(env.LINE_BOT_DESTINATION_ID && env.LINE_BOT_DESTINATION_ID!==data.destination)
         return json({error:'wrong_destination'},403);
-      // Receiver does not expose LINE sender IDs or alter existing user/chat workflows.
+      // Capture only signed/LINE-verified groups as unapproved candidates.
+      // Never expose group ID to the HTTP caller or send any messages.
+      if(env.LINE_GROUP_DISCOVERY_ENABLED==='true'){
+        const discovered=await discoverSignedGroups(env,data.events);
+        return json({ok:true,processed:0,mode:'group_discovery_only',
+          groupCandidates:discovered});
+      }
       return json({ok:true,processed:0,mode:'receiver_only'});
     }
     return json({error:'not_found'},404);
