@@ -1,0 +1,26 @@
+name: Agent Core Read-only QA
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/agentCore.ts'
+      - 'lib/agentGoogleDrive.ts'
+      - 'lib/agentReadOnlyChecks.ts'
+      - 'app/api/agent/read-only/route.ts'
+      - 'tests/agent-core-readonly.test.cjs'
+      - '.github/workflows/agent-core-readonly.yml'
+jobs:
+  agent-core-test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - run: node --test tests/agent-core-readonly.test.cjs
+      - run: npm run build
