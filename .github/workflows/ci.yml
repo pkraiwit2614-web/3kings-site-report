@@ -133,3 +133,6 @@ jobs:
 
       - name: LINE AutoPilot five alert types, strict recipient and no-send safeguards
         run: node --test tests/line-autopilot-five-types.test.cjs
+
+      - name: Cloudflare LINE AutoPilot staging receiver and default-off tests
+        run: node --test tests/line-autopilot-cloudflare.test.cjs
