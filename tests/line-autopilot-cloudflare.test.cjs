@@ -73,3 +73,46 @@ test('modern Supabase secret key is sent as apikey only, never as JWT bearer',as
     global.fetch=previousFetch
   }
 })
+
+test('signed group event records LINE-verified candidate, never sends or approves',async()=>{
+  const secret='group-discovery-test-secret'
+  const groupId='C'+'a'.repeat(32)
+  const event={type:'message',timestamp:Date.now(),source:{type:'group',groupId},
+    message:{type:'text',id:'100',text:'Test only'}}
+  const raw=JSON.stringify({destination:'U'+'f'.repeat(32),events:[event]})
+  const sig=createHmac('sha256',secret).update(raw).digest('base64')
+  const env={LINE_CHANNEL_SECRET:secret,LINE_GROUP_DISCOVERY_ENABLED:'true',
+    AUTOPILOT_ENABLED:'false',LINE_CHANNEL_ACCESS_TOKEN:'test-token',
+    SUPABASE_URL:'https://wtqubwdduzedmcvyhbgs.supabase.co',
+    SUPABASE_SERVER_KEY:'sb_secret_fake'}
+  let requests=[]
+  const prev=global.fetch
+  global.fetch=async(url,init)=>{
+    requests.push({url:String(url),method:init?.method||'GET'})
+    if(String(url).includes('/group/')){
+      assert.equal(init.headers.authorization,'Bearer test-token')
+      return new Response(JSON.stringify({groupId,groupName:'3 Kings Group'}),{
+        status:200,headers:{'content-type':'application/json'}})
+    }
+    assert.match(String(url),/\/rest\/v1\/rpc\/line_autopilot_record_group_candidate$/)
+    assert.equal(init.headers.apikey,'sb_secret_fake')
+    assert.equal('authorization' in init.headers,false)
+    assert.deepEqual(JSON.parse(init.body),{p_group_id:groupId,p_group_name:'3 Kings Group'})
+    return new Response('true',{status:200,headers:{'content-type':'application/json'}})
+  }
+  const request=(signature)=>new Request('https://example.test/line/webhook',{
+    method:'POST',headers:{'X-Line-Signature':signature},body:raw})
+  try{
+    let bad=await worker.fetch(request('bad'),env)
+    assert.equal(bad.status,401)
+    assert.equal(requests.length,0)
+    let result=await worker.fetch(request(sig),{...env,LINE_GROUP_DISCOVERY_ENABLED:'false'})
+    assert.deepEqual(await result.json(),{ok:true,processed:0,mode:'receiver_only'})
+    assert.equal(requests.length,0)
+    result=await worker.fetch(request(sig),env)
+    assert.deepEqual(await result.json(),{ok:true,processed:0,
+      mode:'group_discovery_only',groupCandidates:1})
+    assert.equal(requests.length,2)
+    assert(requests.every(x=>!x.url.includes('/message/push')))
+  }finally{global.fetch=prev}
+})
