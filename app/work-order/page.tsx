@@ -81,6 +81,7 @@ export default function WorkOrderViewer(){
  const permitted=canAccessWorkOrder(role)
  const [rows,setRows]=useState<WorkOrder[]>([])
  const [rooms,setRooms]=useState<RoomStatus[]>([])
+ const [inactiveRows,setInactiveRows]=useState<WorkOrder[]>([])
  const [loading,setLoading]=useState(true)
  const [error,setError]=useState('')
  const [quick,setQuick]=useState<Quick>('ALL')
@@ -99,13 +100,15 @@ export default function WorkOrderViewer(){
 
  const reload=useCallback(async()=>{
   const sb=getSupabase()
-  const [order,master]=await Promise.all([
+  const [order,master,inactive]=await Promise.all([
    sb.from('defect_work_order_snapshot').select('work_id,room_group,building,contractor,defect_item,next_action,received_date,due_date,work_status,evidence_url,qa_status,conflict_note,source_sync_note,source_modified_at,imported_at').eq('source_active',true).order('work_id'),
-   sb.from('condo_room_status').select('room_no,status_group,latest_source,source_note')
+   sb.from('condo_room_status').select('room_no,status_group,latest_source,source_note'),
+   sb.from('defect_work_order_snapshot').select('work_id,room_group,building,contractor,defect_item,next_action,work_status,source_modified_at,imported_at').eq('source_active',false).order('work_id')
   ])
-  if(order.error||master.error)throw new Error(order.error?.message||master.error?.message||'อ่านข้อมูลไม่สำเร็จ')
+  if(order.error||master.error||inactive.error)throw new Error(order.error?.message||master.error?.message||inactive.error?.message||'อ่านข้อมูลไม่สำเร็จ')
   setRows((order.data||[]) as WorkOrder[])
   setRooms((master.data||[]) as RoomStatus[])
+  setInactiveRows((inactive.data||[]) as WorkOrder[])
  },[])
  useEffect(()=>{
   let alive=true
@@ -127,6 +130,16 @@ export default function WorkOrderViewer(){
   if(finished(r.work_status))return false
   const members=ids(r.room_group)
   return members.length>0&&members.every(room=>roomMap.get(room)==='Hotel - Incomplete')
+ }),[rows,roomMap])
+ const reviewLostFromDispatch=useMemo(()=>inactiveRows.filter(r=>{
+  if(finished(r.work_status))return false
+  const members=ids(r.room_group)
+  return members.length>0&&members.every(room=>roomMap.get(room)==='Hotel - Incomplete')
+ }),[inactiveRows,roomMap])
+ const reviewBlockedByRoomStatus=useMemo(()=>rows.filter(r=>{
+  if(finished(r.work_status))return false
+  const members=ids(r.room_group)
+  return !members.length||!members.every(room=>roomMap.get(room)==='Hotel - Incomplete')
  }),[rows,roomMap])
  const teams=useMemo(()=>[...new Set(eligible.map(r=>r.contractor))].sort((a,b)=>a.localeCompare(b,'th')),[eligible])
  // Search and contractor limit the context for every KPI; the selected KPI
@@ -169,6 +182,16 @@ export default function WorkOrderViewer(){
      </div>
     </button>)}
    </section>
+   <details className="panel wo-reconciliation">
+    <summary>ตรวจความต่าง Excel ↔ Defect: {reviewLostFromDispatch.length} งานค้างไม่อยู่ในชุดแจกงาน · {reviewBlockedByRoomStatus.length} งานในชุดแจกงานแต่สถานะห้องไม่อนุญาต</summary>
+    <p>ข้อมูลนี้ใช้ตรวจสอบเท่านั้น ไม่เปิดงานหรือปิดงานจากเว็บโดยอัตโนมัติ และไม่รวมในยอดงานค้างที่แจกได้</p>
+    {reviewLostFromDispatch.length>0&&<div><b>ค้างในทะเบียนเดิม แต่ถูกถอดจากรายการ Active ใน Excel</b>
+      <ul>{reviewLostFromDispatch.map(r=><li key={r.work_id}><b>{groupLabel(r.room_group)}</b> · {r.work_id} · {r.defect_item} · ตรวจชีตใบแจกงานต้นฉบับก่อนเปิดกลับ</li>)}</ul>
+    </div>}
+    {reviewBlockedByRoomStatus.length>0&&<div><b>ยังอยู่ในรายการ Active แต่สถานะห้องไม่ใช่ Defect ค้าง</b>
+      <ul>{reviewBlockedByRoomStatus.map(r=><li key={r.work_id}><b>{groupLabel(r.room_group)}</b> · {r.work_id} · {r.defect_item} · ตรวจสถานะก่อนแจกงาน</li>)}</ul>
+    </div>}
+   </details>
    <section className="panel wo-filters">
     <label>ค้นหา ห้อง / งาน / ผู้รับเหมา
      <input type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="เช่น A524, B102, Good02, ฝักบัว, RSE"/>
