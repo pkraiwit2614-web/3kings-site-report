@@ -386,6 +386,10 @@ export default function DefectFlowPage(){
       }
     })
   },[hotelRows])
+  const combineWarnings=useMemo(()=>hotelCombineRows.filter(group=>group.customer_status==='รอตรวจสอบ').map(group=>{
+    const members=hotelRows.filter(row=>hotelRoomKey(row.room_no)===hotelRoomKey(group.room_no))
+    return members.map(r=>r.room_no).join(' / ')
+  }),[hotelCombineRows,hotelRows])
   const a=useMemo(()=>buildingCounts(rows,'A'),[rows])
   const b=useMemo(()=>buildingCounts(rows,'B'),[rows])
   const synced=useMemo(()=>latestDate(rows),[rows])
@@ -447,6 +451,7 @@ export default function DefectFlowPage(){
       <button type="button" className={'flow-view-tab '+(view==='hotel'?'active':'')} aria-pressed={view==='hotel'} onClick={()=>changeView('hotel')}>Flow โรงแรม</button>
       <button type="button" className={'flow-view-tab '+(view==='combine'?'active':'')} aria-pressed={view==='combine'} onClick={()=>changeView('combine')}>Flow Combine = 1</button>
     </nav>
+    {view==='combine'&&combineWarnings.length>0&&<div className="panel flow-combine-warning" role="status">ข้อมูลสถานะลูกค้าในคู่ Combine ยังไม่ตรงกัน: {combineWarnings.join(', ')} • นับคู่ละ 1 ชุด และคงสถานะ Defect ที่ตรงกันตามฐานข้อมูล • <Link href={withCombineHref(defectHref({filter:'hotel',q:combineWarnings[0].split(' / ')[0]}),true)||'/defects'}>ตรวจสอบรายละเอียดห้อง →</Link></div>}
     <form className="panel filter-panel compact-filter-shell flow-room-search-panel" onSubmit={e=>{e.preventDefault();if(roomSearch.trim())window.location.assign('/defects?'+(view!=='sales'?'filter=hotel&':'')+(view==='combine'?'combine=1&':'')+'q='+encodeURIComponent(roomSearch.trim())+'#room-list')}}>
       <div className="toolbar detail-toolbar compact-filter flow-room-search-toolbar">
         <input value={roomSearch} onChange={e=>setRoomSearch(e.target.value)} placeholder="ค้นหา เช่น B101, Good01, Good-01, A521" aria-label="ค้นหาเลขห้อง ชื่อเจ้าของ สถานะ หรือรายละเอียดงาน หลายคำคั่นด้วย comma"/>
@@ -501,7 +506,7 @@ export default function DefectFlowPage(){
     </section>}
 
     <style jsx>{`
-      .flow-view-tabs{display:flex;gap:8px;margin:0 0 12px;flex-wrap:wrap}.flow-view-tab{padding:10px 18px;border:1px solid #c7d2df;border-radius:10px;background:#fff;color:var(--navy);font-weight:800;font-size:13px;cursor:pointer}.flow-view-tab.active{background:var(--navy);border-color:var(--navy);color:white}.flow-view-tab:focus-visible{outline:3px solid #84afe4;outline-offset:2px}
+      .flow-combine-warning{padding:10px 14px;margin-bottom:10px;border:1px solid #e8c88d;background:#fff9ee;color:#754e16;font-size:12px;font-weight:650}.flow-combine-warning a{font-weight:800;text-decoration:underline}.flow-view-tabs{display:flex;gap:8px;margin:0 0 12px;flex-wrap:wrap}.flow-view-tab{padding:10px 18px;border:1px solid #c7d2df;border-radius:10px;background:#fff;color:var(--navy);font-weight:800;font-size:13px;cursor:pointer}.flow-view-tab.active{background:var(--navy);border-color:var(--navy);color:white}.flow-view-tab:focus-visible{outline:3px solid #84afe4;outline-offset:2px}
       .flow-room-search-panel{margin-bottom:12px!important}.flow-room-search-toolbar{margin-bottom:0}
       .flow-toolbar{display:grid;grid-template-columns:218px 148px;grid-template-rows:38px 38px;align-items:center;justify-content:end;gap:6px 8px;width:auto}.sync-meta{grid-column:1;grid-row:1;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;justify-self:end;line-height:1.25;margin:0}.sync-meta span{font-size:8.5px;color:var(--muted);font-weight:700}.sync-meta b{font-size:10px;color:var(--navy);font-weight:800;white-space:nowrap}.flow-dashboard-button{grid-column:2;grid-row:1;width:148px;min-width:148px;height:38px;white-space:nowrap}.flow-export-button{grid-column:1;grid-row:2;width:218px;min-width:218px;height:38px}.flow-print-button{grid-column:2;grid-row:2;width:148px!important;min-width:148px!important;height:38px!important;margin:0!important;white-space:nowrap}.flow-zoom-toolbar{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin:0 0 9px;font-size:12px;color:var(--muted)}.flow-zoom-toolbar button{padding:6px 11px;min-height:30px}.flow-zoom-toolbar b{min-width:42px;text-align:center;color:var(--navy)}.flow-stage{padding:10px;overflow:auto;max-width:100%;min-width:0;background:#eef2f6}.flow-svg{display:block;min-width:0;height:auto;background:white;border-radius:10px;box-shadow:0 8px 24px rgba(25,42,63,.08)}.flow-loading,.flow-error{padding:24px}.flow-error{color:#9f312d}
       @media(max-width:900px){.flow-toolbar{grid-template-columns:218px 148px;justify-content:end;width:100%}}
