@@ -39,7 +39,7 @@ export async function embedRenderedSvgFonts(source: SVGSVGElement, clone: SVGSVG
     for (const rule of Array.from(cssRules)) {
       if (rule.type === CSSRule.FONT_FACE_RULE) {
         const fontRule = rule as CSSFontFaceRule
-        if (usedFamilies.has(normalizedFamily(fontRule.style.fontFamily)) && /url\s*\(/i.test(fontRule.style.src)) {
+        if (usedFamilies.has(normalizedFamily(fontRule.style.fontFamily)) && /url\s*\(/i.test(fontRule.cssText)) {
           rules.push({ cssText: fontRule.cssText, baseUrl })
         }
       } else if (rule.type === CSSRule.IMPORT_RULE) {
