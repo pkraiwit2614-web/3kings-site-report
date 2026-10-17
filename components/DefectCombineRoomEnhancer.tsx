@@ -86,9 +86,9 @@ function applyEnhancement(combineMap:Map<string,CombineMeta>){
         roomCell.appendChild(badge)
       }
 
-      if(combine.detail&&detailCell.textContent?.trim()!==combine.detail){
-        detailCell.textContent=combine.detail
-      }
+      // React renders the canonical per-room Work Order summary and controls.
+      // Never replace the whole detail cell: doing so deletes its headings,
+      // work-date line, link/button, and print/expand behavior.
     }else{
       existingCode?.remove()
       existingBadge?.remove()

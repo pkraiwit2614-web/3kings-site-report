@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, release/common-ab-live-20261016]
   pull_request:
     branches: [main]
 
@@ -45,6 +45,9 @@ jobs:
 
       - name: Hotel Excel OOO/OOS pinned source safety
         run: node --test tests/hotel-ooo-excel-source.test.cjs
+
+      - name: Common Area A+B read-only report and source regression
+        run: node --test tests/common-defect-report-ab.test.cjs
 
       - name: Defect canonical source contract
         run: node tests/defect-canonical-source.test.cjs

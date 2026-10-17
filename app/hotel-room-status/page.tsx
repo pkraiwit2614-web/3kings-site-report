@@ -181,7 +181,7 @@ export default function HotelRoomStatusPage(){
   }
 
   return <AppShell>
-    <PageHeader title="Room Status | OOO/OOS" subtitle="ใช้สำหรับยืนยันสถานะ OOO/OOS ที่ได้รับจากทางโรงแรม ควบคู่กับกรอบเวลาการเข้าเก็บงาน Defect • OOO = Out of Order • OOS = Out of Service"
+    <PageHeader title="Room Status | OOO/OOS" subtitle="OOO = Out of Order • OOS = Out of Service"
       action={<div className="hotel-header-actions"><div className="hotel-update-meta"><span>ข้อมูลอัปเดต</span><b>{dateTH(lastUpdated)}</b></div><PrintButton reportTitle="Room Status | OOO/OOS"/><Link className="button" href="/defects">เปิด Defect Detail</Link></div>}/>
     <section className="panel" style={{padding:14,marginBottom:12}}>
       <div className="hotel-kpis">
