@@ -8,7 +8,8 @@ import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
 import DefectCombineRoomEnhancer from '@/components/DefectCombineRoomEnhancer'
 import DefectReportTabs from '@/components/DefectReportTabs'
-import {hotelRoomKey,hotelRoomLabel,hotelRoomMembers,normalizeHotelRoom} from '@/lib/hotelRoomGroups'
+import {hotelRoomLabel,hotelRoomMembers,normalizeHotelRoom} from '@/lib/hotelRoomGroups'
+import {flowCombineKey} from '@/lib/flowCombineOne'
 import {statusLabel,statusTone} from '@/lib/defectStatusPresentation'
 import {summarizeDefectDetail} from '@/lib/defectDetailSummary'
 import DefectInputPanel from '@/components/DefectInputPanel'
@@ -156,7 +157,6 @@ export default function DefectDetailPage(){
     const initialCombine=params.get('combine')==='1'
     setCombineMode(initialCombine)
     if(categories.some(c=>c.id===initial))setFilter(initial)
-    else if(initialCombine)setFilter('hotel')
     if(['ALL','A','B'].includes(initialBuilding))setBuilding(initialBuilding)
     if(initialQuery)setQ(initialQuery)
 
@@ -296,18 +296,20 @@ export default function DefectDetailPage(){
   const active=useMemo(()=>categories.find(c=>c.id===filter)||null,[filter])
   const sourceDate=latestDefectChangeAt
   const summaryByRoom=useMemo(()=>new Map(rows.map(r=>[r.room_no,summarizeDefectDetail(r.defect_detail)])),[rows])
-  // Combine=1 is a read-only presentation of hotel-participating physical rooms.
-  const scopedRows=useMemo(()=>combineMode?rows.filter(r=>r.hotel_participation==='ร่วมโรงแรม'):rows,[rows,combineMode])
+  // Combine=1 preserves all Flow รวม categories and changes only room counts.
+  // Hotel uses engineer-confirmed 16 pairs, non-hotel uses existing Combine data.
+  const scopedRows=rows
+  const unitKey=(r:RoomRow)=>r.hotel_participation+'|'+flowCombineKey(r.room_no,r.hotel_participation)
   const uniqueUnits=(list:RoomRow[])=>{
     const seen=new Set<string>()
-    return list.filter(r=>{const key=hotelRoomKey(r.room_no);if(seen.has(key))return false;seen.add(key);return true})
+    return list.filter(r=>{const key=unitKey(r);if(seen.has(key))return false;seen.add(key);return true})
   }
   const baseRows=useMemo(()=>{
     const selected=active?scopedRows.filter(active.predicate):scopedRows
     return combineMode?uniqueUnits(selected):selected
   },[scopedRows,active,combineMode])
   const groupCustomerStatus=(unit:RoomRow)=>{
-    const statuses=new Set(scopedRows.filter(r=>hotelRoomKey(r.room_no)===hotelRoomKey(unit.room_no)).map(r=>r.customer_status))
+    const statuses=new Set(scopedRows.filter(r=>unitKey(r)===unitKey(unit)).map(r=>r.customer_status))
     return statuses.size===1?[...statuses][0]:'รอตรวจสอบ'
   }
   const customerCount=baseRows.filter(r=>combineMode?groupCustomerStatus(r)==='มีลูกค้า':r.customer_status==='มีลูกค้า').length
@@ -320,7 +322,7 @@ export default function DefectDetailPage(){
   const filtered=useMemo(()=>{
     const needles=Array.from(new Set(q.split(/[,，]+/).map(x=>normalizeHotelRoom(x.trim()).toLowerCase()).filter(Boolean)))
     const matched=scopedRows.filter(r=>{
-      const paired=scopedRows.filter(other=>hotelRoomMembers(r.room_no).includes(other.room_no))
+      const paired=combineMode?scopedRows.filter(other=>unitKey(other)===unitKey(r)):scopedRows.filter(other=>hotelRoomMembers(r.room_no).includes(other.room_no))
       if(building!=='ALL'&&!paired.some(other=>other.building===building))return false
       if(customerFilter==='CUSTOMER'&&!paired.some(other=>other.customer_status==='มีลูกค้า'))return false
       if(customerFilter==='NO_CUSTOMER'&&!paired.some(other=>other.customer_status==='ไม่มีลูกค้า'))return false
@@ -332,7 +334,11 @@ export default function DefectDetailPage(){
     return combineMode?uniqueUnits(matched):matched
   },[scopedRows,building,customerFilter,active,q,combineMode])
 
-  const combinedMembers=(room:string)=>combineMode?scopedRows.filter(other=>hotelRoomKey(other.room_no)===hotelRoomKey(room)):[]
+  const combinedMembers=(room:string)=>{
+    if(!combineMode)return []
+    const current=scopedRows.find(row=>row.room_no===room)
+    return current?scopedRows.filter(other=>unitKey(other)===unitKey(current)):[]
+  }
   const memberLabel=(room:string)=>combinedMembers(room).map(r=>hotelRoomLabel(r.room_no)).join(' / ')
   const customerScopeLabel=customerFilter==='CUSTOMER'?'มีลูกค้า':customerFilter==='NO_CUSTOMER'?'ไม่มีลูกค้า':'ทุกประเภทลูกค้า'
 
@@ -341,7 +347,7 @@ export default function DefectDetailPage(){
     <DefectCombineRoomEnhancer />
     <PageHeader
       title="Above Condo — Defect Report"
-      subtitle={combineMode?"รายละเอียดย่อย Above Condo A, B • เฉพาะร่วมโรงแรม • Flow Combine = 1":"รายละเอียดย่อย Above Condo A, B"}
+      subtitle={combineMode?"รายละเอียดย่อย Above Condo A, B • ร่วมและไม่ร่วมโรงแรม • Flow Combine = 1":"รายละเอียดย่อย Above Condo A, B"}
       action={<div className="header-actions">
         <div className="update-meta"><span>ข้อมูลอัปเดต</span><b>{dateTimeTH(sourceDate)}</b></div>
         <a className="button drive-button" href={DEFECT_DONE_FOLDER} target="_blank" rel="noreferrer">📷 Picture - Defect Done</a>
@@ -379,7 +385,7 @@ export default function DefectDetailPage(){
 
       <section className="panel detail-panel" id="report-results">
         <div className="detail-head">
-          <div><h2>รายชื่อห้อง {combineMode?'— Flow Combine = 1':''}</h2><p>แสดง {filtered.length} {combineMode?'ชุดห้อง (เฉพาะร่วมโรงแรม)':'ห้อง'}</p></div>
+          <div><h2>รายชื่อห้อง {combineMode?'— Flow Combine = 1':''}</h2><p>แสดง {filtered.length} {combineMode?'ชุดห้อง (ร่วมและไม่ร่วมโรงแรม)':'ห้อง'}</p></div>
           <div className="legend"><span><i className="customer-dot"/>มีลูกค้า</span><span><i className="no-customer-dot"/>ไม่มีลูกค้า</span><span><i className="bad-dot"/>เพิ่งได้รับแจ้ง Defect</span><span><i className="warn-dot"/>Defect เสร็จแล้ว • รอตรวจรับ</span><span><i className="good-dot"/>ตรวจรับแล้ว / Hotel ตรวจแล้ว</span></div>
         </div>
         <div className="table-wrap defect-table"><table><thead><tr><th>ห้อง</th><th className="center">อาคาร</th><th className="center">วันที่ Hotel แจ้ง</th><th>ชื่อลูกค้า/เจ้าของ</th><th className="center">ลูกค้า</th><th className="center">โรงแรม</th><th>รายละเอียดงาน/Work Order</th><th className="center">สถานะ</th><th>Work Plan / Hotel Status</th><th>ต้องทำต่อ</th></tr></thead><tbody>
