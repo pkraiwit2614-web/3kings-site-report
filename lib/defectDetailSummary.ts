@@ -37,18 +37,36 @@ function workCount(description: string): string {
 }
 
 function workSummary(description: string): string {
-  const first = description.replace(/\\n/g,'\n').split(/\n/)[0].trim()
-  if (!first) return 'ไม่ระบุ'
-  const caption = first.match(/ข้อความกำกับที่อ่านได้\s*[:：]\s*/)
-  let text = caption ? first.slice((caption.index||0)+caption[0].length) : first
-  text = text
+  // Only the original defect inventory belongs under "งานทั้งหมด".
+  // Follow-up/history entries document progress, not additional work items by default.
+  const normalized = description.replace(/\\n/g, '\n').replace(/\r\n/g, '\n')
+  const history = normalized.search(/\n\s*(?:\[(?:อัพเดท|อัปเดต|ยืนยัน|ผู้ใช้ยืนยัน|Updated|Update|Hotel follow-up)|\d{1,2}\/\d{1,2}\/\d{2,4}\s*[—–-]\s*ปิดรอบ Defect)/i)
+  const original = (history >= 0 ? normalized.slice(0, history) : normalized)
     .split(/\s+\|\s+(?=ผู้ใช้ยืนยัน|Updated|Update|Hotel follow-up|Previous|การแจ้ง)/i)[0]
-    .replace(/\s*(?:\.\s*)?(?:ภาพประกอบบางรายการ|ภาพประกอบที่ไม่มีคำกำกับ|ใหม่กว่า\s*update|เอกสารระบุ\s*#?รายการ).*$/i,'')
-    .replace(/\s*[—–-]\s*(?:แก้ไขแล้ว|เสร็จแล้ว|Target|รอ Hotel Engineer|ปิดรอบ Defect).*$/i,'')
-    .replace(/;\s*(?:รอ Hotel Engineer ตรวจ|ผู้ใช้ยืนยัน|Update|ล่าสุด).*$/i,'')
-    .trim().replace(/[.;|\s]+$/,'')
-  if (/^(?:Hotel PDF|โรงแรมแจ้ง|User update|Updated|Update|ผู้ใช้ยืนยัน)\b/i.test(text) && !caption) return 'ไม่ระบุรายการงานที่ยืนยัน'
-  return text || 'ไม่ระบุรายการงานที่ยืนยัน'
+
+  const caption = original.match(/ข้อความกำกับที่อ่านได้\s*[:：]\s*/)
+  let text = caption ? original.slice((caption.index || 0) + caption[0].length) : original
+  text = text
+    .replace(/^\s*Hotel\s+list\s+ล่าสุด\s+\d{1,2}\/\d{1,2}\/\d{2,4}\s*[:：]\s*/i, '')
+    .replace(/\.\s*หลักฐานเสริม\s+(?:doc|เอกสาร)\s+\d{1,2}\/\d{1,2}\/\d{2,4}\s*[:：]\s*/gi, '; ')
+    .replace(/\s*(?:ภาพประกอบบางรายการ|ภาพประกอบที่ไม่มีคำกำกับ|ใหม่กว่า\s*update|เอกสารระบุ\s*#?รายการ)[\s\S]*$/i, '')
+    .trim()
+  // Some rooms record a site visit but explicitly state that no individual
+  // defect items were provided. Never display the visit itself as a work item.
+  if (/^เข้าเก็บ\s+Defect\s+วันนี้\s+\d{1,2}\/\d{1,2}\/\d{2,4}\s*;\s*รายการย่อยยังไม่ระบุ\s*$/i.test(text)) {
+    return 'รายการย่อยยังไม่ระบุ'
+  }
+  if (!caption && /^(?:Hotel PDF|โรงแรมแจ้ง|User update|Updated|Update|ผู้ใช้ยืนยัน)\b/i.test(text)) {
+    return 'ไม่ระบุรายการงานที่ยืนยัน'
+  }
+  // Preserve the order and even repeated source items (multiple defects of the same type).
+  // Join individual semicolon/newline-delimited jobs with a consistent comma delimiter.
+  const jobs = text.split(/[;\n]+/).map(part=>part
+    .replace(/\s*[—–-]\s*(?:แก้ไขแล้ว|เสร็จแล้ว|Target|รอ Hotel Engineer|ปิดรอบ Defect).*$/i, '')
+    .replace(/\s*(?:รอ Hotel Engineer ตรวจ|ผู้ใช้ยืนยัน|Update|ล่าสุด).*$/i, '')
+    .trim().replace(/[.;|,\s]+$/,'')
+  ).filter(part=>part && !/^(?:รอ Hotel Engineer ตรวจ|ปิดรอบ Defect)/i.test(part))
+  return jobs.length ? jobs.join(', ') : 'ไม่ระบุรายการงานที่ยืนยัน'
 }
 
 /** Only first and latest dated notes appear, even after many updates. */

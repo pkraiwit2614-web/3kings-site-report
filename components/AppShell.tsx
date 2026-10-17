@@ -59,7 +59,7 @@ function roleLabel(role:AccessRole|null){
 
 function navIsActive(path:string,href:string){
   if(href==='/materials') return path==='/materials'||path==='/procurement'
-  if(href==='/defect-flow') return path==='/defect-flow'||path==='/defects'||path==='/work-order'||path==='/hotel-work-plan'||path==='/hotel-room-status'
+  if(href==='/defect-flow') return path==='/defect-flow'||path==='/defects'||path.startsWith('/defects/')||path==='/work-order'||path==='/hotel-work-plan'||path==='/hotel-room-status'
   if(href==='/reports/labour') return path==='/reports/labour'
   if(href==='/reports') return path==='/reports'||(path.startsWith('/reports/')&&path!=='/reports/labour')
   return path===href
@@ -223,7 +223,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   const extraActive = extraNav.some(([href]) => navIsActive(path,href))
   const isMaterialsProcurementSection = path==='/materials'||path==='/procurement'
-  const isDefectSection = path==='/defect-flow'||path==='/defects'||path==='/work-order'||path==='/hotel-work-plan'||path==='/hotel-room-status'
+  const isDefectSection = path==='/defect-flow'||path==='/defects'||path.startsWith('/defects/')||path==='/work-order'||path==='/hotel-work-plan'||path==='/hotel-room-status'
   const isSiteOperationsSection = path==='/reports'||path==='/reports/labour'
   const isOwnerToolsSection = actualRole==='owner'&&(path==='/users'||path==='/photo-mapping'||path==='/data-health')
 
