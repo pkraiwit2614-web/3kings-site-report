@@ -14,7 +14,8 @@ test('isolated Cloudflare Worker module and five-type scope',async()=>{
   ])
   const config=fs.readFileSync(path.resolve(__dirname,'..','cloudflare/line-autopilot/wrangler.jsonc'),'utf8')
   assert.match(config,/"AUTOPILOT_ENABLED": "false"/)
-  assert.doesNotMatch(config,/"crons"\s*:|LINE_CHANNEL_SECRET":|LINE_CHANNEL_ACCESS_TOKEN":/)
+  assert.match(config,/"crons": \["0 \* \* \* \*"\]/)
+  assert.doesNotMatch(config,/LINE_CHANNEL_SECRET":|LINE_CHANNEL_ACCESS_TOKEN":/)
 })
 
 test('health is unprivileged but stage remains no-send',async()=>{
