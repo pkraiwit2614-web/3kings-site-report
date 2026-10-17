@@ -22,7 +22,7 @@ const helper=load(helperSource,id=>{
 })
 
 test('Hotel Combine=1 is a fourth opt-in tab and preserves existing defaults',()=>{
-  assert.match(src,/useState<'sales'\\|'hotel'\\|'combine'\\|'hotel-combine'>\\('sales'\\)/)
+  assert.ok(src.includes("useState<'sales'|'hotel'|'combine'|'hotel-combine'>('sales')"))
   assert.ok(src.includes("target==='hotel-combine'"))
   assert.ok(src.includes("changeView('hotel-combine')}>Flow โรงแรม Combine = 1"))
   assert.ok(src.includes("view==='hotel'?<HotelFlowDiagram rows={hotelRows} synced={displayedSync}/>"))
@@ -52,5 +52,5 @@ test('Hotel-only grouping deep-links to grouped Report and preserves role/source
   assert.ok(src.includes("formula={'ร่วมโรงแรม '+stream.list.length+(combineMode?' ชุดห้อง':' ห้อง')}"))
   assert.ok(src.includes("view==='hotel-combine'?hotelCombineWarnings:[]"))
   assert.ok(src.includes("select('room_no,building,customer_status,hotel_participation,status_group,synced_at')"))
-  assert.doesNotMatch(src,/\\.from\\('condo_room_status'\\)\\.(?:insert|update|upsert|delete)\\(/)
+  for(const method of ['insert','update','upsert','delete'])assert.ok(!src.includes(".from('condo_room_status')."+method+"("))
 })
