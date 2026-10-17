@@ -17,7 +17,7 @@ export type GateDecision = {
   sop?:{fileId:string;modifiedAt:string;sha256:string;indexModifiedAt:string}
 }
 const allCommands:AgentCommand[]=manifest.shortcuts
-export const READ_ONLY_INSPECT_IDS = [13,14] as const
+export const READ_ONLY_INSPECT_IDS = [2,4,13,14] as const
 export class AgentGateError extends Error {
   constructor(public code:string){super(code)}
 }
@@ -29,7 +29,7 @@ export function resolveCommand(id:unknown):AgentCommand{
 }
 export function validateAction(command:AgentCommand,mode:AgentMode):void{
   if(mode!=='preflight'&&mode!=='inspect')throw new AgentGateError('BLOCK_INVALID_MODE')
-  if(mode==='inspect'&&(!READ_ONLY_INSPECT_IDS.includes(command.number as 13|14)||command.mode!=='read_only'))
+  if(mode==='inspect'&&(!READ_ONLY_INSPECT_IDS.includes(command.number as 2|4|13|14)||command.mode!=='read_only'))
     throw new AgentGateError('BLOCK_ACTION_NOT_READ_ONLY')
 }
 export function sopIdFromUrl(url:string):string{
