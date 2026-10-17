@@ -6,6 +6,7 @@
   "workers_dev": true,
   "triggers": { "crons": ["0 * * * *"] },
   "vars": {
-    "AUTOPILOT_ENABLED": "false"
+    "AUTOPILOT_ENABLED": "false",
+    "SUPABASE_URL": "https://wtqubwdduzedmcvyhbgs.supabase.co"
   }
 }
