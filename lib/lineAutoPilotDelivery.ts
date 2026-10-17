@@ -5,7 +5,9 @@ import type { PreparedAutoPilotAlert } from './lineAutoPilotNotifications'
  */
 export type DeliveryClaim =
   | { status: 'new'; retryKey: string }
-  | { status: 'already_sent' | 'in_flight' | 'blocked' }
+  | { status: 'already_sent' }
+  | { status: 'in_flight' }
+  | { status: 'blocked' }
 
 export interface LineDeliveryLedger {
   claimOnce(eventKey: string): Promise<DeliveryClaim>
