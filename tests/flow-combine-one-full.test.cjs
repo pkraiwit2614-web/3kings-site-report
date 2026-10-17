@@ -38,7 +38,7 @@ test('Hotel Engineer list is exactly 16 whole-room Combine pairs',()=>{
     assert.equal(flowCombineKey(a,'ร่วมโรงแรม'),flowCombineKey(b,'ร่วมโรงแรม'))
   // Not on the Engineer's Combine list, although paired by another workflow.
   assert.notEqual(flowCombineKey('A517','ร่วมโรงแรม'),flowCombineKey('A518','ร่วมโรงแรม'))
-  assert.notEqual(flowCombineKey('A521','ร่วมโรงแรม'),flowCombineKey('A522','ร่วมโรงแรม'))
+  assert.notEqual(flowCombineKey('A606','ร่วมโรงแรม'),flowCombineKey('A607','ร่วมโรงแรม'))
 })
 
 test('144 physical Hotel rooms become 128 engineer-counted units',()=>{
@@ -55,7 +55,8 @@ test('Non-hotel units retain the existing confirmed Condo Combine mapping',()=>{
   const {flowCombineKey}=load('lib/flowCombineOne.ts')
   assert.equal(flowCombineKey('A221','ไม่ร่วมโรงแรม'),flowCombineKey('A222','ไม่ร่วมโรงแรม'))
   assert.equal(flowCombineKey('B712','ไม่ร่วมโรงแรม'),flowCombineKey('B713','ไม่ร่วมโรงแรม'))
-  assert.notEqual(flowCombineKey('A221','ร่วมโรงแรม'),flowCombineKey('A222','ร่วมโรงแรม'))
+  // The canonical map no longer has a different Combine definition per UI.
+  assert.equal(flowCombineKey('A221','ร่วมโรงแรม'),flowCombineKey('A222','ไม่ร่วมโรงแรม'))
 })
 
 test('Flow and Report keep full-sector coverage and use the shared grouping',()=>{
