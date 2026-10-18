@@ -14,6 +14,7 @@ test('accept only exact HTTPS 3 Kings Vercel preview hosts and root path', () =>
     'http://3kings-site-report-abc.vercel.app/',
     'https://3kings-site-report-abc.vercel.app.evil.example/',
     'https://evil.vercel.app/',
+    'https://3kings-site-report.vercel.app/',
     'https://3kings-site-report-abc.vercel.app:8443/',
     'https://3kings-site-report-abc.vercel.app/admin',
     'https://3kings-site-report-abc.vercel.app/?secret=1',
