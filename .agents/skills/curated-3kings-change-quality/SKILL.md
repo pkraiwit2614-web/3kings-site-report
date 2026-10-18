@@ -3,9 +3,9 @@ name: curated-3kings-change-quality
 description: "Optional 3 Kings engineering QA: verify domain terminology, minimal scoped changes, PR evidence and regression risks; complements, never replaces, SOP Gate and the seven existing Superpowers adapters."
 ---
 
-# Curated 3 Kings — Change Quality (review candidate)
+# Curated 3 Kings — Change Quality
 
-**Status:** Optional repo-level guidance on a test branch. No server-side enforcement or auto-install. Adapted principles, **not** an installation of third-party runtime/plugins.
+**Status:** Optional repository-aware agent guidance. No server-side enforcement or auto-install. Adapted principles, **not** an installation of third-party runtime/plugins.
 
 ## Authority and activation
 
