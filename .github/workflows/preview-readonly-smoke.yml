@@ -1,0 +1,49 @@
+name: Preview HTTP Reachability (read-only)
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/preview-readonly-smoke.yml'
+      - 'scripts/preview-readonly-smoke.mjs'
+      - 'tests/preview-readonly-smoke.test.mjs'
+  deployment_status:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate Preview URL allowlist and fail-closed behavior
+        run: node --test tests/preview-readonly-smoke.test.mjs
+
+  probe:
+    if: >-
+      github.event_name == 'deployment_status' &&
+      github.event.deployment_status.state == 'success' &&
+      (github.event.deployment.environment == 'Preview' ||
+       github.event.deployment.environment == 'preview')
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      # deployment_status runs from default-branch workflow code. Do not expose secrets
+      # or load authenticated browser state from unreviewed PR deployments.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Probe allowed Vercel Preview URL, read-only, no auth bypass
+        env:
+          PREVIEW_ENV_URL: ${{ github.event.deployment_status.environment_url }}
+          PREVIEW_STATUS_URL: ${{ github.event.deployment_status.target_url }}
+        run: node scripts/preview-readonly-smoke.mjs
