@@ -54,3 +54,12 @@ Google STS and Drive against the **production-configured** provider on a control
 deployment, ensure credentials are separated and verify routes/data/security. Only then enable
 Production intentionally and deploy/verify. With Production IAM unavailable, leave the API
 disabled and PR as Draft; do **not** call a Preview PASS equivalent to Production authorization.
+
+
+## Additional controlled checks (read-only / opt-in)
+
+- `POST /api/agent/access-check` accepts only an authenticated bearer token and an empty JSON object; checks actual Supabase `auth.getUser`, active Owner profile and the current read-only permission matrix. It never exchanges Google STS, reads Google Drive, writes or enables the Agent. No token, user ID or email is returned.
+- `/data-health/agent-security-qa` is already under the existing Owner-only `/data-health` path guard; clicking performs one Owner-authenticated request and one *anonymous* request (without any credentials). This is **not a real non-Owner identity test**; such a test requires a separate real Viewer/Contributor account and must not borrow or expose their credentials.
+- SOP 13 now inspects bounded `drive_sync_runs` samples individually for schedule/materials/defects/photos plus independent single-row DB snapshot timestamps for Site Operations, Materials, Procurement, Condo and Work Order. Queries use the caller's RLS-scoped Supabase client and contain no write methods.
+- The inspector **always remains PARTIAL/UNVERIFIED** because it does not observe Google Drive source file content/headers/modified timestamps, GAS triggers/executions, rowwise import verification or browser data readback. `READ_OK` is explicitly one stage, not end-to-end PASS; 0 rows written can be an idempotent no-op.
+- No additional Drive sharing, Apps Script privileges, schema migrations, RLS changes, background cron or action executor in this change. Production activation must remain off until Owner and real non-Owner E2E as well as Google STS/Drive E2E have been demonstrated.
