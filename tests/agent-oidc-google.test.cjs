@@ -70,7 +70,7 @@ test('canonical SOP_INDEX is read directly without a redundant sheet-list reques
  const snapshot=await source.readIndex()
  assert.equal(snapshot.rows.length,1)
  assert.equal(snapshot.rows[0].shortcut,'ตรวจ Sync')
- assert.equal(urls.filter(x=>x.includes('/sheets.googleapis.com/v4/spreadsheets/')).length,0)
+ assert.equal(urls.filter(x=>x.includes('sheets.googleapis.com/v4/spreadsheets/index123?')).length,0)
  assert.equal(urls.filter(x=>x.includes('/values/')).length,1)
  delete process.env.AGENT_SOP_INDEX_ID
 })
