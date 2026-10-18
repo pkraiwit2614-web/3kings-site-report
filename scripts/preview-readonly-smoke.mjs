@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import { pathToFileURL } from 'node:url'
 
-const HOST = /^3kings-site-report(?:-[a-z0-9-]+)?\.vercel\.app$/
+const HOST = /^3kings-site-report-[a-z0-9-]+\.vercel\.app$/
 
 export function choosePreviewUrl(candidates) {
   for (const candidate of candidates) {
