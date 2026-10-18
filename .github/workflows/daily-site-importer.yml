@@ -1,0 +1,23 @@
+name: Daily Site Report isolated sync QA
+on:
+  pull_request:
+    paths:
+      - 'docs/apps-script/DailySiteReportSync_2026-10-19.gs'
+      - 'supabase/migrations/20261019123000_daily_site_report_independent_sync.sql'
+      - 'tests/daily-site-importer.test.cjs'
+      - '.github/workflows/daily-site-importer.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docs/apps-script/DailySiteReportSync_2026-10-19.gs'
+      - 'supabase/migrations/20261019123000_daily_site_report_independent_sync.sql'
+      - 'tests/daily-site-importer.test.cjs'
+jobs:
+  safety:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test tests/daily-site-importer.test.cjs
