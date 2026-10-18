@@ -26,3 +26,5 @@ jobs:
         run: node scripts/validate-superpowers-integration.mjs
       - name: Validate read-only Task Observer and all 17 mappings
         run: node scripts/validate-task-observer.mjs
+      - name: Validate optional curated Skills against original SOP contracts
+        run: node scripts/validate-curated-skills.mjs
