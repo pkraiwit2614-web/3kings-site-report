@@ -5,9 +5,9 @@ const vm=require('node:vm')
 const ts=require('typescript')
 const raw=fs.readFileSync('lib/agentSyncEvidence.ts','utf8')
 const js=ts.transpileModule(raw,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText
-const exports={}
-vm.runInNewContext(js,{exports,module:{exports},require:(name)=>{throw Error('unexpected runtime import '+name)},Date})
-const inspector=exports
+const moduleShim={exports:{}}
+vm.runInNewContext(js,{exports:moduleShim.exports,module:moduleShim,require:(name)=>{throw Error('unexpected runtime import '+name)},Date})
+const inspector=moduleShim.exports
 
 function fakeClient(fixtures){
  const calls=[]
