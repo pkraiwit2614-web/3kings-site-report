@@ -43,6 +43,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Require reviewed checker on default branch before using any bypass credential
+        run: |
+          if [ ! -f scripts/preview-readonly-smoke.mjs ]; then
+            echo "::error::BLOCK_PREVIEW_RUNNER_NOT_MERGED_ON_MAIN"
+            exit 1
+          fi
       - name: Probe Vercel Preview with dedicated automation credential
         env:
           PREVIEW_ENV_URL: ${{ github.event.deployment_status.environment_url }}
