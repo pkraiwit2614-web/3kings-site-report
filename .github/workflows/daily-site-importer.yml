@@ -4,6 +4,7 @@ on:
     paths:
       - 'docs/apps-script/DailySiteReportSync_2026-10-19.gs'
       - 'supabase/migrations/20261019123000_daily_site_report_independent_sync.sql'
+      - 'supabase/migrations/20261019065500_daily_site_rpc_role_guard.sql'
       - 'tests/daily-site-importer.test.cjs'
       - '.github/workflows/daily-site-importer.yml'
   push:
@@ -11,6 +12,7 @@ on:
     paths:
       - 'docs/apps-script/DailySiteReportSync_2026-10-19.gs'
       - 'supabase/migrations/20261019123000_daily_site_report_independent_sync.sql'
+      - 'supabase/migrations/20261019065500_daily_site_rpc_role_guard.sql'
       - 'tests/daily-site-importer.test.cjs'
 jobs:
   safety:
