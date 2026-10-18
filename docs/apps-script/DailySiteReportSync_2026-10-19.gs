@@ -106,26 +106,50 @@ function dailySiteSyncRun20261019_(commit){
  try{
    const source=dailySiteSyncRead20261019_();
    if(!source.rows.length)return {status:'NO_NEW_ROWS',rows_read:source.read};
-   const request={p_rows:source.rows,p_mode:'dry_run',p_expected:{},
-     p_source_rows_read:source.read,p_source_revision:source.revision};
-   const dry=dailySiteSyncRpc20261019_(request);
-   if(dry.blocked>0)throw Error('BLOCK_REQUIRES_REVIEW_COUNT_'+dry.blocked);
-   if(!commit)return {status:'DRY_RUN_OK',result:dry};
-   // Source changed since dry-run => refuse to write a stale payload.
-   const revision=String(DriveApp.getFileById(DAILY_SITE_20261019.SOURCE_ID)
-      .getLastUpdated().getTime());
-   if(source.revision!==revision)throw Error('BLOCK_SOURCE_REVISION_CHANGED');
-   request.p_mode='commit';request.p_expected=dry.expected;
-   const live=dailySiteSyncRpc20261019_(request);
-   if(live.blocked!==0||live.verified!==source.rows.length
-     ||live.would_insert_or_inserted!==dry.would_insert_or_inserted
-     ||live.would_update_or_updated!==dry.would_update_or_updated)
-     throw Error('BLOCK_POST_WRITE_VERIFICATION_MISMATCH');
-   console.log('Daily Site Sync validated counts: '+JSON.stringify({
-     read:live.rows_read,parsed:live.rows_parsed,inserted:live.would_insert_or_inserted,
-     updated:live.would_update_or_updated,skipped:live.skipped,verified:live.verified
-   }));
-   return {status:'PASS_READBACK',result:live};
+   // Stay below the RPC's 400-row limit as submissions accumulate over months.
+   // PRE-FLIGHT ALL chunks before committing any, avoiding known mid-batch blockers.
+   const chunks=[];
+   for(let i=0;i<source.rows.length;i+=200)chunks.push(source.rows.slice(i,i+200));
+   const plans=chunks.map(rows=>{
+     const request={p_rows:rows,p_mode:'dry_run',p_expected:{},
+       p_source_rows_read:source.read,p_source_revision:source.revision};
+     const dry=dailySiteSyncRpc20261019_(request);
+     if(dry.blocked>0)throw Error('BLOCK_REQUIRES_REVIEW_COUNT_'+dry.blocked);
+     return {request:request,dry:dry,rows:rows};
+   });
+   const aggregate={rows_read:source.read,rows_parsed:0,
+     would_insert_or_inserted:0,would_update_or_updated:0,
+     skipped:0,verified:0,blocked:0,chunk_count:plans.length};
+   const accumulate=result=>{
+     aggregate.rows_parsed+=result.rows_parsed;
+     aggregate.would_insert_or_inserted+=result.would_insert_or_inserted;
+     aggregate.would_update_or_updated+=result.would_update_or_updated;
+     aggregate.skipped+=result.skipped;
+     aggregate.verified+=result.verified;
+     aggregate.blocked+=result.blocked;
+   };
+   if(!commit){
+     plans.forEach(p=>accumulate(p.dry));
+     return {status:'DRY_RUN_OK',result:aggregate};
+   }
+   plans.forEach(p=>{
+     // Check before EVERY bounded transaction. A new Form submission stops stale work.
+     const revision=String(DriveApp.getFileById(DAILY_SITE_20261019.SOURCE_ID)
+       .getLastUpdated().getTime());
+     if(source.revision!==revision)throw Error('BLOCK_SOURCE_REVISION_CHANGED');
+     const request=p.request;
+     request.p_mode='commit';request.p_expected=p.dry.expected;
+     const live=dailySiteSyncRpc20261019_(request);
+     if(live.blocked!==0||live.verified!==p.rows.length
+       ||live.would_insert_or_inserted!==p.dry.would_insert_or_inserted
+       ||live.would_update_or_updated!==p.dry.would_update_or_updated)
+       throw Error('BLOCK_POST_WRITE_VERIFICATION_MISMATCH');
+     accumulate(live);
+   });
+   if(aggregate.rows_parsed!==source.rows.length||aggregate.verified!==source.rows.length)
+     throw Error('BLOCK_TOTAL_READBACK_COUNT');
+   console.log('Daily Site Sync validated counts: '+JSON.stringify(aggregate));
+   return {status:'PASS_READBACK',result:aggregate};
  } finally {lock.releaseLock()}
 }
 function dailySiteSyncDryRun20261019(){return dailySiteSyncRun20261019_(false)}

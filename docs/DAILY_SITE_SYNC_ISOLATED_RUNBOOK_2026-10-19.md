@@ -15,15 +15,23 @@
 - Multiple project links reference sites only. **Never allocate worker counts or salary per project automatically**.
 - On commit, inserts pending labour batch per new source row; no verified status or finance payment action. Check database constraints before using.
 
-## Install plan — sequential
-1. Create a Branch and open PR with only the new migration, GAS reference, tests, runbook. CI must pass; no Production code deploy is necessary for a purely isolated Apps Script/RPC importer.
-2. Verify dry-run on the 17 observed rows 354..370 (4 backdated work-date 16 Oct, 13 work-date 17 Oct), plus post-insert assertions (17 new entries and pending labour batches) before any write.
-3. Apply additive SQL migration **only after isolated QA**, ensuring grants `service_role` only and no changes to existing policies.
-4. In Apps Script main project `3Kings Drive → Supabase Sync`, click **+ File** and paste only `docs/apps-script/DailySiteReportSync_2026-10-19.gs` into new file. Do not replace or rename existing files or run any other installer.
-5. Run `dailySiteSyncDryRun20261019()`; should return `status=DRY_RUN_OK`, `would_insert_or_inserted=17`, `would_update_or_updated=0`, `blocked=0` on unchanged baseline. If not exact, **STOP**.
-6. Run `dailySiteSyncNow20261019()` only after valid dry-run. Observe `PASS_READBACK` with inserted=17, updated=0, verified=17; read database `source_row BETWEEN 354 AND 370`, check 13 + 4 dates and 17 pending batches and unchanged preexisting 350 rows.
-7. Only after readback, run `installDailySiteTrigger20261019()`, expect `before:9, after:10, dailyCount:1`. Never touch/delete the existing 9 triggers.
-8. Verify first real scheduled run with zero new writes; check `daily_site_report_sync_audit` for counts and actual Reports/Labour Web UI with authenticated Owner session.
+## Current verified state (after authorized backfill)
+- On 19 Oct 2026, RPC migration was installed; one guarded, source-pinned 17-row commit returned inserted=17, updated=0, verified=17. Source rows 354..370 are now in Supabase: 4 dated Oct 16 and 13 dated Oct 17.
+- SiteOps prior 350 rows and prior 350 Labour Batches were hash-compared and unchanged; old 26 worker assignments unchanged; Payroll records 0 unchanged. New entries have 17 **pending** Labour Batches and 21 source project links. New audit row read=369, parsed=17, inserted=17, updated=0, verified=17.
+- Auth grants confirmed anon=false/authenticated=false/service_role=true for the new RPC.
+- Read-only tests: unchanged v2 row skipped=1; synthetic work-detail-only correction would_update=1. No synthetic change persisted.
+- Apps Script is **not yet installed in the existing GAS project**; therefore no new scheduled trigger exists until the operator completes the following install.
+
+## Install plan — sequential (current data already backfilled)
+1. In existing Apps Script project `3Kings Drive → Supabase Sync`, add a **new** file named `DailySiteReportSync_2026-10-19.gs`, copying only `docs/apps-script/DailySiteReportSync_2026-10-19.gs` from latest GitHub main. DO NOT replace any of the existing files.
+2. Confirm existing Script Property `SUPABASE_SERVICE_ROLE_KEY` exists. Do not show or paste its value in chat, or create a new credential.
+3. Run `dailySiteSyncDryRun20261019()`. If Form has not changed from the readback state, expect `DRY_RUN_OK`, inserted=0, updated=0, skipped=17, blocked=0. New Form submissions may lead to inserted>0, but **STOP and review the exact new source row/date before commit**.
+4. Run `dailySiteSyncNow20261019()` only if the dry-run is consistent. Expect `PASS_READBACK` with verified=all processed and **zero new writes** if source is unchanged. The original 17 rows are NOT inserted again.
+5. Only after that safe no-op, run `installDailySiteTrigger20261019()`: expect `status=INSTALLED`, `before:9`, `after:10`, `dailyCount:1`. No prior trigger is deleted, edited or disabled.
+6. Verify the next scheduled invocation completes and keeps inserted=updated=0 when source unchanged. Compare `site_operations_entries`, pending labour batches, source project mapping, monthly native sheet and Owner-authenticated `/reports` / `/reports/labour` UI.
+7. On a mismatch, STOP and disable ONLY `dailySiteSyncHourly20261019`. Do not touch the old nine triggers, replay old rows or alter Payroll.
+
+The Apps Script batches requests in groups of at most 200 source rows and dry-runs all groups before committing any. Each RPC commit is individually atomic; if source changes between chunks, earlier committed chunks remain safely recorded and the next call can resume idempotently.
 
 ## Rollback
 - If automated run fails or data changes unexpectedly: disable **only** `dailySiteSyncHourly20261019` (the newly created trigger); do not touch the other nine.
