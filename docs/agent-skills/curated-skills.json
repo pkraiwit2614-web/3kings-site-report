@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "project": "3 Kings Construction",
-  "status": "test_branch_candidate_not_installed_upstream",
+  "status": "repository_optional_guidance_upstream_not_installed",
   "policy": "Existing live Drive SOP + six central rules + 17 numbered Skills + Superpowers + Observer take precedence. All three optional adapters are guidance only; no runtime/auto-install/permission grant.",
   "requires_explicit_activation": true,
   "does_not_modify_sop_manifest": true,
