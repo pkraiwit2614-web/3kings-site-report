@@ -5,7 +5,7 @@ description: "Optional read-only reporting workflow for editable management Powe
 
 # Curated 3 Kings — Management Slide Decks
 
-**Status:** Source-driven presentation guidance on a test branch. PPT Master is **not installed**; no bundled Python workflow, renderer, image generator or model provider.
+**Status:** Optional repository-aware presentation guidance. PPT Master is **not installed**; no bundled Python workflow, renderer, image generator or model provider.
 
 ## Gate and scope
 
