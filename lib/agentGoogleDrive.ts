@@ -33,11 +33,11 @@ export function readOidcConfig():OidcConfig{
       ownerId:requireConfig(prefix+'OIDC_EXPECTED_OWNER_ID')
     }:{})
   }
-  if(!/^\\d+$/.test(config.projectNumber)||
+  if(!/^\d+$/.test(config.projectNumber)||
     !/^[a-z0-9-]+$/.test(config.poolId)||!/^[a-z0-9-]+$/.test(config.providerId)||
-    !/^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\\.iam\\.gserviceaccount\\.com$/.test(config.serviceAccount)||
-    !/^https:\\/\\/oidc\\.vercel\\.com\\/[a-z0-9-]+$/.test(config.issuer)||
-    !/^https:\\/\\/vercel\\.com\\/[a-z0-9-]+$/.test(config.audience)||
+    !/^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.iam\.gserviceaccount\.com$/.test(config.serviceAccount)||
+    !/^https:\/\/oidc\.vercel\.com\/[a-z0-9-]+$/.test(config.issuer)||
+    !/^https:\/\/vercel\.com\/[a-z0-9-]+$/.test(config.audience)||
     !/^owner:[a-z0-9-]+:project:[a-z0-9-]+:environment:(preview|production)$/.test(config.subject))
       throw new AgentGateError('BLOCK_DRIVE_IDENTITY_UNCONFIGURED')
   const owner=config.issuer.split('/').pop()
