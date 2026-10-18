@@ -35,3 +35,9 @@ For task-oriented sessions involving any of the 17 SOP shortcuts, complete the *
 Authorized connected coding agents should also read `docs/agent-skills/private-observer-routing.md` and resolve the owner-controlled Drive folder by **names only**, rechecking permissions and actual write/readback each session. This config does not create a global ChatGPT listener or guarantee that a scheduled review can access the connector.
 
 The application repository is public: never commit observation logs, handoffs with private content, raw incident details, secrets or access identifiers. Unless a verified writable **private** observation store is configured, report a user-visible session handoff labeled NOT PERSISTED; do not imply cross-chat memory or automation. GitHub repository instructions support repository-aware agents such as Codex, but **do not auto-install** a Skill or activate a universal listener in ordinary ChatGPT chats. No automatic review schedule or Production/runtime change is created.
+
+## Optional curated quality / reporting Skills
+
+For explicitly authorized quality-review or report-visual tasks, agents may consult `docs/agent-skills/curated-skills.json` and its three `.agents/skills/curated-3kings-*/SKILL.md` adapters **after** all applicable 17-command SOP Gate, live full Drive SOP, numbered Skill, Superpowers and Task Observer requirements. Never substitute these optional methods for mandatory preflight. A missing live SOP blocks writes/deployment regardless of curated guidance.
+
+The curated adapters add domain/PR discipline and report diagram/slide *instructions*; the upstream Matt Pocock, Karpathy, Diagram Design and PPT Master executables/skills are NOT installed by these files. No auto execution, hook, new network/service, self-edit, DB/writeback, skill installation, production deploy or universal ChatGPT activation. Read-only work remains read-only. See `docs/agent-skills/curated-skills-review.md` for impact and QA.
