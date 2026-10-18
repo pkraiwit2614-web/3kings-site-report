@@ -10,7 +10,7 @@ description: "Optional read-only reporting workflow for editable management Powe
 ## Gate and scope
 
 - Activate for a requested slide deck, weekly/monthly recap presentation, or a PPT template update.
-- If the slide deliverable is part of one of the 17 SOP shortcuts, run live SOP Gate and current Drive SOP **before** accessing source or writing output; if blocked, report UNVERIFIED, no data write.
+- If the slide deliverable is part of one of the 17 SOP shortcuts, read `.agents/skills/3kings-sop-gate/SKILL.md` and run live SOP Gate and current Drive SOP **before** accessing source or writing output; if blocked, report UNVERIFIED, no data write.
 - Generate a **new** output file; do not overwrite original source or existing approved template unless explicitly authorized. All 3 Kings project deliverables belong in the authorized workspace; no public raw operational data.
 
 ## Reporting workflow
