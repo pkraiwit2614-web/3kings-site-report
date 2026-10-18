@@ -36,7 +36,7 @@ Authorized connected coding agents should also read `docs/agent-skills/private-o
 
 The application repository is public: never commit observation logs, handoffs with private content, raw incident details, secrets or access identifiers. Unless a verified writable **private** observation store is configured, report a user-visible session handoff labeled NOT PERSISTED; do not imply cross-chat memory or automation. GitHub repository instructions support repository-aware agents such as Codex, but **do not auto-install** a Skill or activate a universal listener in ordinary ChatGPT chats. No automatic review schedule or Production/runtime change is created.
 
-## Optional curated quality / reporting Skills (test-only proposal)
+## Optional curated quality / reporting Skills
 
 For explicitly authorized quality-review or report-visual tasks, agents may consult `docs/agent-skills/curated-skills.json` and its three `.agents/skills/curated-3kings-*/SKILL.md` adapters **after** all applicable 17-command SOP Gate, live full Drive SOP, numbered Skill, Superpowers and Task Observer requirements. Never substitute these optional methods for mandatory preflight. A missing live SOP blocks writes/deployment regardless of curated guidance.
 
