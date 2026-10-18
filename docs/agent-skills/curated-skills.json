@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "project": "3 Kings Construction",
+  "status": "test_branch_candidate_not_installed_upstream",
+  "policy": "Existing live Drive SOP + six central rules + 17 numbered Skills + Superpowers + Observer take precedence. All three optional adapters are guidance only; no runtime/auto-install/permission grant.",
+  "requires_explicit_activation": true,
+  "does_not_modify_sop_manifest": true,
+  "runtime_enforcement": false,
+  "auto_install": false,
+  "production_deploy": false,
+  "adapters": [
+    {
+      "name": "curated-3kings-change-quality",
+      "path": ".agents/skills/curated-3kings-change-quality/SKILL.md",
+      "use": "Authorized code quality/review; domain terminology, small changes, evidence, blast radius. Superpowers retains existing debugging/TDD/review authority.",
+      "sources": [
+        {
+          "repo": "mattpocock/skills",
+          "commit": "49dd158d1076134a641b33efb035946536778336",
+          "selected_methods": [
+            "domain-modeling",
+            "pr"
+          ],
+          "execution": "methodology_only"
+        },
+        {
+          "repo": "multica-ai/andrej-karpathy-skills",
+          "commit": "2c606141936f1eeef17fa3043a72095b4765b9c2",
+          "selected_methods": [
+            "think-before-coding",
+            "simplicity",
+            "surgical-changes",
+            "goal-driven-execution"
+          ],
+          "execution": "principles_only"
+        }
+      ]
+    },
+    {
+      "name": "curated-3kings-report-diagram",
+      "path": ".agents/skills/curated-3kings-report-diagram/SKILL.md",
+      "use": "Generate static read-only/report-only diagram specifications or exports using tools separately authorized for a particular task.",
+      "sources": [
+        {
+          "repo": "cathrynlavery/diagram-design",
+          "commit": "550fd66edff058bc73056c3416b76d69cfe865ba",
+          "selected_methods": [
+            "diagram-type-selection",
+            "visual-qa"
+          ],
+          "execution": "methodology_only_no_upstream_renderer"
+        }
+      ]
+    },
+    {
+      "name": "curated-3kings-report-slides",
+      "path": ".agents/skills/curated-3kings-report-slides/SKILL.md",
+      "use": "Source-backed editable PowerPoint report authoring if a separate presentation tool is available and explicitly used.",
+      "sources": [
+        {
+          "repo": "hugohe3/ppt-master",
+          "commit": "b113d23720260c411ee47b2b05a73615f954deeb",
+          "selected_methods": [
+            "presentation-structure",
+            "template-editability",
+            "render-qa"
+          ],
+          "execution": "methodology_only_no_upstream_python_runtime"
+        }
+      ]
+    }
+  ],
+  "excluded": [
+    {
+      "repo": "paperclipai/paperclip",
+      "reason": "Separate agent server/orchestration, not a skill; requires dedicated sandbox, identity, secrets and approval before any future deployment."
+    },
+    {
+      "repo": "bilawalsidhu/gods-eye-view",
+      "reason": "GIS/public live globe simulator, not required for existing 3 Kings operations; significant runtime and third-party data licensing footprint."
+    },
+    {
+      "repo": "mattpocock/skills",
+      "methods": [
+        "tdd",
+        "diagnosing-bugs",
+        "code-review"
+      ],
+      "reason": "Already covered by seven existing Superpowers adapters; avoid duplicate/contradictory activation."
+    }
+  ]
+}
