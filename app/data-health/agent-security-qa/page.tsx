@@ -12,6 +12,7 @@ export default function AgentSecurityQa(){
   const [authorized,setAuthorized]=useState<Readback|null>(null)
   const [anonymous,setAnonymous]=useState<Readback|null>(null)
   const [error,setError]=useState('')
+  const [googleProbe,setGoogleProbe]=useState<{status:number;code:string;fileId?:string}|null>(null)
   async function check(){
     if(actualRole!=='owner'||busy)return
     setBusy(true);setError('');setAuthorized(null);setAnonymous(null)
@@ -31,6 +32,23 @@ export default function AgentSecurityQa(){
     }catch{setError('ไม่สามารถตรวจสิทธิ์ด้วย Session ปัจจุบันได้')}
     finally{setBusy(false)}
   }
+
+  async function checkProductionOidc(){
+    if(actualRole!=='owner'||busy)return
+    setBusy(true);setError('');setGoogleProbe(null)
+    try{
+      const session=(await getSupabase().auth.getSession()).data.session
+      if(!session?.access_token)throw Error('no session')
+      const response=await fetch('/api/agent/production-oidc-probe',{
+        method:'POST',cache:'no-store',headers:{'content-type':'application/json',
+          authorization:'Bearer '+session.access_token},body:'{}'
+      })
+      const body=await response.json() as {gate?:{code?:string;sop?:{fileId?:string}};error?:string}
+      setGoogleProbe({status:response.status,code:body.gate?.code||body.error||'UNKNOWN',
+        fileId:body.gate?.sop?.fileId})
+    }catch{setError('ไม่สามารถตรวจ Production OIDC ได้')}
+    finally{setBusy(false)}
+  }
   return <AppShell><section className="panel" style={{padding:24,maxWidth:720,margin:'20px auto'}}>
     <h1 style={{fontSize:22,marginTop:0}}>Agent — Production Security QA</h1>
     <p className="muted">ตรวจ Owner และคำขอไม่มี Token ผ่าน Server โดยไม่เปิด Agent หรืออ่านข้อมูล Drive</p>
@@ -42,6 +60,13 @@ export default function AgentSecurityQa(){
     {authorized&&<p role="status"><b>Owner:</b> HTTP {authorized.status} — {authorized.result.code},
       Agent Enabled: {String(authorized.result.agentEnabled)}</p>}
     {anonymous&&<p><b>Anonymous:</b> HTTP {anonymous.status} — {anonymous.result.code}</p>}
+    <p className="muted" style={{marginTop:16}}>ขั้นสุดท้าย: อ่าน SOP 13 จริงด้วย Production OIDC โดยไม่เปิด Agent อัตโนมัติ</p>
+    {ready&&actualRole==='owner'&&<button className="button" type="button" disabled={busy}
+      onClick={()=>void checkProductionOidc()}>
+      {busy?'กำลังตรวจสอบ...':'ทดสอบ Google Production OIDC (Read-only)'}
+    </button>}
+    {googleProbe&&<p role="status"><b>Google Production OIDC:</b> HTTP {googleProbe.status} — {googleProbe.code}
+      {googleProbe.fileId?' / SOP '+googleProbe.fileId:''}</p>}
     {error&&<p role="alert">{error}</p>}
     <p className="muted" style={{fontSize:12,marginTop:16}}>
       ผล Anonymous ไม่ใช่ผล Non-Owner ที่ล็อกอินจริง ต้องแยกทดสอบด้วยบัญชี Contributor/Viewer

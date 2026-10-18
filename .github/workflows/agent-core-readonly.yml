@@ -8,6 +8,7 @@ on:
       - 'lib/agentReadOnlyChecks.ts'
       - 'lib/agentSyncEvidence.ts'
       - 'app/api/agent/access-check/route.ts'
+      - 'app/api/agent/production-oidc-probe/route.ts'
       - 'app/data-health/agent-security-qa/page.tsx'
       - 'app/agent-access-qa/page.tsx'
       - 'app/api/agent/read-only/route.ts'
