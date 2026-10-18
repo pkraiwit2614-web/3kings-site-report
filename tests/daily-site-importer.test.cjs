@@ -47,3 +47,11 @@ test('read-only mode cannot write and source rows are present only via RPC trans
  assert.doesNotMatch(gas,/Logger\.log\(.*(?:key|token)/);
  assert.doesNotMatch(gas,/ScriptApp\.deleteTrigger\(/);
 });
+
+test('GAS splits long source histories into bounded chunks and checks each before writes',()=>{
+ assert.match(gas,/for\(let i=0;i<source\.rows\.length;i\+=200\)/);
+ assert.match(gas,/const plans=chunks\.map\(rows=>/);
+ assert.match(gas,/plans\.forEach\(p=>\{/);
+ assert.ok(gas.indexOf("const plans=chunks.map")<gas.indexOf("request.p_mode='commit'"));
+ assert.match(gas,/BLOCK_TOTAL_READBACK_COUNT/);
+});
