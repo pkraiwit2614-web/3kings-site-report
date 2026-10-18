@@ -94,3 +94,11 @@ test('Owner access probe guards production without running Agent or exposing cre
  assert.ok(page.includes("const noAuth=await fetch(url"))
  assert.equal(/createLiveSopSource|exchangeVercelOidcToken|generateAccessToken|\.insert\(|\.update\(|\.delete\(/.test(route),false)
 })
+
+test('Viewer-accessible read-only security QA invokes only same-origin agent access endpoint',()=>{
+ const qa=fs.readFileSync('app/agent-access-qa/page.tsx','utf8')
+ assert.ok(qa.includes("'/api/agent/access-check'"))
+ assert.ok(qa.includes('getSupabase().auth.getSession()'))
+ assert.ok(qa.includes('FORBIDDEN')===false)
+ assert.equal(/createLiveSopSource|console\.log|\.insert\(|\.upsert\(|\.update\(|\.delete\(/.test(qa),false)
+})

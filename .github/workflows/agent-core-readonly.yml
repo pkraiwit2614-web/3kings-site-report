@@ -9,6 +9,7 @@ on:
       - 'lib/agentSyncEvidence.ts'
       - 'app/api/agent/access-check/route.ts'
       - 'app/data-health/agent-security-qa/page.tsx'
+      - 'app/agent-access-qa/page.tsx'
       - 'app/api/agent/read-only/route.ts'
       - 'tests/agent-core-readonly.test.cjs'
       - 'tests/agent-readonly-inspectors.test.cjs'
