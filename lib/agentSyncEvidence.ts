@@ -53,7 +53,7 @@ export async function inspectSyncEvidence(client:SupabaseClient,clock=new Date()
       const {data,error}=await client.from(source.table).select(source.columns)
         .order(source.order,{ascending:false}).limit(1)
       if(error||!Array.isArray(data))throw new Error('read failed')
-      const first=data[0] as Record<string,unknown>|undefined
+      const first=data[0] as unknown as Record<string,unknown>|undefined
       return {source,ok:true,latest:first?String(first[source.order]||'')||null:null,hasRows:data.length>0}
     }catch{return {source,ok:false,latest:null,hasRows:false}}
   }))
