@@ -189,6 +189,24 @@ begin
             select 1 from public.site_operations_entry_projects ep
             where ep.entry_id=v_prior.id and ep.mapping_method='manual'
           )
+          or exists (
+            select 1 from public.site_operations_entry_projects ep
+              join public.projects p on p.id=ep.project_id
+            where ep.entry_id=v_prior.id and ep.mapping_method='source_project'
+              and not exists (
+                select 1 from jsonb_array_elements_text(v_codes) c(value)
+                where c.value=p.code
+              )
+          )
+          or exists (
+            select 1 from jsonb_array_elements_text(v_codes) c(value)
+            where not exists (
+              select 1 from public.site_operations_entry_projects ep
+                join public.projects p on p.id=ep.project_id
+              where ep.entry_id=v_prior.id and ep.mapping_method='source_project'
+                and p.code=c.value
+            )
+          )
           or v_prior.project_name_raw is distinct from nullif(r->>'project_name_raw','')
           or v_prior.area_raw is distinct from nullif(r->>'area_raw','')
           or v_prior.supervisor_raw is distinct from r->>'supervisor_raw'
