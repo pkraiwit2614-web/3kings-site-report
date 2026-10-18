@@ -32,4 +32,4 @@ Based on methodology documented at:
 - https://github.com/mattpocock/skills (specifically domain-modeling and PR evidence discipline)
 - https://github.com/multica-ai/andrej-karpathy-skills (think before coding, simplicity, surgical changes, goal-driven execution)
 
-No external executable, hook, dependency, telemetry, or runtime tool is installed by this file.
+Upstream Matt Pocock and Karpathy Skills are not installed. No external executable, hook, dependency, telemetry, or runtime tool is installed by this file.
