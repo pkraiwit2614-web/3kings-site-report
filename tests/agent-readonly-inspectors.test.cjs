@@ -6,7 +6,7 @@ const ts=require('typescript')
 const raw=fs.readFileSync('lib/agentReadOnlyChecks.ts','utf8')
 const code=ts.transpileModule(raw,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText
 const mod={exports:{}}
-vm.runInNewContext(code,{module:mod,exports:mod.exports,require:(x)=>{throw Error('unexpected runtime import '+x)},
+vm.runInNewContext(code,{module:mod,exports:mod.exports,require:(x)=>{if(x==='./agentSyncEvidence')return {inspectSyncEvidence:async()=>({status:'PARTIAL',checks:[],note:'test stub'})};throw Error('unexpected runtime import '+x)},
   fetch:async()=>{throw Error('no live calls in fixture')},Date,Intl,URL,AbortSignal})
 const checks=mod.exports
 function client(tables){
