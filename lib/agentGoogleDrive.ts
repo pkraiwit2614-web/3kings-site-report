@@ -1,40 +1,91 @@
-import {createSign} from 'node:crypto'
 import {AgentGateError,type SopSource,type IndexSnapshot,type SourceDocument,type LiveIndexRow,sopIdFromUrl} from './agentCore'
 
-// Server-only, scoped Google service identity. Never put these variables in NEXT_PUBLIC or the browser.
-type ServiceIdentity={client_email:string;private_key:string}
+// Vercel Functions supply a short-lived OIDC JWT in x-vercel-oidc-token.
+// This path never accepts a Google service-account JSON/private key.
 const INDEX_TITLE='00-SOP_INDEX - 3Kings Construction'
+type OidcConfig={projectNumber:string;poolId:string;providerId:string;serviceAccount:string;
+  issuer:string;audience:string;subject:string}
+function requireConfig(name:string):string{
+  const value=String(process.env[name]||'').trim()
+  if(!value)throw new AgentGateError('BLOCK_DRIVE_IDENTITY_UNCONFIGURED')
+  return value
+}
+export function readOidcConfig():OidcConfig{
+  if(process.env.VERCEL_ENV!=='preview')throw new AgentGateError('BLOCK_NOT_PREVIEW')
+  const config={
+    projectNumber:requireConfig('AGENT_GCP_PROJECT_NUMBER'),
+    poolId:requireConfig('AGENT_GCP_POOL_ID'),
+    providerId:requireConfig('AGENT_GCP_PROVIDER_ID'),
+    serviceAccount:requireConfig('AGENT_GCP_SERVICE_ACCOUNT_EMAIL'),
+    issuer:requireConfig('AGENT_OIDC_EXPECTED_ISSUER'),
+    audience:requireConfig('AGENT_OIDC_EXPECTED_AUDIENCE'),
+    subject:requireConfig('AGENT_OIDC_EXPECTED_SUBJECT'),
+  }
+  if(!/^\d+$/.test(config.projectNumber)||
+    !/^[a-z0-9-]+$/.test(config.poolId)||!/^[a-z0-9-]+$/.test(config.providerId)||
+    !/^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.iam\.gserviceaccount\.com$/.test(config.serviceAccount)||
+    !/^https:\/\/oidc\.vercel\.com\/[a-z0-9-]+$/.test(config.issuer)||
+    !/^https:\/\/vercel\.com\/[a-z0-9-]+$/.test(config.audience)||
+    !/^owner:[a-z0-9-]+:project:[a-z0-9-]+:environment:preview$/.test(config.subject))
+      throw new AgentGateError('BLOCK_DRIVE_IDENTITY_UNCONFIGURED')
+  const owner=config.issuer.split('/').pop()
+  if(config.audience!=='https://vercel.com/'+owner||!config.subject.startsWith('owner:'+owner+':'))
+    throw new AgentGateError('BLOCK_OIDC_CONFIGURATION_MISMATCH')
+  return config
+}
+export function checkOidcPreviewClaims(rawToken:string,config:OidcConfig):void{
+  try {
+    if(!rawToken||rawToken.length>12000)throw Error('missing')
+    const chunks=rawToken.split('.')
+    if(chunks.length!==3||!chunks.every(Boolean))throw Error('invalid JWT')
+    const claims=JSON.parse(Buffer.from(chunks[1],'base64url').toString('utf8')) as {
+      iss?:string; aud?:string|string[];sub?:string;exp?:number;nbf?:number;environment?:string
+    }
+    const now=Math.floor(Date.now()/1000)
+    if(claims.iss!==config.issuer||claims.aud!==config.audience||claims.sub!==config.subject||
+      claims.environment!=='preview'||typeof claims.exp!=='number'||claims.exp<=now||
+      (typeof claims.nbf==='number'&&claims.nbf>now+60))throw Error('claims mismatch')
+  }catch{throw new AgentGateError('BLOCK_OIDC_PREVIEW_CLAIMS')}
+  // Deliberately untrusted until Google STS verifies signature, issuer, audience and binding.
+}
 async function responseOrBlock(url:string,init:RequestInit):Promise<Response>{
   const r=await fetch(url,{...init,cache:'no-store',signal:AbortSignal.timeout(10000)})
   if(!r.ok)throw new AgentGateError('BLOCK_SOP_SOURCE_UNAVAILABLE')
   return r
 }
-async function getAccessToken():Promise<string>{
-  const raw=process.env.AGENT_GOOGLE_SERVICE_ACCOUNT_JSON
-  if(!raw)throw new AgentGateError('BLOCK_DRIVE_IDENTITY_UNCONFIGURED')
-  let identity:ServiceIdentity
-  try{identity=JSON.parse(raw) as ServiceIdentity}catch{throw new AgentGateError('BLOCK_DRIVE_IDENTITY_UNCONFIGURED')}
-  if(!identity.client_email||!identity.private_key)throw new AgentGateError('BLOCK_DRIVE_IDENTITY_UNCONFIGURED')
-  const now=Math.floor(Date.now()/1000)
-  const encode=(o:unknown)=>Buffer.from(JSON.stringify(o)).toString('base64url')
-  const message=encode({alg:'RS256',typ:'JWT'})+'.'+encode({
-    iss:identity.client_email,scope:'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/spreadsheets.readonly',
-    aud:'https://oauth2.googleapis.com/token',iat:now,exp:now+3000
+export async function exchangePreviewOidcToken(rawToken:string):Promise<string>{
+  const cfg=readOidcConfig()
+  checkOidcPreviewClaims(rawToken,cfg)
+  const pool='projects/'+cfg.projectNumber+'/locations/global/workloadIdentityPools/'+cfg.poolId+
+    '/providers/'+cfg.providerId
+  const request=new URLSearchParams({
+    grant_type:'urn:ietf:params:oauth:grant-type:token-exchange',
+    audience:'//iam.googleapis.com/'+pool,
+    scope:'https://www.googleapis.com/auth/cloud-platform',
+    requested_token_type:'urn:ietf:params:oauth:token-type:access_token',
+    subject_token_type:'urn:ietf:params:oauth:token-type:jwt',
+    subject_token:rawToken,
   })
-  let signed:string
-  try{const signer=createSign('RSA-SHA256');signer.update(message);signed=message+'.'+signer.sign(identity.private_key).toString('base64url')}
-  catch{throw new AgentGateError('BLOCK_DRIVE_IDENTITY_UNCONFIGURED')}
-  const body=new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion:signed})
-  const r=await responseOrBlock('https://oauth2.googleapis.com/token',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body})
-  const result=await r.json() as {access_token?:string}
-  if(!result.access_token)throw new AgentGateError('BLOCK_SOP_SOURCE_UNAVAILABLE')
-  return result.access_token
+  // Google validates Vercel's token signature and IAM Workload Identity Provider conditions.
+  const sts=await responseOrBlock('https://sts.googleapis.com/v1/token',{method:'POST',
+    headers:{'content-type':'application/x-www-form-urlencoded'},body:request})
+  const first=await sts.json() as {access_token?:string}
+  if(!first.access_token)throw new AgentGateError('BLOCK_SOP_SOURCE_UNAVAILABLE')
+  // A subject-scoped iam.workloadIdentityUser binding is required on this one service account.
+  const impersonate=await responseOrBlock('https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/'+
+    encodeURIComponent(cfg.serviceAccount)+':generateAccessToken',{method:'POST',headers:{
+    'content-type':'application/json',Authorization:'Bearer '+first.access_token},
+    body:JSON.stringify({scope:['https://www.googleapis.com/auth/drive.readonly',
+      'https://www.googleapis.com/auth/spreadsheets.readonly'],lifetime:'1200s'})})
+  const second=await impersonate.json() as {accessToken?:string}
+  if(!second.accessToken)throw new AgentGateError('BLOCK_SOP_SOURCE_UNAVAILABLE')
+  return second.accessToken
 }
 type DriveMeta={id:string;name:string;mimeType:string;modifiedTime:string;trashed?:boolean}
-export async function createLiveSopSource():Promise<SopSource>{
+export async function createLiveSopSource(vercelOidcToken:string):Promise<SopSource>{
   const indexId=process.env.AGENT_SOP_INDEX_ID
   if(!indexId||!/^[a-zA-Z0-9_-]+$/.test(indexId))throw new AgentGateError('BLOCK_INDEX_UNCONFIGURED')
-  const token=await getAccessToken()
+  const token=await exchangePreviewOidcToken(vercelOidcToken)
   const auth={Authorization:'Bearer '+token}
   const json=async <T>(url:string):Promise<T>=>(await (await responseOrBlock(url,{headers:auth})).json()) as T
   const meta=async(id:string):Promise<DriveMeta>=>{

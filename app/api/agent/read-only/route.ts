@@ -45,7 +45,7 @@ export async function POST(request:NextRequest){
       return respond({error:'FORBIDDEN_MATRIX'},403)
   }catch{return respond({error:'PERMISSION_CHECK_UNAVAILABLE'},503)}
   let source
-  try{source=await createLiveSopSource()}
+  try{source=await createLiveSopSource(request.headers.get('x-vercel-oidc-token')||'')}
   catch(e){return respond({gate:{ok:false,commandId:command.number,code:e instanceof AgentGateError?e.code:'BLOCK_SOP_SOURCE_UNAVAILABLE'},inspection:null},503)}
   const gate=await evaluateSopGate(command.number,mode as AgentMode,source)
   if(!gate.ok)return respond({gate,inspection:null},424)
