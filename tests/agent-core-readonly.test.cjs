@@ -72,3 +72,12 @@ test('route is owner-authenticated and accepts no mutation payload or non-owner 
    assert.ok(route.includes(v),v)
  assert.equal(/\.insert\(|\.upsert\(|\.update\(|\.delete\(|\.rpc\(['"]drive_sync_replace/.test(route),false)
 })
+
+test('Preview-only Owner QA page uses authorized read-only API and never exposes tokens',()=>{
+ const view=fs.readFileSync('app/data-health/agent-sop-preview/page.tsx','utf8')
+ assert.ok(view.includes("actualRole!=='owner'"))
+ assert.ok(view.includes("'/api/agent/read-only'"))
+ assert.ok(view.includes('commandId:13'))
+ assert.ok(view.includes('getSupabase().auth.getSession()'))
+ assert.equal(/AGENT_GOOGLE_SERVICE_ACCOUNT_JSON|private_key|console\.log|\.insert\(|\.update\(|\.upsert\(|\.delete\(/.test(view),false)
+})
