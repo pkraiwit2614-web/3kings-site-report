@@ -16,6 +16,12 @@ When a user message matches one of the 17 confirmed shortcuts or their index-app
 7. Execute scoped work only when authorized and evidence is sufficient; otherwise produce discrepancy/QA report. After completion independently read back intended outputs and report PASS/FAIL/UNTESTED.
 8. **Do not claim a technical lock exists outside a controlled runtime.** This file only guides an agent. A future backend Gateway must separately enforce permissions and write barriers before any DB/Drive mutation.
 
+## Efficient, fully verified preflight (same-invocation only)
+
+- Read the latest Drive INDEX and the **entire linked current SOP once per command invocation**, before any operation. The numbered Skill, Superpowers adapter and read-only Task Observer may share that verified in-invocation evidence; they do **not** each need to fetch the same document again. This never permits using memory, a past chat, a cached text summary or repository SOP copy as the first live read.
+- Re-run the live preflight for a new command/invocation, an uncertain or changed revision, a changed source/permission, or evidence that the active SOP is no longer current. Before authorized write/deploy, retain all required revision, Source of Truth, RBAC and final readback checks; do not reuse a stale PASS.
+- Independent **read-only** source checks may run concurrently, but execution never starts before all mandatory checks are complete. Optional Skills load only for applicable work. This changes agent orchestration only; it does not implement or weaken a server-side authorization gate.
+
 ## Six permanent central rules
 
 1. Verify the newest genuine source: file ID, type, tab, version and timestamp.
