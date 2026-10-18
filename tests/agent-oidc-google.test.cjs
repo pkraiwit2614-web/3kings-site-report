@@ -61,7 +61,7 @@ test('canonical SOP_INDEX is read directly without a redundant sheet-list reques
   if(url.includes('iamcredentials.googleapis.com'))return response({accessToken:'drive'})
   if(url.includes('/drive/v3/files/index123?'))return response({id:'index123',name:'00-SOP_INDEX - 3Kings Construction',mimeType:'application/vnd.google-apps.spreadsheet',modifiedTime:'revision1'})
   if(url.includes('/values/')){
-   assert.equal(decodeURIComponent(url.split('/values/')[1]),\"'SOP_INDEX'!A1:K100\")
+   assert.equal(decodeURIComponent(url.split('/values/')[1]),"'SOP_INDEX'!A1:K100")
    return response({values:[['ลำดับ','คำสั่งลัด','','','','','ลิงก์ SOP','สถานะเอกสาร'],['13','ตรวจ Sync','','','','','https://docs.google.com/document/d/sop13/edit','จัดทำ SOP v1.0']]})
   }
   throw Error('unexpected request '+url)
@@ -86,7 +86,7 @@ test('noncanonical index tab still works through legacy header discovery',async(
   if(url.endsWith('?fields=sheets(properties(title))'))return response({sheets:[{properties:{title:'Legacy Index'}}]})
   if(url.includes('/values/')){
    const tab=decodeURIComponent(url.split('/values/')[1])
-   return tab===\"'SOP_INDEX'!A1:K100\"?response({values:[['not the expected headers']]}):
+   return tab==="'SOP_INDEX'!A1:K100"?response({values:[['not the expected headers']]}):
      response({values:[['ลำดับ','คำสั่งลัด','','','','','ลิงก์ SOP','สถานะเอกสาร'],['13','ตรวจ Sync','','','','','https://docs.google.com/document/d/sop13/edit','จัดทำ SOP v1.0']]})
   }
   throw Error('unexpected request '+url)
