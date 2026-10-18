@@ -11,12 +11,12 @@ function requireConfig(name:string):string{
   if(!value)throw new AgentGateError('BLOCK_DRIVE_IDENTITY_UNCONFIGURED')
   return value
 }
-export function readOidcConfig():OidcConfig{
+export function readOidcConfig(probeOnly=false):OidcConfig{
   const environment=process.env.VERCEL_ENV
   if(environment!=='preview'&&environment!=='production')
     throw new AgentGateError('BLOCK_UNSUPPORTED_ENVIRONMENT')
   // Deliberate second authorization gate: code deployment does not enable the Agent on Production.
-  if(environment==='production'&&process.env.AGENT_PRODUCTION_ENABLED!=='true')
+  if(environment==='production'&&process.env.AGENT_PRODUCTION_ENABLED!=='true'&&!probeOnly)
     throw new AgentGateError('BLOCK_PRODUCTION_DISABLED')
   const prefix=environment==='production'?'AGENT_PRODUCTION_':'AGENT_'
   const config:OidcConfig={
@@ -77,8 +77,8 @@ async function responseOrBlock(url:string,init:RequestInit):Promise<Response>{
   if(!r.ok)throw new AgentGateError('BLOCK_SOP_SOURCE_UNAVAILABLE')
   return r
 }
-export async function exchangeVercelOidcToken(rawToken:string):Promise<string>{
-  const cfg=readOidcConfig()
+export async function exchangeVercelOidcToken(rawToken:string,probeOnly=false):Promise<string>{
+  const cfg=readOidcConfig(probeOnly)
   checkOidcPreviewClaims(rawToken,cfg)
   const pool='projects/'+cfg.projectNumber+'/locations/global/workloadIdentityPools/'+cfg.poolId+
     '/providers/'+cfg.providerId
@@ -108,11 +108,11 @@ export async function exchangeVercelOidcToken(rawToken:string):Promise<string>{
 // Keep the prior test contract as an alias; both environments share the same keyless exchange.
 export const exchangePreviewOidcToken=exchangeVercelOidcToken
 type DriveMeta={id:string;name:string;mimeType:string;modifiedTime:string;trashed?:boolean}
-export async function createLiveSopSource(vercelOidcToken:string):Promise<SopSource>{
+export async function createLiveSopSource(vercelOidcToken:string,probeOnly=false):Promise<SopSource>{
   const indexId=process.env.VERCEL_ENV==='production'
     ?process.env.AGENT_PRODUCTION_SOP_INDEX_ID:process.env.AGENT_SOP_INDEX_ID
   if(!indexId||!/^[a-zA-Z0-9_-]+$/.test(indexId))throw new AgentGateError('BLOCK_INDEX_UNCONFIGURED')
-  const token=await exchangeVercelOidcToken(vercelOidcToken)
+  const token=await exchangeVercelOidcToken(vercelOidcToken,probeOnly)
   const auth={Authorization:'Bearer '+token}
   const json=async <T>(url:string):Promise<T>=>(await (await responseOrBlock(url,{headers:auth})).json()) as T
   const meta=async(id:string):Promise<DriveMeta>=>{

@@ -148,4 +148,49 @@ test('production requires separate provider, exact production claims and IAM ide
  for(const key of Object.keys(process.env).filter(k=>k.startsWith('AGENT_PRODUCTION_')))delete process.env[key]
 })
 
+
+test('disabled Production supports explicit, read-only server probe but default Agent remains blocked',async()=>{
+ Object.assign(process.env,config,{
+  VERCEL_ENV:'production',AGENT_PRODUCTION_ENABLED:'false',
+  AGENT_PRODUCTION_GCP_PROJECT_NUMBER:'123456789012',
+  AGENT_PRODUCTION_GCP_POOL_ID:'test-vercel-sop',
+  AGENT_PRODUCTION_GCP_PROVIDER_ID:'test-production',
+  AGENT_PRODUCTION_GCP_SERVICE_ACCOUNT_EMAIL:'reader@test-project.iam.gserviceaccount.com',
+  AGENT_PRODUCTION_OIDC_EXPECTED_ISSUER:'https://oidc.vercel.com/test-team',
+  AGENT_PRODUCTION_OIDC_EXPECTED_AUDIENCE:'https://vercel.com/test-team',
+  AGENT_PRODUCTION_OIDC_EXPECTED_SUBJECT:'owner:test-team:project:3kings-site-report:environment:production',
+  AGENT_PRODUCTION_OIDC_EXPECTED_PROJECT_ID:'prj_123ABC',
+  AGENT_PRODUCTION_OIDC_EXPECTED_OWNER_ID:'team_123ABC'
+ })
+ let calls=0
+ const m=setup(async(url)=>{
+  calls++
+  if(url==='https://sts.googleapis.com/v1/token')return response({access_token:'federated'})
+  if(url.includes('iamcredentials.googleapis.com'))return response({accessToken:'drive-readonly'})
+  throw Error('unexpected host')
+ })
+ const prodToken=token({sub:'owner:test-team:project:3kings-site-report:environment:production',
+   environment:'production',project_id:'prj_123ABC',owner_id:'team_123ABC'})
+ await assert.rejects(m.exchangeVercelOidcToken(prodToken),/BLOCK_PRODUCTION_DISABLED/)
+ assert.equal(calls,0)
+ assert.equal(await m.exchangeVercelOidcToken(prodToken,true),'drive-readonly')
+ assert.equal(calls,2)
+ await assert.rejects(m.exchangeVercelOidcToken(token(),true),/BLOCK_OIDC_ENVIRONMENT_CLAIMS/)
+ assert.equal(calls,2)
+ delete process.env.AGENT_PRODUCTION_ENABLED
+ for(const key of Object.keys(process.env).filter(k=>k.startsWith('AGENT_PRODUCTION_')))delete process.env[key]
+})
+test('Production OIDC probe is restricted by Owner auth, matrix and hard-coded SOP 13 preflight',()=>{
+ const route=fs.readFileSync('app/api/agent/production-oidc-probe/route.ts','utf8')
+ const page=fs.readFileSync('app/data-health/agent-security-qa/page.tsx','utf8')
+ assert.ok(route.indexOf('user.id!==OWNER_USER_ID')<route.indexOf("createLiveSopSource("))
+ assert.ok(route.indexOf('readPermissionSnapshot(client)')<route.indexOf("createLiveSopSource("))
+ assert.ok(route.includes("process.env.VERCEL_ENV!=='production'"))
+ assert.ok(route.includes("evaluateSopGate(13,'preflight',source)"))
+ assert.ok(route.includes("request.headers.get('x-vercel-oidc-token')||'',true"))
+ assert.ok(!/process\\.env\\.AGENT_PRODUCTION_ENABLED\\s*=/.test(route))
+ assert.ok(!/\.insert\(|\.update\(|\.delete\(|\.upsert\(/.test(route))
+ assert.ok(page.includes("'/api/agent/production-oidc-probe'"))
+})
+
 process.on('exit',()=>{for(const key of Object.keys(config)){if(saved[key]===undefined)delete process.env[key];else process.env[key]=saved[key]}})
