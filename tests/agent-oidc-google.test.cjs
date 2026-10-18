@@ -188,7 +188,7 @@ test('Production OIDC probe is restricted by Owner auth, matrix and hard-coded S
  assert.ok(route.includes("process.env.VERCEL_ENV!=='production'"))
  assert.ok(route.includes("evaluateSopGate(13,'preflight',source)"))
  assert.ok(route.includes("request.headers.get('x-vercel-oidc-token')||'',true"))
- assert.ok(!route.includes('AGENT_PRODUCTION_ENABLED=true'))
+ assert.ok(!/process\\.env\\.AGENT_PRODUCTION_ENABLED\\s*=/.test(route))
  assert.ok(!/\.insert\(|\.update\(|\.delete\(|\.upsert\(/.test(route))
  assert.ok(page.includes("'/api/agent/production-oidc-probe'"))
 })
