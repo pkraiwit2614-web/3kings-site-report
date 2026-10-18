@@ -10,7 +10,7 @@ description: "Optional report-only design guidance for creating sourced 3 Kings 
 ## Activation and source check
 
 - Use only when asked to prepare a diagram, workflow visual or management-report illustration.
-- When a requested diagram is part of any of the 17 SOP shortcuts, run the existing SOP Gate, current live Drive SOP and matching numbered Skill **first**. If live SOP cannot be read, do not write files/data or publish the report.
+- When a requested diagram is part of any of the 17 SOP shortcuts, read `.agents/skills/3kings-sop-gate/SKILL.md` and run the existing SOP Gate, current live Drive SOP and matching numbered Skill **first**. If live SOP cannot be read, do not write files/data or publish the report.
 - For independent read-only diagrams, use only sources the user explicitly supplied or current sources verified for the requested scope; label unverified quantities and unknown stages.
 
 ## Diagram method
