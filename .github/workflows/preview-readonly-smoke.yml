@@ -34,16 +34,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      # deployment_status runs from default-branch workflow code. Do not expose secrets
-      # or load authenticated browser state from unreviewed PR deployments.
+      # Use reviewed default-branch implementation, NOT code checked out from
+      # the Preview deployment's potentially unreviewed commit.
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
+          ref: main
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Probe allowed Vercel Preview URL, read-only, no auth bypass
+      - name: Probe Vercel Preview with dedicated automation credential
         env:
           PREVIEW_ENV_URL: ${{ github.event.deployment_status.environment_url }}
           PREVIEW_STATUS_URL: ${{ github.event.deployment_status.target_url }}
+          KINGS_VERCEL_PREVIEW_BYPASS: ${{ secrets.KINGS_VERCEL_PREVIEW_BYPASS }}
         run: node scripts/preview-readonly-smoke.mjs
