@@ -1,19 +1,10 @@
+import {inspectSyncEvidence} from './agentSyncEvidence'
 import type {SupabaseClient} from '@supabase/supabase-js'
 
 type Result={status:'PARTIAL'|'UNVERIFIED';checks:{name:string;status:string;details?:unknown}[];
   note:string}
 export async function inspectSync(client:SupabaseClient):Promise<Result>{
-  const {data,error}=await client.from('drive_sync_runs')
-    .select('sync_type,source_file,source_sheet,rows_read,rows_written,status,created_at')
-    .order('created_at',{ascending:false}).limit(20)
-  if(error)return {status:'UNVERIFIED',checks:[{name:'supabase_sync_log',status:'READ_FAILED'}],
-    note:'No source-to-Web verification performed; no data written.'}
-  return {status:'PARTIAL',checks:[{
-    name:'supabase_sync_log',status:'READ_OK',
-    details:{sampleSize:data?.length||0,latestAt:data?.[0]?.created_at??null,
-      latestRuns:(data||[]).map(r=>({type:r.sync_type,source:r.source_file,sheet:r.source_sheet,
-        read:r.rows_read,written:r.rows_written,status:r.status,at:r.created_at}))}
-  }],note:'Supabase log only; Drive, Apps Script trigger, source rows, and Web UI were NOT verified.'}
+  return inspectSyncEvidence(client)
 }
 export async function inspectProduction():Promise<Result>{
   const checks:Result['checks']=[]
