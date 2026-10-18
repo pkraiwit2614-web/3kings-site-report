@@ -12,7 +12,7 @@ const config={
   AGENT_GCP_PROVIDER_ID:'test-preview',AGENT_GCP_SERVICE_ACCOUNT_EMAIL:'reader@test-project.iam.gserviceaccount.com',
   AGENT_OIDC_EXPECTED_ISSUER:'https://oidc.vercel.com/test-team',
   AGENT_OIDC_EXPECTED_AUDIENCE:'https://vercel.com/test-team',
-  AGENT_OIDC_EXPECTED_SUBJECT:'owner:test-team:project:test-app:environment:preview',
+  AGENT_OIDC_EXPECTED_SUBJECT:'owner:test-team:project:3kings-site-report:environment:preview',
 }
 const encode=(a)=>Buffer.from(JSON.stringify(a)).toString('base64url')
 function token(overrides={}){
@@ -57,7 +57,7 @@ test('production or wrong-issuer tokens fail before any network request',async()
  let calls=0
  const m=setup(async()=>{calls++;throw Error('network must not be called')})
  for(const input of [
-   token({sub:'owner:test-team:project:test-app:environment:production',environment:'production'}),
+   token({sub:'owner:test-team:project:3kings-site-report:environment:production',environment:'production'}),
    token({iss:'https://oidc.vercel.com/attacker'}),
    token({aud:'https://vercel.com/attacker'}),
    token({exp:Math.floor(Date.now()/1000)-1}),
