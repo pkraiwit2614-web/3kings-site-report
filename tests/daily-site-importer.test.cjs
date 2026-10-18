@@ -55,3 +55,13 @@ test('GAS splits long source histories into bounded chunks and checks each befor
  assert.ok(gas.indexOf("const plans=chunks.map")<gas.indexOf("request.p_mode='commit'"));
  assert.match(gas,/BLOCK_TOTAL_READBACK_COUNT/);
 });
+
+test('PostgREST service role guard uses the effective DB role rather than legacy claim GUC',()=>{
+ const fix=fs.readFileSync('supabase/migrations/20261019065500_daily_site_rpc_role_guard.sql','utf8');
+ assert.match(fix,/security invoker/i);
+ assert.match(fix,/current_user <> 'service_role'/);
+ assert.doesNotMatch(fix,/coalesce\(current_setting\('request\.jwt\.claim\.role'/);
+ assert.match(fix,/revoke all on function public\.daily_site_report_sync_v1\(jsonb,text,jsonb,integer,text\) from public,anon,authenticated/);
+ assert.match(fix,/grant execute on function public\.daily_site_report_sync_v1\(jsonb,text,jsonb,integer,text\) to service_role/);
+ assert.doesNotMatch(fix,/drop table|truncate table|delete from|alter table.*disable row level security/i);
+});

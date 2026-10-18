@@ -42,3 +42,9 @@ The Apps Script batches requests in groups of at most 200 source rows and dry-ru
 ## Status / blocked actions
 - GitHub reference source is **not** installed Apps Script code. Merging PR and applying DB migration do **not** install a trigger.
 - No tool in this chat currently has direct access to create/edit the user's Apps Script code or its triggers. Those two GUI actions require the user in the Apps Script Editor.
+
+## 19 Oct 2026 HTTP 400 diagnostic (06:46 Bangkok time)
+- Owner-run `dailySiteSyncDryRun20261019` reached PostgREST but failed `DSR_RPC_FAILED_HTTP_400`; correlated `postgres_logs` contained `DSR_SERVICE_ROLE_ONLY`. Database 17 imported rows and one historical audit remained unchanged.
+- RPC v1 used legacy `request.jwt.claim.role` GUC for a role gate. On modern PostgREST this may be absent even when the effective database role is `service_role`; fix only the RPC to validate `current_user = 'service_role'` (invoker, JWT role mapped by PostgREST). Do not modify the Script Property or share any key.
+- **After migration and permission checks**, re-run only `dailySiteSyncDryRun20261019`; expect no-op `insert=0, update=0, skipped=17, blocked=0` if Form unchanged. No trigger installation until dry-run and no-op `dailySiteSyncNow20261019` pass.
+- If it still fails, examine PostgREST/Postgres error code and verify the existing service-role credential privately; never print the credential or raw request headers.
