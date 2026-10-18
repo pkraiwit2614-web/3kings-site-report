@@ -5,7 +5,7 @@ description: "Optional report-only design guidance for creating sourced 3 Kings 
 
 # Curated 3 Kings — Report Diagrams
 
-**Status:** Documentation-first trial Skill; upstream Diagram Design is **not installed**. No executable integration, automatic export, or permanent rendering service is provided here.
+**Status:** Optional repository-aware design guidance; upstream Diagram Design is **not installed**. No executable integration, automatic export, or permanent rendering service is provided here.
 
 ## Activation and source check
 
