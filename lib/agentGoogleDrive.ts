@@ -126,24 +126,33 @@ export async function createLiveSopSource(vercelOidcToken:string):Promise<SopSou
       const first=await meta(indexId)
       if(first.mimeType!=='application/vnd.google-apps.spreadsheet'||first.name!==INDEX_TITLE)
         throw new AgentGateError('BLOCK_INDEX_UNREADABLE')
-      const sheets=await json<{sheets?:{properties?:{title?:string}}[]}>(
-        'https://sheets.googleapis.com/v4/spreadsheets/'+indexId+'?fields=sheets(properties(title))')
-      let rows:LiveIndexRow[]|null=null
-      for(const sheet of (sheets.sheets||[]).slice(0,10)){
-        const title=sheet.properties?.title||''
-        if(!title)continue
+      const readRows=async(title:string):Promise<LiveIndexRow[]|null>=>{
         const range="'"+title.replace(/'/g,"''")+"'!A1:K100"
         const cells=await json<{values?:string[][]}>('https://sheets.googleapis.com/v4/spreadsheets/'+indexId+
           '/values/'+encodeURIComponent(range))
         const values=cells.values||[]
         const header=values[0]||[]
         const col=(s:string)=>header.indexOf(s)
-        if(['ลำดับ','คำสั่งลัด','ลิงก์ SOP','สถานะเอกสาร'].some(v=>col(v)<0))continue
-        rows=values.slice(1).filter(v=>v[col('คำสั่งลัด')]).map(v=>({
+        if(['ลำดับ','คำสั่งลัด','ลิงก์ SOP','สถานะเอกสาร'].some(v=>col(v)<0))return null
+        return values.slice(1).filter(v=>v[col('คำสั่งลัด')]).map(v=>({
           sequence:String(v[col('ลำดับ')]||''),shortcut:String(v[col('คำสั่งลัด')]||''),
           sopUrl:String(v[col('ลิงก์ SOP')]||''),status:String(v[col('สถานะเอกสาร')]||'')
         }))
-        break
+      }
+      // The live SOP index uses this canonical tab. Avoid a redundant sheets-list call
+      // on the normal path; preserve legacy header discovery if it is absent/renamed.
+      let rows:LiveIndexRow[]|null=null
+      try{rows=await readRows('SOP_INDEX')}
+      catch(e){if(!(e instanceof AgentGateError)||e.code!=='BLOCK_SOP_SOURCE_UNAVAILABLE')throw e}
+      if(!rows){
+        const sheets=await json<{sheets?:{properties?:{title?:string}}[]}>(
+          'https://sheets.googleapis.com/v4/spreadsheets/'+indexId+'?fields=sheets(properties(title))')
+        for(const sheet of (sheets.sheets||[]).slice(0,10)){
+          const title=sheet.properties?.title||''
+          if(!title||title==='SOP_INDEX')continue
+          rows=await readRows(title)
+          if(rows)break
+        }
       }
       if(!rows)throw new AgentGateError('BLOCK_INDEX_UNREADABLE')
       return {id:first.id,modifiedTime:first.modifiedTime,rows}
