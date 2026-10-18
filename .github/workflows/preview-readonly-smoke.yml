@@ -43,6 +43,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Show nonsecret deployment identity for trust review
+        env:
+          DEPLOY_REF: ${{ github.event.deployment.ref }}
+          DEPLOY_REPO: ${{ github.event.repository.full_name }}
+          DEPLOY_SHA: ${{ github.event.deployment.sha }}
+        run: |
+          echo "deployment.ref=$DEPLOY_REF"
+          echo "deployment.repo=$DEPLOY_REPO"
+          echo "deployment.sha=$DEPLOY_SHA"
       - name: Require reviewed checker on default branch before using any bypass credential
         run: |
           if [ ! -f scripts/preview-readonly-smoke.mjs ]; then
