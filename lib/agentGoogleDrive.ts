@@ -4,32 +4,53 @@ import {AgentGateError,type SopSource,type IndexSnapshot,type SourceDocument,typ
 // This path never accepts a Google service-account JSON/private key.
 const INDEX_TITLE='00-SOP_INDEX - 3Kings Construction'
 type OidcConfig={projectNumber:string;poolId:string;providerId:string;serviceAccount:string;
-  issuer:string;audience:string;subject:string}
+  issuer:string;audience:string;subject:string;environment:'preview'|'production';
+  projectId?:string;ownerId?:string}
 function requireConfig(name:string):string{
   const value=String(process.env[name]||'').trim()
   if(!value)throw new AgentGateError('BLOCK_DRIVE_IDENTITY_UNCONFIGURED')
   return value
 }
 export function readOidcConfig():OidcConfig{
-  if(process.env.VERCEL_ENV!=='preview')throw new AgentGateError('BLOCK_NOT_PREVIEW')
-  const config={
-    projectNumber:requireConfig('AGENT_GCP_PROJECT_NUMBER'),
-    poolId:requireConfig('AGENT_GCP_POOL_ID'),
-    providerId:requireConfig('AGENT_GCP_PROVIDER_ID'),
-    serviceAccount:requireConfig('AGENT_GCP_SERVICE_ACCOUNT_EMAIL'),
-    issuer:requireConfig('AGENT_OIDC_EXPECTED_ISSUER'),
-    audience:requireConfig('AGENT_OIDC_EXPECTED_AUDIENCE'),
-    subject:requireConfig('AGENT_OIDC_EXPECTED_SUBJECT'),
+  const environment=process.env.VERCEL_ENV
+  if(environment!=='preview'&&environment!=='production')
+    throw new AgentGateError('BLOCK_UNSUPPORTED_ENVIRONMENT')
+  // Deliberate second authorization gate: code deployment does not enable the Agent on Production.
+  if(environment==='production'&&process.env.AGENT_PRODUCTION_ENABLED!=='true')
+    throw new AgentGateError('BLOCK_PRODUCTION_DISABLED')
+  const prefix=environment==='production'?'AGENT_PRODUCTION_':'AGENT_'
+  const config:OidcConfig={
+    environment,
+    projectNumber:requireConfig(prefix+'GCP_PROJECT_NUMBER'),
+    poolId:requireConfig(prefix+'GCP_POOL_ID'),
+    providerId:requireConfig(prefix+'GCP_PROVIDER_ID'),
+    serviceAccount:requireConfig(prefix+'GCP_SERVICE_ACCOUNT_EMAIL'),
+    issuer:requireConfig(prefix+'OIDC_EXPECTED_ISSUER'),
+    audience:requireConfig(prefix+'OIDC_EXPECTED_AUDIENCE'),
+    subject:requireConfig(prefix+'OIDC_EXPECTED_SUBJECT'),
+    ...(environment==='production'?{
+      projectId:requireConfig(prefix+'OIDC_EXPECTED_PROJECT_ID'),
+      ownerId:requireConfig(prefix+'OIDC_EXPECTED_OWNER_ID')
+    }:{})
   }
-  if(!/^\d+$/.test(config.projectNumber)||
+  if(!/^\\d+$/.test(config.projectNumber)||
     !/^[a-z0-9-]+$/.test(config.poolId)||!/^[a-z0-9-]+$/.test(config.providerId)||
-    !/^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.iam\.gserviceaccount\.com$/.test(config.serviceAccount)||
-    !/^https:\/\/oidc\.vercel\.com\/[a-z0-9-]+$/.test(config.issuer)||
-    !/^https:\/\/vercel\.com\/[a-z0-9-]+$/.test(config.audience)||
-    !/^owner:[a-z0-9-]+:project:[a-z0-9-]+:environment:preview$/.test(config.subject))
+    !/^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\\.iam\\.gserviceaccount\\.com$/.test(config.serviceAccount)||
+    !/^https:\\/\\/oidc\\.vercel\\.com\\/[a-z0-9-]+$/.test(config.issuer)||
+    !/^https:\\/\\/vercel\\.com\\/[a-z0-9-]+$/.test(config.audience)||
+    !/^owner:[a-z0-9-]+:project:[a-z0-9-]+:environment:(preview|production)$/.test(config.subject))
       throw new AgentGateError('BLOCK_DRIVE_IDENTITY_UNCONFIGURED')
   const owner=config.issuer.split('/').pop()
-  if(config.audience!=='https://vercel.com/'+owner||!config.subject.startsWith('owner:'+owner+':'))
+  if(config.audience!=='https://vercel.com/'+owner||
+    config.subject!==('owner:'+owner+':project:3kings-site-report:environment:'+environment))
+    throw new AgentGateError('BLOCK_OIDC_CONFIGURATION_MISMATCH')
+  if(environment==='production'&&(
+      config.providerId==='vercel-preview'||
+      !/^prj_[a-zA-Z0-9]+$/.test(config.projectId||'')||
+      !/^team_[a-zA-Z0-9]+$/.test(config.ownerId||'')||
+      (process.env.VERCEL_PROJECT_ID&&process.env.VERCEL_PROJECT_ID!==config.projectId)||
+      (process.env.VERCEL_ORG_ID&&process.env.VERCEL_ORG_ID!==config.ownerId)
+    ))
     throw new AgentGateError('BLOCK_OIDC_CONFIGURATION_MISMATCH')
   return config
 }
@@ -39,21 +60,24 @@ export function checkOidcPreviewClaims(rawToken:string,config:OidcConfig):void{
     const chunks=rawToken.split('.')
     if(chunks.length!==3||!chunks.every(Boolean))throw Error('invalid JWT')
     const claims=JSON.parse(Buffer.from(chunks[1],'base64url').toString('utf8')) as {
-      iss?:string; aud?:string|string[];sub?:string;exp?:number;nbf?:number;environment?:string
+      iss?:string;aud?:string|string[];sub?:string;exp?:number;nbf?:number;
+      environment?:string;project_id?:string;owner_id?:string
     }
     const now=Math.floor(Date.now()/1000)
     if(claims.iss!==config.issuer||claims.aud!==config.audience||claims.sub!==config.subject||
-      claims.environment!=='preview'||typeof claims.exp!=='number'||claims.exp<=now||
-      (typeof claims.nbf==='number'&&claims.nbf>now+60))throw Error('claims mismatch')
-  }catch{throw new AgentGateError('BLOCK_OIDC_PREVIEW_CLAIMS')}
-  // Deliberately untrusted until Google STS verifies signature, issuer, audience and binding.
+      claims.environment!==config.environment||typeof claims.exp!=='number'||claims.exp<=now||
+      (typeof claims.nbf==='number'&&claims.nbf>now+60)||
+      (config.projectId&&claims.project_id!==config.projectId)||
+      (config.ownerId&&claims.owner_id!==config.ownerId))throw Error('claims mismatch')
+  }catch{throw new AgentGateError('BLOCK_OIDC_ENVIRONMENT_CLAIMS')}
+  // Local claim checks are untrusted hints: Google STS must verify signature, audience, issuer, WIF condition.
 }
 async function responseOrBlock(url:string,init:RequestInit):Promise<Response>{
   const r=await fetch(url,{...init,cache:'no-store',signal:AbortSignal.timeout(10000)})
   if(!r.ok)throw new AgentGateError('BLOCK_SOP_SOURCE_UNAVAILABLE')
   return r
 }
-export async function exchangePreviewOidcToken(rawToken:string):Promise<string>{
+export async function exchangeVercelOidcToken(rawToken:string):Promise<string>{
   const cfg=readOidcConfig()
   checkOidcPreviewClaims(rawToken,cfg)
   const pool='projects/'+cfg.projectNumber+'/locations/global/workloadIdentityPools/'+cfg.poolId+
@@ -81,11 +105,14 @@ export async function exchangePreviewOidcToken(rawToken:string):Promise<string>{
   if(!second.accessToken)throw new AgentGateError('BLOCK_SOP_SOURCE_UNAVAILABLE')
   return second.accessToken
 }
+// Keep the prior test contract as an alias; both environments share the same keyless exchange.
+export const exchangePreviewOidcToken=exchangeVercelOidcToken
 type DriveMeta={id:string;name:string;mimeType:string;modifiedTime:string;trashed?:boolean}
 export async function createLiveSopSource(vercelOidcToken:string):Promise<SopSource>{
-  const indexId=process.env.AGENT_SOP_INDEX_ID
+  const indexId=process.env.VERCEL_ENV==='production'
+    ?process.env.AGENT_PRODUCTION_SOP_INDEX_ID:process.env.AGENT_SOP_INDEX_ID
   if(!indexId||!/^[a-zA-Z0-9_-]+$/.test(indexId))throw new AgentGateError('BLOCK_INDEX_UNCONFIGURED')
-  const token=await exchangePreviewOidcToken(vercelOidcToken)
+  const token=await exchangeVercelOidcToken(vercelOidcToken)
   const auth={Authorization:'Bearer '+token}
   const json=async <T>(url:string):Promise<T>=>(await (await responseOrBlock(url,{headers:auth})).json()) as T
   const meta=async(id:string):Promise<DriveMeta>=>{

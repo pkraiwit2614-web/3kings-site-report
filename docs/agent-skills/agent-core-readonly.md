@@ -25,3 +25,32 @@ The server exchanges the Vercel OIDC JWT at Google STS for a short-lived federat
 ## Tests and activation gate
 
 Run `node --test tests/agent-core-readonly.test.cjs tests/agent-readonly-inspectors.test.cjs tests/agent-oidc-google.test.cjs` and `npm run build` on PR. Verify all seven read-only command classifications, revision-change denial, scope denial, auth denial, missing credentials, and no write APIs. Then test Preview with a legitimate Owner token and an intentionally missing SOP permission (must block), and with a fully authorized service identity (must read back the latest SOP). Check preview login plus existing Defect, Materials, Payroll, Sync, print and role workflows before requesting a separate Production authorization. No claim of active automation until credentials, live tests and explicit deployment approval exist.
+
+
+## Production readiness — disabled until explicit, verified setup
+
+Production support is implemented as **fail-closed**. Code or a successful build does NOT activate
+the Agent in Production. The API rejects requests with `BLOCK_PRODUCTION_DISABLED` unless
+`AGENT_PRODUCTION_ENABLED=true` is deliberately set by an authorized release operator **after E2E**.
+The Preview-only QA route returns a 404 outside Vercel Preview.
+
+Required Production-only Vercel environment variables (none are added by this PR):
+`AGENT_PRODUCTION_ENABLED` (must equal `true`), `AGENT_PRODUCTION_SOP_INDEX_ID`,
+`AGENT_PRODUCTION_GCP_PROJECT_NUMBER`, `AGENT_PRODUCTION_GCP_POOL_ID`,
+`AGENT_PRODUCTION_GCP_PROVIDER_ID`, `AGENT_PRODUCTION_GCP_SERVICE_ACCOUNT_EMAIL`,
+`AGENT_PRODUCTION_OIDC_EXPECTED_ISSUER`, `AGENT_PRODUCTION_OIDC_EXPECTED_AUDIENCE`,
+`AGENT_PRODUCTION_OIDC_EXPECTED_SUBJECT` (must be the exact Vercel **production** subject),
+`AGENT_PRODUCTION_OIDC_EXPECTED_PROJECT_ID`, `AGENT_PRODUCTION_OIDC_EXPECTED_OWNER_ID`.
+No Preview value is used as a Production fallback.
+
+Google Cloud prerequisite: create a **separate** Production OIDC Provider (not `vercel-preview`)
+with the verified Team issuer and Audience; restrict condition to the real Vercel Project ID,
+Team ID and `assertion.environment == 'production'`; bind the exact production
+`google.subject` to the SOP Reader Service Account using `roles/iam.workloadIdentityUser`
+only. Do not change or broaden the existing Preview Provider. No Google JSON key is required.
+
+Release gate: update branch against current main, test Next.js CI and Owner/Non-Owner E2E,
+Google STS and Drive against the **production-configured** provider on a controlled staging
+deployment, ensure credentials are separated and verify routes/data/security. Only then enable
+Production intentionally and deploy/verify. With Production IAM unavailable, leave the API
+disabled and PR as Draft; do **not** call a Preview PASS equivalent to Production authorization.

@@ -81,3 +81,13 @@ test('Preview-only Owner QA page uses authorized read-only API and never exposes
  assert.ok(view.includes('getSupabase().auth.getSession()'))
  assert.equal(/AGENT_GOOGLE_SERVICE_ACCOUNT_JSON|private_key|console\.log|\.insert\(|\.update\(|\.upsert\(|\.delete\(/.test(view),false)
 })
+
+test('Preview-only test UI is hidden by a server-side non-preview 404 boundary',()=>{
+ const guard=fs.readFileSync('app/data-health/agent-sop-preview/layout.tsx','utf8')
+ assert.ok(guard.includes("process.env.VERCEL_ENV!=='preview'"))
+ assert.ok(guard.includes('notFound()'))
+ const auth=fs.readFileSync('lib/agentGoogleDrive.ts','utf8')
+ assert.ok(auth.includes('BLOCK_PRODUCTION_DISABLED'))
+ assert.ok(auth.includes("AGENT_PRODUCTION_SOP_INDEX_ID"))
+ assert.ok(auth.includes("AGENT_PRODUCTION_OIDC_EXPECTED_PROJECT_ID")===false) // variable is constructed dynamically
+})
