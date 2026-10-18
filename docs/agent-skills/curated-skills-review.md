@@ -1,4 +1,4 @@
-# Curated optional Skills — review branch (2026-10-19)
+# Curated optional Skills — release review (2026-10-19)
 
 **Scope:** Agent instruction files and one additive static CI test only. This is not installation of upstream products. No changes to `app/`, `components/`, `lib/`, `supabase/`, `vercel.json`, `package.json`, `Data...`, Google Drive, database, or production.
 
