@@ -24,10 +24,26 @@ LINE integration. It never calls LINE. Do not report an E2E or Production PASS.
 - Independent daily-site Supabase importer Apps Script installation/triggers
   were **not verified**; GitHub script file is not evidence of GAS installation.
 
+## Confirmed weekend policy (2026-10-19)
+- **Sunday (Asia/Bangkok): no automated LINE text or image sends.**
+  The scheduler must skip dispatch before processing any route, even when a
+  historical report date has been explicitly supplied. Do not create a Sunday
+  delivery claim. This is a send rule, not permission to delete Sunday data.
+- **Monday 07:30-08:05:** select and send the **preceding Saturday** report.
+  Example: Monday 2026-10-19 selects Saturday 2026-10-17, not Sunday
+  2026-10-18. Do not regenerate it as a Sunday report.
+- **Tuesday-Saturday:** use the calendar day immediately preceding execution.
+  For a Sunday date passed to manual replay on an ordinary weekday, retain
+  that data but never automatically select it for Monday dispatch.
+- **Duplicate protection:** weekends must still use an atomic delivery ledger.
+  In particular, Monday retries must not resend the same Saturday assets
+  to a group already acknowledged for that report date and stage. The
+  staged core supplies stable retry hashes only; a real ledger does not yet exist.
+
 ## Scheduled local-time stages (not installed)
 | Bangkok | UTC (Cloudflare schedule) | Action | Precondition |
 |---|---|---|---|
-| 07:30 | 00:30 | Process yesterday, rerun the current SOP and prepare PDF/4 PNG | Fresh form and monthly native sheet, confirmed executor access |
+| 07:30 | 00:30 | Select yesterday except Mondays select Saturday; skip Sundays; rerun the current SOP and prepare PDF/4 PNG | Fresh form and monthly native sheet, confirmed executor access |
 | 07:50 | 00:50 | Per-site QA, preserve valid sites | Latest final 4-page A4 landscape PDF and 4 images read back from Drive |
 | 08:00 | 01:00 | Send form text FIRST per allowed group | Signed owner approval, group mapping, durable claim, LINE send feature gate |
 | 08:02 | 01:02 | Send matching image only after text ACK | Site-specific QA PASS, correct approved group, HTTPS expiring image URL |
@@ -67,7 +83,7 @@ Each route must explicitly specify its approved report page; if uncertain,
 block that route only. Reject a single group mapped to conflicting pages.
 
 ## Current branch scope
-- `lib/dailyLineAutopilotCore.cjs` computes yesterday in Bangkok time,
+- `lib/dailyLineAutopilotCore.cjs` selects prior Saturday on Mondays and skips Sunday in Bangkok time,
   checks SOP/data/asset/PNG QA proof, verifies explicit candidate and
   per-site destination gates, rejects duplicates, emits masked per-site
   dry-run delivery records and SHA-256 dedupe keys. Network sends = zero.
