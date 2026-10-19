@@ -1,6 +1,13 @@
 // 3 Kings Daily LINE image gateway: privately stored QA-verified PNGs.
 // Separate Edge Function; no ability to call LINE or approve group routes.
-const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+const legacyKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+let modernKeys: string[]=[];
+try{
+ const values=JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS')||'{}') as Record<string,string>;
+ modernKeys=Object.values(values).filter(v=>typeof v==='string'&&v.length>20);
+}catch{ /* fail closed to available legacy key */ }
+const key = legacyKey || modernKeys[0] || '';
+const acceptedKeys=[legacyKey,...modernKeys].filter(Boolean);
 const endpoint = (Deno.env.get('SUPABASE_URL') || '').replace(/\/$/,'');
 const service = endpoint+'/functions/v1/kings_daily_line_images';
 const noStore = {'cache-control':'no-store','x-content-type-options':'nosniff'};
@@ -13,7 +20,7 @@ function equal(a:string,b:string):boolean {
   for(let i=0;i<Math.max(a.length,b.length);i++)v|=(a.charCodeAt(i)||0)^(b.charCodeAt(i)||0);
   return v===0;
 }
-function auth(req:Request):boolean {return !!key&&equal(req.headers.get('x-3kings-server-key')||'',key);}
+function auth(req:Request):boolean {const provided=req.headers.get('x-3kings-server-key')||'';return acceptedKeys.some(k=>equal(provided,k));}
 async function sign(input:string):Promise<string>{
   const k=await crypto.subtle.importKey('raw',new TextEncoder().encode(key),{name:'HMAC',hash:'SHA-256'},false,['sign']);
   const digest=new Uint8Array(await crypto.subtle.sign('HMAC',k,new TextEncoder().encode('3kings-daily-line-image-v1|'+input)));
