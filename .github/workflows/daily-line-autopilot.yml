@@ -1,0 +1,26 @@
+name: Daily Site Report LINE AutoPilot dry-run safety
+on:
+  pull_request:
+    paths:
+      - 'lib/dailyLineAutopilotCore.cjs'
+      - 'tests/daily-line-autopilot.test.cjs'
+      - 'docs/LINE_DAILY_AUTOPILOT_DRYRUN_2026-10-19.md'
+      - '.github/workflows/daily-line-autopilot.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'lib/dailyLineAutopilotCore.cjs'
+      - 'tests/daily-line-autopilot.test.cjs'
+      - '.github/workflows/daily-line-autopilot.yml'
+permissions:
+  contents: read
+jobs:
+  fail-closed-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test dry-run without external secrets
+        run: node --test tests/daily-line-autopilot.test.cjs
