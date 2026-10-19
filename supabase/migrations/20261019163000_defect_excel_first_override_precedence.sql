@@ -11,6 +11,8 @@ BEGIN
  IF pg_catalog.current_setting('app.defect_manual_update',true) IS DISTINCT FROM '1' THEN
    SELECT * INTO v FROM public.defect_web_overrides WHERE room_no=new.room_no;
    IF FOUND AND (
+      new.room_no NOT IN ('B214','B314','B315','B403','B515')
+      OR
       v.source_sync_state IS DISTINCT FROM 'synced'
       OR new.source_file_id IS DISTINCT FROM '1MEeB1E7D_35MTndRPi1aBTlVfI2aR0Wj'
       OR new.source_file_name IS DISTINCT FROM 'Handover_Defect_Summary_Updated_28-09-2026.xlsx'

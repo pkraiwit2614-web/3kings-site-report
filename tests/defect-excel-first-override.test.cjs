@@ -18,3 +18,4 @@ test('no destructive schema, privilege or history changes',()=>{
  for(const r of [/DROP\s+TRIGGER/i,/DROP\s+TABLE/i,/DELETE\s+FROM/i,/TRUNCATE/i,/ALTER\s+POLICY/i,/GRANT\s/i])
  assert.doesNotMatch(sql,r);
 });
+test('five-room rollout only',()=>{assert.match(sql,/new\.room_no NOT IN \('B214','B314','B315','B403','B515'\)/)})
