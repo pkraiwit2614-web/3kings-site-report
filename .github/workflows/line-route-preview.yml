@@ -1,0 +1,30 @@
+name: LINE routing preview (no send)
+
+on:
+  pull_request:
+    paths:
+      - 'infra/line-autopilot/**'
+      - 'tests/line-autopilot/**'
+      - '.github/workflows/line-route-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  readonly-routing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Unit test read-only source-to-site routing and no-send guards
+        run: node --test tests/line-autopilot/*.test.mjs
+      - name: Reject hardcoded production LINE group identifiers in staged source
+        run: |
+          if grep -ERn 'C[0-9a-fA-F]{32}' infra/line-autopilot tests/line-autopilot; then
+            echo 'Hardcoded LINE Group ID is prohibited.'
+            exit 1
+          fi
