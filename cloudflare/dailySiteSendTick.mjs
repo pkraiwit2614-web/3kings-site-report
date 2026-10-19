@@ -31,7 +31,7 @@ export async function dailySiteSendTick(env,{db,hash,transport=fetch,now=new Dat
     ||when.localTime<'08:00'||when.localTime>'13:00')return stats;
   if(typeof db!=='function'||typeof hash!=='function')throw Error('DB_DEPENDENCY_MISSING');
   const endpoint=env.SUPABASE_URL.replace(/\/$/,'')+
-    '/functions/v1/kings_daily_line_images/ready?date='+encodeURIComponent(when.reportDate);
+    '/functions/v1/3kings-daily-line-images/ready?date='+encodeURIComponent(when.reportDate);
   let ready;
   try{
     const result=await transport(endpoint,{method:'GET',headers:{
@@ -46,7 +46,7 @@ export async function dailySiteSendTick(env,{db,hash,transport=fetch,now=new Dat
   for(const image of ready.assets){
     if(!validSha(image.sha256)||typeof image.url!=='string'
       ||!image.url.startsWith(env.SUPABASE_URL.replace(/\/$/,'')+
-          '/functions/v1/kings_daily_line_images/image?')
+          '/functions/v1/3kings-daily-line-images/image?')
       ||!/^https:\/\//.test(image.url)
       ||!Number.isInteger(image.width)||image.width!==2947
       ||!Number.isInteger(image.height)||image.height<101
