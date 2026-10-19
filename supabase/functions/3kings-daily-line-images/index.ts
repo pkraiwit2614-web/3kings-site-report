@@ -25,18 +25,10 @@ async function auth(req:Request):Promise<boolean>{
   if(provided.length<25 || provided.length>1800 || !/^[a-zA-Z0-9_.-]+$/.test(provided))
     return false;
   if(acceptedKeys.some(k=>equal(provided,k)))return true;
-  // The Cloudflare Worker has a pre-existing server credential which may be
-  // different from the Edge Function's default service-role key. Validate it
-  // against a service-only RPC; never disclose or persist the presented key.
-  try{
-    const headers:Record<string,string>={'apikey':provided,'content-type':'application/json'};
-    if(!provided.startsWith('sb_secret_'))headers.authorization='Bearer '+provided;
-    const r=await fetch(endpoint+'/rest/v1/rpc/daily_line_verify_server_access',{
-      method:'POST',headers,body:'{}',signal:AbortSignal.timeout(8000)
-    });
-    if(!r.ok)return false;
-    return (await r.json())===true;
-  }catch{return false;}
+  // Independent daily-only credential: the secret itself exists ONLY in
+  // Cloudflare; Supabase stores a SHA-256 digest in a private table.
+  try{return (await rpc('daily_line_bridge_validate',{p_token:provided}))===true;}
+  catch{return false;}
 }
 async function sign(input:string):Promise<string>{
   const k=await crypto.subtle.importKey('raw',new TextEncoder().encode(key),{name:'HMAC',hash:'SHA-256'},false,['sign']);
@@ -73,6 +65,32 @@ Deno.serve(async(req:Request)=>{
       return {...a,url:service+'/image?'+p.toString()};
     }));
     return json({...result,assets,ready:true,expires_at:expiry});
+  }
+  if(req.method==='POST'&&url.pathname.endsWith('/rpc')){
+    if(!await auth(req))return json({error:'unauthorized'},401);
+    const ct=req.headers.get('content-length');
+    if(ct&&Number(ct)>4096)return json({error:'too_large'},413);
+    const raw=await req.text();
+    if(raw.length>4096)return json({error:'too_large'},413);
+    let data:{rpc?:string,args?:Record<string,unknown>};
+    try{data=JSON.parse(raw);}catch{return json({error:'invalid_json'},400);}
+    if(!data||typeof data!=='object'||Array.isArray(data)||
+       !data.args||typeof data.args!=='object'||Array.isArray(data.args))
+       return json({error:'invalid_args'},400);
+    const kind=data.rpc;
+    if(!['line_autopilot_daily_route','daily_line_record_delivery',
+      'line_autopilot_claim','line_autopilot_ack'].includes(kind||''))
+      return json({error:'rpc_forbidden'},403);
+    if(kind==='line_autopilot_daily_route' &&
+       !['above_villa','above_condo_a','above_condo_b'].includes(String(data.args.p_site_code)))
+      return json({error:'site_forbidden'},403);
+    if(kind==='line_autopilot_claim' &&
+       (data.args.p_alert_kind!=='daily_site_report' || data.args.p_target_scope!=='site_group'))
+      return json({error:'claim_forbidden'},403);
+    if(kind==='line_autopilot_ack' && data.args.p_status!=='delivered'
+      && data.args.p_status!=='uncertain')return json({error:'ack_invalid'},403);
+    const result=await rpc(kind!,data.args);
+    return json(result);
   }
   if(req.method==='GET'&&url.pathname.endsWith('/image')){
     const date=url.searchParams.get('date')||'';
