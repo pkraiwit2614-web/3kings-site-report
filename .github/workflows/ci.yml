@@ -136,3 +136,6 @@ jobs:
 
       - name: Editable permission defaults and confirmed save workflow
         run: node --test tests/editable-role-matrix.test.cjs tests/editable-role-matrix-ui.test.cjs tests/access-role-preview-hook.test.cjs
+
+      - name: Daily Site Report LINE secure bridge regression
+        run: node --test tests/daily-line-autopilot.test.cjs tests/daily-line-runtime.test.cjs
