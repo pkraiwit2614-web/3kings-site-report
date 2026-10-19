@@ -2,14 +2,22 @@ name: Daily Site Report LINE AutoPilot dry-run safety
 on:
   pull_request:
     paths:
-      - 'lib/dailyLineAutopilotCore.cjs'\n      - 'cloudflare/dailySiteSendTick.mjs'\n      - 'tests/daily-line-runtime.test.cjs'\n      - 'supabase/functions/3kings-daily-line-images/index.ts'\n      - 'supabase/migrations/20261019170000_daily_line_secure_bridge.sql'
+      - 'lib/dailyLineAutopilotCore.cjs'
+      - 'cloudflare/dailySiteSendTick.mjs'
+      - 'tests/daily-line-runtime.test.cjs'
+      - 'supabase/functions/3kings-daily-line-images/index.ts'
+      - 'supabase/migrations/20261019170000_daily_line_secure_bridge.sql'
       - 'tests/daily-line-autopilot.test.cjs'
       - 'docs/LINE_DAILY_AUTOPILOT_DRYRUN_2026-10-19.md'
       - '.github/workflows/daily-line-autopilot.yml'
   push:
     branches: [main]
     paths:
-      - 'lib/dailyLineAutopilotCore.cjs'\n      - 'cloudflare/dailySiteSendTick.mjs'\n      - 'tests/daily-line-runtime.test.cjs'\n      - 'supabase/functions/3kings-daily-line-images/index.ts'\n      - 'supabase/migrations/20261019170000_daily_line_secure_bridge.sql'
+      - 'lib/dailyLineAutopilotCore.cjs'
+      - 'cloudflare/dailySiteSendTick.mjs'
+      - 'tests/daily-line-runtime.test.cjs'
+      - 'supabase/functions/3kings-daily-line-images/index.ts'
+      - 'supabase/migrations/20261019170000_daily_line_secure_bridge.sql'
       - 'tests/daily-line-autopilot.test.cjs'
       - '.github/workflows/daily-line-autopilot.yml'
 permissions:
