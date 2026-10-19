@@ -98,15 +98,45 @@ test('live sender keeps missing image proof fail-closed and never guesses routes
  assert.equal(m.pushes.length,0);
 });
 
-test('daily sender uses only service gated daily route and not read-only preview RPC',async()=>{
+test('daily sender reads only dedicated owner-approved routes and preserves staged legacy',async()=>{
  const fs=require('node:fs');
  const worker=fs.readFileSync('cloudflare/dailySiteSendTick.mjs','utf8');
  assert(worker.includes('/rpc/line_autopilot_daily_route'));
  assert(!worker.includes('/rpc/line_autopilot_preview_route'));
- const sql=fs.readFileSync('supabase/migrations/20261019180500_daily_line_scoped_route_gate.sql','utf8');
- assert(sql.includes('r.notifications_enabled IS TRUE'));
- assert(sql.includes('c.approved IS TRUE'));
- assert(sql.includes('sr.delivery_enabled IS TRUE'));
- assert(sql.includes('nt.delivery_enabled IS TRUE'));
+ const sql=fs.readFileSync('supabase/migrations/20261019184500_daily_line_isolated_live_routes.sql','utf8');
+ assert(sql.includes('line_autopilot.daily_live_routes'));
+ assert(sql.includes('r.enabled IS TRUE'));
+ assert(sql.includes('r.owner_approved_at IS NOT NULL'));
+ assert(sql.includes('c.verified_member IS TRUE'));
+ assert(sql.includes('c.group_name=r.expected_group_name'));
  assert(sql.includes('REVOKE ALL ON FUNCTION public.line_autopilot_daily_route(text) FROM PUBLIC,anon,authenticated'));
+ assert(!sql.includes('DROP CONSTRAINT'));
+});
+
+test('three distinct confirmed routes stage text before shared Condo image and never duplicate',async()=>{
+ const {dailySiteSendTick}=await load();
+ const m=mock();
+ const groups={above_villa:'C'+'a'.repeat(32),above_condo_a:'C'+'b'.repeat(32),above_condo_b:'C'+'c'.repeat(32)};
+ const original=m.db;
+ m.db=(env,path,arg)=>path.includes('line_autopilot_daily_route')
+   ? [{would_send_line:true,group_id:groups[arg.p_site_code]}]
+   : original(env,path,arg);
+ const crypto=require('node:crypto');
+ m.hash=async input=>crypto.createHash('sha256').update(input).digest('hex');
+ const a=await dailySiteSendTick(env,{...m,now});
+ assert.equal(a.textAccepted,3);
+ assert.equal(m.pushes.length,3);
+ assert(m.pushes.every(p=>p.payload.messages[0].type==='text'));
+ const b=await dailySiteSendTick(env,{...m,now});
+ assert.equal(b.imageAccepted,3);
+ assert.equal(m.pushes.length,6);
+ assert(m.pushes.slice(3).every(p=>p.payload.messages[0].type==='image'));
+ const c=await dailySiteSendTick(env,{...m,now});
+ assert.equal(c.textAccepted+c.imageAccepted,0);
+ assert.equal(m.pushes.length,6);
+ assert.equal(new Set(m.metas.map(x=>x.p_event_key)).size,6);
+ const condo=m.pushes.slice(3).filter(p=>p.payload.to!==groups.above_villa);
+ assert.equal(condo.length,2);
+ assert.equal(condo[0].payload.messages[0].originalContentUrl,
+              condo[1].payload.messages[0].originalContentUrl);
 });
