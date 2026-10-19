@@ -49,3 +49,8 @@ test('importer cannot reopen Work Order after Hotel acceptance',()=>{
  assert.match(src,/defect_work_order_sync_import/)
  assert.doesNotMatch(src,/TRUNCATE|DROP TABLE/i)
 })
+
+test('Work Order XLSX dry run scans row markers using a word boundary',()=>{
+ assert.ok(worker.includes(String.raw`dispatch.match(/<row\b`))
+ assert.ok(!worker.includes(String.raw`dispatch.match(/<row\\b`))
+})

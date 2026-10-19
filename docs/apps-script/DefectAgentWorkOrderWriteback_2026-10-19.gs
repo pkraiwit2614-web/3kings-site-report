@@ -174,11 +174,11 @@ function dryRunDefectAgentWorkOrder20261019(){
     const shared=defectWbSharedStrings_(parts['xl/sharedStrings.xml']);
     const primary=parts['xl/worksheets/sheet1.xml'].getDataAsString();
     const dispatch=parts['xl/worksheets/sheet8.xml'].getDataAsString();
-    const lines=dispatch.match(/<row\\b[^>]*\\br="\\d+"[^>]*>[\\s\\S]*?<\\/row>/g)||[];
+    const lines=dispatch.match(/<row\b[^>]*\br="\d+"[^>]*>[\s\S]*?<\/row>/g)||[];
     let chosen=null;
     lines.forEach(function(line){
       if(chosen)return;
-      const number=Number((line.match(/<row\\b[^>]*\\br="(\\d+)"/)||[])[1]);
+      const number=Number((line.match(/<row\b[^>]*\br="(\d+)"/)||[])[1]);
       if(number<=5)return;
       const workId=defectWbReadCell_(line,'C'+number,shared);
       if(!/^DF-[A-Za-z0-9()_-]+$/.test(workId))return;
