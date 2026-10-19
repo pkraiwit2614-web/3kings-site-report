@@ -85,12 +85,14 @@ function defectAgentWorkOrderWrite20261019_(id,workId,completedAt,dryRun){
   const workbookXml=book.getDataAsString();
   const shared=defectWbSharedStrings_(entries['xl/sharedStrings.xml']);
   const checks=[];
+  let hasChange=false;
   meta.sheets.forEach(function(sheet){
     if(workbookXml.indexOf('name="'+sheet.name+'"')<0||!entries[sheet.path])
       throw Error('Unapproved or missing worksheet '+sheet.name);
     const before=entries[sheet.path].getDataAsString();
     const patched=defectAgentPatchWorkXml20261019_(before,shared,sheet,workId,closedDate);
-    if(!patched.xml||patched.xml===before)throw Error('No XLSX delta '+sheet.name);
+    if(!patched.xml)throw Error('Invalid XLSX delta '+sheet.name);
+    if(patched.xml!==before)hasChange=true;
     entries[sheet.path]=Utilities.newBlob(patched.xml,'text/xml',sheet.path);
     checks.push({path:sheet.path,expected:patched.expected});
   });
@@ -110,6 +112,11 @@ function defectAgentWorkOrderWrite20261019_(id,workId,completedAt,dryRun){
   // The existing Work Order import uses this same ScriptLock. No concurrent in-project import.
   if(file.getLastUpdated().getTime()!==initialModified)
     throw Error('Workbook revision changed during update; retry');
+  if(!hasChange){
+    // Previous upload may have succeeded before the ack; verify and acknowledge on retry.
+    assertVerified(Utilities.unzip(file.getBlob()));
+    return {verified:true,alreadyWritten:true,workId:workId,closedDate:closedDate};
+  }
   defectWbEnsureBaselineBackup_(file);
   const packed=Utilities.zip(files.map(function(f){return entries[f.getName()];}),meta.name);
   const result=UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files/'+id+'?uploadType=media',{

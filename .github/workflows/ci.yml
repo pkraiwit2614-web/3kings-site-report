@@ -136,3 +136,6 @@ jobs:
 
       - name: Editable permission defaults and confirmed save workflow
         run: node --test tests/editable-role-matrix.test.cjs tests/editable-role-matrix-ui.test.cjs tests/access-role-preview-hook.test.cjs
+
+      - name: SOP 01 Defect Agent executor security and Excel writeback
+        run: node --test tests/defect-agent-executor.test.cjs
