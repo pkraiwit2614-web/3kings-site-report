@@ -381,7 +381,7 @@ export default function ExecutivePresentationV41(){
   const exportPptx=async()=>{
     if(exporting)return; setExporting('pptx')
     try{
-      const mod=await import('pptxgenjs'); const PptxGenJS=mod.default; const pptxFile=new PptxGenJS(); pptxFile.layout='LAYOUT_WIDE'; pptxFile.theme={headFontFace:'Tahoma',bodyFontFace:'Tahoma',lang:'th-TH'}; pptxFile.author='3 Kings Construction'; pptxFile.company='3 Kings Construction'; pptxFile.subject='Executive Presentation View'; pptxFile.title='3 Kings Construction Executive Presentation'
+      const mod=await import('pptxgenjs'); const PptxGenJS=mod.default; const pptxFile=new PptxGenJS(); pptxFile.layout='LAYOUT_WIDE'; pptxFile.theme={headFontFace:'Tahoma',bodyFontFace:'Tahoma'}; pptxFile.author='3 Kings Construction'; pptxFile.company='3 Kings Construction'; pptxFile.subject='Executive Presentation View'; pptxFile.title='3 Kings Construction Executive Presentation'
       const imageCache=new Map<string,string>()
       const decorateSlide=(slide:any,label:string)=>{
         slide.addShape(pptxFile.ShapeType.rect,{x:0,y:0,w:13.333,h:.08,line:{color:'A97920',transparency:100},fill:{color:'A97920'}})
