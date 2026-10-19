@@ -1,0 +1,21 @@
+name: Express PO Preview Safety
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/express-po/**'
+      - 'app/api/sync/express-po/**'
+      - 'supabase/migrations/*express_po*'
+      - 'tests/express-po-parser.test.cjs'
+      - '.github/workflows/express-po-preview-checks.yml'
+jobs:
+  parser-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate synthetic report parser
+        run: node --test tests/express-po-parser.test.cjs
