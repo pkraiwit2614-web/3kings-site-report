@@ -62,7 +62,7 @@ test('functional 263-row master: Q chat updates change only a valid room Defect 
       ])
     }
   }
-  const sheet={getDataRange:()=>({getDisplayValues:()=>[titles,...roomRows]})}
+  const sheet={getName:()=> 'ข้อมูลจำแนก',getDataRange:()=>({getDisplayValues:()=>[titles,...roomRows]})}
   const parsed=vm.runInContext('parseCondoDefectMasterV13_',context)(sheet)
   assert.equal(parsed.rows.length,263)
   assert.equal(parsed.validation.buildingA,162)
