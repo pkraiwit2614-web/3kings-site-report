@@ -39,7 +39,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           # Immutable, reviewed browser-checker commit; never run deployed PR code with secrets.
-          ref: 5f0dba70a496b92610dab9755a79d697bd61a0e2
+          ref: e9eddc400a95605109891bc5d467c23945c18f3a
           persist-credentials: false
       - name: Verify protected branch SHA and pinned browser runner
         env:
@@ -51,8 +51,8 @@ jobs:
           [[ "$DEPLOY_SHA" =~ ^[a-f0-9]{40}$ ]] && [ "$DEPLOY_REF" = "$DEPLOY_SHA" ] || { echo "::error::BLOCK_DEPLOYMENT_REVISION"; exit 1; }
           expected="$(gh api 'repos/pkraiwit2614-web/3kings-site-report/branches/test/preview-qa-automation-20261019' --jq '.commit.sha')"
           [ "$DEPLOY_SHA" = "$expected" ] || { echo "::error::BLOCK_UNTRUSTED_PREVIEW_SHA"; exit 1; }
-          [ "$(git rev-parse HEAD)" = "5f0dba70a496b92610dab9755a79d697bd61a0e2" ] || { echo "::error::BLOCK_BROWSER_CHECKER_REVISION"; exit 1; }
-          [ "$(git rev-parse HEAD:scripts/preview-playwright-e2e.mjs)" = "22519aac6a0cd66370608482ec3c70b0dbbf683c" ] || { echo "::error::BLOCK_BROWSER_CHECKER_HASH"; exit 1; }
+          [ "$(git rev-parse HEAD)" = "e9eddc400a95605109891bc5d467c23945c18f3a" ] || { echo "::error::BLOCK_BROWSER_CHECKER_REVISION"; exit 1; }
+          [ "$(git rev-parse HEAD:scripts/preview-playwright-e2e.mjs)" = "fdae3595e4e3aa387ab715e943941f04223fa35c" ] || { echo "::error::BLOCK_BROWSER_CHECKER_HASH"; exit 1; }
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -81,7 +81,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          ref: 5f0dba70a496b92610dab9755a79d697bd61a0e2
+          ref: e9eddc400a95605109891bc5d467c23945c18f3a
           persist-credentials: false
       - name: Verify protected branch SHA and pinned browser runner
         env:
@@ -93,8 +93,8 @@ jobs:
           [[ "$DEPLOY_SHA" =~ ^[a-f0-9]{40}$ ]] && [ "$DEPLOY_REF" = "$DEPLOY_SHA" ] || { echo "::error::BLOCK_DEPLOYMENT_REVISION"; exit 1; }
           expected="$(gh api 'repos/pkraiwit2614-web/3kings-site-report/branches/test/preview-qa-automation-20261019' --jq '.commit.sha')"
           [ "$DEPLOY_SHA" = "$expected" ] || { echo "::error::BLOCK_UNTRUSTED_PREVIEW_SHA"; exit 1; }
-          [ "$(git rev-parse HEAD)" = "5f0dba70a496b92610dab9755a79d697bd61a0e2" ] || { echo "::error::BLOCK_BROWSER_CHECKER_REVISION"; exit 1; }
-          [ "$(git rev-parse HEAD:scripts/preview-playwright-e2e.mjs)" = "22519aac6a0cd66370608482ec3c70b0dbbf683c" ] || { echo "::error::BLOCK_BROWSER_CHECKER_HASH"; exit 1; }
+          [ "$(git rev-parse HEAD)" = "e9eddc400a95605109891bc5d467c23945c18f3a" ] || { echo "::error::BLOCK_BROWSER_CHECKER_REVISION"; exit 1; }
+          [ "$(git rev-parse HEAD:scripts/preview-playwright-e2e.mjs)" = "fdae3595e4e3aa387ab715e943941f04223fa35c" ] || { echo "::error::BLOCK_BROWSER_CHECKER_HASH"; exit 1; }
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -110,4 +110,6 @@ jobs:
           KINGS_E2E_PREVIEW_SUPABASE_ORIGIN: ${{ vars.KINGS_E2E_PREVIEW_SUPABASE_ORIGIN }}
           KINGS_E2E_VIEWER_LOGIN: ${{ secrets.KINGS_E2E_VIEWER_LOGIN }}
           KINGS_E2E_VIEWER_PASSWORD: ${{ secrets.KINGS_E2E_VIEWER_PASSWORD }}
+          KINGS_E2E_RLS_OTHER_PROFILE_ID: ${{ vars.KINGS_E2E_RLS_OTHER_PROFILE_ID }}
+          KINGS_E2E_RLS_PAYROLL_RECORD_ID: ${{ vars.KINGS_E2E_RLS_PAYROLL_RECORD_ID }}
         run: node scripts/preview-playwright-e2e.mjs viewer
