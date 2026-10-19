@@ -31,8 +31,7 @@ jobs:
       github.event.deployment_status.state == 'success' &&
       (github.event.deployment.environment == 'Preview' ||
        github.event.deployment.environment == 'preview') &&
-      github.event.repository.full_name == 'pkraiwit2614-web/3kings-site-report' &&
-      github.event.deployment.ref == 'test/preview-qa-automation-20261019'
+      github.event.repository.full_name == 'pkraiwit2614-web/3kings-site-report'
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
@@ -56,6 +55,25 @@ jobs:
           echo "deployment.ref=$DEPLOY_REF"
           echo "deployment.repo=$DEPLOY_REPO"
           echo "deployment.sha=$DEPLOY_SHA"
+      # Vercel deployment.ref is a commit SHA (not the branch name).
+      # Resolve the single allowlisted first-party branch from the GitHub API
+      # BEFORE passing the project-wide bypass key to any HTTP request.
+      - name: Verify deployed SHA equals trusted first-party branch HEAD
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_SHA: ${{ github.event.deployment.sha }}
+          DEPLOY_REF: ${{ github.event.deployment.ref }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$DEPLOY_SHA" =~ ^[a-f0-9]{40}$ ]] || [[ "$DEPLOY_SHA" != "$DEPLOY_REF" ]]; then
+            echo "::error::BLOCK_DEPLOYMENT_REVISION_MISMATCH"
+            exit 1
+          fi
+          trusted_sha="$(gh api 'repos/pkraiwit2614-web/3kings-site-report/branches/test/preview-qa-automation-20261019' --jq '.commit.sha')"
+          if [ -z "$trusted_sha" ] || [ "$DEPLOY_SHA" != "$trusted_sha" ]; then
+            echo "::error::BLOCK_UNTRUSTED_DEPLOYMENT_REVISION"
+            exit 1
+          fi
       - name: Require reviewed checker on default branch before using any bypass credential
         run: |
           if [ ! -f scripts/preview-readonly-smoke.mjs ]; then
