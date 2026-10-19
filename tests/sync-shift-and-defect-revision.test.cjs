@@ -35,3 +35,23 @@ test('defect UI sends a loaded server revision to guarded RPC',()=>{
  assert.match(migration,/FOR UPDATE/i);
  assert.match(migration,/DEFECT_REVISION_CONFLICT_REFRESH_ROOM/);
 });
+test('B511 RSE reconciliation proposes approved Current Status and Next Action only on explicit click',()=>{
+ const ui=read('components/DefectInputPanel.tsx');
+ assert.match(ui,/room:'B511'/);
+ assert.match(ui,/status:'Defect เสร็จแล้ว \/ รอ Hotel Engineer ตรวจ'/);
+ assert.match(ui,/group:'Hotel - Awaiting Check'/);
+ assert.match(ui,/nextAction:'นัด\/ตาม Hotel Engineer ตรวจ; รวบรวมรูป After'/);
+ assert.match(ui,/normalizeHotelRoom\(room\)!==B511_RECONCILIATION\.room/);
+ assert.match(ui,/loadedRoom\?\.room!==B511_RECONCILIATION\.room/);
+ assert.match(ui,/onClick=\{applyB511Reconciliation\}/);
+ assert.match(ui,/target===B511_RECONCILIATION\.room&&\/RSE/);
+ assert.match(ui,/proposedStatus!==B511_RECONCILIATION\.status/);
+ assert.match(ui,/nextAction\.trim\(\)!==B511_RECONCILIATION\.nextAction/);
+ assert.match(ui,/\.rpc\('defect_manual_update_apply_checked'/);
+ assert.match(ui,/p_expected_source_modified_at:loadedRoom\.stamp/);
+ assert.match(ui,/\.select\('current_status,status_group,next_action'\)\.eq\('room_no',target\)\.maybeSingle\(\)/);
+ assert.match(ui,/verified\.current_status!==proposedStatus/);
+ assert.match(ui,/verified\.status_group!==proposedGroup/);
+ assert.match(ui,/verified\.next_action!==nextAction\.trim\(\)/);
+ assert.doesNotMatch(ui,/\.from\('condo_room_status'\)\.update\(/);
+});
