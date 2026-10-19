@@ -129,17 +129,20 @@ export default function WorkOrderViewer(){
  const eligible=useMemo(()=>rows.filter(r=>{
   if(finished(r.work_status))return false
   const members=ids(r.room_group)
-  return members.length>0&&members.every(room=>roomMap.get(room)==='Hotel - Incomplete')
+  return members.length>0&&(members.every(room=>roomMap.get(room)==='Hotel - Incomplete') ||
+   (members.length===1&&members.every(room=>roomMap.get(room)?.startsWith('Non-Hotel -')))
  }),[rows,roomMap])
  const reviewLostFromDispatch=useMemo(()=>inactiveRows.filter(r=>{
   if(finished(r.work_status))return false
   const members=ids(r.room_group)
-  return members.length>0&&members.every(room=>roomMap.get(room)==='Hotel - Incomplete')
+  return members.length>0&&(members.every(room=>roomMap.get(room)==='Hotel - Incomplete') ||
+   (members.length===1&&members.every(room=>roomMap.get(room)?.startsWith('Non-Hotel -')))
  }),[inactiveRows,roomMap])
  const reviewBlockedByRoomStatus=useMemo(()=>rows.filter(r=>{
   if(finished(r.work_status))return false
   const members=ids(r.room_group)
-  return !members.length||!members.every(room=>roomMap.get(room)==='Hotel - Incomplete')
+  return !members.length||!(members.every(room=>roomMap.get(room)==='Hotel - Incomplete') ||
+   (members.length===1&&members.every(room=>roomMap.get(room)?.startsWith('Non-Hotel -')))
  }),[rows,roomMap])
  const teams=useMemo(()=>[...new Set(eligible.map(r=>r.contractor))].sort((a,b)=>a.localeCompare(b,'th')),[eligible])
  // Search and contractor limit the context for every KPI; the selected KPI
