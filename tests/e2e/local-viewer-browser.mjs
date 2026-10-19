@@ -46,7 +46,14 @@ try {
   page.setDefaultTimeout(25000)
   page.on('response', response => {
     const u=new URL(response.url())
-    if(u.origin===DB && u.pathname==='/auth/v1/token') console.log('LOCAL_AUTH_HTTP_'+response.status())
+    if(u.origin===DB && u.pathname==='/auth/v1/token'){
+      console.log('LOCAL_AUTH_HTTP_'+response.status())
+      if(!response.ok()) void response.json().then(body=>{
+        const code=String(body?.code||body?.error_code||body?.error||'UNKNOWN')
+          .toUpperCase().replace(/[^A-Z0-9_]/g,'').slice(0,45)
+        console.log('LOCAL_AUTH_ERROR_CODE_'+code)
+      }).catch(()=>console.log('LOCAL_AUTH_ERROR_NON_JSON'))
+    }
     if(u.origin===APP && u.pathname==='/api/access-control') console.log('LOCAL_ROLE_API_HTTP_'+response.status())
   })
   page.on('request',req=>{
