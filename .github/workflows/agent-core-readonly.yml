@@ -17,6 +17,7 @@ on:
       - 'tests/agent-oidc-google.test.cjs'
       - 'tests/agent-sync-evidence.test.cjs'
       - 'tests/phase1-materials-reconciliation.test.cjs'
+      - 'tests/phase1-rpc-audit.test.cjs'
       - 'lib/materialsReconciliation.ts'
       - 'supabase/audits/phase1_rpc_permissions_readonly.sql'
       - 'docs/agent-skills/manifest.json'
@@ -34,5 +35,5 @@ jobs:
         with:
           node-version: '22'
       - run: npm ci --no-audit --no-fund
-      - run: node --test tests/agent-core-readonly.test.cjs tests/agent-readonly-inspectors.test.cjs tests/agent-oidc-google.test.cjs tests/agent-sync-evidence.test.cjs tests/phase1-materials-reconciliation.test.cjs
+      - run: node --test tests/agent-core-readonly.test.cjs tests/agent-readonly-inspectors.test.cjs tests/agent-oidc-google.test.cjs tests/agent-sync-evidence.test.cjs tests/phase1-materials-reconciliation.test.cjs tests/phase1-rpc-audit.test.cjs
       - run: npm run build
