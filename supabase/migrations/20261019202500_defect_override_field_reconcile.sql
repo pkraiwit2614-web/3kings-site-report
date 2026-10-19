@@ -51,7 +51,7 @@ DECLARE
   expected_status text;
   expected_group text;
   approved boolean := false;
-  field_name text;
+  v_field_name text;
   proposed_value text;
   previous_value text;
   override_value text;
@@ -118,13 +118,13 @@ BEGIN
     AND v.source_synced_at >= v.updated_at
     AND new.source_modified_at > v.source_synced_at;
 
-  FOREACH field_name IN ARRAY ARRAY[
+  FOREACH v_field_name IN ARRAY ARRAY[
     'current_status','status_group','next_action','defect_detail'
   ] LOOP
-    previous_value := pg_catalog.to_jsonb(old)->>field_name;
-    proposed_value := pg_catalog.to_jsonb(new)->>field_name;
-    override_value := CASE WHEN field_name='defect_detail' THEN v.detail_text
-      ELSE pg_catalog.to_jsonb(v)->>field_name END;
+    previous_value := pg_catalog.to_jsonb(old)->>v_field_name;
+    proposed_value := pg_catalog.to_jsonb(new)->>v_field_name;
+    override_value := CASE WHEN v_field_name='defect_detail' THEN v.detail_text
+      ELSE pg_catalog.to_jsonb(v)->>v_field_name END;
 
     -- Already identical to the DB: do not needlessly replace the value or
     -- revive an old Web override. This is essential for no-op 15-min syncs.
@@ -133,7 +133,7 @@ BEGIN
     SELECT f.last_accepted_value,f.last_source_revision,f.override_revision
       INTO accepted_value,accepted_revision,accepted_override_revision
       FROM private.defect_reconcile_field_versions f
-      WHERE f.room_no=new.room_no AND f.field_name=field_name;
+      WHERE f.room_no=new.room_no AND f.field_name=v_field_name;
 
     IF FOUND AND accepted_override_revision IS NOT DISTINCT FROM v.updated_at THEN
       -- Per-field last accepted value is our optimistic concurrency baseline.
@@ -152,7 +152,7 @@ BEGIN
         room_no,field_name,override_revision,last_source_revision,
         last_accepted_value,last_accepted_at
       ) VALUES (
-        new.room_no,field_name,v.updated_at,new.source_modified_at,
+        new.room_no,v_field_name,v.updated_at,new.source_modified_at,
         proposed_value,now()
       ) ON CONFLICT (room_no,field_name) DO UPDATE SET
         override_revision=excluded.override_revision,
@@ -163,17 +163,17 @@ BEGIN
         room_no,field_name,decision,override_revision,source_revision,
         previous_db_value,proposed_excel_value,web_override_value
       ) VALUES (
-        new.room_no,field_name,'accepted_excel',v.updated_at,
+        new.room_no,v_field_name,'accepted_excel',v.updated_at,
         new.source_modified_at,previous_value,proposed_value,override_value
       );
     ELSE
       -- Keep actual DB field unchanged; never roll back a recent Web edit,
       -- and record which field must be reconciled.
       new := pg_catalog.jsonb_populate_record(new,
-        pg_catalog.jsonb_build_object(field_name,previous_value));
+        pg_catalog.jsonb_build_object(v_field_name,previous_value));
       IF NOT EXISTS (
         SELECT 1 FROM private.defect_reconcile_field_audit a
-        WHERE a.room_no=new.room_no AND a.field_name=field_name
+        WHERE a.room_no=new.room_no AND a.field_name=v_field_name
           AND a.decision='conflict_kept_db'
           AND a.override_revision IS NOT DISTINCT FROM v.updated_at
           AND a.source_revision IS NOT DISTINCT FROM new.source_modified_at
@@ -183,7 +183,7 @@ BEGIN
           room_no,field_name,decision,override_revision,source_revision,
           previous_db_value,proposed_excel_value,web_override_value
         ) VALUES (
-          new.room_no,field_name,'conflict_kept_db',v.updated_at,
+          new.room_no,v_field_name,'conflict_kept_db',v.updated_at,
           new.source_modified_at,previous_value,proposed_value,override_value
         );
       END IF;
