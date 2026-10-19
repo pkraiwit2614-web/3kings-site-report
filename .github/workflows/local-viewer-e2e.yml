@@ -1,0 +1,113 @@
+name: Supabase Local Viewer E2E (no hosted DB)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/local-viewer-e2e.yml'
+      - 'tests/e2e/**'
+      - 'docs/local-viewer-ci.md'
+      - 'lib/accessControl.ts'
+      - 'lib/permissionServer.ts'
+      - 'app/api/access-control/route.ts'
+      - 'app/login/page.tsx'
+      - 'app/defects/**'
+      - 'app/materials/**'
+      - 'app/reports/**'
+
+permissions:
+  contents: read
+
+jobs:
+  viewer-local:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 28
+    steps:
+      - name: Checkout first-party PR without persisted credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install app dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save --package-lock=false --ignore-scripts --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Install pinned Supabase Local CLI
+        uses: supabase/setup-cli@v3
+        with:
+          version: 2.84.2
+      - name: Guard against hosted DB access
+        run: |
+          set -euo pipefail
+          test -f tests/e2e/local-stack/supabase/config.toml
+          test ! -e tests/e2e/local-stack/supabase/.branches
+          test ! -e tests/e2e/local-stack/supabase/.temp/project-ref
+          ! grep -R -E 'supabase (link|db push|db reset --linked)' .github/workflows/local-viewer-e2e.yml
+      - name: Start disposable Supabase Local with isolated synthetic schema
+        run: |
+          set -euo pipefail
+          cd tests/e2e/local-stack
+          supabase start
+      - name: Export only local Supabase values to CI environment
+        run: |
+          set -euo pipefail
+          cd tests/e2e/local-stack
+          set -a
+          source <(supabase status -o env)
+          set +a
+          test "${API_URL:-}" = "http://127.0.0.1:54321"
+          test -n "${ANON_KEY:-}"
+          test -n "${SERVICE_ROLE_KEY:-}"
+          echo "::add-mask::$ANON_KEY"
+          echo "::add-mask::$SERVICE_ROLE_KEY"
+          {
+            echo "API_URL=$API_URL"
+            echo "ANON_KEY=$ANON_KEY"
+            echo "SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+            echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
+            echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$ANON_KEY"
+          } >> "$GITHUB_ENV"
+          echo "LOCAL_SUPABASE_ONLY"
+      - name: Bootstrap ephemeral real Auth users and profiles
+        run: node tests/e2e/local-viewer-bootstrap.mjs
+      - name: Build Next.js against localhost Supabase only
+        run: npm run build
+      - name: Start Next.js localhost
+        run: |
+          set -euo pipefail
+          PORT=3010 HOSTNAME=127.0.0.1 npm run start > /tmp/3kings-e2e-next.log 2>&1 &
+          for i in $(seq 1 45); do
+            if curl -fsS --max-time 2 http://127.0.0.1:3010/login -o /dev/null; then
+              echo "LOCAL_APP_READY"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::FAIL_LOCAL_APP_START"
+          exit 1
+      - name: Test real Viewer login, UI, API and PostgreSQL RLS
+        run: node tests/e2e/local-viewer-browser.mjs
+      - name: Evidence summary without credentials or business data
+        if: success()
+        run: |
+          {
+            echo "### 3 Kings local Viewer E2E"
+            echo "- Commit: \`$GITHUB_SHA\`"
+            echo "- Environment: ephemeral localhost Supabase + local Next.js"
+            echo "- Data: synthetic only, no real customers/Payroll"
+            echo "- Real Supabase Auth Viewer password login: PASS"
+            echo "- Defect, Materials, Reports UI/API: PASS"
+            echo "- Users, Payroll UI/API denial: PASS"
+            echo "- Local PostgreSQL RLS and write denial: PASS"
+            echo "- Scope: five policy snapshots; ancillary reads mock-empty; **NOT Production parity**"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Stop and destroy test containers; keep no local state
+        if: always()
+        run: |
+          cd tests/e2e/local-stack
+          supabase stop --no-backup || true
