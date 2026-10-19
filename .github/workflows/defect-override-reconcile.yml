@@ -1,0 +1,47 @@
+name: Defect Override Reconciliation SQL
+
+on:
+  push:
+    branches: [fix/defect-override-reconcile-20261019]
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/*defect_override_field_reconcile.sql'
+      - 'tests/sql/defect-override-reconcile-*.sql'
+      - '.github/workflows/defect-override-reconcile.yml'
+
+jobs:
+  postgres-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test_only
+          POSTGRES_DB: defect_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d defect_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: test_only
+      PGDATABASE: defect_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client >/dev/null
+      - name: Create synthetic schema + exact old trigger fixture
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/sql/defect-override-reconcile-fixture.sql
+      - name: Apply reconciliation migration in isolated PostgreSQL
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/20261019202500_defect_override_field_reconcile.sql
+      - name: Test pending synced conflict baseline history and restricted rooms
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/sql/defect-override-reconcile-assertions.sql
