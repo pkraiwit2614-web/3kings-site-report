@@ -36,4 +36,5 @@ test('live Cloudflare health confirms server-to-server gateway handshake, no pus
  assert.equal(r.body.gateway_http_status,200,JSON.stringify({gateway_status:r.body.gateway_http_status,server_role_rpc:r.body.server_role_rpc}));
  assert.equal(r.body.gateway,true);
  assert.equal(r.body.bridge_rpc,true,'dedicated Daily bridge RPC not authorized');
+ assert.equal(r.body.signed_image_readback,true,'live signed PNG did not match stored SHA-256');
 });
