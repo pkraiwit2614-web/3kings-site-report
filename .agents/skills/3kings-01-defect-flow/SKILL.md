@@ -6,7 +6,7 @@ description: "3 Kings Construction shortcut 'อัปเดต Defect ตาม
 # 01 — อัปเดต Defect ตามเดิม
 
 **Shortcut:** `อัปเดต Defect ตามเดิม`  
-**SOP title (resolve via live Drive index):** `SOP_01_Defect_Flow_v1.0`  
+**SOP title (resolve via live Drive index):** `SOP_01_Defect_Flow_v1.1_2026-10-19`  
 **Mode:** `authorized_write`
 
 ## Before any action

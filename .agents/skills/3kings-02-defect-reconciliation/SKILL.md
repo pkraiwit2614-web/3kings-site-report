@@ -6,7 +6,7 @@ description: "3 Kings Construction shortcut 'ตรวจยอด Defect'. READ
 # 02 — ตรวจยอด Defect
 
 **Shortcut:** `ตรวจยอด Defect`  
-**SOP title (resolve via live Drive index):** `SOP_02_Defect_Count_Reconciliation_v1.0`  
+**SOP title (resolve via live Drive index):** `SOP_02_Defect_Count_Reconciliation_v1.1_2026-10-19`  
 **Mode:** `read_only`
 
 ## Before any action

@@ -6,7 +6,7 @@ description: "3 Kings Construction shortcut 'ตรวจ Hotel Defect'. READ-ON
 # 05 — ตรวจ Hotel Defect
 
 **Shortcut:** `ตรวจ Hotel Defect`  
-**SOP title (resolve via live Drive index):** `SOP_05_Hotel_Defect_Comparison_v1.0`  
+**SOP title (resolve via live Drive index):** `SOP_05_Hotel_Defect_Comparison_v1.1_2026-10-19`  
 **Mode:** `read_only`
 
 ## Before any action
