@@ -35,11 +35,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      # Use reviewed default-branch implementation, NOT code checked out from
-      # the Preview deployment's potentially unreviewed commit.
+      # Pilot only: run the inspected, immutable read-only runner at a pinned
+      # commit, never checkout code from the Preview deployment being tested.
+      # When merged, this may be changed to a protected main ref after review.
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          ref: main
+          ref: 9657c74be334af6c8cc20d29c64482588be127bd
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -74,10 +75,12 @@ jobs:
             echo "::error::BLOCK_UNTRUSTED_DEPLOYMENT_REVISION"
             exit 1
           fi
-      - name: Require reviewed checker on default branch before using any bypass credential
+      - name: Verify pinned read-only checker before using bypass credential
         run: |
-          if [ ! -f scripts/preview-readonly-smoke.mjs ]; then
-            echo "::error::BLOCK_PREVIEW_RUNNER_NOT_MERGED_ON_MAIN"
+          set -euo pipefail
+          if [ "$(git rev-parse HEAD)" != "9657c74be334af6c8cc20d29c64482588be127bd" ] ||
+             [ "$(git rev-parse HEAD:scripts/preview-readonly-smoke.mjs)" != "171990c7b755281ef8b1c5e2044130387cbfb177" ]; then
+            echo "::error::BLOCK_PREVIEW_RUNNER_NOT_PINNED"
             exit 1
           fi
       - name: Probe Vercel Preview with dedicated automation credential
