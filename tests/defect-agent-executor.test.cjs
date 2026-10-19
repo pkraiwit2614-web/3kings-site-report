@@ -12,7 +12,7 @@ test('command 01 only, owner auth, live SOP and disabled Production write',()=>{
  assert.match(route,/user\.id!==OWNER_USER_ID/)
  assert.match(route,/evaluateSopGate\(1,'preflight',source\)/)
  assert.match(route,/EXPLICIT_HOTEL_ACCEPTANCE_REQUIRED/)
- assert.match(route,/process\.env\.VERCEL_ENV!=='preview'/)
+ assert.match(route,/process\.env\.VERCEL_ENV==='preview'/)
  assert.match(route,/DEFECT_AGENT_EXECUTOR_ENABLED/)
  assert.match(route,/INVALID_ROOM_GROUPS_OR_COMBINE/)
  assert.doesNotMatch(route,/SUPABASE_SERVICE_ROLE_KEY/)
