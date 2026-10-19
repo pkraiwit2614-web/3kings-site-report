@@ -19,3 +19,11 @@ This is an owner-authenticated API contract for the existing 3 Kings Defect comm
 
 ## Safety
 No general ChatGPT write access, no unrestricted service role, no bypass of SOP Gate, RBAC/RLS or original approval. No unrelated edits to Materials, Daily, Payroll, Calendar, OOO/OOS, Work Plan or Defect photos. Two-way Excel writebacks are a non-atomic cross-service saga; a failed workbook write stays pending/error and retries, without reporting completion. A date recorded as Hotel OK closure must not be represented as the actual repair date. Full readback and Excel→Supabase→Web reconciliation are mandatory before Production claims.
+
+## Staging safeguards, status as of 2026-10-19
+- Preview Vercel variable AGENT_SOP_INDEX_ID is pinned to the real live SOP INDEX; DEFECT_AGENT_EXECUTOR_ENABLED remains **false** for this Git branch.
+- A dedicated staging database is required before execution. Configure both DEFECT_AGENT_STAGING_SUPABASE_URL and DEFECT_AGENT_STAGING_SUPABASE_PUBLISHABLE_KEY as encrypted, branch-scoped Preview variables; never set the URL to Production. The API rejects writes unless the separate staging project is configured and authenticated.
+- Creation of a Supabase Development Branch requires explicit hourly-cost approval from the owner; do not create until approved. Production schema and rows must not be used as a test fixture for writes.
+- No Google Apps Script management connector is currently installed in this chat. This repository worker is not deployed into the user's Apps Script project; run the independent in-memory dry run there before enabling its trigger.
+- The original Work Order import is Excel→DB; add the closure-preserving import migration on staging so stale Excel cannot revive accepted work while outbound writeback is pending.
+- ChatGPT normal-chat execution still requires an installed owner-approved external app providing OAuth and the new executor tool. A Next.js API route does not self-register as a ChatGPT plugin or automatically act for an ordinary chat.

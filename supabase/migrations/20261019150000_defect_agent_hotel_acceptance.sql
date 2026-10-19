@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS public.defect_agent_requests (
   requested_by uuid NOT NULL,
   room_ids text[] NOT NULL,
   work_ids text[] NOT NULL DEFAULT '{}',
+  changed_rooms text[] NOT NULL DEFAULT '{}',
   requested_at timestamptz NOT NULL DEFAULT now(),
   status text NOT NULL DEFAULT 'pending_excel',
   CONSTRAINT defect_agent_request_status CHECK (status IN ('pending_excel','verified','error'))
@@ -30,6 +31,7 @@ DECLARE
  v_room_row public.condo_room_status%ROWTYPE;
  v_w public.defect_work_order_snapshot%ROWTYPE;
  v_work_ids text[] := '{}';
+ v_changed_rooms text[] := '{}';
  v_previous public.defect_agent_requests%ROWTYPE;
  v_result jsonb;
 BEGIN
@@ -54,7 +56,8 @@ BEGIN
       RAISE EXCEPTION 'IDEMPOTENCY_CONFLICT';
    END IF;
    RETURN jsonb_build_object('ok',true,'replayed',true,'request_id',p_request_id,
-     'work_ids',v_previous.work_ids,'room_ids',v_previous.room_ids,'status',v_previous.status);
+     'work_ids',v_previous.work_ids,'changed_rooms',v_previous.changed_rooms,
+     'room_ids',v_previous.room_ids,'status',v_previous.status);
  END IF;
  -- Never update a partial Combine group. A group either appears in full or not at all.
  IF EXISTS (
@@ -96,6 +99,7 @@ BEGIN
    SELECT * INTO v_room_row FROM public.condo_room_status WHERE room_no=v_room;
    IF v_room_row.current_status='Defect เสร็จแล้ว / Hotel Engineer ตรวจแล้ว'
       AND v_room_row.status_group='Hotel - Checked Complete' THEN CONTINUE; END IF;
+   v_changed_rooms:=array_append(v_changed_rooms,v_room);
    -- Reuse audited authenticated update and its existing Excel master/overview queue.
    -- Preserve the existing detail exactly; do not append automation boilerplate.
    PERFORM public.defect_manual_update_apply_checked(
@@ -106,10 +110,11 @@ BEGIN
       v_room_row.source_modified_at);
  END LOOP;
 
- INSERT INTO public.defect_agent_requests(request_id,requested_by,room_ids,work_ids)
- VALUES(p_request_id,v_actor,p_room_ids,v_work_ids);
+ INSERT INTO public.defect_agent_requests(request_id,requested_by,room_ids,work_ids,changed_rooms)
+ VALUES(p_request_id,v_actor,p_room_ids,v_work_ids,v_changed_rooms);
  RETURN jsonb_build_object('ok',true,'request_id',p_request_id,
-    'replayed',false,'status','pending_excel','room_ids',p_room_ids,'work_ids',v_work_ids);
+    'replayed',false,'status','pending_excel','room_ids',p_room_ids,
+    'changed_rooms',v_changed_rooms,'work_ids',v_work_ids);
 END; $$;
 REVOKE ALL ON FUNCTION public.defect_agent_hotel_accepted_apply(uuid,text[],jsonb,text) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.defect_agent_hotel_accepted_apply(uuid,text[],jsonb,text) TO authenticated;

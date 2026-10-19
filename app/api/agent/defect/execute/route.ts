@@ -42,12 +42,24 @@ export async function POST(request:NextRequest){
     return response({error:'BLOCK_UNSUPPORTED_FIELD'},400)
   if(body.commandId!==1||!['preview','execute','status'].includes(String(body.action)))
     return response({error:'BLOCK_COMMAND_NOT_SUPPORTED'},400)
+  // Never write to Production from Preview even when an enable flag is accidentally set.
+  // Until a separately provisioned branch + auth identity exist, Preview remains read-only.
+  const productionUrl=String(process.env.NEXT_PUBLIC_SUPABASE_URL||'').trim()
+  const stagingUrl=String(process.env.DEFECT_AGENT_STAGING_SUPABASE_URL||'').trim()
+  const stagingKey=String(process.env.DEFECT_AGENT_STAGING_SUPABASE_PUBLISHABLE_KEY||'').trim()
+  const stagingConfigured=/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(stagingUrl)&&
+    stagingUrl!==productionUrl&&stagingKey.length>20&&
+    !stagingUrl.includes('wtqubwdduzedmcvyhbgs')
+  const executeEnabled=process.env.VERCEL_ENV==='preview'&&
+    process.env.DEFECT_AGENT_EXECUTOR_ENABLED==='true'&&stagingConfigured
+  if(body.action==='execute'&&!executeEnabled)
+    return response({error:'EXECUTOR_REQUIRES_ISOLATED_STAGING_DATABASE'},503)
   const bearer=request.headers.get('authorization')||''
   const jwt=bearer.toLowerCase().startsWith('bearer ')?bearer.slice(7).trim():''
   if(!jwt)return response({error:'UNAUTHORIZED'},401)
   const client=createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL||'https://wtqubwdduzedmcvyhbgs.supabase.co',
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||'',
+    stagingConfigured?stagingUrl:productionUrl,
+    stagingConfigured?stagingKey:(process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||''),
     {global:{headers:{Authorization:'Bearer '+jwt}},auth:{persistSession:false,autoRefreshToken:false}}
   )
   const {data:{user},error}=await client.auth.getUser(jwt)
@@ -76,9 +88,10 @@ export async function POST(request:NextRequest){
     if(jobError)return response({error:'STATUS_UNAVAILABLE'},503)
     if(!job)return response({error:'REQUEST_NOT_FOUND'},404)
     const roomIds=job.room_ids as string[]
+    const changedRoomIds=(job.changed_rooms||[]) as string[]
     const workIds=job.work_ids as string[]
     const [roomSync,workSync,roomState]=await Promise.all([
-      Promise.all(roomIds.map(async room=>({room,...await client.rpc('defect_writeback_status',{p_room_no:room})}))),
+      Promise.all(changedRoomIds.map(async room=>({room,...await client.rpc('defect_writeback_status',{p_room_no:room})}))),
       workIds.length?client.from('defect_work_order_snapshot')
         .select('work_id,writeback_state,web_completed_at').in('work_id',workIds):
         Promise.resolve({data:[],error:null}),
@@ -88,7 +101,7 @@ export async function POST(request:NextRequest){
       return response({error:'SYNC_STATUS_UNAVAILABLE'},503)
     const statusByRoom=new Map(roomSync.map(x=>[x.room,String(x.data?.state||'unknown')]))
     const statusByValue=new Map((roomState.data||[]).map(x=>[x.room_no,x]))
-    const pendingRooms=roomIds.filter(room=>statusByRoom.get(room)!=='synced'||
+    const pendingRooms=changedRoomIds.filter(room=>statusByRoom.get(room)!=='synced'||
       statusByValue.get(room)?.current_status!==STATUS||statusByValue.get(room)?.status_group!==GROUP)
     const pendingWork=(workSync.data||[]).filter(x=>x.writeback_state!=='synced')
     const missingWork=workIds.filter(id=>!(workSync.data||[]).some(x=>x.work_id===id))
@@ -118,14 +131,13 @@ export async function POST(request:NextRequest){
   if(body.action==='preview')return response({ok:true,requestId:randomUUID(),groups:targets.groups,
     roomIds:targets.roomIds,changedRooms,openWorkIds:activeWork.map(w=>w.work_id),
     awaitingExcel:false,gate:{code:gate.code,sopModifiedAt:gate.sop?.modifiedAt},
-    executeEnabled:process.env.DEFECT_AGENT_EXECUTOR_ENABLED==='true'&&
-      process.env.VERCEL_ENV==='preview'},200)
+    executeEnabled},200)
   if(body.confirmation!=='HOTEL_ENGINEER_ACCEPTED_CLOSE_ALL')
     return response({error:'EXPLICIT_HOTEL_ACCEPTANCE_REQUIRED'},400)
   if(typeof body.requestId!=='string'||!UUID.test(body.requestId))
     return response({error:'INVALID_REQUEST_ID'},400)
   // No Production execution until a separate reviewed release and explicit enablement.
-  if(process.env.VERCEL_ENV!=='preview'||process.env.DEFECT_AGENT_EXECUTOR_ENABLED!=='true')
+  if(!executeEnabled)
     return response({error:'EXECUTOR_DISABLED_IN_THIS_ENVIRONMENT'},503)
   const expected=Object.fromEntries(rows.map(r=>[r.room_no,r.source_modified_at]))
   const {data:result,error:rpcError}=await client.rpc('defect_agent_hotel_accepted_apply',{

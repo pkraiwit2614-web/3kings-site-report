@@ -38,6 +38,14 @@ test('Work Order source writeback is targeted and verified',()=>{
  assert.match(worker,/defect_work_order_writeback_ack/)
  assert.match(worker,/defect_work_order_writeback_fail/)
  assert.match(worker,/meta\.dateCol\+row/)
+ assert.match(worker,/originalFileUnmodified:true/)
  assert.doesNotMatch(worker,/dateCol:\s*'Z'/)
  assert.doesNotMatch(worker,/deleteRows|clearContents|deleteSheet/)
+})
+
+test('importer cannot reopen Work Order after Hotel acceptance',()=>{
+ const src=fs.readFileSync(path.join(root,'supabase/migrations/20261019151000_defect_work_order_import_closure_guard.sql'),'utf8')
+ assert.match(src,/web_completed_at IS NOT NULL THEN 'เสร็จแล้ว'/)
+ assert.match(src,/defect_work_order_sync_import/)
+ assert.doesNotMatch(src,/TRUNCATE|DROP TABLE/i)
 })

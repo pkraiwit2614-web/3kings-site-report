@@ -159,7 +159,38 @@ function defectAgentWorkOrderExecute20261019_(dryRun){
   }finally{lock.releaseLock();}
 }
 function dryRunDefectAgentWorkOrder20261019(){
-  return defectAgentWorkOrderExecute20261019_(true);
+  // Pure source-layout validation; does not call the private database queue or write Drive.
+  // Select an existing Work ID present in BOTH approved sheets as a temporary in-memory fixture.
+  const lock=LockService.getScriptLock();
+  if(!lock.tryLock(4000))throw Error('executor-locked');
+  try {
+    const c=defectAgentWorkOrderConfig20261019_();
+    const file=DriveApp.getFileById(c.id);
+    if(file.getName()!==DEFECT_AGENT_WO_20261019.name||
+       file.getMimeType()!==DEFECT_AGENT_WO_20261019.mime)
+      throw Error('Unexpected original Excel source');
+    const parts={};
+    Utilities.unzip(file.getBlob()).forEach(function(b){parts[b.getName()]=b;});
+    const shared=defectWbSharedStrings_(parts['xl/sharedStrings.xml']);
+    const primary=parts['xl/worksheets/sheet1.xml'].getDataAsString();
+    const dispatch=parts['xl/worksheets/sheet8.xml'].getDataAsString();
+    const lines=dispatch.match(/<row\\b[^>]*\\br="\\d+"[^>]*>[\\s\\S]*?<\\/row>/g)||[];
+    let chosen=null;
+    lines.forEach(function(line){
+      if(chosen)return;
+      const number=Number((line.match(/<row\\b[^>]*\\br="(\\d+)"/)||[])[1]);
+      if(number<=5)return;
+      const workId=defectWbReadCell_(line,'C'+number,shared);
+      if(!/^DF-[A-Za-z0-9()_-]+$/.test(workId))return;
+      try{defectAgentWorkRow20261019_(primary,shared,'B',workId);chosen=workId;}
+      catch(ignored){}
+    });
+    if(!chosen)throw Error('No matching Work IDs in the two original Excel sheets');
+    const verified=defectAgentWorkOrderWrite20261019_(c.id,chosen,new Date().toISOString(),true);
+    return {ok:true,mode:'in-memory-dry-run',verified:verified.dryRun===true,
+      workId:chosen,sheets:DEFECT_AGENT_WO_20261019.sheets.map(function(s){return s.name;}),
+      originalFileUnmodified:true};
+  }finally{lock.releaseLock();}
 }
 function runDefectAgentWorkOrderWriteback20261019(){
   return defectAgentWorkOrderExecute20261019_(false);
