@@ -6,7 +6,7 @@ description: "3 Kings Construction shortcut 'อัปเดตปฏิทิ�
 # 12 — อัปเดตปฏิทินงาน
 
 **Shortcut:** `อัปเดตปฏิทินงาน`  
-**SOP title (resolve via live Drive index):** `SOP_12_Work_Calendar_v1.0`  
+**SOP title (resolve via live Drive index):** `SOP_12_Work_Calendar_v1.1_2026-10-19`  
 **Mode:** `authorized_write`
 
 ## Before any action
