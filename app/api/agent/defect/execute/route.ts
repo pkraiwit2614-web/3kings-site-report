@@ -77,16 +77,19 @@ export async function POST(request:NextRequest){
     if(!job)return response({error:'REQUEST_NOT_FOUND'},404)
     const roomIds=job.room_ids as string[]
     const workIds=job.work_ids as string[]
-    const [roomSync,workSync]=await Promise.all([
-      client.from('defect_web_overrides').select('room_no,source_sync_state')
-        .in('room_no',roomIds),
+    const [roomSync,workSync,roomState]=await Promise.all([
+      Promise.all(roomIds.map(async room=>({room,...await client.rpc('defect_writeback_status',{p_room_no:room})}))),
       workIds.length?client.from('defect_work_order_snapshot')
         .select('work_id,writeback_state,web_completed_at').in('work_id',workIds):
         Promise.resolve({data:[],error:null}),
+      client.from('condo_room_status').select('room_no,current_status,status_group').in('room_no',roomIds),
     ])
-    if(roomSync.error||workSync.error)return response({error:'SYNC_STATUS_UNAVAILABLE'},503)
-    const statusByRoom=new Map((roomSync.data||[]).map(x=>[x.room_no,x.source_sync_state]))
-    const pendingRooms=roomIds.filter(room=>statusByRoom.get(room)!=='synced')
+    if(roomSync.some(r=>r.error)||workSync.error||roomState.error)
+      return response({error:'SYNC_STATUS_UNAVAILABLE'},503)
+    const statusByRoom=new Map(roomSync.map(x=>[x.room,String(x.data?.state||'unknown')]))
+    const statusByValue=new Map((roomState.data||[]).map(x=>[x.room_no,x]))
+    const pendingRooms=roomIds.filter(room=>statusByRoom.get(room)!=='synced'||
+      statusByValue.get(room)?.current_status!==STATUS||statusByValue.get(room)?.status_group!==GROUP)
     const pendingWork=(workSync.data||[]).filter(x=>x.writeback_state!=='synced')
     const missingWork=workIds.filter(id=>!(workSync.data||[]).some(x=>x.work_id===id))
     return response({ok:true,requestId:job.request_id,roomIds,workIds,

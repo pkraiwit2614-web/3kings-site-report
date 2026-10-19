@@ -14,7 +14,7 @@ type WorkOrder={
   defect_item:string;next_action:string|null;
   received_date:string|null;due_date:string|null;work_status:string|null;
   evidence_url:string|null;qa_status:string|null;conflict_note:string|null;
-  source_sync_note:string|null;source_modified_at:string;imported_at:string;
+  source_sync_note:string|null;source_modified_at:string;imported_at:string;web_completed_at:string|null;
 }
 type RoomStatus={room_no:string;status_group:string|null;latest_source:string|null;source_note:string|null}
 type Quick='ALL'|'A'|'B'|'OVERDUE'
@@ -101,9 +101,9 @@ export default function WorkOrderViewer(){
  const reload=useCallback(async()=>{
   const sb=getSupabase()
   const [order,master,inactive]=await Promise.all([
-   sb.from('defect_work_order_snapshot').select('work_id,room_group,building,contractor,defect_item,next_action,received_date,due_date,work_status,evidence_url,qa_status,conflict_note,source_sync_note,source_modified_at,imported_at').eq('source_active',true).order('work_id'),
+   sb.from('defect_work_order_snapshot').select('work_id,room_group,building,contractor,defect_item,next_action,received_date,due_date,work_status,evidence_url,qa_status,conflict_note,source_sync_note,source_modified_at,imported_at,web_completed_at').eq('source_active',true).order('work_id'),
    sb.from('condo_room_status').select('room_no,status_group,latest_source,source_note'),
-   sb.from('defect_work_order_snapshot').select('work_id,room_group,building,contractor,defect_item,next_action,work_status,source_modified_at,imported_at').eq('source_active',false).order('work_id')
+   sb.from('defect_work_order_snapshot').select('work_id,room_group,building,contractor,defect_item,next_action,work_status,source_modified_at,imported_at,web_completed_at').eq('source_active',false).order('work_id')
   ])
   if(order.error||master.error||inactive.error)throw new Error(order.error?.message||master.error?.message||inactive.error?.message||'อ่านข้อมูลไม่สำเร็จ')
   setRows((order.data||[]) as WorkOrder[])
@@ -157,6 +157,11 @@ export default function WorkOrderViewer(){
   if(quick==='OVERDUE'&&!((daysForRow(r)??0)>7))return false
   return true
  }).sort((a,b)=>a.contractor.localeCompare(b.contractor,'th')||a.room_group.localeCompare(b.room_group)||a.work_id.localeCompare(b.work_id)),[inScope,quick,noticeMap,todayISO])
+ const closedHistory=useMemo(()=>[...rows,...inactiveRows].filter(r=>r.web_completed_at).filter(r=>{
+  const needle=normalize(query)
+  return (contractor==='ALL'||r.contractor===contractor)&&
+    (!needle||normalize([r.work_id,r.room_group,r.defect_item,r.contractor].join(' ')).includes(needle))
+ }).sort((a,b)=>String(b.web_completed_at).localeCompare(String(a.web_completed_at))),[rows,inactiveRows,query,contractor])
  const latestWorkDetailSourceAt=rows.map(r=>r.source_modified_at).filter(Boolean).sort().at(-1)||null
  const kpiRows:Record<Quick,WorkOrder[]>={
   ALL:inScope,A:inScope.filter(r=>r.building==='A'),B:inScope.filter(r=>r.building==='B'),
@@ -222,6 +227,10 @@ export default function WorkOrderViewer(){
      {!filtered.length&&<tr><td colSpan={7} className="wo-empty">ไม่พบรายการงานค้างตามตัวกรอง</td><td className="wo-print-only"/></tr>}
     </tbody></table></div>
    </section>
+   {closedHistory.length>0&&<details className="panel wo-reconciliation">
+    <summary>ประวัติงานที่ปิดแล้ว ({closedHistory.length} รายการ)</summary>
+    <ul>{closedHistory.map(r=><li key={r.work_id}><b>{groupLabel(r.room_group)}</b> · {r.work_id} · {r.defect_item} · {dateTimeTH(r.web_completed_at)}</li>)}</ul>
+   </details>}
    <p className="wo-screen-scope">ขอบเขต: {scope} • {filtered.length} รายการ</p>
   </>}
  </AppShell>
