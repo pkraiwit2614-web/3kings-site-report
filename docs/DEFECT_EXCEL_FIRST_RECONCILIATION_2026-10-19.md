@@ -1,0 +1,8 @@
+# Excel-first Defect reconciliation — 19 October 2026
+Status: DRAFT; do not merge before real Apps Script trigger + readback QA.
+
+1. Source status is accepted only from the canonical Master ID. Overview and Work Order are companion workbooks, not sources of room classification.
+2. Existing synced Web overrides may be superseded only by a newer canonical XLSX file revision after both the latest Web edit and acknowledged writeback. Pending Web changes always win. This changes only the existing BEFORE UPDATE trigger function, preserving RLS, privileges, log/history, and all existing override rows.
+3. User-provided screenshots on 19 October show successful runs of defectWritebackScheduledV2, defectWorkOrderScheduled20261015 and syncWorkOrderHourly20261015; smartSyncDefectsV13_15m does not appear in the visible Triggers table. Verify whether its source exists and install the narrowly scoped importer if needed.
+4. Never infer import success from Apps Script 'Completed'. Confirm row counts and matching values in original three XLSX Drive files, Supabase condo_room_status and defect_work_order_snapshot, and Web Flow/Report/Work Order. The Work Order importer reads statuses, but its new 'Hotel OK date' column is not currently in the database snapshot.
+5. The already prepared 19 October backup and staged Excel files remain separate in Drive. Revalidate originals against their timestamps/ZIP components before any production replacement. Avoid speculative dates, blanking notes, and revisions that clobber new evidence.

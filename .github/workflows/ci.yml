@@ -55,6 +55,9 @@ jobs:
       - name: Defect canonical source contract
         run: node tests/defect-canonical-source.test.cjs
 
+      - name: Excel-first Defect Override precedence safety
+        run: node --test tests/defect-excel-first-override.test.cjs
+
       - name: Hotel-only Combine=1 Flow regression
         run: node --test tests/hotel-combine-one-tab.test.cjs
 
