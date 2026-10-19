@@ -177,7 +177,7 @@ test('read-only discrepancies use current room classification and preserve role,
  assert.match(acl,/permissionDecision\(role,'defect','view'/)
  assert.match(page,/members\.every\(room=>roomMap\.get\(room\)==='Hotel - Incomplete'\)/)
  assert.match(page,/flatMap\(room=>hotelRoomMembers\(room\)\)/)
- assert.match(page,/!members\\.length\\|\\|!\\(members\\.every/)
+ assert.match(page,/!members\.length\|\|!\(members\.every/)
  assert.match(page,/finished\(r\.work_status\)/)
  assert.match(page,/<details className="panel wo-reconciliation">/)
  assert.match(css,/body\.report-print-mode\[data-print-report="Above Condo — Work Order"\] \.wo-reconciliation,/)
