@@ -154,7 +154,8 @@ function runDefectSyncV13_(opts) {
         owner_source_file_name: old.owner_source_file_name || null,
         owner_source_modified_at: old.owner_source_modified_at || null,
 
-        defect_detail: old.defect_detail || null,
+        defect_detail: src.defect_detail && src.defect_detail.includes('รายการ Defect แจ้งผ่านแชต:')
+          ? src.defect_detail : old.defect_detail || null,
         synced_at: nowIso,
       };
     });
@@ -278,6 +279,7 @@ function parseCondoDefectMasterV13_(sheet) {
   const sourceNoteCol = optionalColumn('Source Note');
   const completeColorCol = optionalColumn('Hotel Complete Color');
   const remarksCol = optionalColumn('Hotel Remarks');
+  const defectDetailCol = optionalColumn('Defect Detail (Web App)');
 
   const rows = [];
   const seen = {};
@@ -344,6 +346,7 @@ function parseCondoDefectMasterV13_(sheet) {
       source_note: sourceNoteCol >= 0 ? cleanText_(values[r][sourceNoteCol]) || null : null,
       hotel_complete_color: completeColorCol >= 0 ? cleanText_(values[r][completeColorCol]) || null : null,
       hotel_remarks: remarksCol >= 0 ? cleanText_(values[r][remarksCol]) || null : null,
+      defect_detail: defectDetailCol >= 0 ? cleanText_(values[r][defectDetailCol]) || null : null,
     });
   }
 
@@ -390,6 +393,7 @@ function defectMasterV13NeedsWrite_(row, old) {
     'source_note',
     'hotel_complete_color',
     'hotel_remarks',
+    'defect_detail',
   ];
 
   return fields.some(
