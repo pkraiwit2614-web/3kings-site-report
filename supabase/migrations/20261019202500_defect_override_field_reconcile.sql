@@ -4,8 +4,8 @@
 -- No UPDATE/DELETE on existing overrides, no change to RBAC/RLS/role grants.
 DO $preflight$
 BEGIN
-  IF pg_catalog.position('All other rooms keep exactly the old Web-override behavior'
-      IN pg_catalog.pg_get_functiondef('public.defect_web_override_protect()'::pg_catalog.regprocedure)) = 0 THEN
+  IF pg_catalog.strpos(pg_catalog.pg_get_functiondef('public.defect_web_override_protect()'::pg_catalog.regprocedure),
+      'All other rooms keep exactly the old Web-override behavior') = 0 THEN
     RAISE EXCEPTION 'DEFECT_RECONCILE_BASELINE_CHANGED_REVIEW_REQUIRED';
   END IF;
 END
