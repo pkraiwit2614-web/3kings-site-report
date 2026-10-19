@@ -114,7 +114,7 @@ test('latest failed Materials import is surfaced as reconciliation-required, not
  assert.equal(c.status,'SOURCE_RECONCILIATION_REQUIRED')
  assert.equal(c.details.latestFailed,true)
  assert.equal(c.details.latestDiagnosticCategory,'UNMATCHED_MATERIALS')
- assert.equal(r.status,'PARTIAL')
+ assert.equal(r.status,'UNVERIFIED') // failed latest log without DB/source readback is unverified
  assert.equal(client.writes.length,0)
 })
 test('other failed latest run is flagged; historical success cannot mask latest error',async()=>{
