@@ -19,7 +19,7 @@ test('Express PO display never reads data directly from browser or writes existi
  assert.match(route,/canAccessPath\(role,'\/materials',matrix\)/)
  assert.match(route,/exchangeVercelOidcToken/)
  assert.match(route,/cache-control':'private, no-store/)
- assert.match(route,/express-po/i)
+ assert.match(route,/Express_PO_Preview_Staging_2026-10-19/)
  assert.doesNotMatch(route,/(\.insert\(|\.upsert\(|\.update\(|\.delete\(|\.rpc\('express_po_stage_import')/)
  assert.doesNotMatch(component,/docs\.google\.com|drive\.google\.com|supabase\.co\/rest\/v1/)
 })
