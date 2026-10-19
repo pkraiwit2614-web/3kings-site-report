@@ -30,7 +30,9 @@ jobs:
       github.event_name == 'deployment_status' &&
       github.event.deployment_status.state == 'success' &&
       (github.event.deployment.environment == 'Preview' ||
-       github.event.deployment.environment == 'preview')
+       github.event.deployment.environment == 'preview') &&
+      github.event.repository.full_name == 'pkraiwit2614-web/3kings-site-report' &&
+      github.event.deployment.ref == 'test/preview-qa-automation-20261019'
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
@@ -43,6 +45,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      # Secret-bearing requests are restricted to a dedicated first-party branch.
+      # This pilot is NOT a generic unreviewed PR deployment tester.
       - name: Show nonsecret deployment identity for trust review
         env:
           DEPLOY_REF: ${{ github.event.deployment.ref }}
