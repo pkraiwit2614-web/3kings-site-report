@@ -12,6 +12,7 @@ if(!process.env.KINGS_LOCAL_VIEWER_LOGIN||!process.env.KINGS_LOCAL_VIEWER_PASSWO
   throw Error('BLOCK_VIEWER_NOT_BOOTSTRAPPED')
 const {chromium}=await import('playwright')
 let browser
+let phase='BROWSER_INIT'
 try {
   browser=await chromium.launch({headless:true})
   const context=await browser.newContext({viewport:{width:1440,height:960}})
@@ -49,18 +50,24 @@ try {
       if(a.startsWith('Bearer '))viewerBearer=a
     }
   })
+  phase='ANON_API'
   const anon=await context.request.get(APP+'/api/access-control?path=%2Fmaterials')
   assert.equal(anon.status(),401,'anonymous API must refuse')
+  phase='LOGIN_PAGE'
   await page.goto(APP+'/login',{waitUntil:'domcontentloaded'})
   await page.getByRole('heading',{name:'3 Kings Site Report'}).waitFor()
   await page.getByPlaceholder('เช่น USER01').fill(process.env.KINGS_LOCAL_VIEWER_LOGIN)
   await page.getByPlaceholder('กรอกรหัสผ่าน').fill(process.env.KINGS_LOCAL_VIEWER_PASSWORD)
+  phase='LOGIN_CLICK'
   await page.getByRole('button',{name:'เข้าสู่ระบบ'}).click()
+  phase='LOGIN_REDIRECT'
   await page.waitForURL(u=>u.pathname==='/',{timeout:35000})
+  phase='DASHBOARD_MARKER'
   await page.getByText('CI-ONLY PROJECT',{exact:false}).first().waitFor()
   assert.ok(viewerBearer.startsWith('Bearer '),'expected real Supabase Auth token')
   console.log('PASS_VIEWER_REAL_AUTH_AND_DASHBOARD')
 
+  phase='FEATURE_ROUTES'
   for(const [path,marker] of [
     ['/defects','A991'],
     ['/materials','CI-ONLY MATERIAL'],
@@ -77,6 +84,7 @@ try {
     assert.equal(new URL(page.url()).pathname,path)
     console.log('PASS_VIEWER_UI_API_'+path.slice(1).toUpperCase())
   }
+  phase='RESTRICTED_ROUTES'
   for(const path of ['/users','/reports/labour']){
     const api=await context.request.get(APP+'/api/access-control?path='+encodeURIComponent(path),
       {headers:{authorization:viewerBearer}})
@@ -86,6 +94,7 @@ try {
     await page.waitForURL(u=>u.pathname!=='/login'&&u.pathname!==path,{timeout:25000})
     console.log('PASS_VIEWER_DENIED_'+path.slice(1).replaceAll('/','_').toUpperCase())
   }
+  phase='RLS_CHECKS'
   const h={apikey:key,authorization:viewerBearer}
   const user=await context.request.get(DB+'/auth/v1/user',{headers:h})
   assert.equal(user.status(),200)
@@ -121,7 +130,8 @@ try {
   console.log('PASS_LOCAL_NO_PRODUCTION_TRAFFIC_NO_BUSINESS_WRITES')
   await context.close()
 } catch(err) {
-  console.error('FAIL_LOCAL_VIEWER_E2E')
+  console.error('FAIL_LOCAL_VIEWER_E2E_AT_'+phase)
+  console.error('FAIL_KIND_'+String(err?.name || 'Unknown').replace(/[^A-Za-z]/g,''))
   process.exitCode=1
 } finally {
   if(browser)await browser.close()
