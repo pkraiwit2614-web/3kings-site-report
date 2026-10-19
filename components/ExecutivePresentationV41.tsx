@@ -187,6 +187,8 @@ export default function ExecutivePresentationV41(){
   const [tasks,setTasks]=useState<PresentationTask[]>([])
   const [photos,setPhotos]=useState<PresentationPhoto[]>([])
   const [photoFeedback,setPhotoFeedback]=useState<Map<string,PresentationFeedbackStatus>>(()=>new Map())
+  // Per-slide preview/export choices are session-only; never write photo mappings or source data.
+  const [slidePhotoChoices,setSlidePhotoChoices]=useState<Record<string,string[]>>({})
   const [condoRooms,setCondoRooms]=useState<CondoRoomRow[]>([])
   const [projectFilter,setProjectFilter]=useState('')
   const [startDate,setStartDate]=useState(bounds.start)
@@ -279,7 +281,7 @@ export default function ExecutivePresentationV41(){
   const condoB=useMemo(()=>condoMetrics(condoRooms,'B'),[condoRooms])
   const metricFor=(building:'A'|'B')=>building==='A'?condoA:condoB
 
-  const pickPhotos=(projectId:string,taskId?:string)=>{
+  const pickPhotos=(projectId:string,taskId?:string,limit=4)=>{
     const projectPhotos=photosInPeriod.filter(p=>p.project_id===projectId)
     const task=taskId?tasks.find(t=>t.id===taskId&&t.project_id===projectId):undefined
     const status=(p:PresentationPhoto)=>taskId?photoFeedback.get(`${p.id}|${taskId}`):undefined
@@ -301,7 +303,7 @@ export default function ExecutivePresentationV41(){
     const otherPlotCandidates=taskId?other.filter(p=>p.source==='drive'&&Boolean(p.task_id)&&p.task_id!==taskId
       &&!otherTaskMatches.some(x=>x.id===p.id)).sort((a,b)=>score(b)-score(a)||recent(a,b)):[]
     const pool=(taskId?[...approved,...direct,...filenameMatches,...otherTaskMatches,...fallback,...otherPlotCandidates]:eligible.slice().sort(sortEvidenceLatest))
-    if(photoMode==='latest') return pool.slice(0,4)
+    if(photoMode==='latest') return pool.slice(0,limit)
     const before=pool.find(p=>p.phase==='before'); const after=pool.find(p=>p.phase==='after')
     const chosen:PresentationPhoto[]=[]
     if(before) chosen.push(before); if(after&&after.id!==before?.id) chosen.push(after)
@@ -309,8 +311,8 @@ export default function ExecutivePresentationV41(){
       const chronological=direct.slice().sort((a,b)=>a.report_date.localeCompare(b.report_date))
       if(chronological[0].report_date!==chronological[chronological.length-1].report_date) chosen.push(chronological[0],chronological[chronological.length-1])
     }
-    for(const p of pool){ if(chosen.length>=4) break; if(!chosen.some(x=>x.id===p.id)) chosen.push(p) }
-    return chosen.slice(0,4)
+    for(const p of pool){ if(chosen.length>=limit) break; if(!chosen.some(x=>x.id===p.id)) chosen.push(p) }
+    return chosen.slice(0,limit)
   }
 
   const pickCondoPhotos=(building:'A'|'B',projectId?:string)=>{
@@ -336,7 +338,34 @@ export default function ExecutivePresentationV41(){
   const selectedCondoPhotos=selectedBuilding?pickCondoPhotos(selectedBuilding,selectedProject?.id):[]
   const selectedTasks=useMemo(()=>periodTasks.filter(t=>t.project_id===selectedProjectId),[periodTasks,selectedProjectId])
   const currentTask=selectedTasks[slideIndex]||null
-  const currentPhotos=currentTask?pickPhotos(currentTask.project_id,currentTask.id):[]
+  const slidePhotoKey=(taskId:string)=>[taskId,startDate,endDate,photoMode].join('|')
+  const taskSlidePhotos=(projectId:string,taskId:string):PresentationPhoto[]=>{
+    const selected=slidePhotoChoices[slidePhotoKey(taskId)]
+    if(!selected)return pickPhotos(projectId,taskId)
+    const candidates=new Map(pickPhotos(projectId,taskId,120).map(p=>[p.id,p]))
+    const unique=new Set<string>()
+    return selected.flatMap(id=>{
+      const photo=candidates.get(id)
+      if(!photo||unique.has(id))return []
+      unique.add(id)
+      return [photo]
+    }).slice(0,4)
+  }
+  const currentPhotoCandidates=currentTask?pickPhotos(currentTask.project_id,currentTask.id,120):[]
+  const currentPhotoDefaults=currentTask?pickPhotos(currentTask.project_id,currentTask.id):[]
+  const currentPhotoChoiceIds=currentTask?slidePhotoChoices[slidePhotoKey(currentTask.id)]||currentPhotoDefaults.map(p=>p.id):[]
+  const currentPhotos=currentTask?taskSlidePhotos(currentTask.project_id,currentTask.id):[]
+  const selectSlidePhoto=(taskId:string,slot:number,photoId:string)=>{
+    const key=slidePhotoKey(taskId)
+    setSlidePhotoChoices(prev=>{
+      const defaults=pickPhotos(currentTask?.project_id||'',taskId).map(p=>p.id)
+      const next=Array.from({length:4},(_,i)=>prev[key]?.[i]??defaults[i]??'')
+      next[slot]=photoId
+      // Each slide must not show the same photograph twice.
+      if(photoId)next.forEach((id,index)=>{if(index!==slot&&id===photoId)next[index]=''})
+      return {...prev,[key]:next}
+    })
+  }
   const currentDirectCount=currentTask?currentPhotos.filter(p=>p.task_id===currentTask.id).length:0
   const currentFallbackCount=currentTask?currentPhotos.filter(p=>!p.task_id).length:0
   const currentVerifiedCount=currentTask?currentPhotos.filter(p=>p.task_id===currentTask.id&&p.verified).length:0
@@ -352,21 +381,47 @@ export default function ExecutivePresentationV41(){
   const exportPptx=async()=>{
     if(exporting)return; setExporting('pptx')
     try{
-      const mod=await import('pptxgenjs'); const PptxGenJS=mod.default; const pptxFile=new PptxGenJS(); pptxFile.layout='LAYOUT_WIDE'; pptxFile.author='3 Kings Construction'; pptxFile.company='3 Kings Construction'; pptxFile.subject='Executive Presentation View'; pptxFile.title='3 Kings Construction Executive Presentation'
+      const mod=await import('pptxgenjs'); const PptxGenJS=mod.default; const pptxFile=new PptxGenJS(); pptxFile.layout='LAYOUT_WIDE'; pptxFile.theme={headFontFace:'Tahoma',bodyFontFace:'Tahoma',lang:'th-TH'}; pptxFile.author='3 Kings Construction'; pptxFile.company='3 Kings Construction'; pptxFile.subject='Executive Presentation View'; pptxFile.title='3 Kings Construction Executive Presentation'
       const imageCache=new Map<string,string>()
+      const decorateSlide=(slide:any,label:string)=>{
+        slide.addShape(pptxFile.ShapeType.rect,{x:0,y:0,w:13.333,h:.08,line:{color:'A97920',transparency:100},fill:{color:'A97920'}})
+        slide.addText(`3 KINGS CONSTRUCTION  •  ${label}  •  ${dateTH(startDate)} – ${dateTH(endDate)}`,
+          {x:.55,y:7.20,w:11.9,h:.16,fontFace:'Tahoma',fontSize:7.5,color:'7A818D',margin:0})
+      }
+      const addExportPhoto=async(slide:any,photo:PresentationPhoto,box:{x:number;y:number;w:number;h:number},taskId?:string)=>{
+        const data=await urlToDataUri(photo.image_url,imageCache)
+        if(!data)return false
+        const dimensions=await new Promise<{w:number;h:number}>(resolve=>{
+          const img=new Image()
+          img.onload=()=>resolve({w:img.naturalWidth||0,h:img.naturalHeight||0})
+          img.onerror=()=>resolve({w:0,h:0})
+          img.src=data
+        })
+        if(!dimensions.w||!dimensions.h)return false
+        const photoHeight=box.h-.32
+        const scale=Math.min(box.w/dimensions.w,photoHeight/dimensions.h)
+        const w=dimensions.w*scale,h=dimensions.h*scale
+        slide.addShape(pptxFile.ShapeType.rect,{x:box.x,y:box.y,w:box.w,h:box.h,
+          fill:{color:'F5F2EB'},line:{color:'DED7CC',width:.5}})
+        slide.addImage({data,x:box.x+(box.w-w)/2,y:box.y+(photoHeight-h)/2,w,h})
+        const isDirect=!taskId||photo.task_id===taskId
+        slide.addText(`${phaseLabel(photo.phase,isDirect)} • ${dateTH(photo.report_date)} • ${photo.verified&&isDirect?'Verified':'ตรวจสอบรูป'}`,
+          {x:box.x+.07,y:box.y+photoHeight+.03,w:box.w-.14,h:.23,fontFace:'Tahoma',fontSize:8.2,color:'263850',margin:0,breakLine:false})
+        return true
+      }
       for(const project of exportProjects){
         const building=condoBuilding(project.code)
         if(building){
-          const m=metricFor(building); const cPhotos=pickCondoPhotos(building,project.id); const cover=pptxFile.addSlide(); cover.background={color:'F6F2E9'}
+          const m=metricFor(building); const cPhotos=pickCondoPhotos(building,project.id); const cover=pptxFile.addSlide(); cover.background={color:'F6F2E9'}; decorateSlide(cover,project.code)
           cover.addText('3 KINGS CONSTRUCTION',{x:.65,y:.45,w:4.2,h:.3,fontSize:11,bold:true,color:'A97920',charSpacing:1.5})
           cover.addText(`Above Condo ${building} — Defect / Handover`,{x:.65,y:1.0,w:7.8,h:.65,fontSize:27,bold:true,color:'17243A'})
           cover.addText(`สถานะล่าสุดจาก Defect Dashboard • ${m.total} ห้อง`,{x:.65,y:1.75,w:6.8,h:.35,fontSize:14,color:'687486'})
           cover.addText(`ปิดแล้ว ${pct(m.closedRatio)}   |   ต้องติดตาม ${m.remaining} ห้อง   |   Defect ยังไม่เสร็จ ${m.incomplete} ห้อง`,{x:.65,y:2.35,w:7.8,h:.55,fontSize:17,bold:true,color:'233A5D'})
           cover.addText(`แดง ${m.red} • เหลือง ${m.yellow} • เขียว ${m.green} • เทา ${m.grey}`,{x:.65,y:3.02,w:6.8,h:.35,fontSize:13,color:'6D7785'})
-          for(let n=0;n<Math.min(2,cPhotos.length);n++){ const data=await urlToDataUri(cPhotos[n].image_url,imageCache); if(data) cover.addImage({data,x:8.55+n*2.05,y:1.0,w:1.9,h:3.35}) }
+          for(let n=0;n<Math.min(2,cPhotos.length);n++)await addExportPhoto(cover,cPhotos[n],{x:8.55+n*2.05,y:1.0,w:1.9,h:3.35})
           if(!cPhotos.length) cover.addText('เปิด Picture - Defect Done ใน Google Drive',{x:8.4,y:2.0,w:4.1,h:.55,fontSize:15,bold:true,color:'2F6FB0',align:'center',hyperlink:{url:DEFECT_DONE_URL}})
 
-          const slide=pptxFile.addSlide(); slide.background={color:'FFFDF9'}
+          const slide=pptxFile.addSlide(); slide.background={color:'FFFDF9'}; decorateSlide(slide,project.code)
           slide.addText(`CONDO ${building} • DEFECT / HANDOVER STATUS`,{x:.55,y:.35,w:5.6,h:.3,fontSize:11,bold:true,color:'A97920'})
           slide.addText(`Above Condo ${building}`,{x:.55,y:.72,w:5.7,h:.55,fontSize:25,bold:true,color:'17243A'})
           slide.addText(`ปิดแล้ว ${pct(m.closedRatio)} • เหลือติดตาม ${m.remaining} ห้อง`,{x:.55,y:1.34,w:5.4,h:.4,fontSize:16,bold:true,color:'233A5D'})
@@ -374,20 +429,20 @@ export default function ExecutivePresentationV41(){
           items.forEach(({s,count},idx)=>{ const x=.55+(idx%2)*2.65; const y=1.95+Math.floor(idx/2)*.78; slide.addText(`${s.label}\n${count} ห้อง (${m.total?Math.round(count/m.total*100):0}%)`,{x,y,w:2.48,h:.62,fontSize:11,bold:true,color:s.color.replace('#',''),fill:{color:s.light.replace('#','')},line:{color:s.color.replace('#',''),width:1.4},margin:.09,breakLine:false}) })
           slide.addText(`Defect ยังไม่เสร็จ: ${m.incompleteRooms.length?m.incompleteRooms.join(', '):'ไม่มี'}`,{x:.55,y:4.45,w:5.35,h:.55,fontSize:11,color:'27364A',fill:{color:'FFF4F2'},line:{color:'E4B5B0',width:1},margin:.09})
           const positions=[{x:6.15,y:.75,w:3.05,h:2.75},{x:9.35,y:.75,w:3.05,h:2.75},{x:6.15,y:3.7,w:3.05,h:2.75},{x:9.35,y:3.7,w:3.05,h:2.75}]
-          for(let n=0;n<Math.min(4,cPhotos.length);n++){ const data=await urlToDataUri(cPhotos[n].image_url,imageCache); if(data) slide.addImage({data,...positions[n]}) }
+          for(let n=0;n<Math.min(4,cPhotos.length);n++)await addExportPhoto(slide,cPhotos[n],positions[n])
           if(!cPhotos.length) slide.addText('Picture - Defect Done',{x:7.1,y:2.7,w:4.4,h:.6,fontSize:17,bold:true,color:'2F6FB0',align:'center',hyperlink:{url:DEFECT_DONE_URL}})
           continue
         }
 
-        const projectTasks=periodTasks.filter(t=>t.project_id===project.id); const projectStat=stats.find(x=>x.project.id===project.id); const cover=pptxFile.addSlide(); cover.background={color:'F6F2E9'}
+        const projectTasks=periodTasks.filter(t=>t.project_id===project.id); const projectStat=stats.find(x=>x.project.id===project.id); const cover=pptxFile.addSlide(); cover.background={color:'F6F2E9'}; decorateSlide(cover,project.code)
         cover.addText('3 KINGS CONSTRUCTION',{x:.65,y:.45,w:4.2,h:.3,fontSize:11,bold:true,color:'A97920',charSpacing:1.5}); cover.addText(project.name,{x:.65,y:1.0,w:8.5,h:.65,fontSize:28,bold:true,color:'17243A'}); cover.addText(`${dateTH(startDate)} – ${dateTH(endDate)}`,{x:.65,y:1.75,w:5,h:.35,fontSize:14,color:'687486'})
         cover.addText(`Actual ${pct(projectStat?.actual||0)}   |   Plan ${pct(projectStat?.plan||0)}   |   งานในช่วง ${projectTasks.length} รายการ`,{x:.65,y:2.35,w:7.7,h:.45,fontSize:17,bold:true,color:'233A5D'}); cover.addText(`Delayed ${projectStat?.delayed||0}   •   Completed ${projectStat?.completed||0}   •   Latest photo ${imageDateLabel(projectStat?.latestPhotoDate)}`,{x:.65,y:2.95,w:8.7,h:.35,fontSize:13,color:'6D7785'})
-        const projectPhotos=pickPhotos(project.id); for(let n=0;n<Math.min(2,projectPhotos.length);n++){ const data=await urlToDataUri(projectPhotos[n].image_url,imageCache); if(data) cover.addImage({data,x:8.55+n*2.05,y:1.0,w:1.9,h:3.35}) }
+        const projectPhotos=pickPhotos(project.id); for(let n=0;n<Math.min(2,projectPhotos.length);n++)await addExportPhoto(cover,projectPhotos[n],{x:8.55+n*2.05,y:1.0,w:1.9,h:3.35})
         if(!projectPhotos.length&&PHOTO_SOURCES[project.code]) cover.addText('Picture Progress available in Google Drive',{x:8.55,y:1.2,w:3.9,h:.6,fontSize:16,bold:true,color:'2F6FB0',hyperlink:{url:PHOTO_SOURCES[project.code]}})
         for(let idx=0;idx<projectTasks.length;idx++){
-          const task=projectTasks[idx]; const slide=pptxFile.addSlide(); slide.background={color:'FFFDF9'}; slide.addText(`${project.code}  •  ${task.category||'งานก่อสร้าง'}`,{x:.55,y:.35,w:4.8,h:.3,fontSize:11,bold:true,color:'A97920'}); slide.addText(task.task_name,{x:.55,y:.75,w:7.2,h:.72,fontSize:23,bold:true,color:'17243A'}); slide.addText(`${task.area||'-'}   |   Plan ${dateTH(task.planned_start)} → ${dateTH(task.planned_end)}`,{x:.55,y:1.52,w:7.2,h:.35,fontSize:12,color:'687486'}); slide.addText(`ACTUAL ${pct(task.actual_progress)}   •   ${task.site_status||'ยังไม่ระบุสถานะ'}`,{x:.55,y:2.02,w:4.8,h:.45,fontSize:18,bold:true,color:(task.delay_days||0)>0?'A73530':'1C6A49'}); slide.addText(shortNote(task),{x:.55,y:2.65,w:5.3,h:1.15,fontSize:14,color:'27364A',valign:'top',margin:.08,fill:{color:'F3F0E8'},line:{color:'DDD5C7',width:1}})
-          const taskPhotos=pickPhotos(project.id,task.id); const positions=[{x:6.15,y:.75,w:3.05,h:2.75},{x:9.35,y:.75,w:3.05,h:2.75},{x:6.15,y:3.7,w:3.05,h:2.75},{x:9.35,y:3.7,w:3.05,h:2.75}]
-          for(let n=0;n<Math.min(4,taskPhotos.length);n++){ const data=await urlToDataUri(taskPhotos[n].image_url,imageCache); if(data) slide.addImage({data,...positions[n]}) }
+          const task=projectTasks[idx]; const slide=pptxFile.addSlide(); slide.background={color:'FFFDF9'}; decorateSlide(slide,project.code); slide.addText(`${project.code}  •  ${task.category||'งานก่อสร้าง'}`,{x:.55,y:.35,w:4.8,h:.3,fontSize:11,bold:true,color:'A97920'}); slide.addText(task.task_name,{x:.55,y:.75,w:7.2,h:.72,fontSize:23,bold:true,color:'17243A'}); slide.addText(`${task.area||'-'}   |   Plan ${dateTH(task.planned_start)} → ${dateTH(task.planned_end)}`,{x:.55,y:1.52,w:7.2,h:.35,fontSize:12,color:'687486'}); slide.addText(`ACTUAL ${pct(task.actual_progress)}   •   ${task.site_status||'ยังไม่ระบุสถานะ'}`,{x:.55,y:2.02,w:4.8,h:.45,fontSize:18,bold:true,color:(task.delay_days||0)>0?'A73530':'1C6A49'}); slide.addText(shortNote(task),{x:.55,y:2.65,w:5.3,h:1.15,fontSize:14,color:'27364A',valign:'top',margin:.08,fill:{color:'F3F0E8'},line:{color:'DDD5C7',width:1}})
+          const taskPhotos=taskSlidePhotos(project.id,task.id); const positions=[{x:6.15,y:.75,w:3.05,h:2.75},{x:9.35,y:.75,w:3.05,h:2.75},{x:6.15,y:3.7,w:3.05,h:2.75},{x:9.35,y:3.7,w:3.05,h:2.75}]
+          for(let n=0;n<Math.min(4,taskPhotos.length);n++)await addExportPhoto(slide,taskPhotos[n],positions[n],task.id)
           if(taskPhotos.length){ const verified=taskPhotos.filter(p=>p.task_id===task.id&&p.verified).length; const fallback=taskPhotos.filter(p=>!p.task_id).length; slide.addText(`${verified?`Verified ${verified} รูป`:'ยังไม่มี Verified Photo'}${fallback?` • Plot fallback ${fallback} รูป`:''}`,{x:6.15,y:6.58,w:6.25,h:.22,fontSize:8.5,color:verified?'247951':'7A6A42',align:'right'}) }
           if(!taskPhotos.length&&PHOTO_SOURCES[project.code]) slide.addText('เปิด Picture Progress ใน Google Drive',{x:7.1,y:2.7,w:4.4,h:.6,fontSize:17,bold:true,color:'2F6FB0',align:'center',hyperlink:{url:PHOTO_SOURCES[project.code]}})
           slide.addText(`${idx+1} / ${projectTasks.length}`,{x:11.5,y:6.95,w:1.1,h:.22,fontSize:9,color:'8A919A',align:'right'})
@@ -454,15 +509,33 @@ export default function ExecutivePresentationV41(){
         </article>
       </>:currentTask&&selectedProject?<><div className="ep-stage-controls"><div><button className="button" onClick={()=>setSlideIndex(i=>Math.max(0,i-1))} disabled={slideIndex===0}>← Previous</button><span>{slideIndex+1} / {selectedTasks.length}</span><button className="button" onClick={()=>setSlideIndex(i=>Math.min(selectedTasks.length-1,i+1))} disabled={slideIndex>=selectedTasks.length-1}>Next →</button></div><button className="button" onClick={toggleFullscreen}>⛶ Fullscreen</button></div>
         <article className="ep-slide" data-presentation-task-id={currentTask.id}><header><div><span className="ep-eyebrow">{selectedProject.code} • {currentTask.category||'งานก่อสร้าง'}</span><h2>{currentTask.task_name}</h2><p>{currentTask.area||'-'} • Plan {dateTH(currentTask.planned_start)} → {dateTH(currentTask.planned_end)}</p></div><StatusBadge value={currentTask.site_status}/></header><div className="ep-slide-body"><section className="ep-task-info"><div className="ep-progress"><span>ACTUAL PROGRESS</span><b>{pct(currentTask.actual_progress)}</b><i><em style={{width:`${Math.max(0,Math.min(100,Math.round((currentTask.actual_progress||0)*100)))}%`}}/></i></div><div className="ep-plan-pair"><div className="ep-plan-card"><span>เริ่มในแผน</span><time>{dateTH(currentTask.planned_start)}</time></div><div className="ep-plan-card"><span>จบในแผน</span><time>{dateTH(currentTask.planned_end)}</time></div></div><div className="ep-info-grid"><div><span>Plan</span><b>{pct(currentTask.current_plan_progress)}</b></div><div><span>Variance</span><b className={(currentTask.current_variance||0)<0?'danger-text':''}>{(currentTask.current_variance||0)>0?'+':''}{Math.round((currentTask.current_variance||0)*100)}%</b></div><div><span>Delay</span><b>{(currentTask.delay_days||0)>0?`${currentTask.delay_days} วัน`:'—'}</b></div><div><span>อัปเดต</span><b>{dateTH(currentTask.source_updated_at)}</b></div></div><div className="ep-note"><span>หมายเหตุ / งานถัดไป</span><p>{shortNote(currentTask)}</p></div>{(currentTask.contractor||currentTask.responsible_person)&&<div className="ep-owner">ผู้รับผิดชอบ: <b>{currentTask.contractor||currentTask.responsible_person}</b></div>}</section>
-        <section className="ep-photo-section"><div className="ep-photo-head"><div><b>{photoMode==='latest'?'รูปล่าสุด':'Before–After'}</b><span>วันที่รูปล่าสุด: {imageDateLabel(currentPhotos[0]?.report_date)} • Verified {currentVerifiedCount} รูป</span></div>{currentDriveUrl&&<a href={currentDriveUrl} target="_blank" rel="noreferrer">เปิด Picture Progress ↗</a>}</div>{currentFallbackCount>0&&<div className="ep-fallback-note">{currentDirectCount>0?`รูปตรง Task มี ${currentDirectCount} รูป — เติมรูปภาพรวมระดับ Plot ที่ยังไม่ผูก Task อีก ${currentFallbackCount} รูป`:'ยังไม่มีรูปที่จับคู่ตรง Task นี้ — แสดงเฉพาะรูปภาพรวมระดับ Plot ที่ยังไม่ผูกกับ Task เป็น fallback'}</div>}{currentPhotos.length?<div className={`ep-photo-grid count-${currentPhotos.length}`}>{currentPhotos.map(photo=><figure key={photo.id}><img src={photo.image_url} alt={photo.caption}/><figcaption><div><b>{phaseLabel(photo.phase,photo.task_id===currentTask.id)}</b><span>{evidenceLabel(photo,currentTask.id)}</span></div><span>{imageDateLabel(photo.report_date)}</span></figcaption></figure>)}</div>:<div className="ep-photo-empty"><b>ยังไม่มีรูปประกอบในช่วงที่เลือก</b><span>Photo Index จะเติมรูปจาก Picture Progress เมื่อ Sync เข้ามา</span></div>}</section></div></article></>:<div className="panel">ไม่มีงานในช่วงวันที่ที่เลือก</div>}
+        <section className="ep-photo-section"><div className="ep-photo-head"><div><b>{photoMode==='latest'?'รูปล่าสุด':'Before–After'}</b><span>วันที่รูปล่าสุด: {imageDateLabel(currentPhotos[0]?.report_date)} • Verified {currentVerifiedCount} รูป</span></div>{currentDriveUrl&&<a href={currentDriveUrl} target="_blank" rel="noreferrer">เปิด Picture Progress ↗</a>}</div>{currentPhotoCandidates.length>0&&<div className="ep-photo-picks">
+          <div className="ep-photo-picks-title"><b>เลือกภาพที่จะนำเสนอ (สูงสุด 4 รูป)</b><span>เลือกเฉพาะสไลด์นี้และไฟล์ PowerPoint ที่ส่งออก • ไม่แก้ Photo Mapping หรือรูปต้นทาง</span></div>
+          <div className="ep-photo-picks-grid">{[0,1,2,3].map(slot=><label key={slot}>ภาพ {slot+1}
+            <select value={currentPhotoChoiceIds[slot]||''} onChange={e=>selectSlidePhoto(currentTask.id,slot,e.target.value)}>
+              <option value="">ไม่แสดงรูป</option>
+              {currentPhotoCandidates.map(photo=><option key={photo.id} value={photo.id}>{dateTH(photo.report_date)} • {phaseLabel(photo.phase,photo.task_id===currentTask.id)} • {evidenceLabel(photo,currentTask.id)} • {photo.caption}</option>)}
+            </select>
+          </label>)}</div>
+          {photoMode==='before_after'&&<span className="ep-photo-picks-note">Before–After อ้างอิงประเภทภาพจากต้นทาง โปรดตรวจว่างานและมุมภาพตรงกันก่อนนำเสนอ</span>}
+        </div>}{currentFallbackCount>0&&<div className="ep-fallback-note">{currentDirectCount>0?`รูปตรง Task มี ${currentDirectCount} รูป — เติมรูปภาพรวมระดับ Plot ที่ยังไม่ผูก Task อีก ${currentFallbackCount} รูป`:'ยังไม่มีรูปที่จับคู่ตรง Task นี้ — แสดงเฉพาะรูปภาพรวมระดับ Plot ที่ยังไม่ผูกกับ Task เป็น fallback'}</div>}{currentPhotos.length?<div className={`ep-photo-grid count-${currentPhotos.length}`}>{currentPhotos.map(photo=><figure key={photo.id}><img src={photo.image_url} alt={photo.caption}/><figcaption><div><b>{phaseLabel(photo.phase,photo.task_id===currentTask.id)}</b><span>{evidenceLabel(photo,currentTask.id)}</span></div><span>{imageDateLabel(photo.report_date)}</span></figcaption></figure>)}</div>:<div className="ep-photo-empty"><b>ยังไม่มีรูปประกอบในช่วงที่เลือก</b><span>Photo Index จะเติมรูปจาก Picture Progress เมื่อ Sync เข้ามา</span></div>}</section></div></article></>:<div className="panel">ไม่มีงานในช่วงวันที่ที่เลือก</div>}
     </div>}
 
     <style jsx global>{`
       .ep-filter{margin-bottom:12px}.ep-filters{display:grid;grid-template-columns:2fr 1fr 1fr 1.35fr;gap:10px}.ep-filters label{font-size:12px;font-weight:800;color:var(--muted);display:grid;gap:5px}.ep-filters select,.ep-filters input{width:100%;padding:10px 11px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--navy-2)}.ep-meta{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:12px;font-size:11px;color:var(--muted)}.ep-actions{display:flex;justify-content:space-between;gap:10px;align-items:center;margin:0 0 12px}.ep-actions>div:last-child{display:flex;gap:8px}.ep-overview{display:grid;grid-template-columns:repeat(auto-fit,minmax(285px,1fr));gap:14px}.ep-card{background:var(--surface);border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 8px 24px rgba(20,31,48,.06)}.ep-cover{height:210px;background:#e9e5dc;position:relative;overflow:hidden}.ep-cover img{width:100%;height:100%;object-fit:cover}.ep-cover:after{content:'';position:absolute;inset:40% 0 0;background:linear-gradient(transparent,rgba(9,21,38,.7))}.ep-cover-empty{height:100%;display:grid;place-content:center;text-align:center;gap:4px;color:var(--muted)}.ep-cover-empty b{font-size:28px;color:var(--navy-2)}.ep-cover-title{position:absolute;left:16px;right:16px;bottom:14px;z-index:2;color:white}.ep-cover-title span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:1.4px;opacity:.78}.ep-cover-title b{display:block;font-size:20px;margin-top:2px}.ep-card-body{padding:14px}.ep-kpis,.condo-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.ep-kpis>div,.condo-kpis>div{padding:9px;border-radius:11px;background:var(--surface-2);border:1px solid transparent}.ep-kpis span,.ep-info-grid span,.condo-kpis span{display:block;font-size:10px;color:var(--muted);font-weight:800}.ep-kpis b,.condo-kpis b{display:block;margin-top:2px;font-size:20px}.condo-kpis b em{font-size:9px;font-style:normal;margin-left:3px;color:var(--muted)}.condo-kpis .danger{background:#fff2f1;border-color:#edcac6}.condo-kpis .danger b{color:#b23c36}.condo-kpis .warn{background:#fff8e7;border-color:#ead8a4}.condo-kpis .warn b{color:#96630d}.condo-kpis .good{background:#eef9f3;border-color:#cce5d6}.condo-kpis .good b{color:#247951}.condo-tone-row{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:9px}.condo-tone-row span{padding:6px 5px;border-radius:8px;font-size:8.5px;text-align:center;font-weight:800}.condo-tone-row .danger{background:#fff2f1;color:#a93d37}.condo-tone-row .warn{background:#fff8e7;color:#93610d}.condo-tone-row .good{background:#eef9f3;color:#247951}.condo-tone-row .neutral{background:#f1f3f5;color:#606a75}.ep-card-meta{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:10px;font-size:11px;color:var(--muted)}.ep-open{width:100%;margin-top:12px}.ep-drive-link{display:block;text-align:center;margin-top:7px;color:var(--blue);font-size:10px;font-weight:800}.ep-no-schedule{margin-top:12px;padding:10px;border-radius:10px;background:var(--surface-2);display:grid;gap:5px;font-size:11px}.ep-no-schedule a,.ep-photo-head a{color:var(--blue);font-weight:800}.ep-stage{background:#101722;padding:14px;border-radius:18px}.ep-stage:fullscreen{padding:24px;background:#0d1522;overflow:auto}.ep-stage-controls{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px;color:#d9e1ee}.ep-stage-controls>div{display:flex;align-items:center;gap:10px}.ep-slide{background:#fffdf9;border-radius:14px;min-height:650px;padding:24px;display:grid;grid-template-rows:auto 1fr}.ep-slide>header{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;border-bottom:1px solid #e7e1d6;padding-bottom:14px}.ep-slide h2{font-size:27px;line-height:1.18;margin:6px 0 4px;color:#17243a}.ep-slide header p{margin:0;color:#6b7480;font-size:12px}.ep-eyebrow{font-size:10px;font-weight:900;letter-spacing:1px;color:#a97920}.ep-slide-body{display:grid;grid-template-columns:minmax(280px,.82fr) minmax(0,1.8fr);gap:20px;padding-top:18px}.ep-task-info{display:grid;align-content:start;gap:12px}.ep-progress,.condo-progress{border:1px solid #ddd5c7;border-radius:14px;padding:16px;background:#f8f5ed}.ep-progress>span,.condo-progress>span{font-size:10px;font-weight:900;color:#7a705f;letter-spacing:.8px}.ep-progress>b,.condo-progress>b{display:block;font-size:42px;color:#17243a}.ep-progress i,.condo-progress i{height:8px;display:block;background:#e4ded3;border-radius:99px;overflow:hidden}.ep-progress em{height:100%;display:block;background:#315f9e}.condo-progress.good{background:#eef9f3;border-color:#cbe5d5}.condo-progress.good>b{color:#247951}.condo-progress.good i{background:#d7e9de}.condo-progress.good i em{display:block;height:100%;background:#2e9a6a}.condo-progress small{display:block;margin-top:7px;font-size:9px;color:#647166}.ep-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.ep-info-grid>div{padding:10px;border:1px solid #e4ddd1;border-radius:10px}.ep-info-grid b{display:block;font-size:15px;margin-top:2px}.ep-note{padding:12px;border-radius:12px;background:#f3f0e8}.ep-note span{font-size:10px;font-weight:900;color:#756d5e}.ep-note p{margin:5px 0 0;line-height:1.45;font-size:13px}.ep-owner{font-size:11px;color:#6d7480}.ep-photo-section{min-width:0}.ep-photo-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:8px}.ep-photo-head>div{display:grid;gap:2px}.ep-photo-head b{font-size:15px}.ep-photo-head span{font-size:10px;color:#707988}.ep-fallback-note{padding:7px 10px;margin-bottom:8px;border-radius:9px;background:#fff3cd;color:#6d5510;font-size:10px;font-weight:800}.ep-photo-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.ep-photo-grid.count-1{grid-template-columns:1fr}.ep-photo-grid figure{margin:0;border:1px solid #e3ddd4;border-radius:12px;overflow:hidden;background:#f2eee6}.ep-photo-grid img{display:block;width:100%;height:235px;object-fit:cover}.ep-photo-grid.count-1 img{height:500px}.ep-photo-grid figcaption{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 9px;background:white;font-size:10px;color:#6f7781}.ep-photo-grid figcaption>div{display:grid;gap:1px;min-width:0}.ep-photo-grid figcaption b{color:#263850}.ep-photo-grid figcaption div span{font-size:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ep-photo-empty{height:480px;border:1px dashed #d8d1c6;border-radius:12px;display:grid;place-content:center;text-align:center;gap:4px;color:#7d8490}.ep-photo-empty b{color:#25364b}.danger-text{color:#a73530!important}
       .condo-body{grid-template-columns:minmax(360px,1fr) minmax(0,1.45fr)}.condo-status-panel{display:grid;align-content:start;gap:10px}.condo-summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.condo-summary-grid>div{border:1px solid #e1ddd5;border-radius:10px;padding:9px;background:#faf8f3}.condo-summary-grid span{display:block;font-size:9px;font-weight:800;color:#747b84}.condo-summary-grid b{display:block;font-size:19px;color:#24364b;margin-top:2px}.condo-summary-grid b em{font-size:8px;font-style:normal;margin-left:3px;color:#858d96}.condo-six-status{display:grid;grid-template-columns:1fr 1fr;gap:7px}.condo-status-box{border:1px solid var(--line);border-left-width:5px;border-radius:10px;padding:8px 9px}.condo-status-box>span{display:block;font-size:9.5px;font-weight:850;line-height:1.3}.condo-status-box>b{display:flex;align-items:baseline;gap:4px;margin-top:4px;font-size:18px}.condo-status-box>b em{font-size:8px;font-style:normal}.condo-status-box>small{display:block;margin-top:3px;font-size:8px}.condo-status-box.danger{background:#fff2f1;border-color:#edcac6;border-left-color:#d84d45;color:#9f3530}.condo-status-box.warn{background:#fff8e7;border-color:#ead8a4;border-left-color:#e2ad32;color:#8b5b0d}.condo-status-box.good{background:#eef9f3;border-color:#cce5d6;border-left-color:#2e9a6a;color:#206d49}.condo-status-box.neutral{background:#f1f3f5;border-color:#d8dde2;border-left-color:#7c8794;color:#59636d}.condo-incomplete-list{padding:10px;border-radius:10px;background:#fff3f1;border:1px solid #ebc9c4}.condo-incomplete-list span{font-size:9px;font-weight:850;color:#9f3530}.condo-incomplete-list p{margin:4px 0 0;font-size:11px;line-height:1.4;color:#573b39}.condo-source-note{font-size:9px;color:#717985;line-height:1.4}
+      /* Executive preview improvements are scoped to the presentation stage only. */
+      .ep-stage .ep-slide{font-family:Tahoma,Arial,sans-serif;border-top:4px solid #a97920}
+      .ep-photo-picks{border:1px solid #ddd5c7;border-radius:10px;padding:10px;margin:8px 0 10px;background:#fbf9f4}
+      .ep-photo-picks-title{display:flex;justify-content:space-between;flex-wrap:wrap;gap:5px 12px;font-size:11px;color:#263850}
+      .ep-photo-picks-title span{font-size:9px;color:#667281}
+      .ep-photo-picks-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:8px}
+      .ep-photo-picks-grid label{display:grid;gap:3px;min-width:0;font-size:10px;font-weight:700;color:#263850}
+      .ep-photo-picks-grid select{width:100%;min-width:0;padding:6px;border:1px solid #d8d1c6;border-radius:7px;background:#fff;color:#27364a;font:inherit}
+      .ep-photo-picks-note{display:block;margin-top:7px;font-size:9px;color:#96630d}
       @media(max-width:950px){.ep-filters{grid-template-columns:1fr 1fr}.ep-slide-body,.condo-body{grid-template-columns:1fr}.ep-photo-grid img{height:260px}.ep-photo-grid.count-1 img{height:360px}}
       @media(max-width:620px){.ep-filters{grid-template-columns:1fr}.ep-actions{align-items:flex-start;flex-direction:column}.ep-stage{padding:6px}.ep-stage-controls{align-items:stretch;flex-direction:column}.ep-slide{padding:14px}.ep-slide h2{font-size:21px}.ep-photo-grid{grid-template-columns:1fr}.ep-photo-grid img,.ep-photo-grid.count-1 img{height:260px}.condo-tone-row{grid-template-columns:1fr 1fr}.condo-kpis{grid-template-columns:1fr}.condo-six-status{grid-template-columns:1fr}}
-      @media print{.sidebar,.mobile-nav,.page-header,.ep-filter,.ep-actions,.ep-stage-controls{display:none!important}.main{margin:0!important;padding:0!important}.ep-overview{display:block}.ep-card{break-after:page;border:none;box-shadow:none}.ep-stage{padding:0;background:white}.ep-slide{min-height:95vh;border-radius:0;break-after:page}.ep-photo-grid img{height:250px}}
+      @media print{.sidebar,.mobile-nav,.page-header,.ep-filter,.ep-actions,.ep-stage-controls,.ep-photo-picks{display:none!important}.main{margin:0!important;padding:0!important}.ep-overview{display:block}.ep-card{break-after:page;border:none;box-shadow:none}.ep-stage{padding:0;background:white}.ep-slide{min-height:95vh;border-radius:0;break-after:page}.ep-photo-grid img{height:250px}}
     `}</style>
   </AppShell>
 }
