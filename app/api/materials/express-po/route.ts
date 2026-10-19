@@ -37,7 +37,8 @@ export async function GET(request:NextRequest){
  const role=resolveAccessRole(profile.role,user.id)
  try{
   const matrix=await readPermissionSnapshot(client)
-  if(!role||!canAccessPath(role,'/materials',matrix))
+  const grant=role&&matrix.rows?.find(p=>p.role===role&&p.module==='materials')
+  if(!grant||grant.level==='none'||!canAccessPath(role,'/materials',matrix))
    return respond({error:'FORBIDDEN'},403)
  }catch{return respond({error:'PERMISSION_CHECK_UNAVAILABLE'},503)}
  const sheetId=String(process.env.EXPRESS_PO_STAGING_SHEET_ID||'').trim()
