@@ -1,6 +1,6 @@
 import {NextRequest,NextResponse} from 'next/server'
 import {createHash,timingSafeEqual} from 'node:crypto'
-import {createClient} from '@supabase/supabase-js'
+import {stageExpressInSheets} from '@/lib/express-po/sheets-sync'
 import {exchangeVercelOidcToken} from '@/lib/agentGoogleDrive'
 
 export const runtime='nodejs'
@@ -60,18 +60,7 @@ async function latestCsv(token:string):Promise<{file:DriveFile;bytes:Buffer}>{
   throw Error('SOURCE_FILE_CHANGED_DURING_READ')
  return {file,bytes}
 }
-function stagingDb(){
- if(process.env.VERCEL_ENV!=='preview'||process.env.EXPRESS_PO_ALLOW_STAGING_WRITE!=='true')
-  throw Error('STAGING_WRITE_DISABLED')
- const url=required('EXPRESS_PO_STAGING_DB_URL'),host=new URL(url)
- const prod=new URL(process.env.NEXT_PUBLIC_SUPABASE_URL||
-  'https://wtqubwdduzedmcvyhbgs.supabase.co').hostname
- if(host.protocol!=='https:'||!host.hostname.endsWith('.supabase.co')||
-  host.hostname===prod||host.hostname==='wtqubwdduzedmcvyhbgs.supabase.co')
-  throw Error('STAGING_DATABASE_IS_PRODUCTION_OR_INVALID')
- return createClient(url,required('EXPRESS_PO_STAGING_SERVICE_ROLE_KEY'),
-  {auth:{persistSession:false,autoRefreshToken:false}})
-}
+
 export async function POST(request:NextRequest){
  // Strict Preview-only API; no Production cron, Materials mutations, or client access.
  if(process.env.VERCEL_ENV!=='preview'||process.env.EXPRESS_PO_SYNC_ENABLED!=='true')
@@ -104,17 +93,14 @@ export async function POST(request:NextRequest){
     holdQa:documents.filter(d=>d.importDecision==='hold_qa').length},
    note:'Express received-all flag is not confirmed physical receipt.'}
   if(mode==='dry_run')return reply({...response,result:'DRY_RUN_ONLY_NO_WRITES'},200)
-  const staging=stagingDb()
-  const {data,error}=await staging.rpc('express_po_stage_import',{
-   p_source_file:file.name,p_source_modified_at:file.modifiedTime,
-   p_source_sha256:report.sourceSha256,p_documents:documents,p_qa:report.qa,
-   p_summary:report.summary})
-  if(error)throw Error('STAGING_IMPORT_FAILED')
-  return reply({...response,result:'STAGED_ONLY',stagingRunId:data},200)
+  const staged=await stageExpressInSheets({readerToken:token,
+   oidcToken:request.headers.get('x-vercel-oidc-token')||'',
+   source:{fileName:file.name,modifiedTime:file.modifiedTime},report})
+  return reply({...response,...staged,note:'Private Google Sheets Preview only; Materials and Production unchanged.'},200)
  }catch(e){
   // Do not expose supplier names, private file text or privileged backend messages.
   const message=e instanceof Error?e.message:''
-  const code=/^(CONFIG_REQUIRED_|INVALID_SOURCE_|DRIVE_|SOURCE_|NO_VALID_|UNSUPPORTED_|INVALID_|MISSING_|STAGING_|EXPRESS_PO_|BLOCK_)/.test(message)
+  const code=/^(CONFIG_REQUIRED_|INVALID_SOURCE_|DRIVE_|SOURCE_|NO_VALID_|UNSUPPORTED_|INVALID_|MISSING_|SHEETS_|EXPRESS_PO_|BLOCK_)/.test(message)
    ?message:'EXPRESS_PO_SYNC_FAILED'
   return reply({error:code},503)
  }
