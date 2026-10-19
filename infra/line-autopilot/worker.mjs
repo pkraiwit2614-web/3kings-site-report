@@ -290,6 +290,73 @@ export async function previewLineSourceEvent(env, alertKind, source, query = sb)
   return previewLineSiteRoute(env, alertKind, siteCode, query);
 }
 
+
+/**
+ * Owner-only Daily Site Report pilot. All arguments are read-only evidence
+ * produced by the native Google Form/Sheet and canonical Drive PDF+PNG QA.
+ * Never calls LINE or mutates Drive/Supabase. No success inferred from a file
+ * existing, row count alone, or a completed trigger execution.
+ */
+export function previewDailyOwnerPilot(input) {
+  const reject = (reason) => ({
+    kind: 'daily_site_report', destination: 'owner',
+    decision: reason, wouldSendLine: false
+  });
+  if (!input || typeof input !== 'object') return reject('BLOCK_MISSING_EVIDENCE');
+  if (!/^\d{4}-\d\d-\d\d$/.test(input.reportDate||''))
+    return reject('BLOCK_INVALID_REPORT_DATE');
+  if (!Number.isInteger(input.formEntries) || input.formEntries < 1
+    || !Number.isInteger(input.masterEntries) || input.masterEntries < 0)
+    return reject('BLOCK_INVALID_ROW_COUNTS');
+  if (input.formEntries !== input.masterEntries)
+    return reject('BLOCK_FORM_MASTER_COUNT_MISMATCH');
+  if (!input.latestSubmissionAt || !input.pdfModifiedAt)
+    return reject('BLOCK_MISSING_ARTIFACT_TIMES');
+  const latest=Date.parse(input.latestSubmissionAt),pdf=Date.parse(input.pdfModifiedAt);
+  if (!Number.isFinite(latest)||!Number.isFinite(pdf))
+    return reject('BLOCK_INVALID_ARTIFACT_TIMES');
+  if (pdf < latest) return reject('BLOCK_PDF_PREDATES_FORM');
+  if (!Array.isArray(input.pngPages) || input.pngPages.length !== 4
+    || new Set(input.pngPages.map(p=>p.page)).size !== 4
+    || input.pngPages.some(p=>![1,2,3,4].includes(p.page)
+      || p.mimeType !== 'image/png'
+      || !Number.isFinite(Date.parse(p.modifiedAt))
+      || Date.parse(p.modifiedAt)<pdf))
+    return reject('BLOCK_PNG_SET_UNVERIFIED');
+  if (input.sourceReconciled !== true || input.pdfQaPassed !== true
+      || input.pngQaPassed !== true || input.publishApproved !== true)
+    return reject('BLOCK_REPORT_QA_OR_APPROVAL_PENDING');
+  return {
+    kind:'daily_site_report',destination:'owner',
+    decision:'OWNER_PILOT_READY_BUT_SEND_DISABLED',
+    reportDate:input.reportDate,wouldSendLine:false
+  };
+}
+
+/**
+ * Error-only owner DM preview: do not notify on success/skips or stale error.
+ * This does not claim/deliver events; it prepares a safe no-send decision.
+ */
+export function previewSyncFailureOwnerPilot(item, nowIso) {
+  const reject=(reason)=>({
+    kind:'sync_failure',destination:'owner',
+    decision:reason,wouldSendLine:false
+  });
+  if (!item || item.status!=='error' || item.sync_type==null)
+    return reject('BLOCK_NOT_AN_EXPLICIT_SYNC_ERROR');
+  const at=Date.parse(item.created_at),now=Date.parse(nowIso);
+  if (!Number.isFinite(at)||!Number.isFinite(now)||at>now
+      || now-at>65*60*1000)
+    return reject('BLOCK_SYNC_ERROR_OUTSIDE_WINDOW');
+  if (!/^[0-9a-f-]{36}$/i.test(item.id||''))
+    return reject('BLOCK_UNVERIFIED_EVENT_ID');
+  return {
+    kind:'sync_failure',destination:'owner',
+    decision:'OWNER_ERROR_DETECTED_BUT_SEND_DISABLED',
+    syncType:safeText(item.sync_type,45),wouldSendLine:false
+  };
+}
+
 export default {
   async fetch(request,env){
     const url=new URL(request.url);
