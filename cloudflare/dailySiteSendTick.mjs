@@ -91,15 +91,15 @@ export async function dailySiteSendTick(env,{db,hash,transport=fetch,now=new Dat
     stats.routesChecked++;
     let preview;
     try{
-      const res=await db(env,'/rest/v1/rpc/line_autopilot_preview_route',{
-        p_alert_kind:'daily_site_report',p_site_code:route});
+      const res=await db(env,'/rest/v1/rpc/line_autopilot_daily_route',{
+        p_site_code:route});
       preview=Array.isArray(res)?res[0]:null;
     }catch{stats.blocked++;continue;}
     if(!preview||preview.would_send_line!==true
-      ||!validGroup(preview.candidate_group_id)||!images.has(asset)){
+      ||!validGroup(preview.group_id)||!images.has(asset)){
       stats.blocked++;continue;
     }
-    const groupId=preview.candidate_group_id;
+    const groupId=preview.group_id;
     try{
       const text=await claim(route,groupId,'form_text',null);
       if(text.status==='new'){
