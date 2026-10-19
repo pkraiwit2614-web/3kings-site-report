@@ -2,7 +2,7 @@
 // Separate Edge Function; no ability to call LINE or approve group routes.
 const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const endpoint = (Deno.env.get('SUPABASE_URL') || '').replace(/\/$/,'');
-const service = endpoint+'/functions/v1/3kings-daily-line-images';
+const service = endpoint+'/functions/v1/kings_daily_line_images';
 const noStore = {'cache-control':'no-store','x-content-type-options':'nosniff'};
 const json=(value:unknown,status=200)=>new Response(JSON.stringify(value),{status,headers:{...noStore,'content-type':'application/json'}});
 const isDate=(s:string)=>/^20\d{2}-\d{2}-\d{2}$/.test(s)&&!Number.isNaN(Date.parse(s+'T00:00:00Z'));
@@ -32,7 +32,7 @@ Deno.serve(async(req:Request)=>{
  try{
   const url=new URL(req.url);
   if(req.method==='GET'&&url.pathname.endsWith('/health'))
-    return json({service:'3kings-daily-line-images',line_sends_enabled:false,ready:!!key&&!!endpoint});
+    return json({service:'kings_daily_line_images',line_sends_enabled:false,ready:!!key&&!!endpoint});
   if(req.method==='GET'&&url.pathname.endsWith('/ready')){
     if(!auth(req))return json({error:'unauthorized'},401);
     const date=url.searchParams.get('date')||'';
