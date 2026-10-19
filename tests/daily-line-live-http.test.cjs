@@ -33,6 +33,6 @@ test('live Cloudflare health confirms server-to-server gateway handshake, no pus
  assert.equal(r.body.service,'daily-line');
  // 19 Oct's manually QA-finalized Saturday 17 Oct is valid only TODAY (19 Oct).
  // This probes the private server key with no external LINE action.
- assert.equal(r.body.gateway_http_status,200);
+ assert.equal(r.body.gateway_http_status,200,JSON.stringify({gateway_status:r.body.gateway_http_status,server_role_rpc:r.body.server_role_rpc}));
  assert.equal(r.body.gateway,true);
 });
