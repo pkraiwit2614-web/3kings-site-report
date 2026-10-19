@@ -47,6 +47,8 @@ test('CP874, item, cancelled placeholder and receipt flag',()=>{
  assert.deepEqual(x.documents[0].projectCodes,['AV-P6','AV-P7'])
  assert.equal(x.documents[0].expressReceivedAllFlag,'Y')
  assert.equal(x.documents[0].totalCents,10700)
+ assert.equal(x.documents[0].documentDate,'2026-10-19')
+ assert.equal(x.documents[0].plannedReceiptDate,'2026-10-19')
  assert.equal(x.qa.length,0)
 })
 test('quarantine one mismatch without amending the accounting value',()=>{
