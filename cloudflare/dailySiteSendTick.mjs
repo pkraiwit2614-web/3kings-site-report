@@ -59,6 +59,12 @@ export async function dailySiteSendTick(env,{db,hash,transport=fetch,now=new Dat
   async function claim(route,groupId,stage,sha){
     const key=await hash(['3kings','daily_site_report',when.reportDate,route,groupId,stage].join('|'));
     if(!validSha(key))throw Error('INVALID_EVENT_KEY');
+    // Persist the typed log before claiming a retry key. Failure is retryable
+    // and cannot strand the atomic claim without an outbound attempt.
+    const logged=await db(env,'/rest/v1/rpc/daily_line_record_delivery',{
+      p_event_key:key,p_report_date:when.reportDate,p_site_code:route,
+      p_group_id:groupId,p_stage:stage,p_asset_sha256:sha||null});
+    if(logged!==true)throw Error('DELIVERY_METADATA_NOT_LOGGED');
     const result=await db(env,'/rest/v1/rpc/line_autopilot_claim',{
       p_event_key:key,p_alert_kind:'daily_site_report',
       p_target_scope:'site_group',
@@ -68,10 +74,6 @@ export async function dailySiteSendTick(env,{db,hash,transport=fetch,now=new Dat
       return {status:'blocked'};
     if(r.claim_status!=='new')return {status:r.claim_status};
     if(!validRetry(r.retry_key))return {status:'blocked'};
-    const logged=await db(env,'/rest/v1/rpc/daily_line_record_delivery',{
-      p_event_key:key,p_report_date:when.reportDate,p_site_code:route,
-      p_group_id:groupId,p_stage:stage,p_asset_sha256:sha||null});
-    if(logged!==true)throw Error('DELIVERY_METADATA_NOT_LOGGED');
     return {status:'new',key,retry:r.retry_key};
   }
   async function push(groupId,messages,token){
