@@ -14,12 +14,12 @@ export const NOTIFICATION_TYPES = Object.freeze([
 const NO_STORE = {'cache-control':'no-store','content-type':'application/json; charset=utf-8'};
 function json(data,status=200){return new Response(JSON.stringify(data),{status,headers:NO_STORE});}
 function validId(id,kind){return typeof id==='string' && new RegExp('^'+kind+'[0-9a-f]{32}$','i').test(id);}
-function isConfigured(env){
+// Owner-only Sync collector needs the owner identity, not a destination group.
+export function isConfigured(env){
   return env.AUTOPILOT_ENABLED === 'true'
     && /^https:\/\/[a-z0-9.-]+\.supabase\.co$/.test(env.SUPABASE_URL||'')
     && !!env.SUPABASE_SERVER_KEY && !!env.LINE_CHANNEL_ACCESS_TOKEN
-    && validId(env.LINE_OWNER_USER_ID,'U')
-    && validId(env.LINE_MAIN_GROUP_ID,'C');
+    && validId(env.LINE_OWNER_USER_ID,'U');
 }
 function b64(buffer) {
   const bytes = new Uint8Array(buffer);
