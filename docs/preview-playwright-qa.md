@@ -5,7 +5,7 @@ This is **not** a production E2E approval. It extends PR #155 with browser-based
 ## Modes
 - **anonymous**: On a real protected Vercel deployment, verify Login UI, unauthenticated API HTTP 401, and direct-route redirects for Materials, Defect Report, Site Operations, Users and Payroll. Uses Vercel automation bypass header only for the verified 3 Kings Vercel hostname.
 - **viewer**: Only after the browser backend is independently verified to use an **isolated** Supabase project. Log in with a dedicated \`viewer\` QA identity, verify authenticated API role/permissions, open Dashboard/Defects/Materials/Reports, and confirm Users and Payroll are rejected at API and UI route levels. Browser blocks writes (including activity_logs) and third-party access.
-- **RLS**: Read-only API route authorization checked; backend write-side RLS must be tested separately on a seeded, isolated disposable DB. This suite deliberately **does not** send mutation probes, so a green check is **not** proof of write-side RLS.
+- **RLS (read-side)**: On an isolated seeded Supabase Preview DB, prove that the Viewer can read its own profile but cannot read another seeded profile or a seeded payroll verification record. Requires both fixture UUIDs to be checked independently by an admin/setup step. **Write-side RLS remains untested** by this read-only suite: a green check is NOT proof of database write protection.
 
 ## Required CI controls
 - The GitHub deployment SHA must equal the HEAD of \`test/preview-qa-automation-20261019\`, under the active \`3Kings Trusted Preview\` Ruleset.
