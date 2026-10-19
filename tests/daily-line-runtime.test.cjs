@@ -20,8 +20,8 @@ function mock(){
   throw Error('unexpected URL');
  };
  const db=async (_env,path,body)=>{
-   if(path.includes('line_autopilot_preview_route'))
-     return [{would_send_line:body.p_site_code==='above_villa',candidate_group_id:'C'+'a'.repeat(32)}];
+   if(path.includes('line_autopilot_daily_route'))
+     return [{would_send_line:body.p_site_code==='above_villa',group_id:'C'+'a'.repeat(32)}];
    if(path.includes('line_autopilot_claim')){
      const existing=ledger.get(body.p_event_key);
      if(existing)return [{claim_status:existing.status,retry_key:'00000000-0000-4000-8000-000000000000'}];
@@ -96,4 +96,17 @@ test('live sender keeps missing image proof fail-closed and never guesses routes
  const result=await dailySiteSendTick(env,{...m,now});
  assert.equal(result.mode,'QA_BLOCKED');
  assert.equal(m.pushes.length,0);
+});
+
+test('daily sender uses only service gated daily route and not read-only preview RPC',async()=>{
+ const fs=require('node:fs');
+ const worker=fs.readFileSync('cloudflare/dailySiteSendTick.mjs','utf8');
+ assert(worker.includes('/rpc/line_autopilot_daily_route'));
+ assert(!worker.includes('/rpc/line_autopilot_preview_route'));
+ const sql=fs.readFileSync('supabase/migrations/20261019180500_daily_line_scoped_route_gate.sql','utf8');
+ assert(sql.includes('r.notifications_enabled IS TRUE'));
+ assert(sql.includes('c.approved IS TRUE'));
+ assert(sql.includes('sr.delivery_enabled IS TRUE'));
+ assert(sql.includes('nt.delivery_enabled IS TRUE'));
+ assert(sql.includes('REVOKE ALL ON FUNCTION public.line_autopilot_daily_route(text) FROM PUBLIC,anon,authenticated'));
 });
