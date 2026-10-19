@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
 import { choosePreviewUrl, inspectPreview } from '../scripts/preview-readonly-smoke.mjs'
 
 const origin = 'https://3kings-site-report-hdyxodg0n-kraiwit-p-golfiiz-sqr.vercel.app/'
@@ -68,4 +69,15 @@ test('no bypass credential is sent to an invalid domain, even with a valid secre
     inspectPreview(['https://attacker.example/'], async () => { throw Error('must not fetch') }, dummy),
     /BLOCK_PREVIEW_URL_UNVERIFIED/
   )
+})
+
+test('workflow disallows arbitrary deployment revisions before bypass secret can be read', () => {
+  const workflow = fs.readFileSync(new URL('../.github/workflows/preview-readonly-smoke.yml', import.meta.url), 'utf8')
+  const guard = workflow.indexOf('- name: Verify deployed SHA equals trusted first-party branch HEAD')
+  const secret = workflow.indexOf('KINGS_VERCEL_PREVIEW_BYPASS: ${{ secrets.KINGS_VERCEL_PREVIEW_BYPASS }}')
+  assert.ok(guard > 0 && secret > guard, 'trusted SHA gate must precede secret use')
+  assert.match(workflow, /BLOCK_UNTRUSTED_DEPLOYMENT_REVISION/)
+  assert.match(workflow, /github\.event\.repository\.full_name/)
+  assert.match(workflow, /gh api 'repos\/pkraiwit2614-web\/3kings-site-report\/branches\/test\/preview-qa-automation-20261019'/)
+  assert.doesNotMatch(workflow, /pull_request_target/)
 })
