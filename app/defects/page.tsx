@@ -252,7 +252,8 @@ export default function DefectDetailPage(){
       if(/เสร็จแล้ว|งดแจก|ยกเลิก/.test(item.work_status||''))continue
       const members=[...new Set((item.room_group.toUpperCase().match(/[AB]\d{3}/g)||[])
         .flatMap(room=>hotelRoomMembers(room)))]
-      if(members.length&&members.every(room=>roomStatus.get(room)==='Hotel - Incomplete'))
+      if(members.length&&(members.every(room=>roomStatus.get(room)==='Hotel - Incomplete') ||
+        (members.length===1&&members.every(room=>roomStatus.get(room)?.startsWith('Non-Hotel -'))))
         members.forEach(room=>open.add(room))
     }
     return open
