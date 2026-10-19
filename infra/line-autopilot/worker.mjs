@@ -232,6 +232,64 @@ export async function previewLineSiteRoute(env, alertKind, siteCode, query = sb)
   };
 }
 
+
+/**
+ * Source-to-site preview from real, canonical source attributes only.
+ * Not a notification collector: does not infer overdue/ordered/completed
+ * status and cannot invoke LINE. Project names are never guessed.
+ */
+export async function previewLineSourceEvent(env, alertKind, source, query = sb) {
+  const reject = (decision) => ({
+    kind: alertKind ?? null, site: null, groupName: null,
+    routeFound: false, decision, wouldSendLine: false
+  });
+  if (env?.AUTOPILOT_ENABLED !== 'false')
+    return reject('BLOCK_PREVIEW_REQUIRES_SEND_OFF');
+  if (!NOTIFICATION_TYPES.includes(alertKind)) return reject('BLOCK_UNKNOWN_MESSAGE_TYPE');
+  if (alertKind === 'sync_failure') {
+    if (source?.kind !== 'drive_sync_log' || source?.status !== 'error')
+      return reject('BLOCK_NO_CONFIRMED_SYNC_FAILURE');
+    return previewLineSiteRoute(env, alertKind, null, query);
+  }
+  if (!source || typeof source !== 'object')
+    return reject('BLOCK_SOURCE_NOT_IDENTIFIED');
+  let siteCode = null;
+  if (source.kind === 'defect_work_order') {
+    if (alertKind !== 'defect_overdue') return reject('BLOCK_SOURCE_KIND_MISMATCH');
+    if (source.building === 'A') siteCode = 'above_condo_a';
+    else if (source.building === 'B') siteCode = 'above_condo_b';
+    else return reject('BLOCK_UNKNOWN_OR_MISSING_SITE');
+    // Only routing is tested here. Upstream must separately verify
+    // the actual defect item is overdue using source status/date/evidence.
+  } else if (['materials', 'daily_site_report', 'weekly_recap'].includes(source.kind)) {
+    const category = source.kind === 'materials' ? 'po_materials'
+      : source.kind === 'daily_site_report' ? 'daily_site_report' : 'weekly_recap';
+    if (alertKind !== category) return reject('BLOCK_SOURCE_KIND_MISMATCH');
+    if (typeof source.project_id !== 'string'
+        || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(source.project_id))
+      return reject('BLOCK_MISSING_PROJECT_ID');
+    let projects;
+    try {
+      projects = await query(env,
+        '/rest/v1/projects?select=code,active&id=eq.'+encodeURIComponent(source.project_id));
+    } catch {
+      return reject('BLOCK_PROJECT_LOOKUP_FAILED');
+    }
+    if (!Array.isArray(projects) || projects.length !== 1 || projects[0]?.active !== true)
+      return reject('BLOCK_PROJECT_NOT_VERIFIED');
+    const code = projects[0].code;
+    if (code === 'CONDO-A') siteCode = 'above_condo_a';
+    else if (code === 'CONDO-B') siteCode = 'above_condo_b';
+    else if (typeof code === 'string'
+      && (/^AV-P[0-9]{1,2}$/.test(code) || code === 'AV-COMMON'))
+      siteCode = 'above_villa';
+    else return reject('BLOCK_OUTSIDE_CONFIGURED_SITES');
+  } else {
+    return reject('BLOCK_SOURCE_NOT_IDENTIFIED');
+  }
+  return previewLineSiteRoute(env, alertKind, siteCode, query);
+}
+
 export default {
   async fetch(request,env){
     const url=new URL(request.url);
