@@ -29,7 +29,7 @@ export async function dailyLineRpc(env,path,args,transport=fetch){
        'line_autopilot_claim','line_autopilot_ack'].includes(kind))
    throw Error('BLOCK_RPC_NOT_ALLOWED');
  if(!env.DAILY_LINE_BRIDGE_TOKEN)throw Error('BLOCK_BRIDGE_NOT_CONFIGURED');
- const url=env.SUPABASE_URL.replace(/\\/$/,'')+
+ const url=env.SUPABASE_URL.replace(/\/$/,'')+
    '/functions/v1/kings_daily_line_images/rpc';
  const res=await transport(url,{method:'POST',
    headers:{'x-3kings-server-key':env.DAILY_LINE_BRIDGE_TOKEN,
