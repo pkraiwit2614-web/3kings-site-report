@@ -1,0 +1,188 @@
+{
+  "schema_version": 1,
+  "mode": "observe_only",
+  "scope": "3Kings release queue: inspect only; never merge or deploy",
+  "entries": [
+    {
+      "priority": 1,
+      "pr": 155,
+      "name": "Playwright Local Viewer E2E",
+      "policy": "candidate",
+      "ci_checks": [
+        "build",
+        "viewer-local"
+      ]
+    },
+    {
+      "priority": 2,
+      "pr": 170,
+      "name": "Align 17 Skills to latest Drive SOP",
+      "policy": "candidate",
+      "ci_checks": [
+        "build"
+      ]
+    },
+    {
+      "priority": 3,
+      "pr": 71,
+      "name": "Plot 3 safeguards",
+      "policy": "hold"
+    },
+    {
+      "priority": 4,
+      "pr": 168,
+      "name": "Defect Excel-first",
+      "policy": "hold"
+    },
+    {
+      "priority": 5,
+      "pr": 143,
+      "name": "Materials reconciliation",
+      "policy": "hold"
+    },
+    {
+      "priority": 6,
+      "pr": 167,
+      "name": "Express PO staging",
+      "policy": "hold"
+    },
+    {
+      "priority": 7,
+      "pr": 140,
+      "name": "Work Order reconciliation",
+      "policy": "hold"
+    },
+    {
+      "priority": 8,
+      "pr": 163,
+      "name": "Defect override",
+      "policy": "hold"
+    },
+    {
+      "priority": 9,
+      "pr": 130,
+      "name": "Combine detail",
+      "policy": "hold"
+    },
+    {
+      "priority": 10,
+      "pr": 129,
+      "name": "Defect Report layout",
+      "policy": "hold"
+    },
+    {
+      "priority": 11,
+      "pr": 122,
+      "name": "Work Order UI",
+      "policy": "hold"
+    },
+    {
+      "priority": 12,
+      "pr": 125,
+      "name": "Work Order KPI",
+      "policy": "hold"
+    },
+    {
+      "priority": 13,
+      "pr": 120,
+      "name": "Work Plan Combine",
+      "policy": "hold"
+    },
+    {
+      "priority": 14,
+      "pr": 126,
+      "name": "Work Plan Overview",
+      "policy": "hold"
+    },
+    {
+      "priority": 15,
+      "pr": 101,
+      "name": "Calendar projection",
+      "policy": "hold"
+    },
+    {
+      "priority": 16,
+      "pr": 132,
+      "name": "Common Defect",
+      "policy": "hold"
+    },
+    {
+      "priority": 17,
+      "pr": 161,
+      "name": "LINE pilot",
+      "policy": "hold"
+    },
+    {
+      "priority": 18,
+      "pr": 164,
+      "name": "LINE dry run",
+      "policy": "hold"
+    },
+    {
+      "priority": 19,
+      "pr": 139,
+      "name": "LINE webhook",
+      "policy": "hold"
+    },
+    {
+      "priority": 20,
+      "pr": 111,
+      "name": "Contact Book",
+      "policy": "hold"
+    },
+    {
+      "priority": 21,
+      "pr": 159,
+      "name": "Defect executor",
+      "policy": "hold"
+    },
+    {
+      "priority": 22,
+      "pr": 119,
+      "name": "Work Order writeback",
+      "policy": "hold"
+    },
+    {
+      "priority": 23,
+      "pr": 113,
+      "name": "Work Order mirror",
+      "policy": "hold"
+    },
+    {
+      "priority": 24,
+      "pr": 169,
+      "name": "Older SOP mapping",
+      "policy": "reconcile"
+    },
+    {
+      "priority": 25,
+      "pr": 138,
+      "name": "Older Hotel Flow release",
+      "policy": "reconcile"
+    },
+    {
+      "priority": 26,
+      "pr": 136,
+      "name": "Older Combine",
+      "policy": "reconcile"
+    },
+    {
+      "priority": 27,
+      "pr": 137,
+      "name": "Older Hotel cards",
+      "policy": "reconcile"
+    },
+    {
+      "priority": 28,
+      "pr": 135,
+      "name": "Older B408",
+      "policy": "reconcile"
+    },
+    {
+      "priority": 29,
+      "pr": 133,
+      "name": "Older Hotel Flow",
+      "policy": "reconcile"
+    }
+  ]
+}
