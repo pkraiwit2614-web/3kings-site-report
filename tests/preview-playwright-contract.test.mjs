@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {checkedPreview,checkedViewerConfig,isAllowedBrowserRequest} from '../scripts/preview-playwright-e2e.mjs'
+import {checkedPreview,checkedViewerConfig,checkedRlsFixtures,isAllowedBrowserRequest} from '../scripts/preview-playwright-e2e.mjs'
 
 const origin = 'https://3kings-site-report-aaa-kraiwit-p-golfiiz-sqr.vercel.app'
 const prod = 'https://wtqubwdduzedmcvyhbgs.supabase.co'
@@ -35,4 +35,17 @@ test('never send credentials to third-party or production DB in viewer mode', ()
   assert.equal(isAllowedBrowserRequest(isolated+'/rest/v1/rpc/defect_report_latest_change_at','POST',origin,isolated,true),true)
   assert.equal(isAllowedBrowserRequest(isolated+'/rest/v1/rpc/delete_all','POST',origin,isolated,true),false)
   assert.equal(isAllowedBrowserRequest(isolated+'/auth/v1/token?grant_type=password','POST',origin,isolated,false),false)
+})
+
+test('read-side RLS requires two independently attested UUID fixtures', () => {
+  const fixtures = {
+    KINGS_E2E_RLS_OTHER_PROFILE_ID: '11111111-1111-4111-8111-111111111111',
+    KINGS_E2E_RLS_PAYROLL_RECORD_ID: '22222222-2222-4222-8222-222222222222'
+  }
+  assert.deepEqual(checkedRlsFixtures(fixtures), {
+    otherUserId: fixtures.KINGS_E2E_RLS_OTHER_PROFILE_ID,
+    payrollId: fixtures.KINGS_E2E_RLS_PAYROLL_RECORD_ID
+  })
+  assert.throws(() => checkedRlsFixtures({}), /BLOCK_RLS_FIXTURE_ID_MISSING/)
+  assert.throws(() => checkedRlsFixtures({ ...fixtures, KINGS_E2E_RLS_PAYROLL_RECORD_ID: 'not-a-uuid' }), /BLOCK_RLS_FIXTURE_ID_MISSING/)
 })
