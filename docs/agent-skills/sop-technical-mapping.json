@@ -1,0 +1,322 @@
+{
+  "schema_version": 1,
+  "review_date": "2026-10-19",
+  "project": "3 Kings Construction",
+  "status": "ADVISORY_ONLY",
+  "authority": "Live Google Drive 00-SOP_INDEX and complete current SOP outrank this manifest on every execution",
+  "enforcement": "No runtime gate, RPC authorization, extra write rights, schema migration, CI or deploy implied",
+  "rules": [
+    "Never execute SQL/RPC solely because it is listed here",
+    "Preserve all 17 existing skill IDs, modes and permanent rules",
+    "Read-only commands stay read-only",
+    "Verify actual source, auth and SOP revision again per invocation",
+    "Never store private Drive document IDs or credentials in public repository"
+  ],
+  "shortcuts": [
+    {
+      "number": 1,
+      "shortcut": "อัปเดต Defect ตามเดิม",
+      "sop_title": "SOP_01_Defect_Flow_v1.1_2026-10-19",
+      "mode": "authorized_write",
+      "domain": "Defect",
+      "source_of_truth": "Excel-first Defect master; Web/Supabase for verification",
+      "observed_tables": [
+        "condo_room_status",
+        "defect_work_order_snapshot",
+        "defect_web_overrides"
+      ],
+      "observed_sql_functions": [
+        "drive_sync_apply_condo_defects",
+        "defect_work_order_sync_import",
+        "defect_writeback_status"
+      ],
+      "executor_guidance": "Authorized scoped Excel patch then existing sync",
+      "readback_qa": "Check pending Web overrides/writeback, row conflicts, Combine and Excel/DB/UI readback",
+      "runtime_binding_verified": false
+    },
+    {
+      "number": 2,
+      "shortcut": "ตรวจยอด Defect",
+      "sop_title": "SOP_02_Defect_Count_Reconciliation_v1.1_2026-10-19",
+      "mode": "read_only",
+      "domain": "Defect",
+      "source_of_truth": "Verified Excel/DB Room and Work ID snapshots",
+      "observed_tables": [
+        "condo_room_status",
+        "defect_work_order_snapshot"
+      ],
+      "observed_sql_functions": [],
+      "executor_guidance": "Read-only",
+      "readback_qa": "Compare room count, Combine, Good aliases, Work Items; do not change statuses",
+      "runtime_binding_verified": false
+    },
+    {
+      "number": 3,
+      "shortcut": "ทำใบแจกงาน",
+      "sop_title": "SOP_03_Contractor_Work_Order_v1.1_2026-10-19",
+      "mode": "document_only",
+      "domain": "Defect",
+      "source_of_truth": "Current outstanding Work Order and verified evidence",
+      "observed_tables": [
+        "defect_work_order_snapshot",
+        "condo_room_status"
+      ],
+      "observed_sql_functions": [],
+      "executor_guidance": "Document-only",
+      "readback_qa": "Preserve room/work IDs, team ownership, no duplicate Combine or room state edit",
+      "runtime_binding_verified": false
+    },
+    {
+      "number": 4,
+      "shortcut": "ตรวจ Defect 7 วัน",
+      "sop_title": "SOP_04_Defect_7_Days_v1.1_2026-10-19",
+      "mode": "read_only",
+      "domain": "Defect",
+      "source_of_truth": "Verified notify/done dates and latest Defect evidence",
+      "observed_tables": [
+        "condo_room_status",
+        "defect_manual_updates"
+      ],
+      "observed_sql_functions": [],
+      "executor_guidance": "Read-only; any authorized change is a separate SOP 01 action",
+      "readback_qa": "Asia/Bangkok seven-day test; missing dates UNKNOWN; never auto-close",
+      "runtime_binding_verified": false
+    },
+    {
+      "number": 5,
+      "shortcut": "ตรวจ Hotel Defect",
+      "sop_title": "SOP_05_Hotel_Defect_Comparison_v1.1_2026-10-19",
+      "mode": "read_only",
+      "domain": "Hotel/Defect",
+      "source_of_truth": "Hotel source and verified Defect Excel",
+      "observed_tables": [
+        "hotel_room_availability",
+        "hotel_room_source_map",
+        "hotel_room_group_members",
+        "condo_room_status"
+      ],
+      "observed_sql_functions": [],
+      "executor_guidance": "Read-only",
+      "readback_qa": "Hotel OOO/OOS is separate from Defect; Combine and revision checks",
+      "runtime_binding_verified": false
+    },
+    {
+      "number": 6,
+      "shortcut": "อัปเดตวัสดุตามเดิม",
+      "sop_title": "SOP_06_Materials_Status_v1.1_2026-10-19",
+      "mode": "authorized_write",
+      "domain": "Materials",
+      "source_of_truth": "Express-confirmed PO, vendor receipt, PR/Plan retained",
+      "observed_tables": [
+        "materials",
+        "procurement_items",
+        "procurement_item_projects"
+      ],
+      "observed_sql_functions": [
+        "drive_sync_replace_materials",
+        "drive_sync_replace_materials_tools"
+      ],
+      "executor_guidance": "Use existing validated source import only",
+      "readback_qa": "Express E2E unverified; PO ordered is not received; missing PO not cancelled",
+      "runtime_binding_verified": false
+    },
+    {
+      "number": 7,
+      "shortcut": "เช็ก PO",
+      "sop_title": "SOP_07_Purchase_Order_Check_v1.1_2026-10-19",
+      "mode": "read_only",
+      "domain": "Materials",
+      "source_of_truth": "Express import evidence plus PR/Drive plans",
+      "observed_tables": [
+        "procurement_items",
+        "procurement_item_projects"
+      ],
+      "observed_sql_functions": [],
+      "executor_guidance": "Read-only",
+      "readback_qa": "Ordered/received/planned/conflict/unknown separate",
+      "runtime_binding_verified": false
+    },
+    {
+      "number": 8,
+      "shortcut": "สรุป Progress",
+      "sop_title": "SOP_08_Construction_Progress_v1.1_2026-10-19",
+      "mode": "document_only",
+      "domain": "Progress",
+      "source_of_truth": "Schedule Progress Update, actual site report and verified photo log",
+      "observed_tables": [
+        "schedule_tasks",
+        "schedule_task_daily_snapshots",
+        "drive_photo_index"
+      ],
+      "observed_sql_functions": [],
+      "executor_guidance": "Read-only report",
+      "readback_qa": "Never infer actual from schedule or target",
+      "runtime_binding_verified": false
+    },
+    {
+      "number": 9,
+      "shortcut": "จัดรูป Progress",
+      "sop_title": "SOP_09_Progress_Photo_Mapping_v1.2_2026-10-19",
+      "mode": "authorized_write",
+      "domain": "Progress Photos",
+      "source_of_truth": "Picture Progress source and verified mapping checkpoint",
+      "observed_tables": [
+        "drive_photo_index"
+      ],
+      "observed_sql_functions": [
+        "drive_photo_index_upsert",
+        "drive_photo_index_reconcile_full_scan"
+      ],
+      "executor_guidance": "Authorized name mapping through Drive; functions are observations only",
+      "readback_qa": "Full baseline before delta; preserve named photos; no unverified rename",
+      "runtime_binding_verified": false
+    },
+    {
+      "number": 10,
+      "shortcut": "ทำ Labour PDF",
+      "sop_title": "SOP_10_Labour_PDF_GSheets_v1.3_2026-10-19",
+      "mode": "document_only",
+      "domain": "Labour PDF",
+      "source_of_truth": "QA-approved native monthly Google Sheets only",
+      "observed_tables": [],
+      "observed_sql_functions": [],
+      "executor_guidance": "Document-only; no SQL dependency",
+      "readback_qa": "Monthly team PDF, 15th/month-end; no direct Excel/Form, no source/payroll edit",
+      "runtime_binding_verified": false
+    },
+    {
+      "number": 11,
+      "shortcut": "สรุป Weekly Recap",
+      "sop_title": "SOP_11_Weekly_Recap_v1.1_2026-10-19",
+      "mode": "document_only",
+      "domain": "Weekly Recap",
+      "source_of_truth": "Verified Daily Sheets and actual/schedule/Defect/Materials snapshots",
+      "observed_tables": [
+        "weekly_snapshots",
+        "schedule_tasks",
+        "materials",
+        "condo_room_status"
+      ],
+      "observed_sql_functions": [],
+      "executor_guidance": "Read-only report",
+      "readback_qa": "Check zero-row snapshot, day/Plot source revision and actual-target separation",
+      "runtime_binding_verified": false
+    },
+    {
+      "number": 12,
+      "shortcut": "อัปเดตปฏิทินงาน",
+      "sop_title": "SOP_12_Work_Calendar_v1.1_2026-10-19",
+      "mode": "authorized_write",
+      "domain": "Calendar",
+      "source_of_truth": "Verified Work Plan plus designated Calendar",
+      "observed_tables": [
+        "work_calendars",
+        "work_calendar_events"
+      ],
+      "observed_sql_functions": [
+        "work_calendar_save_event",
+        "work_calendar_create",
+        "work_calendar_update"
+      ],
+      "executor_guidance": "Authorized calendar-scoped upsert via existing path",
+      "readback_qa": "Event ID/dedupe/timezone; no Defect/Hotel status update",
+      "runtime_binding_verified": false
+    },
+    {
+      "number": 13,
+      "shortcut": "ตรวจ Sync",
+      "sop_title": "SOP_13_Sync_Validation_v1.1_2026-10-19",
+      "mode": "read_only",
+      "domain": "Sync",
+      "source_of_truth": "Drive source + Apps Script execution + DB/UI readback",
+      "observed_tables": [
+        "drive_sync_runs",
+        "daily_site_report_sync_audit"
+      ],
+      "observed_sql_functions": [],
+      "executor_guidance": "Read-only",
+      "readback_qa": "Source/DB/UI counts, timestamps and errors, not log-only PASS",
+      "runtime_binding_verified": false
+    },
+    {
+      "number": 14,
+      "shortcut": "ตรวจ Production",
+      "sop_title": "SOP_14_Production_Inspection_v1.1_2026-10-19",
+      "mode": "read_only",
+      "domain": "Production",
+      "source_of_truth": "GitHub SHA, CI and Vercel live deployment",
+      "observed_tables": [],
+      "observed_sql_functions": [],
+      "executor_guidance": "Read-only",
+      "readback_qa": "Live login, SHA and route verification; no deploy",
+      "runtime_binding_verified": false
+    },
+    {
+      "number": 15,
+      "shortcut": "แก้เว็บเฉพาะจุด",
+      "sop_title": "SOP_15_Surgical_Web_Change_v1.1_2026-10-19",
+      "mode": "code_change",
+      "domain": "Web Code",
+      "source_of_truth": "GitHub main/Preview and actual API/DB dependencies",
+      "observed_tables": [],
+      "observed_sql_functions": [],
+      "executor_guidance": "Branch and Preview only",
+      "readback_qa": "Diff, build, critical regression, i18n, Print, UI/API/RLS/Sync impact",
+      "runtime_binding_verified": false
+    },
+    {
+      "number": 16,
+      "shortcut": "Deploy Production",
+      "sop_title": "SOP_16_Deploy_Production_v1.1_2026-10-19",
+      "mode": "deploy",
+      "domain": "Deployment",
+      "source_of_truth": "Authorized SHA with CI/Preview evidence",
+      "observed_tables": [],
+      "observed_sql_functions": [],
+      "executor_guidance": "Deploy only with explicit authorization after QA",
+      "readback_qa": "Verify production live SHA/login/critical routes/source DB UI and rollback",
+      "runtime_binding_verified": false
+    },
+    {
+      "number": 17,
+      "shortcut": "ตรวจสิทธิ์ผู้ใช้",
+      "sop_title": "SOP_17_Role_Permission_Check_v1.1_2026-10-19",
+      "mode": "read_only",
+      "domain": "RBAC/RLS",
+      "source_of_truth": "Actual Auth, role matrix, API and RLS",
+      "observed_tables": [
+        "profiles"
+      ],
+      "observed_sql_functions": [
+        "role_permission_matrix_read",
+        "role_permission_matrix_history"
+      ],
+      "executor_guidance": "Read-only",
+      "readback_qa": "Viewer/Hotel/Owner tests at UI, direct route, API and RLS; no permission changes",
+      "runtime_binding_verified": false
+    }
+  ],
+  "supporting_sops": [
+    {
+      "shortcut": "ทำ Daily Site Report ตามเดิม",
+      "sop_title": "SOP_Daily_Site_Report_GSheets_Only_v1.4_2026-10-19",
+      "source": "Google Form response to native monthly Google Sheets only",
+      "sql_reference": "daily_site_report_sync_v1",
+      "note": "RPC presence does not change Sheets-only SOP; do not auto-generate PDF/PNG or send LINE"
+    },
+    {
+      "shortcut": "เผยแพร่ Daily Site Report PDF/PNG",
+      "sop_title": "SOP_SUP_Daily_Report_PDF_PNG_Publish_v1.0_2026-10-19",
+      "source": "QA-approved monthly native Google Sheets",
+      "note": "Document-only PDF/PNG publisher; LINE delivery needs separate authorization"
+    }
+  ],
+  "blast_radius": {
+    "Defect": "No Excel changes, Web override clearing, Work Order closure, trigger, SQL or UI changes",
+    "Materials": "No Materials/PR/PO status/import or Express sync changes",
+    "Daily_Report": "No Form/Sheet/Apps Script change and no PDF/PNG/LINE activation",
+    "Calendar": "No event, calendar ID or external Google Calendar changes",
+    "RBAC_RLS": "No Auth, role, grants, policy, RLS, Owner reset or SQL changes"
+  },
+  "verification": "Only metadata presence of observed tables/functions checked. No E2E, UI tests or Production enforcement verified."
+}
