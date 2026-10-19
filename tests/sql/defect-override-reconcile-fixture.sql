@@ -1,5 +1,7 @@
 -- Synthetic fixtures only. No production/customer rows or service credentials.
 CREATE SCHEMA IF NOT EXISTS private;
+CREATE ROLE anon;
+CREATE ROLE authenticated;
 CREATE TABLE public.defect_web_overrides(
   room_no text PRIMARY KEY,
   current_status text,status_group text,next_action text,detail_text text,
