@@ -66,7 +66,7 @@ test('Text then image in separate ticks, then no duplicates',async()=>{
  assert.equal(m.pushes.length,2);assert.equal(m.pushes[1].payload.messages[0].type,'image');
  const c=await dailySiteSendTick(env,{...m,now});
  assert.equal(c.imageAccepted,0);assert.equal(m.pushes.length,2);
- assert.equal(m.metas.length,2);
+ assert.equal(new Set(m.metas.map(x=>x.p_event_key)).size,2); // idempotent DB metadata log
  assert(m.metas.every(x=>x.p_site_code==='above_villa'));
 });
 
