@@ -1,7 +1,7 @@
 'use strict';
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const {PAGES,FORM_TEXT,SCHEDULE,reportDateFromBangkok,expectedFiles,
+const {PAGES,FORM_TEXT,SCHEDULE,reportPolicyFromBangkok,reportDateFromBangkok,expectedFiles,
   checkRoute,prepareDryRun}=require('../lib/dailyLineAutopilotCore.cjs');
 const TRUE_EVIDENCE={
   sopIndexRead:true,sopV13Read:true,sourceFresh:true,formColumnsVerified:true,
@@ -25,14 +25,49 @@ function fixture(date='2026-10-19'){
     scaleX:5.894,scaleY:5.894,finalPdfChecksum:'fixture',
     pngPdfChecksum:'fixture'
   }]));
-  return {reportDate:date,evidence:{...TRUE_EVIDENCE},assets:[pdf,...pngs],
+  return {reportDate:date,now:new Date('2026-10-19T00:30:00Z'),evidence:{...TRUE_EVIDENCE},assets:[pdf,...pngs],
     imageEvidence,routes:[],candidates:[],rules:[]};
 }
-test('Bangkok previous day works across month and year without UTC drift',()=>{
+test('Bangkok weekdays: Monday selects Saturday; Tuesday-Saturday use yesterday',()=>{
   assert.equal(reportDateFromBangkok(new Date('2026-10-18T17:30:00Z')),
-    '2026-10-18');
+    '2026-10-17'); // Monday morning in Bangkok
+  assert.equal(reportDateFromBangkok(new Date('2026-10-19T00:30:00Z')),
+    '2026-10-17'); // Monday at 07:30
+  assert.equal(reportDateFromBangkok(new Date('2026-10-19T17:30:00Z')),
+    '2026-10-19'); // Tuesday in Bangkok
   assert.equal(reportDateFromBangkok(new Date('2027-01-01T00:30:00Z')),
-    '2026-12-31');
+    '2026-12-31'); // New Year's cross-year
+  assert.equal(reportDateFromBangkok(new Date('2026-11-01T17:30:00Z')),
+    '2026-10-31'); // Monday cross-month
+});
+test('Sunday is completely suppressed, including explicitly selected report dates',()=>{
+  const sunday=new Date('2026-10-18T00:30:00Z');
+  const p=reportPolicyFromBangkok(sunday);
+  assert.equal(p.sendToday,false);
+  assert.equal(p.skipReason,'SKIP_SUNDAY');
+  const input=fixture('2026-10-17');
+  input.now=sunday;
+  const output=prepareDryRun(input);
+  assert.equal(output.skipped,true);
+  assert.equal(output.skip_reason,'SKIP_SUNDAY');
+  assert.deepEqual(output.reportOutput,[]);
+  assert.deepEqual(output.deliveryLog,[]);
+  assert.equal(output.actual_line_messages_sent,0);
+});
+test('Monday dry-run uses Saturday report even if Sunday files are missing',()=>{
+  const input=fixture('2026-10-17');
+  delete input.reportDate;
+  const output=prepareDryRun(input);
+  assert.equal(output.report_date,'2026-10-17');
+  assert.match(output.reportOutput[0].file,/17-10-2026_Page_01_Above_Villa/);
+  assert.equal(output.actual_line_messages_sent,0);
+});
+test('Sunday records stay available for explicit historical replay on a weekday',()=>{
+  const input=fixture('2026-10-18');
+  const output=prepareDryRun(input);
+  assert.equal(output.report_date,'2026-10-18');
+  assert.notEqual(output.skipped,true);
+  assert.equal(output.actual_line_messages_sent,0);
 });
 test('SOP exact names; Henessy filename is intentionally not Hennessy',()=>{
   const f=expectedFiles('2026-10-18');
