@@ -10,7 +10,7 @@ function mock(){
  const pushes=[],ledger=new Map(),metas=[];
  const assets=['above_villa','above_condo','mirage','henessy'].map(site=>({
    site,sha256:'c'.repeat(64),width:2947,height:2000,
-   url:url+'/functions/v1/3kings-daily-line-images/image?site='+site}));
+   url:url+'/functions/v1/kings_daily_line_images/image?site='+site}));
  const transport=async (request,options)=>{
   if(request.includes('/ready?'))return {ok:true,status:200,json:async()=>({ready:true,assets})};
   if(request.includes('api.line.me')){
@@ -74,8 +74,8 @@ test('Text then image in separate ticks, then no duplicates',async()=>{
 test('image gateway URL agrees between worker and deployed Edge Function name',async()=>{
  const fs=require('node:fs');
  const worker=fs.readFileSync('cloudflare/dailySiteSendTick.mjs','utf8');
- const gateway=fs.readFileSync('supabase/functions/3kings-daily-line-images/index.ts','utf8');
- const route='/functions/v1/3kings-daily-line-images';
+ const gateway=fs.readFileSync('supabase/functions/kings_daily_line_images/index.ts','utf8');
+ const route='/functions/v1/kings_daily_line_images';
  assert(worker.includes(route+'/ready?'));
  assert(worker.includes(route+'/image?'));
  assert(gateway.includes(route));
