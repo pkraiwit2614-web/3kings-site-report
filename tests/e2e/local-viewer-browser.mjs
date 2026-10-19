@@ -12,6 +12,7 @@ if(!process.env.KINGS_LOCAL_VIEWER_LOGIN||!process.env.KINGS_LOCAL_VIEWER_PASSWO
   throw Error('BLOCK_VIEWER_NOT_BOOTSTRAPPED')
 const {chromium}=await import('playwright')
 let browser
+let page
 let phase='BROWSER_INIT'
 try {
   browser=await chromium.launch({headless:true})
@@ -41,7 +42,7 @@ try {
     return route.continue()
   })
   await context.routeWebSocket('**/*',socket=>socket.close())
-  const page=await context.newPage()
+  page=await context.newPage()
   page.setDefaultTimeout(25000)
   page.on('response', response => {
     const u=new URL(response.url())
