@@ -2,7 +2,7 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {PAGES,FORM_TEXT,SCHEDULE,reportPolicyFromBangkok,reportDateFromBangkok,expectedFiles,
-  checkRoute,prepareDryRun}=require('../lib/dailyLineAutopilotCore.cjs');
+  checkRoute,validateManualRunGate,prepareAfterManualRunDryRun,prepareDryRun}=require('../lib/dailyLineAutopilotCore.cjs');
 const TRUE_EVIDENCE={
   sopIndexRead:true,sopV13Read:true,sourceFresh:true,formColumnsVerified:true,
   formRowsReconciled:true,monthlySheetVerified:true,sheetFormulaPreserved:true,
@@ -225,4 +225,52 @@ test('failed QA for one site blocks that route but not unrelated sites',()=>{
   assert.equal(output.reportOutput.find(x=>x.route==='mirage').status,
     'DRY_RUN_READY');
   assert.equal(output.actual_line_messages_sent,0);
+});
+
+
+test('manual-only dispatch blocks absent proof and wrong report date even if files exist',()=>{
+  const input=fixture('2026-10-19');
+  input.now=new Date('2026-10-20T01:02:00+07:00');
+  assert.equal(validateManualRunGate(input).reason,'BLOCK_MANUAL_RUN_UNVERIFIED');
+  assert.equal(prepareAfterManualRunDryRun(input).actual_line_messages_sent,0);
+  input.reportDate='2026-10-18';
+  assert.equal(validateManualRunGate(input).reason,'BLOCK_WRONG_REPORT_DATE');
+});
+test('manual-only dispatch blocks stale Sunday run, false QA, and missing evidence',()=>{
+  const input=fixture('2026-10-19');
+  input.now=new Date('2026-10-20T08:02:00+07:00');
+  input.manualRun={source:'server_verified',reportDate:'2026-10-19',
+    qaPassed:true,driveReadback:true,pdf4PagesVerified:true,png4Verified:true,
+    completedAt:'2026-10-19T17:00:00+07:00',runId:'local-test-only',
+    manifestHash:'a'.repeat(64)};
+  assert.equal(validateManualRunGate(input).reason,'BLOCK_STALE_MANUAL_RUN');
+  input.manualRun.completedAt='2026-10-20T07:45:00+07:00';
+  input.manualRun.png4Verified=false;
+  assert.equal(validateManualRunGate(input).reason,'BLOCK_MANUAL_QA_INCOMPLETE');
+  input.manualRun.png4Verified=true;
+  input.manualRun.manifestHash='';
+  assert.equal(validateManualRunGate(input).reason,'BLOCK_MANUAL_RUN_MISSING_PROOF');
+});
+test('verified synthetic Tuesday manual run only creates offline stage plan',()=>{
+  const input=fixture('2026-10-19');
+  input.now=new Date('2026-10-20T08:02:00+07:00');
+  input.manualRun={source:'server_verified',reportDate:'2026-10-19',
+    qaPassed:true,driveReadback:true,pdf4PagesVerified:true,png4Verified:true,
+    completedAt:'2026-10-20T07:55:00+07:00',runId:'local-test-only',
+    manifestHash:'a'.repeat(64)};
+  assert.deepEqual(validateManualRunGate(input),{ok:true,reportDate:'2026-10-19'});
+  const result=prepareAfterManualRunDryRun(input);
+  assert.equal(result.report_date,'2026-10-19');
+  assert.equal(result.send_enabled,false);
+  assert.equal(result.actual_line_messages_sent,0);
+});
+test('no Sunday LINE even with an otherwise complete synthetic manual proof',()=>{
+  const input=fixture('2026-10-17');
+  input.now=new Date('2026-10-18T08:02:00+07:00');
+  input.manualRun={source:'server_verified',reportDate:'2026-10-17',
+    qaPassed:true,driveReadback:true,pdf4PagesVerified:true,png4Verified:true,
+    completedAt:'2026-10-18T07:55:00+07:00',runId:'local-test-only',
+    manifestHash:'a'.repeat(64)};
+  assert.equal(validateManualRunGate(input).reason,'SKIP_SUNDAY');
+  assert.equal(prepareAfterManualRunDryRun(input).deliveryLog.length,0);
 });
