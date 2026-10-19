@@ -54,6 +54,28 @@ function smartSyncDefectsV13Force() {
   return runDefectSyncV13_({ dryRun: false, force: true });
 }
 
+/**
+ * One-shot, strictly-scoped Pre Fur. pilot.
+ * All 263 source rows and DB inventory are validated before a 5-room subset is written.
+ * This never marks the full workbook revision as accepted, because other rooms may differ.
+ * It does not install or modify any triggers.
+ */
+function smartSyncDefectsV13PfurDryRun() {
+  const result = runDefectSyncV13_({
+    dryRun: true, force: true,
+    scopeRooms: ['A311', 'A401', 'B204', 'B502', 'B707'],
+  });
+  console.log(JSON.stringify(result, null, 2));
+  return result;
+}
+
+function smartSyncDefectsV13PfurForce() {
+  return runDefectSyncV13_({
+    dryRun: false, force: true,
+    scopeRooms: ['A311', 'A401', 'B204', 'B502', 'B707'],
+  });
+}
+
 function runDefectSyncV13_(opts) {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(1000)) {
@@ -160,9 +182,7 @@ function runDefectSyncV13_(opts) {
       };
     });
 
-    const changed = prepared.filter(row =>
-      defectMasterV13NeedsWrite_(row, oldByRoom[row.room_no] || null)
-    );
+    const { changed, pendingRooms } = defectV13ScopedChanges_(prepared, oldByRoom, opts);
 
     if (opts.dryRun) {
       return {
@@ -173,6 +193,8 @@ function runDefectSyncV13_(opts) {
         modified: modifiedIso,
         validation: parsed.validation,
         changedRooms: changed.map(r => r.room_no),
+        pendingOtherRooms: pendingRooms,
+        scoped: Boolean(opts.scopeRooms),
       };
     }
 
@@ -190,10 +212,16 @@ function runDefectSyncV13_(opts) {
       status: 'success',
       message:
         `Defect Sync v1.3 validated 263 rooms (A=162, B=101, exact room set); ` +
-        `${changed.length} semantic row(s) changed`,
+        `${changed.length} semantic row(s) changed; ` +
+        (opts.scopeRooms
+          ? `SCOPED pilot only; ${pendingRooms.length} other difference(s) deliberately untouched`
+          : 'full workbook'),
     });
 
-    saveState_(ctx.props, DEFECT_V13.STATE_KEY, file.getId(), modifiedIso);
+    // A scoped import is NOT acceptance of the complete Master revision.
+    if (!opts.scopeRooms) {
+      saveState_(ctx.props, DEFECT_V13.STATE_KEY, file.getId(), modifiedIso);
+    }
 
     console.log(
       `Defect Sync v1.3 SUCCESS | rooms=${prepared.length} changed=${changed.length} file=${file.getName()}`
@@ -373,6 +401,54 @@ function parseCondoDefectMasterV13_(sheet) {
       uniqueRooms: Object.keys(seen).length,
       sourceSheet: sheet.getName(),
     },
+  };
+}
+
+/**
+ * Shared diff guard. Regular scheduled sync retains exactly its old full-sync behavior.
+ * Scoped pilot may update ONLY five chat-marked Q details, never another field.
+ */
+function defectV13ScopedChanges_(prepared, oldByRoom, opts) {
+  const all = prepared.filter(row =>
+    defectMasterV13NeedsWrite_(row, oldByRoom[row.room_no] || null)
+  );
+  if (!opts.scopeRooms) return { changed: all, pendingRooms: [] };
+
+  const expected = ['A311', 'A401', 'B204', 'B502', 'B707'];
+  const supplied = [...new Set(opts.scopeRooms)].sort();
+  if (supplied.length !== expected.length ||
+      supplied.some((room, i) => room !== expected[i])) {
+    throw new Error('Scoped Defect sync: exact approved five-room scope required.');
+  }
+  const changed = all.filter(row => supplied.includes(row.room_no));
+  if (changed.length > 5 || changed.some(row => !oldByRoom[row.room_no])) {
+    throw new Error('Scoped Defect sync requires existing canonical room records.');
+  }
+
+  const protectedFields = [
+    'building', 'floor', 'hotel_participation', 'customer_status',
+    'current_status', 'status_group', 'follow_up', 'priority', 'next_action',
+    'latest_source', 'source_note', 'hotel_complete_color', 'hotel_remarks',
+  ];
+  changed.forEach(row => {
+    const old = oldByRoom[row.room_no];
+    if (!row.defect_detail ||
+        !row.defect_detail.includes('รายการ Defect แจ้งผ่านแชต:')) {
+      throw new Error('Scoped Defect sync rejected non-chat Detail: ' + row.room_no);
+    }
+    const unsafe = protectedFields.filter(key =>
+      normalizeComparable_(row[key]) !== normalizeComparable_(old[key])
+    );
+    if (unsafe.length) {
+      throw new Error('Scoped Defect sync rejected unrelated field(s) for ' +
+        row.room_no + ': ' + unsafe.join(','));
+    }
+  });
+
+  return {
+    changed,
+    pendingRooms: all.filter(row => !supplied.includes(row.room_no))
+      .map(row => row.room_no),
   };
 }
 
