@@ -15,7 +15,7 @@ BEGIN
       OR new.source_file_id IS DISTINCT FROM '1MEeB1E7D_35MTndRPi1aBTlVfI2aR0Wj'
       OR new.source_file_name IS DISTINCT FROM 'Handover_Defect_Summary_Updated_28-09-2026.xlsx'
       OR new.source_modified_at IS NULL
-      OR new.source_modified_at <= pg_catalog.greatest(
+      OR new.source_modified_at <= greatest(
            coalesce(v.updated_at, '-infinity'::timestamptz),
            coalesce(v.source_synced_at, '-infinity'::timestamptz))
    ) THEN
