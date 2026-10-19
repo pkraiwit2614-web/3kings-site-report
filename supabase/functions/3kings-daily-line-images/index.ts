@@ -2,7 +2,7 @@
 // Separate Edge Function; no ability to call LINE or approve group routes.
 const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const endpoint = (Deno.env.get('SUPABASE_URL') || '').replace(/\/$/,'');
-const service = endpoint+'/functions/v1/kings_daily_line_images';
+const service = endpoint+'/functions/v1/3kings-daily-line-images';
 const noStore = {'cache-control':'no-store','x-content-type-options':'nosniff'};
 const json=(value:unknown,status=200)=>new Response(JSON.stringify(value),{status,headers:{...noStore,'content-type':'application/json'}});
 const isDate=(s:string)=>/^20\d{2}-\d{2}-\d{2}$/.test(s)&&!Number.isNaN(Date.parse(s+'T00:00:00Z'));
@@ -40,7 +40,7 @@ Deno.serve(async(req:Request)=>{
     const result=await rpc('daily_line_ready',{p_report_date:date}) as {ready?:boolean,assets?:Array<{site:string,sha256:string}>,[key:string]:unknown};
     if(!result||!result.ready||!Array.isArray(result.assets)||result.assets.length!==4)
       return json({ready:false,reason:'QA_NOT_FINALIZED'},409);
-    const expiry=Math.floor(Date.now()/1000)+7*86400;
+    const expiry=Math.floor(Date.now()/1000)+48*3600;
     const assets=await Promise.all(result.assets.map(async a=>{
       if(!isSite(a.site)||!isHash(a.sha256))throw Error('asset_metadata');
       const p=new URLSearchParams({date,site:a.site,sha:a.sha256,exp:String(expiry)});
@@ -59,7 +59,7 @@ Deno.serve(async(req:Request)=>{
     const expiry=Number(expText),now=Math.floor(Date.now()/1000);
     if(!isDate(date)||!isSite(site)||!isHash(sha)||!isHash(sig)
       ||!/^\d{10}$/.test(expText)||!Number.isSafeInteger(expiry)
-      ||expiry<now||expiry>now+7*86400+120)
+      ||expiry<now||expiry>now+48*3600+120)
       return json({error:'expired_or_invalid'},403);
     const expected=await sign(date+'|'+site+'|'+sha+'|'+expiry);
     if(!equal(expected,sig))return json({error:'invalid_signature'},403);
