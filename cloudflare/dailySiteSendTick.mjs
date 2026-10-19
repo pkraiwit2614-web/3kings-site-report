@@ -50,7 +50,7 @@ export async function dailySiteSendTick(env,{db,hash,transport=fetch,now=new Dat
       ||!/^https:\/\//.test(image.url)
       ||!Number.isInteger(image.width)||image.width!==2947
       ||!Number.isInteger(image.height)||image.height<101
-      ||!Number.isInteger(image.size??0) && 'size' in image && image.size>1048576)
+      ||('size' in image && (!Number.isInteger(image.size)||image.size<=0||image.size>1048576)))
       return {...stats,mode:'IMAGE_METADATA_BLOCKED'};
     images.set(image.site,image);
   }
