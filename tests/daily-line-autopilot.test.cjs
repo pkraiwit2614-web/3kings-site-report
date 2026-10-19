@@ -162,3 +162,67 @@ test('aspect mismatch or nonuniform scaling blocks only affected site',()=>{
   assert.equal(result.reportOutput[0].reason,'BLOCK_QA_NON_UNIFORM_SCALE');
   assert.equal(result.reportOutput.length,4);
 });
+
+
+test('five synthetic approved site groups generate ten staged records without sending',()=>{
+  const input=fixture('2026-10-17');
+  const specs=[
+    ['above_villa','above_villa','a'],
+    ['above_condo_a','above_condo','b'],
+    ['above_condo_b','above_condo','c'],
+    ['mirage','mirage','d'],
+    ['henessy','henessy','e']
+  ];
+  input.routes=specs.map(([site_code,site,c])=>({
+    site_code,site,report_page:site,group_id:'C'+c.repeat(32),
+    target_scope:'site_group',approved_report_page:true,
+    notifications_enabled:true
+  }));
+  input.candidates=input.routes.map(r=>({
+    group_id:r.group_id,verified_member:true,approved:true
+  }));
+  input.rules=input.routes.map(r=>({
+    site_code:r.site_code,alert_kind:'daily_site_report',delivery_enabled:true
+  }));
+  const output=prepareDryRun(input);
+  assert.equal(output.reportOutput.length,5);
+  assert.equal(output.deliveryLog.length,10);
+  assert(output.reportOutput.every(x=>x.status==='DRY_RUN_READY'));
+  assert.equal(output.actual_line_messages_sent,0);
+  assert.equal(output.send_enabled,false);
+  assert(output.deliveryLog.every(x=>x.line_message_id===null&&x.delivery_time===null));
+  assert.deepEqual([...new Set(output.deliveryLog.map(x=>x.dedupe_key))].length,10);
+  const a=output.reportOutput.find(x=>x.route==='above_condo_a');
+  const b=output.reportOutput.find(x=>x.route==='above_condo_b');
+  assert.equal(a.file,b.file); // shared Condo page only in explicitly approved synthetic case
+  assert.match(a.file,/Page_02_Above_Condo/);
+  assert.notEqual(a.group,b.group);
+  const second=prepareDryRun(input);
+  assert.deepEqual(output.deliveryLog.map(x=>x.dedupe_key),
+    second.deliveryLog.map(x=>x.dedupe_key)); // idempotency input
+  assert(!JSON.stringify(output).includes(input.routes[0].group_id));
+});
+test('failed QA for one site blocks that route but not unrelated sites',()=>{
+  const input=fixture('2026-10-17');
+  input.routes=[
+    {site_code:'above_villa',site:'above_villa',report_page:'above_villa',
+      group_id:'C'+'a'.repeat(32),target_scope:'site_group',
+      approved_report_page:true,notifications_enabled:true},
+    {site_code:'mirage',site:'mirage',report_page:'mirage',
+      group_id:'C'+'d'.repeat(32),target_scope:'site_group',
+      approved_report_page:true,notifications_enabled:true}
+  ];
+  input.candidates=input.routes.map(x=>({
+    group_id:x.group_id,verified_member:true,approved:true
+  }));
+  input.rules=input.routes.map(x=>({
+    site_code:x.site_code,alert_kind:'daily_site_report',delivery_enabled:true
+  }));
+  input.imageEvidence.above_villa.uniformScaleVerified=false;
+  const output=prepareDryRun(input);
+  assert.equal(output.reportOutput.find(x=>x.route==='above_villa').status,
+    'DRY_RUN_BLOCKED');
+  assert.equal(output.reportOutput.find(x=>x.route==='mirage').status,
+    'DRY_RUN_READY');
+  assert.equal(output.actual_line_messages_sent,0);
+});
