@@ -1,0 +1,22 @@
+name: LINE AutoPilot live HTTP no-send
+on:
+  pull_request:
+    paths:
+      - 'cloudflare/dailySiteSendTick.mjs'
+      - 'supabase/functions/3kings-daily-line-images/index.ts'
+      - 'tests/daily-line-live-http.test.cjs'
+      - '.github/workflows/daily-line-live-http.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  real-http:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Real gateway and worker HTTP, no LINE dispatch
+        run: node --test tests/daily-line-live-http.test.cjs
