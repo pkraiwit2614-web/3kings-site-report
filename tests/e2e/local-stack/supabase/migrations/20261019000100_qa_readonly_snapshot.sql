@@ -109,7 +109,7 @@ GRANT EXECUTE ON FUNCTION public.defect_report_latest_change_at() TO authenticat
 CREATE POLICY profiles_select_self_or_manager ON public.profiles FOR SELECT TO authenticated
  USING ((user_id = (SELECT auth.uid())) OR (SELECT private.has_app_role(ARRAY['manager'::text])));
 CREATE POLICY projects_select_active ON public.projects FOR SELECT TO authenticated
- USING (private.is_active_user());
+ USING (private.matrix_can_read(ARRAY['dashboard'::text,'presentation'::text], (SELECT private.is_active_user())));
 CREATE POLICY materials_select_active ON public.materials FOR SELECT TO authenticated
  USING (private.matrix_allowed('materials'::text,'view'::text,(SELECT private.is_active_user())));
 CREATE POLICY "active users can view condo room status" ON public.condo_room_status FOR SELECT TO authenticated
