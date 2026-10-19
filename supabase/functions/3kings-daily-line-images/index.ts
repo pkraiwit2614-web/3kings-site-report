@@ -20,7 +20,24 @@ function equal(a:string,b:string):boolean {
   for(let i=0;i<Math.max(a.length,b.length);i++)v|=(a.charCodeAt(i)||0)^(b.charCodeAt(i)||0);
   return v===0;
 }
-function auth(req:Request):boolean {const provided=req.headers.get('x-3kings-server-key')||'';return acceptedKeys.some(k=>equal(provided,k));}
+async function auth(req:Request):Promise<boolean>{
+  const provided=req.headers.get('x-3kings-server-key')||'';
+  if(provided.length<25 || provided.length>1800 || !/^[a-zA-Z0-9_.-]+$/.test(provided))
+    return false;
+  if(acceptedKeys.some(k=>equal(provided,k)))return true;
+  // The Cloudflare Worker has a pre-existing server credential which may be
+  // different from the Edge Function's default service-role key. Validate it
+  // against a service-only RPC; never disclose or persist the presented key.
+  try{
+    const headers:Record<string,string>={'apikey':provided,'content-type':'application/json'};
+    if(!provided.startsWith('sb_secret_'))headers.authorization='Bearer '+provided;
+    const r=await fetch(endpoint+'/rest/v1/rpc/daily_line_verify_server_access',{
+      method:'POST',headers,body:'{}',signal:AbortSignal.timeout(8000)
+    });
+    if(!r.ok)return false;
+    return (await r.json())===true;
+  }catch{return false;}
+}
 async function sign(input:string):Promise<string>{
   const k=await crypto.subtle.importKey('raw',new TextEncoder().encode(key),{name:'HMAC',hash:'SHA-256'},false,['sign']);
   const digest=new Uint8Array(await crypto.subtle.sign('HMAC',k,new TextEncoder().encode('3kings-daily-line-image-v1|'+input)));
@@ -41,7 +58,7 @@ Deno.serve(async(req:Request)=>{
   if(req.method==='GET'&&url.pathname.endsWith('/health'))
     return json({service:'kings_daily_line_images',line_sends_enabled:false,ready:!!key&&!!endpoint});
   if(req.method==='GET'&&url.pathname.endsWith('/ready')){
-    if(!auth(req))return json({error:'unauthorized'},401);
+    if(!await auth(req))return json({error:'unauthorized'},401);
     const date=url.searchParams.get('date')||'';
     if(!isDate(date))return json({error:'invalid_date'},400);
     const result=await rpc('daily_line_ready',{p_report_date:date}) as {ready?:boolean,assets?:Array<{site:string,sha256:string}>,[key:string]:unknown};
