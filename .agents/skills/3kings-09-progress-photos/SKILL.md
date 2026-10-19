@@ -6,12 +6,12 @@ description: "3 Kings Construction shortcut 'จัดรูป Progress'. Write
 # 09 — จัดรูป Progress
 
 **Shortcut:** `จัดรูป Progress`  
-**SOP title (resolve via live Drive index):** `SOP_09_Progress_Photo_Mapping_v1.1_2026-10-19`  
+**SOP title (resolve via live Drive index):** `SOP_09_Progress_Photo_Mapping_v1.2_2026-10-19`  
 **Mode:** `authorized_write`
 
 ## Before any action
 
-Read [SOP Gate](../3kings-sop-gate/SKILL.md) and complete its live Drive SOP and source-of-truth preflight. The actual SOP is authoritative if this summary differs. Record document version and modified time. Respect the six permanent central rules.
+Read [SOP Gate](../3kings-sop-gate/SKILL.md) and complete its live Drive SOP and source-of-truth preflight. The current linked SOP is authoritative if this summary differs. Revision-specific routing: Initial full historical baseline required; subsequent delta scans may rely on verified per-file checkpoint Log, with invalidation/full reconciliation when necessary. Record document version and modified time. Respect the six permanent central rules.
 
 ## Source of truth
 

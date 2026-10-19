@@ -6,12 +6,12 @@ description: "3 Kings Construction shortcut 'สรุป Weekly Recap'. Create 
 # 11 — สรุป Weekly Recap
 
 **Shortcut:** `สรุป Weekly Recap`  
-**SOP title (resolve via live Drive index):** `SOP_11_Weekly_Recap_v1.0`  
+**SOP title (resolve via live Drive index):** `SOP_11_Weekly_Recap_v1.1_2026-10-19`  
 **Mode:** `document_only`
 
 ## Before any action
 
-Read [SOP Gate](../3kings-sop-gate/SKILL.md) and complete its live Drive SOP and source-of-truth preflight. The actual SOP is authoritative if this summary differs. Record document version and modified time. Respect the six permanent central rules.
+Read [SOP Gate](../3kings-sop-gate/SKILL.md) and complete its live Drive SOP and source-of-truth preflight. The current linked SOP is authoritative if this summary differs. Revision-specific routing: Reuse source-verified weekly snapshots and photo log; never infer Actual from Target. Record document version and modified time. Respect the six permanent central rules.
 
 ## Source of truth
 

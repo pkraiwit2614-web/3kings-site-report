@@ -6,12 +6,12 @@ description: "3 Kings Construction shortcut 'ตรวจ Defect 7 วัน'. R
 # 04 — ตรวจ Defect 7 วัน
 
 **Shortcut:** `ตรวจ Defect 7 วัน`  
-**SOP title (resolve via live Drive index):** `SOP_04_Defect_7_Days_v1.0`  
+**SOP title (resolve via live Drive index):** `SOP_04_Defect_7_Days_v1.1_2026-10-19`  
 **Mode:** `read_only`
 
 ## Before any action
 
-Read [SOP Gate](../3kings-sop-gate/SKILL.md) and complete its live Drive SOP and source-of-truth preflight. The actual SOP is authoritative if this summary differs. Record document version and modified time. Respect the six permanent central rules.
+Read [SOP Gate](../3kings-sop-gate/SKILL.md) and complete its live Drive SOP and source-of-truth preflight. The current linked SOP is authoritative if this summary differs. Revision-specific routing: This shortcut stays read-only. Explicitly requested 7-day status changes route to SOP 01 scoped write, with no fabricated hotel inspection acceptance. Record document version and modified time. Respect the six permanent central rules.
 
 ## Source of truth
 

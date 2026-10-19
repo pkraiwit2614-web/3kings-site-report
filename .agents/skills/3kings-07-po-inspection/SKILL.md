@@ -6,12 +6,12 @@ description: "3 Kings Construction shortcut 'เช็ก PO'. READ-ONLY: inspec
 # 07 — เช็ก PO
 
 **Shortcut:** `เช็ก PO`  
-**SOP title (resolve via live Drive index):** `SOP_07_Purchase_Order_Check_v1.0`  
+**SOP title (resolve via live Drive index):** `SOP_07_Purchase_Order_Check_v1.1_2026-10-19`  
 **Mode:** `read_only`
 
 ## Before any action
 
-Read [SOP Gate](../3kings-sop-gate/SKILL.md) and complete its live Drive SOP and source-of-truth preflight. The actual SOP is authoritative if this summary differs. Record document version and modified time. Respect the six permanent central rules.
+Read [SOP Gate](../3kings-sop-gate/SKILL.md) and complete its live Drive SOP and source-of-truth preflight. The current linked SOP is authoritative if this summary differs. Revision-specific routing: Express PO source first when verified; absence from Express does not cancel planned/PR items. Read-only. Record document version and modified time. Respect the six permanent central rules.
 
 ## Source of truth
 

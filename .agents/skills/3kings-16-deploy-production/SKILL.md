@@ -6,12 +6,12 @@ description: "3 Kings Construction shortcut 'Deploy Production'. Only an explici
 # 16 — Deploy Production
 
 **Shortcut:** `Deploy Production`  
-**SOP title (resolve via live Drive index):** `SOP_16_Deploy_Production_v1.0`  
+**SOP title (resolve via live Drive index):** `SOP_16_Deploy_Production_v1.1_2026-10-19`  
 **Mode:** `deploy`
 
 ## Before any action
 
-Read [SOP Gate](../3kings-sop-gate/SKILL.md) and complete its live Drive SOP and source-of-truth preflight. The actual SOP is authoritative if this summary differs. Record document version and modified time. Respect the six permanent central rules.
+Read [SOP Gate](../3kings-sop-gate/SKILL.md) and complete its live Drive SOP and source-of-truth preflight. The current linked SOP is authoritative if this summary differs. Revision-specific routing: Reuse valid commit-bound CI/Preview evidence only; authorized release still requires live Production readback. Record document version and modified time. Respect the six permanent central rules.
 
 ## Source of truth
 

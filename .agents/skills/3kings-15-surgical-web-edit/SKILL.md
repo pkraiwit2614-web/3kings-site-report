@@ -6,12 +6,12 @@ description: "3 Kings Construction shortcut 'แก้เว็บเฉพา�
 # 15 — แก้เว็บเฉพาะจุด
 
 **Shortcut:** `แก้เว็บเฉพาะจุด`  
-**SOP title (resolve via live Drive index):** `SOP_15_Surgical_Web_Change_v1.0`  
+**SOP title (resolve via live Drive index):** `SOP_15_Surgical_Web_Change_v1.1_2026-10-19`  
 **Mode:** `code_change`
 
 ## Before any action
 
-Read [SOP Gate](../3kings-sop-gate/SKILL.md) and complete its live Drive SOP and source-of-truth preflight. The actual SOP is authoritative if this summary differs. Record document version and modified time. Respect the six permanent central rules.
+Read [SOP Gate](../3kings-sop-gate/SKILL.md) and complete its live Drive SOP and source-of-truth preflight. The current linked SOP is authoritative if this summary differs. Revision-specific routing: Produce commit-bound test evidence for SOP 16 to reuse; keep branch/Preview and regression controls. Record document version and modified time. Respect the six permanent central rules.
 
 ## Source of truth
 

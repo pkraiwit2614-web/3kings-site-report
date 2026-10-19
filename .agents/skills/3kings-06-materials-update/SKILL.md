@@ -6,12 +6,12 @@ description: "3 Kings Construction shortcut 'อัปเดตวัสดุ�
 # 06 — อัปเดตวัสดุตามเดิม
 
 **Shortcut:** `อัปเดตวัสดุตามเดิม`  
-**SOP title (resolve via live Drive index):** `SOP_06_Materials_Status_v1.0`  
+**SOP title (resolve via live Drive index):** `SOP_06_Materials_Status_v1.1_2026-10-19`  
 **Mode:** `authorized_write`
 
 ## Before any action
 
-Read [SOP Gate](../3kings-sop-gate/SKILL.md) and complete its live Drive SOP and source-of-truth preflight. The actual SOP is authoritative if this summary differs. Record document version and modified time. Respect the six permanent central rules.
+Read [SOP Gate](../3kings-sop-gate/SKILL.md) and complete its live Drive SOP and source-of-truth preflight. The current linked SOP is authoritative if this summary differs. Revision-specific routing: For confirmed PO use verified Express On Cloud import first. Preserve Drive-only planned/PR items until explicitly reclassified. Record document version and modified time. Respect the six permanent central rules.
 
 ## Source of truth
 

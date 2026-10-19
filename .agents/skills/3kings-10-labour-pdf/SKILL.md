@@ -6,12 +6,12 @@ description: "3 Kings Construction shortcut 'ทำ Labour PDF'. Create only the
 # 10 — ทำ Labour PDF
 
 **Shortcut:** `ทำ Labour PDF`  
-**SOP title (resolve via live Drive index):** `SOP_10_Labour_PDF_GSheets_2026-10-15_v1.2_FINAL.md`  
+**SOP title (resolve via live Drive index):** `SOP_10_Labour_PDF_GSheets_v1.3_2026-10-19`  
 **Mode:** `document_only`
 
 ## Before any action
 
-Read [SOP Gate](../3kings-sop-gate/SKILL.md) and complete its live Drive SOP and source-of-truth preflight. The actual SOP is authoritative if this summary differs. Record document version and modified time. Respect the six permanent central rules.
+Read [SOP Gate](../3kings-sop-gate/SKILL.md) and complete its live Drive SOP and source-of-truth preflight. The current linked SOP is authoritative if this summary differs. Revision-specific routing: Only native monthly Google Sheets after daily QA; one PDF per team/person per month, updated on 15th and month-end with daily pages; never wait for Daily PNG. Record document version and modified time. Respect the six permanent central rules.
 
 ## Source of truth
 

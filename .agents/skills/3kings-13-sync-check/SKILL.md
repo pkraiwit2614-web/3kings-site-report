@@ -6,12 +6,12 @@ description: "3 Kings Construction shortcut 'ตรวจ Sync'. READ-ONLY: insp
 # 13 — ตรวจ Sync
 
 **Shortcut:** `ตรวจ Sync`  
-**SOP title (resolve via live Drive index):** `SOP_13_Sync_Validation_v1.0`  
+**SOP title (resolve via live Drive index):** `SOP_13_Sync_Validation_v1.1_2026-10-19`  
 **Mode:** `read_only`
 
 ## Before any action
 
-Read [SOP Gate](../3kings-sop-gate/SKILL.md) and complete its live Drive SOP and source-of-truth preflight. The actual SOP is authoritative if this summary differs. Record document version and modified time. Respect the six permanent central rules.
+Read [SOP Gate](../3kings-sop-gate/SKILL.md) and complete its live Drive SOP and source-of-truth preflight. The current linked SOP is authoritative if this summary differs. Revision-specific routing: Read-only shared source→DB→UI check; a trigger/log success is not proof of synchronized data. Record document version and modified time. Respect the six permanent central rules.
 
 ## Source of truth
 

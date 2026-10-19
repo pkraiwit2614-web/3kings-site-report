@@ -6,12 +6,12 @@ description: "3 Kings Construction shortcut 'อัปเดต Defect ตาม
 # 01 — อัปเดต Defect ตามเดิม
 
 **Shortcut:** `อัปเดต Defect ตามเดิม`  
-**SOP title (resolve via live Drive index):** `SOP_01_Defect_Flow_v1.0`  
+**SOP title (resolve via live Drive index):** `SOP_01_Defect_Flow_v1.1_2026-10-19`  
 **Mode:** `authorized_write`
 
 ## Before any action
 
-Read [SOP Gate](../3kings-sop-gate/SKILL.md) and complete its live Drive SOP and source-of-truth preflight. The actual SOP is authoritative if this summary differs. Record document version and modified time. Respect the six permanent central rules.
+Read [SOP Gate](../3kings-sop-gate/SKILL.md) and complete its live Drive SOP and source-of-truth preflight. The current linked SOP is authoritative if this summary differs. Revision-specific routing: Defect Excel-first scoped updates: share same-invocation QA with SOP 02/04/05/13; stop conflicts/Override only for affected records and require Excel→DB→Web readback. Record document version and modified time. Respect the six permanent central rules.
 
 ## Source of truth
 
