@@ -10,6 +10,16 @@ import {hotelRoomLabel,hotelRoomMembers,normalizeHotelRoom} from '@/lib/hotelRoo
 function cleanFileName(value:string){return value.normalize('NFKC').replace(/[^A-Za-z0-9._-]+/g,'-').replace(/-+/g,'-').slice(0,120)||'defect.pdf'}
 function todayBangkok(){return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date())}
 
+// Scoped reconciliation based on approved RSE update 19/10/2026 and the Excel Master.
+// These values are proposed only after the editor explicitly clicks the B511 action.
+const B511_RECONCILIATION={
+ room:'B511',
+ status:'Defect เสร็จแล้ว / รอ Hotel Engineer ตรวจ',
+ group:'Hotel - Awaiting Check',
+ nextAction:'นัด/ตาม Hotel Engineer ตรวจ; รวบรวมรูป After',
+ detail:'RSE แจ้ง 19/10/26 Defect เสร็จหมดแล้ว',
+} as const
+
 export default function DefectInputPanel({manualOnly=false}:{manualOnly?:boolean}){
  const {role,userId}=useAccessRole();const editable=canEditDefect(role)
  const [file,setFile]=useState<File|null>(null);const [uploading,setUploading]=useState(false);const [uploadMsg,setUploadMsg]=useState('')
@@ -111,6 +121,15 @@ export default function DefectInputPanel({manualOnly=false}:{manualOnly?:boolean
    ))
  }
 
+ const applyB511Reconciliation=()=>{
+   if(!editable||normalizeHotelRoom(room)!==B511_RECONCILIATION.room||loadedRoom?.room!==B511_RECONCILIATION.room)return
+   setStatus(B511_RECONCILIATION.status)
+   setStatusGroup(B511_RECONCILIATION.group)
+   setNextAction(B511_RECONCILIATION.nextAction)
+   if(!detail.trim())setDetail(B511_RECONCILIATION.detail)
+   setManualMsg('เตรียมสถานะและ Next Action ของ B511 ตามรายงาน RSE 19/10/2026 แล้ว • ตรวจค่าก่อนกดบันทึก')
+ }
+
  const saveManual=async()=>{
    if(!editable||!room.trim()||!detail.trim())return
    const target=normalizeHotelRoom(room)
@@ -130,11 +149,34 @@ export default function DefectInputPanel({manualOnly=false}:{manualOnly?:boolean
      if(!window.confirm('ห้อง '+hotelRoomLabel(target)+'\nเสนอเปลี่ยนกลุ่มสถานะเป็น '+nextLabel+'\nยังไม่ถือว่าตรวจรับแล้ว\nกด OK เพื่อยืนยันก่อนบันทึก')){setSaving(false);setManualMsg('ยกเลิก ไม่ได้บันทึกข้อมูล');return}
      if(!proposedStatus)proposedStatus=nextLabel
    }
+   // A completion report on B511 must not be saved as "still incomplete".
+   // Require an explicit editor selection, leaving all other rooms unchanged.
+   if(target===B511_RECONCILIATION.room&&/RSE.*19\/10\/26.*Defect.*เสร็จหมดแล้ว/i.test(detail)
+     &&(proposedStatus!==B511_RECONCILIATION.status
+       ||proposedGroup!==B511_RECONCILIATION.group
+       ||nextAction.trim()!==B511_RECONCILIATION.nextAction)){
+     setSaving(false)
+     setManualMsg('B511: รายงาน RSE ยืนยันงานเสร็จ แต่ช่องสถานะ/ต้องทำต่อยังไม่ตรง กรุณากด “ใช้ค่าที่ตรวจสอบแล้วสำหรับ B511” และตรวจข้อมูลก่อนบันทึก')
+     return
+   }
    const combineMembers=hotelRoomMembers(target)
    if(combineMembers.length>1&&!window.confirm('ยืนยันอัปเดตข้อมูล Defect และสถานะให้ห้อง Combine ทั้งชุด: '+combineMembers.join(' + ')+'\\nยังคงแยก Room ID และประวัติแต่ละห้อง')){setSaving(false);setManualMsg('ยกเลิก ไม่ได้บันทึกข้อมูล');return}
    const {error}=await getSupabase().rpc('defect_manual_update_apply_checked',{p_room_no:target,p_detail_text:detail.trim(),p_current_status:proposedStatus||null,p_status_group:proposedGroup||null,p_next_action:nextAction.trim()||null,p_client_session_id:getActivitySessionId(),p_user_agent:navigator.userAgent,p_expected_source_modified_at:loadedRoom.stamp})
+   if(error){setSaving(false);setManualMsg(error.message.includes('DEFECT_REVISION_CONFLICT')?'ห้องนี้ถูกแก้ไขจากผู้ใช้อื่นแล้ว กรุณาตรวจสถานะล่าสุดและกดโหลดข้อมูลล่าสุดก่อนลองใหม่':error.message);return}
+   // The RPC returning successfully alone is not proof that both saved fields match.
+   // This readback is intentionally limited to the approved B511 reconciliation.
+   if(target===B511_RECONCILIATION.room){
+     const {data:verified,error:verifyError}=await getSupabase().from('condo_room_status')
+       .select('current_status,status_group,next_action').eq('room_no',target).maybeSingle()
+     if(verifyError||!verified||verified.current_status!==proposedStatus||
+       verified.status_group!==proposedGroup||verified.next_action!==(nextAction.trim()||loadedRoom.currentStatus)){
+       setSaving(false)
+       setManualMsg('บันทึกถูกส่งแล้ว แต่ยังไม่ผ่านการอ่านยืนยัน Current Status / Status Group / Next Action ของ B511: '+(verifyError?.message||'ข้อมูลไม่ตรงกับค่าที่ส่ง')+' • โหลดข้อมูลล่าสุดก่อนลองใหม่')
+       void loadRoomRevision(target)
+       return
+     }
+   }
    setSaving(false)
-   if(error){setManualMsg(error.message.includes('DEFECT_REVISION_CONFLICT')?'ห้องนี้ถูกแก้ไขจากผู้ใช้อื่นแล้ว กรุณาตรวจสถานะล่าสุดและกดโหลดข้อมูลล่าสุดก่อนลองใหม่':error.message);return}
    setLoadedRoom(null)
    void loadRoomRevision(target)
    setManualMsg('บันทึก Defect และ Defect Flow ในฐานข้อมูลแล้ว'+(combineMembers.length>1?' • อัปเดต Combine '+combineMembers.join(' + '):''));setWritebackState('กำลังตรวจสถานะเขียนกลับ Excel ทั้งสองไฟล์');setWritebackRoom(target);setDetail('');setStatus('');setStatusGroup('');setNextAction('')
@@ -148,6 +190,7 @@ export default function DefectInputPanel({manualOnly=false}:{manualOnly?:boolean
      <article><b>เพิ่มจากรายละเอียด</b><p>สถานะ = รายละเอียดความคืบหน้า • กลุ่มสถานะ = หมวดที่ Defect Flow ใช้นับห้อง • หากแจ้งว่า Defect เสร็จแล้ว ระบบจะให้ยืนยันการเปลี่ยนเป็นรอตรวจรับก่อนบันทึก</p><div className="manual-grid"><label>ห้อง<input value={room} onChange={e=>setRoom(e.target.value.toUpperCase())} placeholder="เช่น B101 หรือ Good01"/></label><label>สถานะ<input value={status} onChange={e=>setStatus(e.target.value)} placeholder="เว้นว่าง = คงสถานะเดิม"/></label><label>กลุ่มสถานะ<select value={statusGroup} onChange={e=>setStatusGroup(e.target.value)}><option value="">คงเดิม</option><option value="Hotel - Incomplete">เพิ่งได้รับแจ้ง / กำลังดำเนินการ</option><option value="Hotel - Awaiting Check">รอตรวจรับ</option><option value="Hotel - Checked Complete">ตรวจรับเรียบร้อย</option><option value="Non-Hotel - Pending Handover">รอส่งมอบ</option><option value="Non-Hotel - Handover Complete">ลูกค้าตรวจรับแล้ว</option><option value="Non-Hotel - Awaiting Sale">รอขาย</option></select></label><label className="wide">รายละเอียด<textarea value={detail} onChange={e=>setDetail(e.target.value)} placeholder="รายละเอียด Defect ล่าสุด"/></label><label className="wide">ต้องทำต่อ<textarea value={nextAction} onChange={e=>setNextAction(e.target.value)} placeholder="Next Action (ถ้ามี)"/></label></div>{room.trim()&&<div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',marginBottom:8}}>
     <small>{loadedRoom?.room===normalizeHotelRoom(room)?'ข้อมูลขณะเปิดห้อง: '+(loadedRoom.currentStatus||'ไม่ระบุ')+' / '+(loadedRoom.statusGroup||'ไม่ระบุกลุ่ม'):revisionError||'กำลังตรวจ Revision ห้อง…'}</small>
     <button type="button" className="button" onClick={()=>{void loadRoomRevision(room)}} disabled={saving}>โหลดสถานะห้องล่าสุด</button>
+    {loadedRoom?.room===B511_RECONCILIATION.room&&<button type="button" className="button" onClick={applyB511Reconciliation} disabled={saving}>ใช้ค่าที่ตรวจสอบแล้วสำหรับ B511</button>}
    </div>}
    <button type="button" className="button primary" onClick={saveManual} disabled={saving||!room.trim()||!detail.trim()||loadedRoom?.room!==normalizeHotelRoom(room)}>{saving?'กำลังบันทึก…':'บันทึก / ยืนยันการอัปเดต Defect'}</button>{manualMsg&&<small>{manualMsg}</small>}{writebackState&&<small role="status" aria-live="polite">{writebackRoom}: {writebackState}</small>}</article>
    </div>
