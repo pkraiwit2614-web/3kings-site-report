@@ -43,6 +43,11 @@ try {
   await context.routeWebSocket('**/*',socket=>socket.close())
   const page=await context.newPage()
   page.setDefaultTimeout(25000)
+  page.on('response', response => {
+    const u=new URL(response.url())
+    if(u.origin===DB && u.pathname==='/auth/v1/token') console.log('LOCAL_AUTH_HTTP_'+response.status())
+    if(u.origin===APP && u.pathname==='/api/access-control') console.log('LOCAL_ROLE_API_HTTP_'+response.status())
+  })
   page.on('request',req=>{
     const u=new URL(req.url())
     if(u.origin===APP && u.pathname==='/api/access-control'){
@@ -131,6 +136,7 @@ try {
   await context.close()
 } catch(err) {
   console.error('FAIL_LOCAL_VIEWER_E2E_AT_'+phase)
+  try { console.error('FAIL_ROUTE_PATH_'+new URL(page.url()).pathname) } catch {}
   console.error('FAIL_KIND_'+String(err?.name || 'Unknown').replace(/[^A-Za-z]/g,''))
   process.exitCode=1
 } finally {
