@@ -74,7 +74,7 @@ test('Text then image in separate ticks, then no duplicates',async()=>{
 test('image gateway URL agrees between worker and deployed Edge Function name',async()=>{
  const fs=require('node:fs');
  const worker=fs.readFileSync('cloudflare/dailySiteSendTick.mjs','utf8');
- const gateway=fs.readFileSync('supabase/functions/kings_daily_line_images/index.ts','utf8');
+ const gateway=fs.readFileSync('supabase/functions/3kings-daily-line-images/index.ts','utf8');
  const route='/functions/v1/kings_daily_line_images';
  assert(worker.includes(route+'/ready?'));
  assert(worker.includes(route+'/image?'));
