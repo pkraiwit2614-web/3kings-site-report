@@ -6,7 +6,7 @@ description: "3 Kings Construction shortcut 'จัดรูป Progress'. Write
 # 09 — จัดรูป Progress
 
 **Shortcut:** `จัดรูป Progress`  
-**SOP title (resolve via live Drive index):** `SOP_09_Progress_Photo_Mapping_v1.1_2026-10-19`  
+**SOP title (resolve via live Drive index):** `SOP_09_Progress_Photo_Mapping_v1.2_2026-10-19`  
 **Mode:** `authorized_write`
 
 ## Before any action
