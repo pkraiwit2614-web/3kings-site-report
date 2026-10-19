@@ -21,11 +21,29 @@ export function dailyBangkokPolicy(now=new Date()){
 const validGroup=id=>typeof id==='string'&&/^C[0-9a-f]{32}$/i.test(id);
 const validSha=id=>typeof id==='string'&&/^[0-9a-f]{64}$/.test(id);
 const validRetry=id=>typeof id==='string'&&/^[0-9a-f-]{36}$/i.test(id);
+// Only approved daily LINE RPCs can cross this authenticated bridge.
+// The original sync-failure collector still uses its own legacy connection.
+export async function dailyLineRpc(env,path,args,transport=fetch){
+ const kind=String(path).split('/').pop();
+ if(!['line_autopilot_daily_route','daily_line_record_delivery',
+       'line_autopilot_claim','line_autopilot_ack'].includes(kind))
+   throw Error('BLOCK_RPC_NOT_ALLOWED');
+ if(!env.DAILY_LINE_BRIDGE_TOKEN)throw Error('BLOCK_BRIDGE_NOT_CONFIGURED');
+ const url=env.SUPABASE_URL.replace(/\\/$/,'')+
+   '/functions/v1/kings_daily_line_images/rpc';
+ const res=await transport(url,{method:'POST',
+   headers:{'x-3kings-server-key':env.DAILY_LINE_BRIDGE_TOKEN,
+     'content-type':'application/json'},
+   body:JSON.stringify({rpc:kind,args}),signal:AbortSignal.timeout(10000)
+ });
+ if(!res.ok)throw Error('DAILY_BRIDGE_RPC_'+res.status);
+ return await res.json();
+}
 export async function dailySiteSendTick(env,{db,hash,transport=fetch,now=new Date()}={}){
   const when=dailyBangkokPolicy(now);
   const stats={mode:'NO_SEND',reportDate:when.reportDate,ready:false,
     routesChecked:0,textAccepted:0,imageAccepted:0,blocked:0,uncertain:0};
-  if(env.DAILY_SITE_LINE_ENABLED!=='true'||!env.SUPABASE_SERVER_KEY
+  if(env.DAILY_SITE_LINE_ENABLED!=='true'||!env.DAILY_LINE_BRIDGE_TOKEN
     ||!env.LINE_CHANNEL_ACCESS_TOKEN||!env.SUPABASE_URL) return stats;
   if(when.dayOfWeek===0||when.day<'2026-10-20'
     ||when.localTime<'08:00'||when.localTime>'13:00')return stats;
@@ -35,7 +53,7 @@ export async function dailySiteSendTick(env,{db,hash,transport=fetch,now=new Dat
   let ready;
   try{
     const result=await transport(endpoint,{method:'GET',headers:{
-      'x-3kings-server-key':env.SUPABASE_SERVER_KEY
+      'x-3kings-server-key':env.DAILY_LINE_BRIDGE_TOKEN
     },signal:AbortSignal.timeout(10000)});
     if(!result.ok)return {...stats,mode:'GATEWAY_NOT_READY'};
     ready=await result.json();
