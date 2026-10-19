@@ -3,7 +3,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const url='https://wtqubwdduzedmcvyhbgs.supabase.co';
 const env={DAILY_SITE_LINE_ENABLED:'true',SUPABASE_URL:url,
-  SUPABASE_SERVER_KEY:'test-only',LINE_CHANNEL_ACCESS_TOKEN:'test-only'};
+  SUPABASE_SERVER_KEY:'test-only',DAILY_LINE_BRIDGE_TOKEN:'dedicated-test-token',LINE_CHANNEL_ACCESS_TOKEN:'test-only'};
 const load=()=>import('../cloudflare/dailySiteSendTick.mjs');
 const now=new Date('2026-10-20T01:04:00Z');
 function mock(){
