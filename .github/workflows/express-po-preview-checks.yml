@@ -5,6 +5,9 @@ on:
     paths:
       - 'lib/express-po/**'
       - 'app/api/sync/express-po/**'
+      - 'app/api/materials/express-po/**'
+      - 'components/ExpressPoSection.tsx'
+      - 'app/materials/page.tsx'
       - 'tests/express-po-*.test.cjs'
       - '.github/workflows/express-po-preview-checks.yml'
 jobs:
@@ -17,4 +20,4 @@ jobs:
         with:
           node-version: '22'
       - name: Validate synthetic parser + Google Sheets staging
-        run: node --test tests/express-po-parser.test.cjs tests/express-po-staging.test.cjs
+        run: node --test tests/express-po-parser.test.cjs tests/express-po-staging.test.cjs tests/express-po-materials-security.test.cjs
