@@ -5,9 +5,14 @@ on:
     branches: [main, release/common-ab-live-20261016]
   pull_request:
     branches: [main]
+  deployment_status:
+
+permissions:
+  contents: read
 
 jobs:
   build:
+    if: github.event_name != 'deployment_status'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -136,3 +141,261 @@ jobs:
 
       - name: Editable permission defaults and confirmed save workflow
         run: node --test tests/editable-role-matrix.test.cjs tests/editable-role-matrix-ui.test.cjs tests/access-role-preview-hook.test.cjs
+
+  qa_contract:
+    name: QA / Preview contracts (no external traffic)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify read-only Preview, isolated DB and status classification
+        run: node --test tests/preview-playwright-contract.test.mjs tests/preview-readonly-smoke.test.mjs tests/preview-qa-status.test.mjs
+
+  qa_local_viewer:
+    name: QA / Real Viewer Login + API + local RLS
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 28
+    steps:
+      - name: Checkout first-party PR without persisted credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install app dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save --package-lock=false --ignore-scripts --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Install pinned Supabase Local CLI
+        uses: supabase/setup-cli@v3
+        with:
+          version: 2.84.2
+      - name: Guard against hosted DB access
+        run: |
+          set -euo pipefail
+          test -f tests/e2e/local-stack/supabase/config.toml
+          test ! -e tests/e2e/local-stack/supabase/.branches
+          test ! -e tests/e2e/local-stack/supabase/.temp/project-ref
+          ! grep -R -E 'supabase (link|db push|db reset --linked)' .github/workflows/local-viewer-e2e.yml
+      - name: Start disposable Supabase Local with isolated synthetic schema
+        run: |
+          set -euo pipefail
+          cd tests/e2e/local-stack
+          supabase start
+      - name: Export only local Supabase values to CI environment
+        run: |
+          set -euo pipefail
+          cd tests/e2e/local-stack
+          set -a
+          source <(supabase status -o env)
+          set +a
+          test "${API_URL:-}" = "http://127.0.0.1:54321"
+          test -n "${ANON_KEY:-}"
+          test -n "${SERVICE_ROLE_KEY:-}"
+          echo "::add-mask::$ANON_KEY"
+          echo "::add-mask::$SERVICE_ROLE_KEY"
+          {
+            echo "API_URL=$API_URL"
+            echo "ANON_KEY=$ANON_KEY"
+            echo "SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+            echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
+            echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$ANON_KEY"
+          } >> "$GITHUB_ENV"
+          echo "LOCAL_SUPABASE_ONLY"
+      - name: Bootstrap ephemeral real Auth users and profiles
+        run: node tests/e2e/local-viewer-bootstrap.mjs
+      - name: Build Next.js against localhost Supabase only
+        run: npm run build
+      - name: Start Next.js localhost
+        run: |
+          set -euo pipefail
+          PORT=3010 HOSTNAME=127.0.0.1 npm run start > /tmp/3kings-e2e-next.log 2>&1 &
+          for i in $(seq 1 45); do
+            if curl -fsS --max-time 2 http://127.0.0.1:3010/login -o /dev/null; then
+              echo "LOCAL_APP_READY"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::FAIL_LOCAL_APP_START"
+          exit 1
+      - name: Test real Viewer login, UI, API and PostgreSQL RLS
+        run: node tests/e2e/local-viewer-browser.mjs
+      - name: Evidence summary without credentials or business data
+        if: success()
+        run: |
+          {
+            echo "### 3 Kings local Viewer E2E"
+            echo "- Commit: \`$GITHUB_SHA\`"
+            echo "- Environment: ephemeral localhost Supabase + local Next.js"
+            echo "- Data: synthetic only, no real customers/Payroll"
+            echo "- Real Supabase Auth Viewer password login: PASS"
+            echo "- Defect, Materials, Reports UI/API: PASS"
+            echo "- Users, Payroll UI/API denial: PASS"
+            echo "- Local PostgreSQL RLS and write denial: PASS"
+            echo "- Scope: five policy snapshots; ancillary reads mock-empty; **NOT Production parity**"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Stop and destroy test containers; keep no local state
+        if: always()
+        run: |
+          cd tests/e2e/local-stack
+          supabase stop --no-backup || true
+
+  qa_status:
+    name: QA / Local evidence (release remains blocked without Preview)
+    if: always() && github.event_name == 'pull_request'
+    needs: [build, qa_contract, qa_local_viewer]
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Distinguish PASS SKIPPED BLOCK and release verification
+        env:
+          QA_MODE: pr
+          QA_BUILD: ${{ needs.build.result }}
+          QA_CONTRACT: ${{ needs.qa_contract.result }}
+          QA_LOCAL: ${{ needs.qa_local_viewer.result }}
+        run: node scripts/preview-qa-status.mjs
+
+  qa_preview_probe:
+    name: QA / Protected Preview HTTP (no build)
+    if: >-
+      github.event_name == 'deployment_status' &&
+      github.event.deployment_status.state == 'success' &&
+      (github.event.deployment.environment == 'Preview' ||
+       github.event.deployment.environment == 'preview') &&
+      github.event.repository.full_name == 'pkraiwit2614-web/3kings-site-report'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      # Pilot only: run the inspected, immutable read-only runner at a pinned
+      # commit, never checkout code from the Preview deployment being tested.
+      # When merged, this may be changed to a protected main ref after review.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: 9657c74be334af6c8cc20d29c64482588be127bd
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # Secret-bearing requests are restricted to a dedicated first-party branch.
+      # This pilot is NOT a generic unreviewed PR deployment tester.
+      - name: Show nonsecret deployment identity for trust review
+        env:
+          DEPLOY_REF: ${{ github.event.deployment.ref }}
+          DEPLOY_REPO: ${{ github.event.repository.full_name }}
+          DEPLOY_SHA: ${{ github.event.deployment.sha }}
+        run: |
+          echo "deployment.ref=$DEPLOY_REF"
+          echo "deployment.repo=$DEPLOY_REPO"
+          echo "deployment.sha=$DEPLOY_SHA"
+      # Vercel deployment.ref is a commit SHA (not the branch name).
+      # Resolve the single allowlisted first-party branch from the GitHub API
+      # BEFORE passing the project-wide bypass key to any HTTP request.
+      - name: Verify deployed SHA equals trusted first-party branch HEAD
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_SHA: ${{ github.event.deployment.sha }}
+          DEPLOY_REF: ${{ github.event.deployment.ref }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$DEPLOY_SHA" =~ ^[a-f0-9]{40}$ ]] || [[ "$DEPLOY_SHA" != "$DEPLOY_REF" ]]; then
+            echo "::error::BLOCK_DEPLOYMENT_REVISION_MISMATCH"
+            exit 1
+          fi
+          trusted_sha="$(gh api 'repos/pkraiwit2614-web/3kings-site-report/branches/test/preview-qa-p0-unified-20261019' --jq '.commit.sha')"
+          if [ -z "$trusted_sha" ] || [ "$DEPLOY_SHA" != "$trusted_sha" ]; then
+            echo "::error::BLOCK_UNTRUSTED_DEPLOYMENT_REVISION"
+            exit 1
+          fi
+      - name: Verify pinned read-only checker before using bypass credential
+        run: |
+          set -euo pipefail
+          if [ "$(git rev-parse HEAD)" != "9657c74be334af6c8cc20d29c64482588be127bd" ] ||
+             [ "$(git rev-parse HEAD:scripts/preview-readonly-smoke.mjs)" != "171990c7b755281ef8b1c5e2044130387cbfb177" ]; then
+            echo "::error::BLOCK_PREVIEW_RUNNER_NOT_PINNED"
+            exit 1
+          fi
+      - name: Probe Vercel Preview with dedicated automation credential
+        env:
+          PREVIEW_ENV_URL: ${{ github.event.deployment_status.environment_url }}
+          PREVIEW_STATUS_URL: ${{ github.event.deployment_status.target_url }}
+          KINGS_VERCEL_PREVIEW_BYPASS: ${{ secrets.KINGS_VERCEL_PREVIEW_BYPASS }}
+        run: node scripts/preview-readonly-smoke.mjs
+
+  qa_preview_browser:
+    name: QA / Protected Preview anonymous Playwright (no build)
+    if: >-
+      github.event_name == 'deployment_status' &&
+      github.event.deployment_status.state == 'success' &&
+      (github.event.deployment.environment == 'Preview' ||
+       github.event.deployment.environment == 'preview') &&
+      github.event.repository.full_name == 'pkraiwit2614-web/3kings-site-report'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          # Immutable, reviewed browser-checker commit; never run deployed PR code with secrets.
+          ref: e9eddc400a95605109891bc5d467c23945c18f3a
+          persist-credentials: false
+      - name: Verify protected branch SHA and pinned browser runner
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_SHA: ${{ github.event.deployment.sha }}
+          DEPLOY_REF: ${{ github.event.deployment.ref }}
+        run: |
+          set -euo pipefail
+          [[ "$DEPLOY_SHA" =~ ^[a-f0-9]{40}$ ]] && [ "$DEPLOY_REF" = "$DEPLOY_SHA" ] || { echo "::error::BLOCK_DEPLOYMENT_REVISION"; exit 1; }
+          expected="$(gh api 'repos/pkraiwit2614-web/3kings-site-report/branches/test/preview-qa-p0-unified-20261019' --jq '.commit.sha')"
+          [ "$DEPLOY_SHA" = "$expected" ] || { echo "::error::BLOCK_UNTRUSTED_PREVIEW_SHA"; exit 1; }
+          [ "$(git rev-parse HEAD)" = "e9eddc400a95605109891bc5d467c23945c18f3a" ] || { echo "::error::BLOCK_BROWSER_CHECKER_REVISION"; exit 1; }
+          [ "$(git rev-parse HEAD:scripts/preview-playwright-e2e.mjs)" = "fdae3595e4e3aa387ab715e943941f04223fa35c" ] || { echo "::error::BLOCK_BROWSER_CHECKER_HASH"; exit 1; }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned Playwright runtime (do not change committed dependencies)
+        run: |
+          npm install --no-save --package-lock=false --ignore-scripts --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Test Login and anonymous access denial on real Preview
+        env:
+          PREVIEW_ENV_URL: ${{ github.event.deployment_status.environment_url }}
+          KINGS_VERCEL_PREVIEW_BYPASS: ${{ secrets.KINGS_VERCEL_PREVIEW_BYPASS }}
+        run: node scripts/preview-playwright-e2e.mjs anonymous
+
+  qa_preview_status:
+    name: QA / Deployment evidence (Viewer requires isolated DB)
+    if: always() && github.event_name == 'deployment_status'
+    needs: [qa_preview_probe, qa_preview_browser]
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Report Preview proof without treating skip as pass
+        env:
+          QA_MODE: deployment
+          QA_PROBE: ${{ needs.qa_preview_probe.result }}
+          QA_BROWSER: ${{ needs.qa_preview_browser.result }}
+        run: node scripts/preview-qa-status.mjs
