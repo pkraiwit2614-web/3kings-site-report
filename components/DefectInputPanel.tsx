@@ -169,7 +169,7 @@ export default function DefectInputPanel({manualOnly=false}:{manualOnly?:boolean
      const {data:verified,error:verifyError}=await getSupabase().from('condo_room_status')
        .select('current_status,status_group,next_action').eq('room_no',target).maybeSingle()
      if(verifyError||!verified||verified.current_status!==proposedStatus||
-       verified.status_group!==proposedGroup||verified.next_action!==(nextAction.trim()||loadedRoom.currentStatus)){
+       verified.status_group!==proposedGroup||(nextAction.trim()!==''&&verified.next_action!==nextAction.trim())){
        setSaving(false)
        setManualMsg('บันทึกถูกส่งแล้ว แต่ยังไม่ผ่านการอ่านยืนยัน Current Status / Status Group / Next Action ของ B511: '+(verifyError?.message||'ข้อมูลไม่ตรงกับค่าที่ส่ง')+' • โหลดข้อมูลล่าสุดก่อนลองใหม่')
        void loadRoomRevision(target)
