@@ -109,6 +109,7 @@ try {
   }
   phase='RLS_CHECKS'
   const h={apikey:key,authorization:viewerBearer}
+  phase='RLS_GET_USER'
   const user=await context.request.get(DB+'/auth/v1/user',{headers:h})
   assert.equal(user.status(),200)
   const own=(await user.json()).id
@@ -117,17 +118,26 @@ try {
   assert.notEqual(other,own)
   const select=async (table,query)=> {
     const response=await context.request.get(DB+'/rest/v1/'+table+'?'+query,{headers:h})
+    console.log('RLS_READ_HTTP_'+table.toUpperCase()+'_'+response.status())
     assert.equal(response.status(),200,'local RLS read '+table)
     return response.json()
   }
+  phase='RLS_OWN_PROFILE'
   assert.deepEqual((await select('profiles','select=user_id&user_id=eq.'+own)).map(x=>x.user_id),[own])
+  phase='RLS_OTHER_PROFILE'
   assert.deepEqual(await select('profiles','select=user_id&user_id=eq.'+other),[])
+  phase='RLS_PROJECTS'
   assert.equal((await select('projects','select=id')).length,1)
+  phase='RLS_MATERIALS'
   assert.equal((await select('materials','select=id')).length,1)
+  phase='RLS_DEFECT'
   assert.equal((await select('condo_room_status','select=room_no')).length,1)
+  phase='RLS_REPORTS'
   assert.equal((await select('site_operations_entries','select=id')).length,1)
+  phase='RLS_PAYROLL_DENIAL'
   assert.deepEqual(await select('payroll_verification_records','select=id'),[])
   // All local insert attempts for viewer must be rejected; synthetic record only.
+  phase='RLS_WRITE_DENIAL'
   for(const [table,payload] of [
     ['materials',{id:'55555555-5555-4555-8555-555555555555',item_name:'BLOCKED'}],
     ['payroll_verification_records',{id:'66666666-6666-4666-8666-666666666666',note:'BLOCKED'}],
