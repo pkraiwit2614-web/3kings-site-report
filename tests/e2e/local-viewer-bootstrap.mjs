@@ -10,12 +10,12 @@ const secret = randomBytes(28).toString('base64url')
 const client = createClient(origin,process.env.SERVICE_ROLE_KEY,{auth:{autoRefreshToken:false,persistSession:false}})
 const create = async name => {
   const {data,error}=await client.auth.admin.createUser({
-    email:name+'@3kings.invalid',password:secret,email_confirm:true,
+    email:name+'@example.com',password:secret,email_confirm:true,
     app_metadata:{app_role:'viewer',provisioned_by_admin:true},
   })
   if(error||!data?.user?.id) throw Error('FAIL_LOCAL_AUTH_BOOTSTRAP')
   const {error:profileError}=await client.from('profiles').insert({
-    user_id:data.user.id,full_name:'CI-ONLY',role:'viewer',active:true,email:name+'@3kings.invalid'
+    user_id:data.user.id,full_name:'CI-ONLY',role:'viewer',active:true,email:name+'@example.com'
   })
   if(profileError) throw Error('FAIL_LOCAL_PROFILE_BOOTSTRAP')
   return data.user.id
@@ -24,7 +24,7 @@ const own=await create('ci-viewer')
 const other=await create('ci-other')
 if(own===other)throw Error('FAIL_DUPLICATE_CI_VIEWER')
 const vars={
-  KINGS_LOCAL_VIEWER_LOGIN:'ci-viewer@3kings.invalid',
+  KINGS_LOCAL_VIEWER_LOGIN:'ci-viewer@example.com',
   KINGS_LOCAL_VIEWER_PASSWORD:secret,
   KINGS_LOCAL_OTHER_PROFILE_ID:other
 }
