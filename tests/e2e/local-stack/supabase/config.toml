@@ -12,10 +12,11 @@ enabled = true
 sql_paths = ["./seed.sql"]
 [auth]
 enabled = true
+enable_signup = false
 site_url = "http://127.0.0.1:3010"
 additional_redirect_urls = ["http://127.0.0.1:3010"]
 [auth.email]
-enable_signup = false
+enable_signup = true
 [studio]
 enabled = false
 [realtime]
