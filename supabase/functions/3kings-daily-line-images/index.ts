@@ -2,7 +2,7 @@
 // Separate Edge Function; no ability to call LINE or approve group routes.
 const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const endpoint = (Deno.env.get('SUPABASE_URL') || '').replace(/\/$/,'');
-const service = endpoint+'/functions/v1/3kings-daily-line-images';
+const service = endpoint+'/functions/v1/kings_daily_line_images';
 const noStore = {'cache-control':'no-store','x-content-type-options':'nosniff'};
 const json=(value:unknown,status=200)=>new Response(JSON.stringify(value),{status,headers:{...noStore,'content-type':'application/json'}});
 const isDate=(s:string)=>/^20\d{2}-\d{2}-\d{2}$/.test(s)&&!Number.isNaN(Date.parse(s+'T00:00:00Z'));
