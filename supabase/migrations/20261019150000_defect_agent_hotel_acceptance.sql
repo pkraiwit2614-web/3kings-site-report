@@ -100,14 +100,15 @@ BEGIN
    IF v_room_row.current_status='Defect เสร็จแล้ว / Hotel Engineer ตรวจแล้ว'
       AND v_room_row.status_group='Hotel - Checked Complete' THEN CONTINUE; END IF;
    v_changed_rooms:=array_append(v_changed_rooms,v_room);
-   -- Reuse audited authenticated update and its existing Excel master/overview queue.
-   -- Preserve the existing detail exactly; do not append automation boilerplate.
-   PERFORM public.defect_manual_update_apply_checked(
+   -- Each member was individually revision-checked FOR UPDATE above.
+   -- The checked wrapper broadcasts ONE detail to an entire Combine group,
+   -- so call the existing authenticated/audited per-room update here instead.
+   -- This preserves each room's distinct defect_detail and both outbound Excel queues.
+   PERFORM public.defect_manual_update_apply(
       v_room,v_room_row.defect_detail,
       'Defect เสร็จแล้ว / Hotel Engineer ตรวจแล้ว',
       'Hotel - Checked Complete','Hotel Engineer ตรวจแล้ว',
-      p_request_id,left(coalesce(p_user_agent,'3kings-agent'),200),
-      v_room_row.source_modified_at);
+      p_request_id,left(coalesce(p_user_agent,'3kings-agent'),200));
  END LOOP;
 
  INSERT INTO public.defect_agent_requests(request_id,requested_by,room_ids,work_ids,changed_rooms)
