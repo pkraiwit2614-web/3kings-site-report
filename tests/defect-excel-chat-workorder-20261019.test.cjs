@@ -78,3 +78,44 @@ test('functional 263-row master: Q chat updates change only a valid room Defect 
   assert.equal(target.status_group,'Non-Hotel - Pending Handover')
   assert.equal(other.status_group,'Non-Hotel - Pending Handover')
 })
+
+
+test('scoped Pre Fur. sync writes only the five chat-marked Q details; leaves seven pending', () => {
+  const vm=require('node:vm')
+  const context=vm.createContext({
+    console,
+    normalizeComparable_: value => String(value ?? '').trim(),
+  })
+  vm.runInContext(gas,context,{timeout:1500,filename:'SmartSyncDefects_v1.3.gs'})
+  const scoped=vm.runInContext('defectV13ScopedChanges_',context)
+  const expected=['A311','A401','B204','B502','B707']
+  const seven=['A212','A313','A314','A417','A418','B208','B212']
+  const common={
+    building:'A',floor:3,hotel_participation:'ไม่ร่วมโรงแรม',
+    customer_status:'มีลูกค้า',current_status:'Handover Complete',
+    status_group:'Non-Hotel - Handover Complete',follow_up:'ไม่ต้องติดตาม',
+    priority:'Close',next_action:'Unchanged',
+    latest_source:'Verified',source_note:null,hotel_complete_color:null,hotel_remarks:null,
+  }
+  const rows=expected.map(room=>({
+    ...common,room_no:room,defect_detail:'19/10/2026 — รายการ Defect แจ้งผ่านแชต: งาน Pre Fur.'
+  })).concat(seven.map(room=>({...common,room_no:room,next_action:'Source changed',defect_detail:null})))
+  const oldByRoom=Object.fromEntries(rows.map(row=>[
+    row.room_no,{...row,
+      defect_detail: expected.includes(row.room_no)?null:row.defect_detail,
+      next_action: seven.includes(row.room_no)?'DB older':row.next_action}
+  ]))
+  const dry=scoped(rows,oldByRoom,{scopeRooms:expected})
+  assert.equal(dry.changed.length,5)
+  assert.equal(dry.changed.map(r=>r.room_no).join(','),expected.join(','))
+  assert.equal(dry.pendingRooms.length,7)
+  assert.equal(dry.pendingRooms.join(','),seven.join(','))
+  assert.equal(scoped(rows,oldByRoom,{}).changed.length,12)
+  assert.throws(()=>scoped(rows,oldByRoom,{scopeRooms:['A311']}),/five-room scope/)
+  const unsafe=rows.map(r=>({...r}))
+  unsafe[0].status_group='Hotel - Checked Complete'
+  assert.throws(()=>scoped(unsafe,oldByRoom,{scopeRooms:expected}),/unrelated field/)
+  assert.match(gas,/if \(!opts\.scopeRooms\) \{\s+saveState_/)
+  assert.match(gas,/smartSyncDefectsV13PfurDryRun/)
+  assert.match(gas,/smartSyncDefectsV13PfurForce/)
+})
