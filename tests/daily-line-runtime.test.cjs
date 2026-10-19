@@ -69,3 +69,31 @@ test('Text then image in separate ticks, then no duplicates',async()=>{
  assert.equal(m.metas.length,2);
  assert(m.metas.every(x=>x.p_site_code==='above_villa'));
 });
+
+
+test('image gateway URL agrees between worker and deployed Edge Function name',async()=>{
+ const fs=require('node:fs');
+ const worker=fs.readFileSync('cloudflare/dailySiteSendTick.mjs','utf8');
+ const gateway=fs.readFileSync('supabase/functions/3kings-daily-line-images/index.ts','utf8');
+ const route='/functions/v1/3kings-daily-line-images';
+ assert(worker.includes(route+'/ready?'));
+ assert(worker.includes(route+'/image?'));
+ assert(gateway.includes(route));
+ assert(!worker.includes('/functions/v1/kings_daily_line_images/'));
+ assert(!gateway.includes('/functions/v1/kings_daily_line_images/'));
+});
+test('live sender keeps missing image proof fail-closed and never guesses routes',async()=>{
+ const {dailySiteSendTick,DAILY_ROUTES}=await load();
+ assert.deepEqual(DAILY_ROUTES.map(r=>r.route),['above_villa','above_condo_a','above_condo_b']);
+ const m=mock();
+ m.transport=async(u,o)=>{
+  if(u.includes('/ready?'))return {ok:true,json:async()=>({ready:true,assets:[{
+   site:'above_villa',sha256:'c'.repeat(64),width:2947,height:2000,
+   url:'https://example.com/untrusted.png'
+  }]})};
+  throw Error('must not send');
+ };
+ const result=await dailySiteSendTick(env,{...m,now});
+ assert.equal(result.mode,'QA_BLOCKED');
+ assert.equal(m.pushes.length,0);
+});
