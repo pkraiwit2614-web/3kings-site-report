@@ -27,6 +27,20 @@ export function checkedViewerConfig(env) {
   return url.origin
 }
 
+function seededFixtureId(value) {
+  const id = String(value || '')
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))
+    throw new Error('BLOCK_RLS_FIXTURE_ID_MISSING')
+  return id
+}
+
+export function checkedRlsFixtures(env) {
+  return {
+    otherUserId: seededFixtureId(env.KINGS_E2E_RLS_OTHER_PROFILE_ID),
+    payrollId: seededFixtureId(env.KINGS_E2E_RLS_PAYROLL_RECORD_ID)
+  }
+}
+
 export function isAllowedBrowserRequest(requestUrl, method, previewOrigin, supabaseOrigin, viewer) {
   const url = new URL(requestUrl)
   if (url.origin === previewOrigin) return SAFE_METHODS.has(method)
@@ -52,6 +66,7 @@ async function main() {
   const viewer = mode === 'viewer'
   // Verify isolation BEFORE initializing the browser or attempting a password login.
   const expectedDb = viewer ? checkedViewerConfig(process.env) : PROD_DB
+  const fixtures = viewer ? checkedRlsFixtures(process.env) : null
 
   const { chromium } = await import('playwright')
   const browser = await chromium.launch({ headless: true })
@@ -75,10 +90,15 @@ async function main() {
     const page = await context.newPage()
     page.setDefaultTimeout(BROWSER_TIMEOUT)
     let bearer = ''
+    let anonKey = ''
     let dbRequests = 0
     page.on('request', req => {
       const url = new URL(req.url())
-      if (url.origin === expectedDb) dbRequests++
+      if (url.origin === expectedDb) {
+        dbRequests++
+        const key = req.headers().apikey
+        if (key) anonKey = key
+      }
       if (url.origin === origin && url.pathname.startsWith('/api/access-control')) {
         const auth = req.headers().authorization || ''
         if (/^Bearer \S+$/.test(auth)) bearer = auth
@@ -139,9 +159,39 @@ async function main() {
         await page.waitForURL(u => u.pathname !== restricted && u.pathname !== '/login', { timeout: BROWSER_TIMEOUT })
         publicResult('VIEWER_DENIED_' + restricted.substring(1).toUpperCase().replaceAll('/', '_'), 'PASS')
       }
-      // Viewer never sends INSERT/UPDATE/DELETE to Supabase. This validates
-      // real API/RBAC decisions but cannot by itself prove write-side RLS.
-      publicResult('VIEWER_RLS_MUTATION_CHECK', 'NOT_RUN_WRITE_REQUESTS_BLOCKED')
+      // Read-side RLS: own profile exists; a separately seeded other user
+      // and payroll record must both be invisible to a least-privilege Viewer.
+      // Fixture existence is independently attested in the disposable test DB.
+      assert.ok(anonKey, 'missing publishable key from isolated client')
+      const dbHeaders = { apikey: anonKey, authorization: bearer }
+      const self = await context.request.get(expectedDb + '/auth/v1/user', { headers: dbHeaders })
+      assert.equal(self.status(), 200, 'isolated Supabase auth session')
+      const selfId = (await self.json()).id
+      assert.match(selfId, /^[0-9a-f-]{36}$/i)
+      assert.notEqual(fixtures.otherUserId, selfId)
+      const ownProfile = await context.request.get(
+        expectedDb + '/rest/v1/profiles?select=user_id&user_id=eq.' + encodeURIComponent(selfId),
+        { headers: dbHeaders }
+      )
+      assert.equal(ownProfile.status(), 200, 'viewer must read its own profile')
+      const ownRows = await ownProfile.json()
+      assert.ok(Array.isArray(ownRows) && ownRows.some(row => row.user_id === selfId))
+      const otherProfile = await context.request.get(
+        expectedDb + '/rest/v1/profiles?select=user_id&user_id=eq.' + encodeURIComponent(fixtures.otherUserId),
+        { headers: dbHeaders }
+      )
+      assert.equal(otherProfile.status(), 200, 'profiles RLS query must execute')
+      assert.deepEqual(await otherProfile.json(), [], 'viewer must not read another profile')
+      const payroll = await context.request.get(
+        expectedDb + '/rest/v1/payroll_verification_records?select=id&id=eq.' + encodeURIComponent(fixtures.payrollId),
+        { headers: dbHeaders }
+      )
+      assert.ok([200, 401, 403].includes(payroll.status()), 'payroll RLS denied read')
+      if (payroll.status() === 200) assert.deepEqual(await payroll.json(), [], 'viewer must not read payroll row')
+      publicResult('VIEWER_PROFILE_AND_PAYROLL_READ_RLS', 'PASS_SEEDED_FIXTURES_REQUIRED')
+      // No INSERT/UPDATE/DELETE requests are issued. Write-side RLS must be
+      // exercised separately against disposable synthetic data and never Production.
+      publicResult('VIEWER_WRITE_RLS', 'NOT_TESTED_READ_ONLY_MODE')
     }
     await context.close()
   } finally {
