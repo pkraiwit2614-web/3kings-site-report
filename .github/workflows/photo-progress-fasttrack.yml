@@ -1,0 +1,79 @@
+name: SOP 09 Photo Fast-Track (isolated)
+on:
+  pull_request:
+    paths:
+      - 'scripts/progress_photo_fasttrack.py'
+      - 'tests/test_progress_photo_fasttrack.py'
+      - '.github/workflows/photo-progress-fasttrack.yml'
+      - 'docs/photo-progress-fasttrack.md'
+  workflow_dispatch:
+    inputs:
+      mode:
+        type: choice
+        description: Dry-run is the default; apply requires verified per-file mapping and QA
+        options: [dry-run, apply]
+        default: dry-run
+      max_days:
+        description: Candidate-bearing days per Plot (0 = all)
+        required: true
+        default: '4'
+permissions:
+  contents: read
+concurrency:
+  group: photo-fasttrack-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  offline-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -s tests -p 'test_progress_photo_fasttrack.py' -v
+
+  drive-preview:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.mode == 'dry-run'
+    needs: offline-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install google-api-python-client google-auth Pillow opencv-python-headless numpy
+      - name: Inspect Drive, propose only (no writes)
+        env:
+          PHOTO_SA_JSON: ${{ secrets.PHOTO_SA_JSON }}
+          PHOTO_PLOT_FOLDERS_JSON: ${{ secrets.PHOTO_PLOT_FOLDERS_JSON }}
+          PHOTO_SOP_INDEX_ID: ${{ secrets.PHOTO_SOP_INDEX_ID }}
+          PHOTO_SOP_DOC_ID: ${{ secrets.PHOTO_SOP_DOC_ID }}
+          MAX_DAYS: ${{ inputs.max_days }}
+        run: python scripts/progress_photo_fasttrack.py --max-days "$MAX_DAYS"
+
+  drive-apply:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.mode == 'apply'
+    needs: offline-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: photo-rename-production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install google-api-python-client google-auth Pillow opencv-python-headless numpy
+      - name: Apply only independently verified pairs, readback and private audit
+        env:
+          PHOTO_SA_JSON: ${{ secrets.PHOTO_SA_JSON }}
+          PHOTO_PLOT_FOLDERS_JSON: ${{ secrets.PHOTO_PLOT_FOLDERS_JSON }}
+          PHOTO_SOP_INDEX_ID: ${{ secrets.PHOTO_SOP_INDEX_ID }}
+          PHOTO_SOP_DOC_ID: ${{ secrets.PHOTO_SOP_DOC_ID }}
+          PHOTO_AUDIT_FOLDER_ID: ${{ secrets.PHOTO_AUDIT_FOLDER_ID }}
+          PHOTO_VERIFIED_MATCHES_JSON: ${{ secrets.PHOTO_VERIFIED_MATCHES_JSON }}
+          PHOTO_WEB_PARSER_VERIFIED: ${{ vars.PHOTO_WEB_PARSER_VERIFIED }}
+          PHOTO_ENABLE_WRITE: ${{ vars.PHOTO_ENABLE_WRITE }}
+          MAX_DAYS: ${{ inputs.max_days }}
+        run: python scripts/progress_photo_fasttrack.py --max-days "$MAX_DAYS" --apply
