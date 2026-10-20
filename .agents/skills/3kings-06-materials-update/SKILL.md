@@ -6,7 +6,7 @@ description: "3 Kings Construction shortcut 'อัปเดตวัสดุ�
 # 06 — อัปเดตวัสดุตามเดิม
 
 **Shortcut:** `อัปเดตวัสดุตามเดิม`  
-**SOP title (resolve via live Drive index):** `SOP_06_Materials_Status_v1.2_2026-10-20`  
+**SOP title (resolve via live Drive index):** `SOP_06_Materials_Status_v2.0_Consolidated_2026-10-20`  
 **Mode:** `authorized_write`
 
 ## Before any action

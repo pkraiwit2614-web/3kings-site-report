@@ -6,7 +6,7 @@ description: "3 Kings Construction shortcut 'Deploy Production'. Only an explici
 # 16 — Deploy Production
 
 **Shortcut:** `Deploy Production`  
-**SOP title (resolve via live Drive index):** `SOP_16_Deploy_Production_v1.2_2026-10-20`  
+**SOP title (resolve via live Drive index):** `SOP_16_Deploy_Production_v2.0_Consolidated_2026-10-20`  
 **Mode:** `deploy`
 
 ## Before any action

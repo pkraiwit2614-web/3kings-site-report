@@ -6,7 +6,7 @@ description: "3 Kings Construction shortcut 'ตรวจ Sync'. READ-ONLY: insp
 # 13 — ตรวจ Sync
 
 **Shortcut:** `ตรวจ Sync`  
-**SOP title (resolve via live Drive index):** `SOP_13_Sync_Validation_v1.2_2026-10-20`  
+**SOP title (resolve via live Drive index):** `SOP_13_Sync_Validation_v2.0_Consolidated_2026-10-20`  
 **Mode:** `read_only`
 
 ## Before any action
