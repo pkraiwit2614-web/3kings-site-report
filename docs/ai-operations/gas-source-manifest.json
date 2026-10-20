@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "mode": "staging",
+  "paths": [
+    "DailySiteReportSync_2026-10-19.gs",
+    "DefectExcelWriteback_2026-10-13.gs",
+    "HotelOOOExcelWriteback_2026-10-13.gs",
+    "HotelWorkPlanExcelBidirectional_2026-10-14.gs",
+    "ShiftSyncScheduler_2026-10-13.gs",
+    "SmartSyncDefects_v1.3_2026-10-02.gs",
+    "WorkOrderAutoSync_2026-10-15.gs"
+  ]
+}
