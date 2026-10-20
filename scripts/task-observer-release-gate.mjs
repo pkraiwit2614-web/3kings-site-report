@@ -124,7 +124,8 @@ export async function collectGitHub(repo, token, maxPrs = 20) {
       ]);
       snap.checks_complete = checkData.total_count <= 100;
       snap.statuses_complete = (statusData.statuses || []).length <= 100;
-      snap.files_complete = Number.isInteger(pr.changed_files) && pr.changed_files <= 100 && fileData.length === pr.changed_files;
+      snap.changed_files = Number.isInteger(pr.changed_files) ? pr.changed_files : (fileData.length < 100 ? fileData.length : null);
+      snap.files_complete = snap.changed_files !== null && snap.changed_files <= 100 && fileData.length === snap.changed_files;
       snap.check_runs = (checkData.check_runs || []).map(c => ({
         name: c.name, head_sha: c.head_sha, status: c.status,
         conclusion: c.conclusion, summary: c.output?.summary?.slice(0, 200) ?? ""
