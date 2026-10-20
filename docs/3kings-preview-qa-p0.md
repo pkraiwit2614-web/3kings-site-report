@@ -45,3 +45,9 @@ Historical benchmark: PR #155, commit d1636279, GitHub Actions #39260952136; the
 
 ## Main branch reconciliation (2026-10-20)
 Merged against main while preserving newer Defect/Work Order CI regressions and all standalone Preview / Local Viewer workflows. Existing standalone suites remain enabled; if their path filters match, they may run alongside this unified CI and consume GitHub Actions minutes. No separate Vercel build is explicitly requested here.
+
+## Trusted event routing correction — 2026-10-20
+- All Preview event checks now use the EXISTING protected first-party test branch `test/preview-qa-automation-20261019` rather than the temporary PR #175 branch. No bypass credential is sent before exact SHA verification.
+- A deployment event for any other branch is treated as ineligible and its protected checks are **SKIPPED**, not reported as a passing Preview. Actual trusted events still run both pinned HTTP/Playwright checks; errors are FAIL.
+- Existing CI and synthetic local E2E remain the no-Vercel-build QA path for every PR. Hosted Vercel Preview and Production remain separate release gates, not silently waived.
+- No direct Vercel build/deploy instruction; however the existing Vercel Git integration can create a build on code push. These changes do not disable that integration.

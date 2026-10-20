@@ -78,6 +78,6 @@ test('workflow disallows arbitrary deployment revisions before bypass secret can
   assert.ok(guard > 0 && secret > guard, 'trusted SHA gate must precede secret use')
   assert.match(workflow, /BLOCK_UNTRUSTED_DEPLOYMENT_REVISION/)
   assert.match(workflow, /github\.event\.repository\.full_name/)
-  assert.match(workflow, /gh api 'repos\/pkraiwit2614-web\/3kings-site-report\/branches\/test\/preview-qa-p0-unified-20261019'/)
+  assert.match(workflow, /gh api 'repos\/pkraiwit2614-web\/3kings-site-report\/branches\/test\/preview-qa-automation-20261019'/)
   assert.doesNotMatch(workflow, /pull_request_target/)
 })

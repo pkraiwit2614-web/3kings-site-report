@@ -44,3 +44,17 @@ test('deployment QA status only evaluates successful first-party Preview events'
     "github.event.repository.full_name == 'pkraiwit2614-web/3kings-site-report'"
   ]) assert.ok(job.includes(expected), 'Preview status guard missing: ' + expected)
 })
+
+test('Preview deployment events without trusted branch SHA skip without exposing bypass or reporting PASS', () => {
+  const file = readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8')
+  assert.match(file, /preview_trust:/)
+  assert.match(file, /branches\\/test\\/preview-qa-automation-20261019/)
+  assert.match(file, /needs\\.preview_trust\\.outputs\\.trusted == 'true'/)
+  assert.match(file, /SKIP_UNTRUSTED_PREVIEW_SHA/)
+  for (const path of ['preview-readonly-smoke.yml', 'preview-playwright-e2e.yml']) {
+    const workflow = readFileSync(new URL('../.github/workflows/' + path, import.meta.url), 'utf8')
+    assert.match(workflow, /preview_trust:/)
+    assert.match(workflow, /needs\\.preview_trust\\.outputs\\.trusted == 'true'/)
+    assert.match(workflow, /SKIP_UNTRUSTED_PREVIEW_SHA/)
+  }
+})
