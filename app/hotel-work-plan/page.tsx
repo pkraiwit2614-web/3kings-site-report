@@ -53,7 +53,7 @@ export default function HotelWorkPlanPage(){
  const [rooms,setRooms]=useState<Room[]>([])
  const [defects,setDefects]=useState<Defect[]>([])
  const [hotels,setHotels]=useState<Hotel[]>([])
- const [selectedDay,setSelectedDay]=useState(1)
+ const [selectedDay,setSelectedDay]=useState(0)
  const [selectedSeq,setSelectedSeq]=useState<number|null>(null)
  const [roomSearch,setRoomSearch]=useState('')
  const [defectStatusFilter,setDefectStatusFilter]=useState('ALL')
@@ -175,7 +175,7 @@ export default function HotelWorkPlanPage(){
   const query=roomSearch.trim().toUpperCase()
   const normalized=normalizeHotelRoom(query)
   return activePlanRooms.filter(r=>{
-   if(r.day_no!==selectedDay||(building!=='ALL'&&!r.room_no.startsWith(building)))return false
+   if((selectedDay!==0&&r.day_no!==selectedDay)||(building!=='ALL'&&!r.room_no.startsWith(building)))return false
    const members=hotelRoomMembers(r.room_no)
    if(query&&!([r.source_room,...members.flatMap(member=>[member,hotelRoomLabel(member)])].some(value=>value.toUpperCase().includes(query))||members.some(member=>member.includes(normalized))))return false
    if(defectStatusFilter!=='ALL'&&!members.some(member=>{
@@ -186,6 +186,17 @@ export default function HotelWorkPlanPage(){
   })
  },[activePlanRooms,selectedDay,building,roomSearch,defectStatusFilter,defectMap])
  const duplicates=useMemo(()=>{const count=new Map<string,number>();rooms.forEach(r=>count.set(r.room_no,(count.get(r.room_no)||0)+1));return count},[rooms])
+ // All is a read-only aggregate of the exact Day 1–9 card counts.
+ // Keep the existing Combine-room deduplication and OOO/Defect eligibility unchanged.
+ const dayCounts=days.map(d=>{
+  const records=activePlanRooms.filter(r=>r.day_no===d.day_no)
+  return {day_no:d.day_no,rooms:records.length,
+   open:records.filter(r=>defectFor(r.room_no)?.status_group==='Hotel - Incomplete').length,
+   review:records.filter(r=>defectFor(r.room_no)?.status_group==='Hotel - Awaiting Check').length}
+ })
+ const allTotals=dayCounts.reduce((total,d)=>({
+  rooms:total.rooms+d.rooms,open:total.open+d.open,review:total.review+d.review,
+ }),{rooms:0,open:0,review:0})
  const openDaySaveReview=()=>{
   if(!editable||!day||saving||saveDialog)return
   const values:DaySaveValues={
@@ -271,39 +282,48 @@ export default function HotelWorkPlanPage(){
    </div>}/> 
   {error&&<div className="panel" role="alert" style={{color:'#9e312d'}}>โหลด/บันทึกข้อมูลไม่ได้: {error} <button className="button" onClick={()=>{void refresh().then(()=>setError('')).catch(e=>setError(String(e)))}}>ลองใหม่</button></div>}
   {loading?<div className="panel">กำลังโหลดแผนโรงแรม…</div>:<>
-   <section className="work-days" aria-label="เลือกแผน Day 1 ถึง Day 9">
-    {days.map(d=>{
-     const records=activePlanRooms.filter(r=>r.day_no===d.day_no)
-     const open=records.filter(r=>defectFor(r.room_no)?.status_group==='Hotel - Incomplete').length
-     const review=records.filter(r=>defectFor(r.room_no)?.status_group==='Hotel - Awaiting Check').length
-     return <button type="button" key={d.day_no} onClick={()=>{setSelectedDay(d.day_no);setSelectedSeq(null)}} className={'work-day '+(selectedDay===d.day_no?'current':'')}>
-      <strong>Day {d.day_no}</strong><span>{records.length} ชุดห้อง</span>
-      <small>ค้าง {open} · รอตรวจ {review}</small>
-      <small className="work-date">{dateTH(d.planned_date)}</small>
+   <div className="work-plan-top">
+    <section className="work-days" aria-label="เลือกแผน Day 1 ถึง Day 9 หรือ All">
+     {days.map(d=>{
+      const counts=dayCounts.find(item=>item.day_no===d.day_no)!
+      return <button type="button" key={d.day_no} onClick={()=>{setSelectedDay(d.day_no);setSelectedSeq(null)}} className={'work-day '+(selectedDay===d.day_no?'current':'')}>
+       <strong>Day {d.day_no}</strong><span>{counts.rooms} ชุดห้อง</span>
+       <small>กำลังดำเนินการ {counts.open} · Defect เสร็จแล้ว/รอตรวจ {counts.review}</small>
+       <small className="work-date">{dateTH(d.planned_date)}</small>
+      </button>
+     })}
+     <button type="button" onClick={()=>{setSelectedDay(0);setSelectedSeq(null)}} className={'work-day '+(selectedDay===0?'current':'')}>
+      <strong>All</strong><span>{allTotals.rooms} ชุดห้อง</span>
+      <small>กำลังดำเนินการ {allTotals.open} · Defect เสร็จแล้ว/รอตรวจ {allTotals.review}</small>
+      <small className="work-date">Day 1–9</small>
      </button>
-    })}
-   </section>
-   <section className="panel work-day-editor">
-    <div><h2>Day {selectedDay} <small>({activePlanRooms.filter(r=>r.day_no===selectedDay).length} ชุดห้อง)</small></h2>
-     <p className="muted small">วันที่กลางของ Day ใช้กับทุกห้องที่ไม่มีวันที่เฉพาะ · เปลี่ยนแผนไม่เปลี่ยนสถานะ Defect หรือ OOO/OOS</p></div>
-    <label>วันที่เข้าทำงาน<input type="date" value={dayDate} disabled={!editable||saving} onChange={e=>setDayDate(e.target.value)}/></label>
-    <label>หมายเหตุแผนเดิม<input value={dayNote} readOnly disabled title="อ้างอิงอย่างเดียว • หน้านี้แก้เฉพาะวันตามแผน"/></label>
-    {editable&&<button type="button" className="button" disabled={saving||!!saveDialog} onClick={openDaySaveReview}>บันทึก Day {selectedDay}</button>}
-    {day?.updated_at&&<small className="work-history">แก้ไขล่าสุด {day.updated_by_name||'ผู้ใช้'} · {new Date(day.updated_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})} · {day.sync_state==='pending'?'รอซิงก์ Excel':day.sync_state==='conflict'?'ข้อมูลขัดแย้ง':'ซิงก์แล้ว'}</small>}
-   </section>
-   <p className="muted small">แสดง {activePlanRooms.length} ชุดห้องที่อยู่ในสถานะ Defect ค้าง/รอตรวจ และมี OOO ล่าสุด · ห้อง OOS รออนุญาตแยก {pendingOosCount} ชุด · ไม่แสดงห้องที่ OOO ยังไม่ยืนยัน</p>
-   <section className="panel work-table">
-    <div className="work-filter"><div><h2>รายการห้อง · Day {selectedDay}</h2><small>คลิกเลขห้องเพื่อดูรายละเอียดและผู้รับเหมา</small></div>
+    </section>
+    <section className="panel work-day-editor">
+     {selectedDay===0?<div className="work-editor-all">
+      <h2>All <small>({allTotals.rooms} ชุดห้อง)</small></h2>
+      <p className="muted small">ภาพรวม Day 1–9 · เลือก Day ที่ต้องการเพื่อกรอกหรือแก้ไขวันที่เข้าทำงาน</p>
+     </div>:<>
+      <div><h2>Day {selectedDay} <small>({activePlanRooms.filter(r=>r.day_no===selectedDay).length} ชุดห้อง)</small></h2>
+       <p className="muted small">วันที่กลางของ Day ใช้กับทุกห้องที่ไม่มีวันที่เฉพาะ</p></div>
+      <label>วันที่เข้าทำงาน<input type="date" value={dayDate} disabled={!editable||saving} onChange={e=>setDayDate(e.target.value)}/></label>
+      <label>หมายเหตุแผนเดิม<input value={dayNote} readOnly disabled title="อ้างอิงอย่างเดียว • หน้านี้แก้เฉพาะวันตามแผน"/></label>
+      {editable&&<button type="button" className="button" disabled={saving||!!saveDialog} onClick={openDaySaveReview}>บันทึก Day {selectedDay}</button>}
+      {day?.updated_at&&<small className="work-history">แก้ไขล่าสุด {day.updated_by_name||'ผู้ใช้'} · {new Date(day.updated_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})} · {day.sync_state==='pending'?'รอซิงก์ Excel':day.sync_state==='conflict'?'ข้อมูลขัดแย้ง':'ซิงก์แล้ว'}</small>}
+     </>}
+    </section>
+   </div>
+      <section className="panel work-table">
+    <div className="work-filter"><div><h2>รายการห้อง · {selectedDay===0?'All':'Day '+selectedDay}</h2><small>คลิกเลขห้องเพื่อดูรายละเอียดและผู้รับเหมา</small></div>
      <input aria-label="ค้นหาเลขห้อง" placeholder="ค้นหาห้อง เช่น A212, Good02" value={roomSearch} onChange={e=>setRoomSearch(e.target.value)}/>
      <select aria-label="กรองอาคาร" value={building} onChange={e=>setBuilding(e.target.value)}><option value="ALL">อาคาร A + B</option><option value="A">อาคาร A</option><option value="B">อาคาร B</option></select>
      <select className="work-defect-filter" aria-label="กรองสถานะ Defect ปัจจุบัน" value={defectStatusFilter} onChange={e=>setDefectStatusFilter(e.target.value)}><option value="ALL">ทุกสถานะ Defect</option>{defectStatusOptions.map(label=><option key={label} value={label}>{label}</option>)}</select>
     </div>
-    <div className="table-wrap"><table><thead><tr><th>ลำดับ</th><th>ห้อง</th><th>วันที่แผน</th><th>วันที่จริง</th><th>สถานะแผน</th><th>Defect ปัจจุบัน</th><th>OOO/OOS</th><th>รายละเอียด</th></tr></thead><tbody>
+    <div className="table-wrap"><table><thead><tr><th>ลำดับ</th><th>ห้อง</th><th>วันที่แผน</th><th>วันที่จริง</th><th>สถานะแผน</th><th>สถานะ Defect</th><th>OOO/OOS</th><th>รายละเอียด</th></tr></thead><tbody>
     {filtered.map((r,index)=>{
      const df=defectFor(r.room_no),hotel=statusFor(r.room_no)
      const peers=hotelRoomMembers(r.room_no).filter(member=>member!==r.room_no)
-     return <tr key={r.seq_no}><td>{index+1}</td><td><button className="work-room-link" onClick={()=>setSelectedSeq(r.seq_no)}>{hotelRoomLabel(r.room_no)}</button>{peers.length>0&&<sup className="work-combine-symbol" title="ห้อง Combine">c</sup>}{peers.length>0&&<small className="work-combine">Combine: {peers.map(hotelRoomLabel).join(', ')}</small>}{duplicates.get(r.room_no)!>1&&<small className="work-duplicate">มีมากกว่า 1 คิว</small>}</td>
-      <td>{dateTH(planDate(r))}</td><td>{dateTH(r.actual_date)}</td><td>{LABELS[r.work_status]||r.work_status}</td>
+     return <tr key={r.seq_no}><td>{index+1}</td><td><button className="work-room-link" onClick={()=>setSelectedSeq(r.seq_no)}>{hotelRoomLabel(r.room_no)}</button>{peers.length>0&&<sup className="work-combine-symbol" title="ห้อง Combine">c</sup>}{peers.length>0&&<small className="work-combine-badge">Combine: {hotelRoomMembers(r.room_no).map(hotelRoomLabel).join(' + ')}</small>}{duplicates.get(r.room_no)!>1&&<small className="work-duplicate">มีมากกว่า 1 คิว</small>}</td>
+      <td>{selectedDay===0&&<small className="work-row-day">Day {r.day_no} · </small>}{dateTH(planDate(r))}</td><td>{dateTH(r.actual_date)}</td><td>{LABELS[r.work_status]||r.work_status}</td>
       <td><span className={'work-defect-badge '+(df?statusTone(df):'neutral')}>{df?statusLabel(df):'—'}</span></td><td>{hotel?.availability_status==='OOO'?<><b>OOO</b><small>{hotel.start_date?dateTH(hotel.start_date):'ไม่ระบุวันเริ่ม'} – {hotel.end_date?dateTH(hotel.end_date):'ไม่ระบุวันสิ้นสุด'}</small></>:hotel?.availability_status==='OOS'?'OOS':'—'}</td>
       <td><button className="button" onClick={()=>setSelectedSeq(r.seq_no)}>ดู{editable?' / แก้ไข':''}</button></td></tr>
     })}
@@ -311,7 +331,7 @@ export default function HotelWorkPlanPage(){
     </tbody></table></div>
    </section>
    {selected&&<section className="panel work-room-detail" id="work-room-detail">
-    <div className="work-room-heading"><div><h2>ห้อง {hotelRoomLabel(selected.room_no)}</h2><small>รหัสอ้างอิง Excel {selected.seq_no} · Day {selected.day_no} · Room ID หลัก {selected.room_no}</small>{hotelRoomMembers(selected.room_no).length>1&&<sup className="work-combine-symbol" title="ห้อง Combine">c</sup>}</div>
+    <div className="work-room-heading"><div><h2>ห้อง {hotelRoomLabel(selected.room_no)}</h2><small>รหัสอ้างอิง Excel {selected.seq_no} · Day {selected.day_no} · Room ID หลัก {selected.room_no}</small>{hotelRoomMembers(selected.room_no).length>1&&<sup className="work-combine-symbol" title="ห้อง Combine">c</sup>}{hotelRoomMembers(selected.room_no).length>1&&<small className="work-combine-badge">Combine: {hotelRoomMembers(selected.room_no).map(hotelRoomLabel).join(' + ')}</small>}</div>
      <button className="button" onClick={()=>setSelectedSeq(null)}>ปิดรายละเอียด</button></div>
     <div className="work-facts"><span>วันตามแผน: <b>{dateTH(planDate(selected))}</b></span><span>สถานะห้อง: <b>{HOTEL[statusFor(selected.room_no)?.availability_status||'UNKNOWN']}</b></span>
      <span>สถานะ Defect: <b className={'work-defect-badge '+(selectedDefect?statusTone(selectedDefect):'neutral')}>{selectedDefect?statusLabel(selectedDefect):'—'}</b></span></div>
@@ -332,7 +352,6 @@ export default function HotelWorkPlanPage(){
     {selected.updated_at&&<p className="work-history">แก้ไขล่าสุด {selected.updated_by_name||'ผู้ใช้'} · {new Date(selected.updated_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})} · Revision {selected.revision} · {selected.sync_state==='pending'?'รอซิงก์ Excel':selected.sync_state==='conflict'?'ข้อมูลขัดแย้ง':'ซิงก์แล้ว'}</p>}
     <p><Link href={'/defects?q='+encodeURIComponent(selected.room_no)+'#room-list'}>เปิด Defect Report ของห้องนี้</Link></p>
    </section>}
-   <p className="muted small">Excel Day 1–9 ยังคงทั้ง 267 รายการและลำดับอ้างอิงเดิม · หน้าแผนเลือกห้องจาก Defect และ OOO ล่าสุดโดยไม่เขียนทับต้นทาง · ห้อง Combine นับหนึ่งชุด · แก้ไขเฉพาะวันที่ในแผน</p>
   </>}
   {saveDialog&&<div className="work-save-overlay" role="presentation"
     onMouseDown={e=>{if(e.target===e.currentTarget&&saveDialog.phase!=='saving'&&!saving)setSaveDialog(null)}}>
@@ -393,13 +412,13 @@ export default function HotelWorkPlanPage(){
     .work-save-diff>strong{grid-column:1/-1;font-size:12px}.work-save-diff>div{display:grid;gap:4px;min-width:0}.work-save-diff small{font-size:10px;color:#69798a}.work-save-diff span{font-size:12px;overflow-wrap:anywhere;white-space:pre-wrap;max-height:110px;overflow:auto}.work-save-diff>div:last-child span{color:#155888;font-weight:700}
     .work-save-nochange{padding:12px;border:1px solid #e3e8ef;border-radius:8px;font-size:12px}.work-save-feedback,.work-save-failure{margin-top:12px;padding:11px;border-radius:9px;font-size:11px;background:#f5f8fb;border:1px solid #dce5ef}.work-save-feedback b{color:#217449}.work-save-failure{background:#fff7f7;border-color:#edcaca}.work-save-failure b{color:#9d3030}.work-save-feedback p,.work-save-failure p{margin:5px 0 0;line-height:1.6}
     .work-save-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:15px;flex-wrap:wrap}
-    .work-head{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px}.work-update-meta{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:2px;line-height:1.25;text-align:right;margin-right:4px}.work-update-meta span{font-size:9px;color:var(--muted);font-weight:700}.work-update-meta b{font-size:11px;color:var(--navy);font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums}.work-update-meta .work-update-unverified{color:#935513}.work-days{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:6px;margin:0 0 12px}
+    .work-head{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px}.work-update-meta{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:2px;line-height:1.25;text-align:right;margin-right:4px}.work-update-meta span{font-size:9px;color:var(--muted);font-weight:700}.work-update-meta b{font-size:11px;color:var(--navy);font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums}.work-update-meta .work-update-unverified{color:#935513}.work-plan-top{display:grid;grid-template-columns:minmax(0,1fr) minmax(270px,32%);align-items:stretch;gap:10px;margin:0 0 12px}.work-days{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));gap:7px;margin:0}
     .work-day{min-width:0;display:flex;flex-direction:column;text-align:left;gap:2px;border:1px solid #d9e0e7;border-radius:10px;padding:9px;background:#fff;cursor:pointer;color:#172a43;font:inherit}
-    .work-day.current{border-color:#172a43;box-shadow:inset 0 0 0 1px #172a43;background:#f0f6ff}.work-day strong{font-size:13px}.work-day span,.work-day small{font-size:10px}.work-day small{color:#69798a}
-    .work-date{white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:700}.work-day-editor{display:grid;grid-template-columns:minmax(170px,1.4fr) minmax(140px,.8fr) minmax(180px,1.5fr) auto;align-items:end;gap:10px;margin-bottom:12px}
+    .work-day.current{border-color:#172a43;box-shadow:inset 0 0 0 1px #172a43;background:#f0f6ff}.work-day strong{font-size:13px}.work-day span,.work-day small{font-size:10px}.work-day small{color:#69798a;line-height:1.35}.work-editor-all{display:grid;align-content:start;gap:8px}.work-row-day{font-size:9px;font-weight:750;color:#425c78}
+    .work-date{white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:700}.work-day-editor{display:flex;flex-direction:column;align-items:stretch;gap:10px;margin:0;padding:12px}.work-day-editor>.button{align-self:flex-end}
     .work-day-editor h2,.work-table h2,.work-room-detail h2{margin:0;font-size:16px}.work-day-editor p{margin:3px 0 0}.work-day-editor label,.work-room-editor label{display:grid;gap:4px;font-size:10.5px;font-weight:700;min-width:0}
     .work-day-editor input,.work-room-editor input,.work-room-editor select,.work-filter input,.work-filter select{font:inherit;font-size:11px;padding:8px;border:1px solid #cbd5e1;border-radius:8px;min-width:0;max-width:100%;background:#fff}
-    .work-history{font-size:10px;color:#64748b;grid-column:1/-1}.work-table{padding-bottom:0}.work-filter{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}.work-filter>div{flex:1}.work-filter input{flex:0 1 230px}.work-filter select{flex:0 1 125px}.work-filter select.work-defect-filter{flex:0 1 270px}
+    .work-history{font-size:10px;color:#64748b;overflow-wrap:anywhere}.work-table{padding-bottom:0}.work-filter{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}.work-filter>div{flex:1}.work-filter input{flex:0 1 230px}.work-filter select{flex:0 1 125px}.work-filter select.work-defect-filter{flex:0 1 270px}
     .work-table .table-wrap{max-height:65vh;overflow:auto}.work-table table{width:100%;min-width:780px}.work-table th{position:sticky;top:0;z-index:2}.work-table td{font-size:10.5px;vertical-align:middle}.work-table td .button{font-size:10px;padding:5px 8px}
     .work-room-link{background:none;border:0;text-decoration:underline;color:#175187;font-weight:800;font-size:11px;cursor:pointer}.work-duplicate{display:block;color:#935513;font-size:9px}
     .work-room-detail{margin-top:12px}.work-room-heading{display:flex;justify-content:space-between;align-items:center}.work-facts{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.work-facts span{background:#f2f5f9;border-radius:8px;padding:8px;font-size:10px}
@@ -407,15 +426,20 @@ export default function HotelWorkPlanPage(){
     .work-room-editor{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin:15px 0 10px}.work-note{grid-column:1/-1}
 .work-defect-badge{display:inline-flex;align-items:center;justify-content:center;max-width:230px;white-space:normal;text-align:center;border:1px solid transparent;border-radius:999px;padding:5px 8px;font-size:9px;font-weight:750;line-height:1.35}
     .work-defect-badge.danger{background:#fdeceb;border-color:#f1cdca;color:#9e312d}.work-defect-badge.warn{background:#fff3dc;border-color:#f0dfb8;color:#85570d}.work-defect-badge.good{background:#e9f6ef;border-color:#cfe9da;color:#196645}.work-defect-badge.neutral{background:#f0f2f4;border-color:#d8dde2;color:#5f6873}
-    .work-combine{display:block;color:#406a83;font-size:9px}.work-combine-detail{border:1px solid #d6e4f0;background:#f5f9fc;padding:10px;border-radius:8px;font-size:11px}.work-combine-detail>div{display:flex;flex-wrap:wrap;gap:6px;margin:7px 0}.work-combine-detail button{border:1px solid #bad0df;background:white;border-radius:7px;padding:5px 8px;cursor:pointer;font:inherit;font-weight:700;color:#1b567d}.work-combine-detail small{display:block;color:#52697f;margin-top:4px}.work-combine-detail .work-combine-conflict{color:#9e312d;font-weight:800}
+    .work-combine{display:block;color:#406a83;font-size:9px}.work-combine-badge{display:block;width:max-content;max-width:100%;white-space:normal;overflow-wrap:anywhere;margin-top:4px;padding:2px 6px;border-radius:999px;background:#eef3ff;border:1px solid #c9d7f5;color:#385d9d;font-size:8px;font-weight:800;line-height:1.3}.work-combine-detail{border:1px solid #d6e4f0;background:#f5f9fc;padding:10px;border-radius:8px;font-size:11px}.work-combine-detail>div{display:flex;flex-wrap:wrap;gap:6px;margin:7px 0}.work-combine-detail button{border:1px solid #bad0df;background:white;border-radius:7px;padding:5px 8px;cursor:pointer;font:inherit;font-weight:700;color:#1b567d}.work-combine-detail small{display:block;color:#52697f;margin-top:4px}.work-combine-detail .work-combine-conflict{color:#9e312d;font-weight:800}
     .work-combine-warning{border:1px solid #ead6ab;background:#fff9ea;padding:10px;border-radius:8px;font-size:11px;margin-bottom:10px}.work-combine-warning p{margin:5px 0;line-height:1.4}
-    @media(max-width:1200px){.work-days{grid-template-columns:repeat(5,minmax(0,1fr))}.work-day-editor{grid-template-columns:1fr 1fr}.work-day-editor>div{grid-column:1/-1}}
-    @media(max-width:650px){.work-days{grid-template-columns:repeat(3,minmax(0,1fr))}.work-day-editor,.work-room-editor{grid-template-columns:1fr}.work-note{grid-column:auto}.work-filter input,.work-filter select{flex:1 1 100%}.work-tasks>div{flex-direction:column}.work-tasks strong{flex:auto;text-align:left}}
+    @media(max-width:1100px){.work-plan-top{grid-template-columns:minmax(0,1fr)}.work-day-editor{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:end}.work-day-editor>div{grid-column:1/-1}}
+    @media(max-width:650px){.work-days{grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:auto}.work-day-editor,.work-room-editor{grid-template-columns:1fr}.work-note{grid-column:auto}.work-filter input,.work-filter select{flex:1 1 100%}.work-tasks>div{flex-direction:column}.work-tasks strong{flex:auto;text-align:left}}
     @media print{
       /* Work Plan only: keep the selected Day table visible in report-print mode.
          The shared print rule otherwise hides panels containing filter inputs. */
       :global(body.report-print-mode .main) .panel.work-table{display:block!important;break-inside:auto!important;page-break-inside:auto!important;padding:0!important;margin:0!important;border:0!important}
-      .work-days,.work-day-editor,.work-room-detail{display:none!important}
+      .work-day-editor,.work-room-detail{display:none!important}
+       :global(body.report-print-mode[data-print-report="Hotel Work Plan | Day 1–9"] .report-print-filters){display:none!important}
+       .work-plan-top{display:block!important;margin:0 0 5mm!important}
+       .work-days{display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr))!important;grid-template-rows:repeat(2,auto)!important;gap:2mm!important;margin:0!important}
+       .work-day{display:flex!important;padding:2.5mm!important;min-height:19mm!important;break-inside:avoid!important;page-break-inside:avoid!important;cursor:default!important}
+       .work-day strong{font-size:10px!important}.work-day span,.work-day small{font-size:7px!important}.work-day .work-date{font-size:7px!important}
       .work-table .work-filter{display:flex!important;margin:0 0 5px!important}
       .work-filter input,.work-filter select,.work-filter small{display:none!important}
       .work-table .table-wrap{max-height:none!important;overflow:visible!important}
