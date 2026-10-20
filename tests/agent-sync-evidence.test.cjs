@@ -102,3 +102,42 @@ test('Viewer-accessible read-only security QA invokes only same-origin agent acc
  assert.ok(qa.includes('FORBIDDEN')===false)
  assert.equal(/createLiveSopSource|console\.log|\.insert\(|\.upsert\(|\.update\(|\.delete\(/.test(qa),false)
 })
+
+
+test('latest failed Materials import is surfaced as reconciliation-required, not a success',async()=>{
+ const client=fakeClient({
+   drive_sync_runs:[{sync_type:'materials',status:'error',created_at:'2026-10-19T10:19:37Z',
+      message:'materials: 2 unmatched existing records; no writes/deletes',rows_read:0,rows_written:0}],
+ })
+ const r=await inspector.inspectSyncEvidence(client,new Date('2026-10-19T11:00:00Z'))
+ const c=r.checks.find(x=>x.name==='sync_log_materials')
+ assert.equal(c.status,'SOURCE_RECONCILIATION_REQUIRED')
+ assert.equal(c.details.latestFailed,true)
+ assert.equal(c.details.latestDiagnosticCategory,'UNMATCHED_MATERIALS')
+ assert.equal(r.status,'UNVERIFIED') // failed latest log without DB/source readback is unverified
+ assert.equal(client.writes.length,0)
+})
+test('other failed latest run is flagged; historical success cannot mask latest error',async()=>{
+ const client=fakeClient({drive_sync_runs:[
+  {sync_type:'defects',status:'error',created_at:'2026-10-19T12:00:00Z',message:'source_parse_failed'},
+  {sync_type:'defects',status:'success',created_at:'2026-10-19T11:00:00Z'}
+ ]})
+ const result=await inspector.inspectSyncEvidence(client,new Date('2026-10-19T13:00:00Z'))
+ assert.equal(result.checks.find(x=>x.name==='sync_log_defects').status,'LATEST_RUN_FAILED')
+})
+test('full proof requires independent authenticated source, parser, DB and UI fingerprints',()=>{
+ const sha='a'.repeat(64)
+ const stage={fileId:'source-id',revision:'rev-3',rowCount:263,rowsetSha256:sha}
+ const proof={source:stage,parser:stage,database:stage,web:{...stage,authenticated:true}}
+ assert.equal(inspector.verifyCompleteSyncProof(proof).status,'PASS')
+ assert.equal(inspector.verifyCompleteSyncProof({...proof,web:{...stage,authenticated:false}}).status,'UNVERIFIED')
+ assert.equal(inspector.verifyCompleteSyncProof({...proof,web:undefined}).status,'UNVERIFIED')
+ assert.equal(inspector.verifyCompleteSyncProof({...proof,database:{...stage,rowsetSha256:'b'.repeat(64)}}).status,'FAIL')
+ assert.equal(inspector.verifyCompleteSyncProof({...proof,parser:{...stage,rowCount:262}}).status,'FAIL')
+})
+test('SOP 13 inspector does not manufacture complete Sync evidence from logs',async()=>{
+ const fixture=fakeClient({drive_sync_runs:[{sync_type:'materials',status:'success',created_at:'2026-10-19T12:00:00Z',rows_read:263,rows_written:263}]})
+ const r=await inspector.inspectSyncEvidence(fixture,clock)
+ assert.notEqual(r.status,'PASS')
+ assert.equal(r.checks.find(x=>x.name==='authenticated_web_ui_readback').status,'NOT_VERIFIED')
+})
