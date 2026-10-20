@@ -55,6 +55,9 @@ jobs:
       - name: Hotel Work Plan save confirmation and before-after review
         run: node --test tests/hotel-work-plan-save-dialog.test.cjs
 
+      - name: Auto Work Plan Defect calendar projection safety
+        run: node --test tests/defect-work-plan-calendar.test.cjs
+
       - name: Hotel Work Plan schedule and scoped editor safety
         run: node --test tests/hotel-work-plan.test.cjs
 
