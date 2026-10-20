@@ -55,6 +55,6 @@ if(require.main===module){
   const result=await compare({mapping,token:process.env.GAS_READONLY_ACCESS_TOKEN});
   process.stdout.write(JSON.stringify(result,null,2)+'\n');
   if(result.results.some(x=>x.status!=='EXACT_MATCH'))process.exitCode=2;
- })().catch(err=>{process.stderr.write('P1_BLOCKED: '+String(err.message).replace(/[^A-Z0-9_]/g,'')+'\n');process.exitCode=1;});
+ })().catch(err=>{process.stderr.write('P1_BLOCKED: '+(/^(?:PRIVATE_MAPPING_FILE_REQUIRED|READONLY_TOKEN_REQUIRED|MAPPING_INCOMPLETE|MAPPING_INVALID|INVALID_GIT_MANIFEST|GOOGLE_API_REQUEST_FAILED|GOOGLE_API_INVALID_JSON|GOOGLE_API_INVALID_CONTENT|GOOGLE_API_INVALID_SOURCE|AMBIGUOUS_REMOTE_FILE|GOOGLE_API_HTTP_(?:[1-5][0-9]{2}|UNKNOWN))$/.test(err.message)?err.message:'INTERNAL_ERROR')+'\n');process.exitCode=1;});
 }
 module.exports={compare,validateMapping};
