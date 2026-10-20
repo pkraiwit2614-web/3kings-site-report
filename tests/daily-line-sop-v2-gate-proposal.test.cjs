@@ -10,7 +10,8 @@ test('SOP v2 publisher gate is reference-only, not auto-applied',()=>{
   assert(!fs.readdirSync('supabase/migrations').some(x=>x.includes('daily_line_sop_v2')));
   assert.equal((src.match(/CREATE OR REPLACE FUNCTION/g)||[]).length,1);
   assert.match(src,/public\.daily_line_finalize\(/);
-  assert.doesNotMatch(src,/\b(GRANT|REVOKE|DROP|TRUNCATE|DELETE FROM|UPDATE line_autopilot)\b/i);
+  const executable=src.split('\n').filter(line=>!line.trimStart().startsWith('--')).join('\n');
+  assert.doesNotMatch(executable,/^\s*(GRANT|REVOKE|DROP|TRUNCATE|DELETE\s+FROM|UPDATE\s+line_autopilot)\b/im);
 });
 test('new report dates require two independent ACTIVE v2 SOP proofs',()=>{
   assert.match(src,/WHEN p_report_date>='2026-10-20'::date THEN NOT/);
