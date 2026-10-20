@@ -52,3 +52,15 @@ test('Combine writes are atomic, revision checked, audited and keep other module
  assert.ok(workPlanCell>=0&&nextActionCell>workPlanCell,'Work Plan/Hotel Status column precedes remaining work, including Combine member details')
  assert.match(css,/\.defect-table th:nth-child\(9\)/)
 })
+
+test('Consolidated PR120+PR126 keeps filter numbering and complete Combine labels while preserving save identity',()=>{
+ assert.ok(plan.includes('<th>ลำดับ</th>'))
+ assert.ok(plan.includes('{filtered.map((r,index)=>{'))
+ assert.ok(plan.includes('<tr key={r.seq_no}><td>{index+1}</td>'))
+ assert.ok(plan.includes("Combine: {hotelRoomMembers(r.room_no).map(hotelRoomLabel).join(' + ')}"))
+ assert.ok(plan.includes("Combine: {hotelRoomMembers(selected.room_no).map(hotelRoomLabel).join(' + ')}"))
+ assert.ok(plan.includes('className="work-combine-symbol"'))
+ assert.ok(plan.includes('className="work-combine-badge"'))
+ assert.ok(plan.includes('p_seq:selected.seq_no'))
+ assert.ok(plan.includes('setSelectedSeq(r.seq_no)'))
+})
