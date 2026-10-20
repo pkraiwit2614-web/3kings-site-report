@@ -317,7 +317,7 @@ export async function dailyOwnerSummaryTick(env,{db,hash,transport=fetch,now=new
   if(env.DAILY_SITE_LINE_ENABLED!=='true'
     ||!env.SUPABASE_URL||!env.SUPABASE_SERVER_KEY
     ||!env.LINE_CHANNEL_ACCESS_TOKEN
-    ||!validId(env.LINE_OWNER_USER_ID,'U'))
+    ||!/^U[0-9a-f]{32}$/i.test(env.LINE_OWNER_USER_ID||''))
     return base;
   // 20 October Condo B was delivered manually; do not replay it or
   // fabricate an automated success for that date.
