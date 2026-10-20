@@ -152,6 +152,26 @@ def create_audit(drive, folder, data):
     return created["id"]
 
 
+def verify_drive_scope(drive, root_id, folders, audit_folder=None):
+    """Fail closed if an environment variable points at the wrong Drive tree."""
+    fields = "id,name,mimeType,parents,capabilities(canAddChildren)"
+    root = drive.files().get(fileId=root_id, fields=fields, supportsAllDrives=True).execute()
+    if root.get("name") != "Picture Progress" or root.get("mimeType") != "application/vnd.google-apps.folder":
+        raise RuntimeError("Wrong Picture Progress root")
+    for plot, folder_id in folders.items():
+        folder = drive.files().get(fileId=folder_id, fields=fields, supportsAllDrives=True).execute()
+        if folder.get("name") != "Plot " + plot or root_id not in folder.get("parents", []):
+            raise RuntimeError("Plot folder identity or parent mismatch")
+    if audit_folder:
+        target = drive.files().get(fileId=audit_folder, fields=fields, supportsAllDrives=True).execute()
+        if target.get("mimeType") != "application/vnd.google-apps.folder" or not target.get("capabilities", {}).get("canAddChildren"):
+            raise RuntimeError("Private audit folder is not writable")
+        perms = drive.permissions().list(fileId=audit_folder,
+            fields="permissions(type,role)", supportsAllDrives=True).execute().get("permissions", [])
+        if not perms or any(p.get("type") in ("anyone", "domain") for p in perms):
+            raise RuntimeError("Private audit folder permissions unverified")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--apply", action="store_true", help="Requires additional verified production gates")
@@ -159,7 +179,7 @@ def main():
     args = ap.parse_args()
     if args.max_days < 0:
         ap.error("max-days must be >= 0")
-    required = ["PHOTO_SA_JSON", "PHOTO_PLOT_FOLDERS_JSON", "PHOTO_SOP_INDEX_ID", "PHOTO_SOP_DOC_ID"]
+    required = ["PHOTO_SA_JSON", "PHOTO_PLOT_FOLDERS_JSON", "PHOTO_ROOT_FOLDER_ID", "PHOTO_SOP_INDEX_ID", "PHOTO_SOP_DOC_ID"]
     missing = [k for k in required if not os.getenv(k)]
     if missing:
         raise SystemExit("Missing configuration: " + ", ".join(missing))
