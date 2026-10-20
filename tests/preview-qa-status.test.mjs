@@ -47,14 +47,14 @@ test('deployment QA status only evaluates successful first-party Preview events'
 
 test('Preview deployment events without trusted branch SHA skip without exposing bypass or reporting PASS', () => {
   const file = readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8')
-  assert.match(file, /preview_trust:/)
-  assert.match(file, /branches\\/test\\/preview-qa-automation-20261019/)
-  assert.match(file, /needs\\.preview_trust\\.outputs\\.trusted == 'true'/)
-  assert.match(file, /SKIP_UNTRUSTED_PREVIEW_SHA/)
+  assert.ok(file.includes('preview_trust:'))
+  assert.ok(file.includes('branches/test/preview-qa-automation-20261019'))
+  assert.ok(file.includes("needs.preview_trust.outputs.trusted == 'true'"))
+  assert.ok(file.includes('SKIP_UNTRUSTED_PREVIEW_SHA'))
   for (const path of ['preview-readonly-smoke.yml', 'preview-playwright-e2e.yml']) {
     const workflow = readFileSync(new URL('../.github/workflows/' + path, import.meta.url), 'utf8')
-    assert.match(workflow, /preview_trust:/)
-    assert.match(workflow, /needs\\.preview_trust\\.outputs\\.trusted == 'true'/)
-    assert.match(workflow, /SKIP_UNTRUSTED_PREVIEW_SHA/)
+    assert.ok(workflow.includes('preview_trust:'))
+    assert.ok(workflow.includes("needs.preview_trust.outputs.trusted == 'true'"))
+    assert.ok(workflow.includes('SKIP_UNTRUSTED_PREVIEW_SHA'))
   }
 })
