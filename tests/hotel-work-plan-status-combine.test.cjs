@@ -8,6 +8,8 @@ const common=read('lib/defectStatusPresentation.ts')
 const sql=read('supabase/migrations/20261014154000_hotel_work_plan_combine_save.sql')
 const groups=read('lib/hotelRoomGroups.ts')
 const css=read('app/defects/print.css')
+// Run the consolidated All/day-card/print contracts in the existing required CI job.
+require('./hotel-work-plan-all-print.test.cjs')
 
 test('Work Plan and Defect Report use the exact same label, tone, and color system',()=>{
  assert.match(report,/import \{DEFECT_AWAITING_ACCEPTANCE_LABEL,statusLabel,statusTone\} from '@\/lib\/defectStatusPresentation'/)
