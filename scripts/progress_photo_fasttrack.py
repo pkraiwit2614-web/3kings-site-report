@@ -106,6 +106,28 @@ def choose_match(candidates, minimum=.83, margin=.16):
     return winner
 
 
+def proposed_label_matches_date(name, target_day):
+    """Never copy a reference label that embeds an older capture date."""
+    explicit = re.findall(r"(?<!\\d)20\\d{6}(?!\\d)", name)
+    return not explicit or all(x == target_day.strftime("%Y%m%d") for x in explicit)
+
+
+def independent_match_verified(row, attestations):
+    """An external visual review must verify two distinct architectural landmarks."""
+    if not isinstance(attestations, list):
+        return False
+    keys = ("file_id", "old", "new", "reference_id", "plot", "day")
+    for item in attestations:
+        if not isinstance(item, dict) or any(item.get(k) != row.get(k) for k in keys):
+            continue
+        landmarks = item.get("landmarks")
+        if (isinstance(landmarks, list) and
+                len({v.strip() for v in landmarks if isinstance(v, str) and len(v.strip()) >= 8}) >= 2 and
+                item.get("verified_source") in ("independent_visual_check", "supervised_visual_check")):
+            return True
+    return False
+
+
 def list_children(drive, parent):
     token = None
     while True:
@@ -237,7 +259,7 @@ def main():
                     if score:
                         proposed.append({"id": ref["id"], "name": ref["name"], "score": score})
                 best = choose_match(proposed)
-                if not best or best["name"].casefold() in names:
+                if not best or best["name"].casefold() in names or not proposed_label_matches_date(best["name"], day):
                     tally["REVIEW"] += 1
                     continue
                 record = {"plot": plot, "day": day.isoformat(), "file_id": src["id"],
@@ -247,6 +269,16 @@ def main():
                 audit.append(record)
                 names.add(best["name"].casefold())
                 tally["proposed"] += 1
+    if args.apply:
+        # A high CV score alone is never authorization to rename.
+        manifest = json.loads(os.environ["PHOTO_VERIFIED_MATCHES_JSON"])
+        eligible = []
+        for item in audit:
+            if independent_match_verified(item, manifest):
+                eligible.append(item)
+            else:
+                tally["REVIEW"] += 1
+        audit = eligible
     if args.apply and audit:
         audit_id = create_audit(drive, os.environ["PHOTO_AUDIT_FOLDER_ID"], audit)
         for row in audit:
@@ -254,6 +286,13 @@ def main():
                 before = drive.files().get(fileId=row["file_id"], fields="id,name,parents,mimeType,size,md5Checksum", supportsAllDrives=True).execute()
                 if before["name"] != row["old"] or row["folder_id"] not in before.get("parents", []):
                     row["status"] = "REVIEW_CHANGED"
+                    tally["REVIEW"] += 1
+                    continue
+                # Repeat collision check at time of write, not just at proposal time.
+                sibling_names = [f["name"].casefold() for f in list_children(drive, row["folder_id"])
+                                 if f["id"] != row["file_id"]]
+                if row["new"].casefold() in sibling_names:
+                    row["status"] = "REVIEW_COLLISION"
                     tally["REVIEW"] += 1
                     continue
                 drive.files().update(fileId=row["file_id"], body={"name": row["new"]},
