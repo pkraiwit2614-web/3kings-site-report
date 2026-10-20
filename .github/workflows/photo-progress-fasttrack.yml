@@ -48,6 +48,7 @@ jobs:
         env:
           PHOTO_SA_JSON: ${{ secrets.PHOTO_SA_JSON }}
           PHOTO_PLOT_FOLDERS_JSON: ${{ secrets.PHOTO_PLOT_FOLDERS_JSON }}
+          PHOTO_ROOT_FOLDER_ID: ${{ secrets.PHOTO_ROOT_FOLDER_ID }}
           PHOTO_SOP_INDEX_ID: ${{ secrets.PHOTO_SOP_INDEX_ID }}
           PHOTO_SOP_DOC_ID: ${{ secrets.PHOTO_SOP_DOC_ID }}
           MAX_DAYS: ${{ inputs.max_days }}
@@ -69,6 +70,7 @@ jobs:
         env:
           PHOTO_SA_JSON: ${{ secrets.PHOTO_SA_JSON }}
           PHOTO_PLOT_FOLDERS_JSON: ${{ secrets.PHOTO_PLOT_FOLDERS_JSON }}
+          PHOTO_ROOT_FOLDER_ID: ${{ secrets.PHOTO_ROOT_FOLDER_ID }}
           PHOTO_SOP_INDEX_ID: ${{ secrets.PHOTO_SOP_INDEX_ID }}
           PHOTO_SOP_DOC_ID: ${{ secrets.PHOTO_SOP_DOC_ID }}
           PHOTO_AUDIT_FOLDER_ID: ${{ secrets.PHOTO_AUDIT_FOLDER_ID }}
