@@ -2,6 +2,7 @@
 // Ancillary/non-core app tables mocked empty, but core fixture reads and Auth/RBAC/RLS
 // hit the *real local* Supabase API and actual Next.js access-control route.
 import assert from 'node:assert/strict'
+import { mkdir } from 'node:fs/promises'
 const APP='http://127.0.0.1:3010'
 const DB='http://127.0.0.1:54321'
 const LOCAL_TABLES=new Set(['profiles','projects','materials','condo_room_status','site_operations_entries','payroll_verification_records'])
@@ -15,6 +16,7 @@ let browser
 let page
 let phase='BROWSER_INIT'
 try {
+  await mkdir('tests/e2e/artifacts',{recursive:true})
   browser=await chromium.launch({headless:true})
   const context=await browser.newContext({viewport:{width:1440,height:960}})
   let preventedWrites=0,blocked=0,realReads=0,viewerBearer=''
@@ -79,6 +81,7 @@ try {
   await page.getByText('CI-ONLY PROJECT',{exact:false}).first().waitFor()
   assert.ok(viewerBearer.startsWith('Bearer '),'expected real Supabase Auth token')
   console.log('PASS_VIEWER_REAL_AUTH_AND_DASHBOARD')
+  await page.screenshot({path:'tests/e2e/artifacts/dashboard.png',fullPage:true})
 
   phase='FEATURE_ROUTES'
   for(const [path,marker] of [
@@ -96,6 +99,7 @@ try {
     await page.getByText(marker,{exact:false}).first().waitFor()
     assert.equal(new URL(page.url()).pathname,path)
     console.log('PASS_VIEWER_UI_API_'+path.slice(1).toUpperCase())
+    await page.screenshot({path:'tests/e2e/artifacts/'+path.slice(1)+'.png',fullPage:true})
   }
   phase='RESTRICTED_ROUTES'
   for(const path of ['/users','/reports/labour']){
