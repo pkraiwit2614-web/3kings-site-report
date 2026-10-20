@@ -1,0 +1,43 @@
+name: Defect 184 SQL Replay (local PostgreSQL only)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/defect-184-sql-replay.yml'
+      - 'tests/sql/defect-184-*'
+      - 'supabase/migrations/20261020125000_defect_chat_detail_scoped_guard_20261020.sql'
+permissions:
+  contents: read
+jobs:
+  sql-local-replay:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: synthetic_only
+          POSTGRES_DB: defect_184_synthetic
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d defect_184_synthetic"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 15
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: synthetic_only
+      PGDATABASE: defect_184_synthetic
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run complete scoped migration against synthetic PostgreSQL and adversarial override cases
+        run: node tests/sql/defect-184-replay.cjs
