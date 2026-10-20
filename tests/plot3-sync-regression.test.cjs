@@ -43,7 +43,12 @@ async function main() {
   }
   for (const number of [6, 7, 8, 9]) {
     assert.equal(api.mapProjectFromLocation('Above Villa Plot ' + number), 'AV-P' + number)
+    // Before this fix, bare non-P3 codes were not parsed. Keep that behavior.
+    assert.equal(api.mapProjectFromLocation('P' + number), null)
+    assert.equal(api.mapProjectFromLocation('AV-P' + number), null)
   }
+  assert.deepEqual(api.mapProjectsFromLocation('Plot 6/7'), ['AV-P6'])
+  assert.deepEqual(api.mapProjectsFromLocation('P6/P7'), [])
   assert.deepEqual(api.mapProjectsFromLocation('Plot 3/6'), ['AV-P3', 'AV-P6'])
   assert.deepEqual(api.mapProjectsFromLocation('Plot 6 / Plot 3'), ['AV-P6', 'AV-P3'])
   assert.deepEqual(api.mapProjectsFromLocation('Plot 6 + Plot 7'), ['AV-P6', 'AV-P7'])
