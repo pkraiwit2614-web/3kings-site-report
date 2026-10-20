@@ -30,6 +30,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Preview gate and Hosted authorization regression
+        run: node --test tests/vercel-preview-gate.test.cjs tests/hosted-preview-authorization.test.mjs
+
       - name: Flow PNG font parity regression
         run: node --test tests/flow-export-png-font.test.cjs
 
