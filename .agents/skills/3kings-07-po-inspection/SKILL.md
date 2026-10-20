@@ -6,7 +6,7 @@ description: "3 Kings Construction shortcut 'เช็ก PO'. READ-ONLY: inspec
 # 07 — เช็ก PO
 
 **Shortcut:** `เช็ก PO`  
-**SOP title (resolve via live Drive index):** `SOP_07_Purchase_Order_Check_v1.2_2026-10-20`  
+**SOP title (resolve via live Drive index):** `SOP_07_Purchase_Order_Check_v2.0_Consolidated_2026-10-20`  
 **Mode:** `read_only`
 
 ## Before any action
