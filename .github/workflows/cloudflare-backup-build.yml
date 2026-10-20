@@ -43,7 +43,7 @@ jobs:
       # Build-only dependencies are deliberately ephemeral. Do not edit the
       # application lockfile, Next scripts, or the Vercel build configuration.
       - name: Install Cloudflare adapter in CI only
-        run: npm install --no-save --no-package-lock --no-audit --no-fund @opennextjs/cloudflare@latest wrangler@latest
+        run: npm install --no-save --no-package-lock --no-audit --no-fund @opennextjs/cloudflare@1.20.3 wrangler@4.134.0
 
       - name: Stage Cloudflare-only build settings
         run: |

@@ -47,14 +47,14 @@ Run on this **test branch**, not `main`, using Node 22:
 ```sh
 npm ci
 node --test scripts/check-cloudflare-preview.cjs
-npm install --no-save --no-package-lock @opennextjs/cloudflare@latest wrangler@latest
+npm install --no-save --no-package-lock @opennextjs/cloudflare@1.20.3 wrangler@4.134.0
 cp cloudflare-preview/open-next.config.ts.template open-next.config.ts
 cp cloudflare-preview/wrangler.jsonc wrangler.jsonc
 NEXT_PUBLIC_SUPABASE_URL=https://preview.invalid NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_preview_placeholder npx opennextjs-cloudflare build
 npx wrangler deploy --dry-run
 ```
 
-Generated root config and `.open-next/` are ignored from Git. Never commit secrets or use the production Supabase credentials to test Cloudflare. Temporary installation uses `latest`; pin validated versions and capture a reproducible lockfile **before** making a release candidate.
+Generated root config and `.open-next/` are ignored from Git. Never commit secrets or use the production Supabase credentials to test Cloudflare. The CI adapter and Wrangler are pinned for this test. Capture an isolated reproducible dependency lock before any release candidate; this experiment does not alter the Vercel package-lock.
 
 ## References
 
