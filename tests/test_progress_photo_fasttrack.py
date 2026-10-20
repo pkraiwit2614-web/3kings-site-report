@@ -2,6 +2,7 @@
 import importlib.util
 import pathlib
 import unittest
+from unittest.mock import Mock
 
 path = pathlib.Path(__file__).resolve().parents[1] / "scripts" / "progress_photo_fasttrack.py"
 spec = importlib.util.spec_from_file_location("progress_photo_fasttrack", path)
@@ -43,6 +44,31 @@ class FastTrackSafetyTests(unittest.TestCase):
         self.assertIsNotNone(match)
         evidence = {"landmarks":["one landmark"]}
         self.assertLess(len(set(evidence["landmarks"])), 2)
+
+    def test_drive_scope_parent_and_private_audit(self):
+        fake = Mock()
+        objects = {
+            "ROOT": {"id":"ROOT","name":"Picture Progress","mimeType":"application/vnd.google-apps.folder"},
+            **{f"P{x}": {"id":f"P{x}","name":f"Plot {x}","mimeType":"application/vnd.google-apps.folder",
+                          "parents":["ROOT"]} for x in ("6","7","8","9")},
+            "AUDIT": {"id":"AUDIT","name":"Private Mapping Log","mimeType":"application/vnd.google-apps.folder",
+                      "capabilities":{"canAddChildren":True}},
+        }
+        fake.files.return_value.get.side_effect = lambda **kw: Mock(execute=lambda: objects[kw["fileId"]])
+        fake.permissions.return_value.list.return_value.execute.return_value = {
+            "permissions":[{"type":"user","role":"owner"}]
+        }
+        plots = {x:f"P{x}" for x in ("6","7","8","9")}
+        m.verify_drive_scope(fake,"ROOT",plots,"AUDIT")
+        objects["P6"]["parents"] = ["WRONG"]
+        with self.assertRaises(RuntimeError):
+            m.verify_drive_scope(fake,"ROOT",plots,"AUDIT")
+        objects["P6"]["parents"] = ["ROOT"]
+        fake.permissions.return_value.list.return_value.execute.return_value = {
+            "permissions":[{"type":"anyone","role":"reader"}]
+        }
+        with self.assertRaises(RuntimeError):
+            m.verify_drive_scope(fake,"ROOT",plots,"AUDIT")
 
 
 if __name__ == "__main__":
