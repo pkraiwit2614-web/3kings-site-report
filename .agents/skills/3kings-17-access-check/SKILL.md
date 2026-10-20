@@ -6,7 +6,7 @@ description: "3 Kings Construction shortcut 'ตรวจสิทธิ์ผ�
 # 17 — ตรวจสิทธิ์ผู้ใช้
 
 **Shortcut:** `ตรวจสิทธิ์ผู้ใช้`  
-**SOP title (resolve via live Drive index):** `SOP_17_Role_Permission_Check_v1.2_2026-10-20`  
+**SOP title (resolve via live Drive index):** `SOP_17_Role_Permission_Check_v2.0_Consolidated_2026-10-20`  
 **Mode:** `read_only`
 
 ## Before any action

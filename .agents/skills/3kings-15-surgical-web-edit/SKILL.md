@@ -1,12 +1,12 @@
 ---
 name: 3kings-15-surgical-web-edit
-description: "3 Kings Construction shortcut 'แก้เว็บเฉพาะจุด'. Edit only requested code on a separate branch after preflight. Do not merge or deploy without a separate request."
+description: "3 Kings Construction shortcut 'แก้เว็บเฉพาะจุด'. Edit only requested code on a separate branch after preflight. Merge or deploy only when the same user command explicitly includes that release scope and real release gates pass."
 ---
 
 # 15 — แก้เว็บเฉพาะจุด
 
 **Shortcut:** `แก้เว็บเฉพาะจุด`  
-**SOP title (resolve via live Drive index):** `SOP_15_Surgical_Web_Change_v1.2_2026-10-20`  
+**SOP title (resolve via live Drive index):** `SOP_15_Surgical_Web_Change_v2.0_Consolidated_2026-10-20`  
 **Mode:** `code_change`
 
 ## Before any action
@@ -22,7 +22,7 @@ Latest GitHub source, shared components, related API/DB, Preview and rights.
 1. Resolve this command's row in the live SOP index and open the current SOP; follow its full ordered instructions.
 2. Fetch and reconcile current source data, scope, identities and evidence; identify out-of-scope dependencies.
 3. Enforce mode `code_change`: Create change on isolated development branch, no main merge or Production. If task scope includes only edits, leave deploy unchanged.
-4. Create limited patch after UI→API→DB→Print→i18n→Role→Sync impact analysis, regression and Preview QA.
+4. Create limited patch after UI→API→DB→Print→i18n→Role→Sync impact analysis, affected regression and conditional Hosted Preview QA.
 5. Preserve unrelated code and functions, RLS/RBAC, TH/EN/RU, Owner Reset; editing is not permission to deploy.
 6. Perform operation only within explicit authorization and when safeguards pass. Validate changed targets by independent readback; for `read_only`, verify evidence without modifying source.
 7. Report source version/time, specific results, unmatched/untested data, side effects, QA and exact remaining blockers.
