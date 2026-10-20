@@ -103,7 +103,7 @@ export async function dailySiteSendTick(env,{db,hash,transport=fetch,now=new Dat
     blocked:0,uncertain:0,quotaStatus:'NOT_CHECKED'};
   if(env.DAILY_SITE_LINE_ENABLED!=='true'||!env.DAILY_LINE_BRIDGE_TOKEN
     ||!env.LINE_CHANNEL_ACCESS_TOKEN||!env.SUPABASE_URL)return stats;
-  if(when.dayOfWeek===0||when.day<'2026-10-20'
+  if(when.dayOfWeek===0||when.day<'2026-10-21'
     ||when.localTime<'08:00'||when.localTime>'13:00')return stats;
   if(typeof db!=='function'||typeof hash!=='function')
     throw Error('DB_DEPENDENCY_MISSING');
@@ -258,4 +258,130 @@ export async function dailySiteSendTick(env,{db,hash,transport=fetch,now=new Dat
     }
   }
   return stats;
+}
+
+
+// Daily owner DM, one report per Bangkok morning. Reads only service-role
+// Delivery Log summary; never reads group IDs or changes site-group delivery.
+const OWNER_SUMMARY_ROUTES=Object.freeze([
+  ['above_villa','Above Villa'],
+  ['above_condo_a','Condo A'],
+  ['above_condo_b','Condo B']
+]);
+const OWNER_SUMMARY_RETRY_SLOTS=new Set(['08:44','09:04','10:04']);
+function ownerStageLabel(status,http){
+  if(status==='delivered')return 'สำเร็จ';
+  if(status==='missing')return 'ยังไม่ส่ง';
+  if(status==='claimed')return 'รอยืนยัน';
+  if(status==='uncertain'){
+    return 'ไม่สำเร็จ/ไม่ยืนยัน'+(
+      Number.isInteger(http)?' (HTTP '+http+')':'');
+  }
+  return 'ไม่ทราบผล';
+}
+export function dailyOwnerMessage(when,summary){
+  if(!summary||summary.report_date!==when.reportDate
+    ||!Array.isArray(summary.sites)||summary.sites.length!==3)
+    throw Error('OWNER_SUMMARY_INVALID');
+  const sites=new Map(summary.sites.map(x=>[x.site_code,x]));
+  if(sites.size!==3||!OWNER_SUMMARY_ROUTES.every(([id])=>sites.has(id)))
+    throw Error('OWNER_SUMMARY_ROUTE_MISMATCH');
+  const complete=OWNER_SUMMARY_ROUTES.every(([id])=>{
+    const s=sites.get(id);
+    return s.form_status==='delivered'&&s.image_status==='delivered';
+  });
+  const d=when.reportDate.split('-').reverse().join('/');
+  const lines=['3 Kings • สรุป LINE AutoPilot',
+    'วันที่รายงาน: '+d,
+    'ผลรับคำขอจาก LINE API (ไม่ใช่การยืนยันการอ่าน)'];
+  for(const [id,label] of OWNER_SUMMARY_ROUTES){
+    const s=sites.get(id);
+    lines.push(label+': ฟอร์ม '+ownerStageLabel(s.form_status,s.form_http)
+      +' | PNG '+ownerStageLabel(s.image_status,s.image_http));
+  }
+  const ok=OWNER_SUMMARY_ROUTES.filter(([id])=>{
+    const s=sites.get(id);
+    return s.form_status==='delivered'&&s.image_status==='delivered';
+  }).length;
+  lines.push('สรุป: '+ok+'/3 กลุ่ม ส่งครบทั้งข้อความและรูป');
+  if(summary.qa_published!==true)
+    lines.push('หมายเหตุ: ยังไม่พบหลักฐานเผยแพร่รายงานที่ผ่าน QA ของเช้านี้');
+  if(!complete)
+    lines.push('โปรดตรวจ Delivery Log/โควตา LINE ก่อนส่งซ้ำ');
+  return {complete, message:lines.join('\n')};
+}
+export async function dailyOwnerSummaryTick(env,{db,hash,transport=fetch,now=new Date()}={}){
+  const when=dailyBangkokPolicy(now),base={
+    mode:'OWNER_OFF',reportDate:when.reportDate,delivered:false
+  };
+  if(env.DAILY_SITE_LINE_ENABLED!=='true'
+    ||!env.SUPABASE_URL||!env.SUPABASE_SERVER_KEY
+    ||!env.LINE_CHANNEL_ACCESS_TOKEN
+    ||!/^U[0-9a-f]{32}$/i.test(env.LINE_OWNER_USER_ID||''))
+    return base;
+  // 20 October Condo B was delivered manually; do not replay it or
+  // fabricate an automated success for that date.
+  if(when.day<'2026-10-21'||when.dayOfWeek===0
+    ||when.localTime<'08:06'||when.localTime>'12:58')
+    return base;
+  if(typeof db!=='function'||typeof hash!=='function')
+    throw Error('OWNER_SUMMARY_DEPENDENCY_MISSING');
+  let summary;
+  try{
+    summary=await db(env,'/rest/v1/rpc/line_autopilot_daily_owner_summary',{
+      p_report_date:when.reportDate
+    });
+  }catch{return {...base,mode:'OWNER_LOG_UNAVAILABLE'};}
+  let report;
+  try{report=dailyOwnerMessage(when,summary);}
+  catch{return {...base,mode:'OWNER_LOG_INVALID'};}
+  if(!report.complete && when.localTime<'08:40')
+    return {...base,mode:'OWNER_WAIT_RETRIES'};
+  const key=await hash('3kings|daily_site_owner_summary|'+when.reportDate);
+  if(!validSha(key))throw Error('OWNER_EVENT_KEY_INVALID');
+  let claim;
+  try{
+    const records=await db(env,'/rest/v1/rpc/line_autopilot_claim',{
+      p_event_key:key,p_alert_kind:'daily_site_report',p_target_scope:'owner',
+      p_summary:'Daily LINE '+when.reportDate+' 3 groups'
+    });
+    claim=Array.isArray(records)?records[0]:null;
+  }catch{return {...base,mode:'OWNER_CLAIM_BLOCKED'};}
+  if(!claim||!validRetry(claim.retry_key))
+    return {...base,mode:'OWNER_CLAIM_INVALID'};
+  if(claim.claim_status==='already_sent')
+    return {...base,mode:'OWNER_ALREADY_SENT',delivered:true};
+  if(claim.claim_status!=='new'
+    &&!(claim.claim_status==='in_flight'
+      &&OWNER_SUMMARY_RETRY_SLOTS.has(when.localTime)))
+    return {...base,mode:'OWNER_NO_RETRY'};
+  let status=null,accepted=false;
+  try{
+    const r=await transport('https://api.line.me/v2/bot/message/push',{
+      method:'POST',headers:{
+        authorization:'Bearer '+env.LINE_CHANNEL_ACCESS_TOKEN,
+        'content-type':'application/json',
+        'X-Line-Retry-Key':claim.retry_key
+      },
+      body:JSON.stringify({
+        to:env.LINE_OWNER_USER_ID,
+        messages:[{type:'text',text:report.message.slice(0,4400)}]
+      }),
+      signal:AbortSignal.timeout(10000)
+    });
+    status=r.status;
+    accepted=r.ok===true&&r.status>=200&&r.status<300
+      ||r.status===409&&!!r.headers?.get?.('x-line-accepted-request-id');
+    if(!accepted)
+      console.warn('daily_owner_message_rejected',{http:status});
+  }catch{console.warn('daily_owner_message_network_uncertain');}
+  try{
+    const ok=await db(env,'/rest/v1/rpc/line_autopilot_ack',{
+      p_event_key:key,p_retry_key:claim.retry_key,
+      p_status:accepted?'delivered':'uncertain',p_http_status:status
+    });
+    if(ok!==true)return {...base,mode:'OWNER_ACK_UNVERIFIED'};
+  }catch{return {...base,mode:'OWNER_ACK_FAILED'};}
+  return {...base,mode:accepted?'OWNER_ACCEPTED':'OWNER_UNCERTAIN',
+    delivered:accepted};
 }
