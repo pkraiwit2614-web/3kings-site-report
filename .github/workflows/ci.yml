@@ -40,6 +40,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Plot 3 sync safety and P6 compatibility regression
+        run: node tests/plot3-sync-regression.test.cjs
+
       - name: Preview gate and Hosted authorization regression
         run: node --test tests/vercel-preview-gate.test.cjs tests/hosted-preview-authorization.test.mjs
 
