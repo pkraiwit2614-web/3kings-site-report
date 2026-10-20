@@ -385,7 +385,13 @@ jobs:
 
   qa_preview_status:
     name: QA / Deployment evidence (Viewer requires isolated DB)
-    if: always() && github.event_name == 'deployment_status'
+    if: >-
+      always() &&
+      github.event_name == 'deployment_status' &&
+      github.event.deployment_status.state == 'success' &&
+      (github.event.deployment.environment == 'Preview' ||
+       github.event.deployment.environment == 'preview') &&
+      github.event.repository.full_name == 'pkraiwit2614-web/3kings-site-report'
     needs: [qa_preview_probe, qa_preview_browser]
     runs-on: ubuntu-latest
     timeout-minutes: 3
