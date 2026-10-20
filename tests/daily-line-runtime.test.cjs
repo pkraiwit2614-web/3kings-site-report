@@ -68,22 +68,26 @@ test('No messages when QA gateway missing',async()=>{
  const x=await dailySiteSendTick(env,{...m,now});
  assert.equal(x.mode,'GATEWAY_NOT_READY');assert.equal(m.pushes.length,0);
 });
-test('fresh send batches Form and image into ONE request; subsequent cron does not duplicate',async()=>{
+test('FORM ACK precedes PNG: two cron ticks and never a duplicate push',async()=>{
  const {dailySiteSendTick}=await load();const m=mock();
  const first=await dailySiteSendTick(env,{...m,now});
- assert.equal(first.textAccepted,1);assert.equal(first.imageAccepted,1);
- assert.equal(first.bundlesAccepted,1);
+ assert.equal(first.textAccepted,1);assert.equal(first.imageAccepted,0);
+ assert.equal(first.bundlesAccepted,0);
  assert.equal(m.pushes.length,1);
- assert.deepEqual(m.pushes[0].payload.messages.map(x=>x.type),['text','image']);
+ assert.deepEqual(m.pushes[0].payload.messages.map(x=>x.type),['text']);
  const second=await dailySiteSendTick(env,{...m,now});
- assert.equal(second.textAccepted+second.imageAccepted,0);
- assert.equal(m.pushes.length,1);
+ assert.equal(second.textAccepted,0);assert.equal(second.imageAccepted,1);
+ assert.equal(m.pushes.length,2);
+ assert.deepEqual(m.pushes[1].payload.messages.map(x=>x.type),['image']);
+ const third=await dailySiteSendTick(env,{...m,now});
+ assert.equal(third.textAccepted+third.imageAccepted,0);
+ assert.equal(m.pushes.length,2);
  assert.equal(new Set(m.metas.map(x=>x.p_event_key)).size,2);
  assert(m.metas.every(x=>x.p_site_code==='above_villa'));
 });
 
-test('429 is recorded uncertain; reuses same retry key only in a bounded slot',async()=>{
- const {dailySiteSendTick}=await load();const m=mock();
+test('429 uncertain FORM is held: no retry at any cron slot and no PNG',async()=>{
+ const {dailySiteSendTick,dailyRetryWindow}=await load();const m=mock();
  const transport=m.transport;let once=true;
  m.transport=async(u,o)=>{
   if(u.includes('/message/push')&&once){
@@ -95,15 +99,35 @@ test('429 is recorded uncertain; reuses same retry key only in a bounded slot',a
  };
  const failed=await dailySiteSendTick(env,{...m,now});
  assert.equal(failed.uncertain,1);assert.equal(m.pushes.length,1);
- const tooSoon=await dailySiteSendTick(env,{...m,now:new Date('2026-10-21T01:10:00Z')});
- assert.equal(tooSoon.textAccepted+tooSoon.imageAccepted,0);
- assert.equal(m.pushes.length,1);
- const recovered=await dailySiteSendTick(env,{...m,now:new Date('2026-10-21T01:12:00Z')});
- assert.equal(recovered.bundlesAccepted,1);
- assert.equal(m.pushes.length,2);
- assert.equal(m.pushes[0].retry,m.pushes[1].retry);
- const done=await dailySiteSendTick(env,{...m,now:new Date('2026-10-21T01:32:00Z')});
- assert.equal(done.textAccepted+done.imageAccepted,0);
+ assert.deepEqual(m.pushes[0].payload.messages.map(x=>x.type),['text']);
+ for(const time of ['01:10','01:12','01:32','02:02']){
+   const t=new Date('2026-10-21T'+time+':00Z');
+   assert.equal(dailyRetryWindow({localTime:time}),false);
+   const held=await dailySiteSendTick(env,{...m,now:t});
+   assert.equal(held.textAccepted+held.imageAccepted,0);
+   assert.equal(m.pushes.length,1);
+ }
+ assert.equal(m.metas.every(x=>x.p_stage==='form_text'),true);
+});
+
+test('429 uncertain PNG is held while already delivered FORM stays delivered',async()=>{
+ const {dailySiteSendTick}=await load();const m=mock(),transport=m.transport;
+ const text=await dailySiteSendTick(env,{...m,now});
+ assert.equal(text.textAccepted,1);
+ let once=true;
+ m.transport=async(u,o)=>{
+   if(u.includes('/message/push')&&once){
+     once=false;
+     m.pushes.push({payload:JSON.parse(o.body),retry:o.headers['X-Line-Retry-Key']});
+     return {ok:false,status:429,json:async()=>({message:'rate limit'})};
+   }
+   return transport(u,o);
+ };
+ const image=await dailySiteSendTick(env,{...m,now});
+ assert.equal(image.uncertain,1);assert.equal(m.pushes.length,2);
+ assert.deepEqual(m.pushes[1].payload.messages.map(x=>x.type),['image']);
+ const held=await dailySiteSendTick(env,{...m,now:new Date('2026-10-21T01:12:00Z')});
+ assert.equal(held.textAccepted+held.imageAccepted,0);
  assert.equal(m.pushes.length,2);
 });
 
@@ -122,7 +146,7 @@ test('monthly quota exhausted and unverified membership block all pushes',async(
  assert.equal(noGroup.blocked,3);assert.equal(group.pushes.length,0);
 });
 
-test('409 with matching accepted request is idempotent, not a fresh delivery',async()=>{
+test('409 accepted retry key ACKs each stage in order without duplicate sends',async()=>{
  const {dailySiteSendTick}=await load();const m=mock();const orig=m.transport;
  m.transport=async(u,o)=>{
   if(u.includes('/message/push')) {
@@ -133,9 +157,14 @@ test('409 with matching accepted request is idempotent, not a fresh delivery',as
   }
   return orig(u,o);
  };
- const result=await dailySiteSendTick(env,{...m,now});
- assert.equal(result.bundlesAccepted,1);
- assert.equal(m.pushes.length,1);
+ const one=await dailySiteSendTick(env,{...m,now});
+ assert.equal(one.textAccepted,1);assert.equal(one.imageAccepted,0);
+ const two=await dailySiteSendTick(env,{...m,now});
+ assert.equal(two.textAccepted,0);assert.equal(two.imageAccepted,1);
+ assert.deepEqual(m.pushes.map(p=>p.payload.messages.map(x=>x.type)),[['text'],['image']]);
+ const three=await dailySiteSendTick(env,{...m,now});
+ assert.equal(three.textAccepted+three.imageAccepted,0);
+ assert.equal(m.pushes.length,2);
 });
 test('image gateway URL agrees between worker and deployed Edge Function name',async()=>{
  const fs=require('node:fs');
@@ -179,7 +208,7 @@ test('daily sender reads only dedicated owner-approved routes and preserves stag
  assert(!sql.includes('DROP CONSTRAINT'));
 });
 
-test('three approved routes each get one two-object push; Condo A/B share only report URL',async()=>{
+test('three approved groups each receive FORM first, then their mapped PNG, never twice',async()=>{
  const {dailySiteSendTick}=await load();const m=mock();
  const groups={above_villa:'C'+'a'.repeat(32),above_condo_a:'C'+'b'.repeat(32),above_condo_b:'C'+'c'.repeat(32)};
  const original=m.db;
@@ -189,24 +218,26 @@ test('three approved routes each get one two-object push; Condo A/B share only r
  const crypto=require('node:crypto');
  m.hash=async input=>crypto.createHash('sha256').update(input).digest('hex');
  const a=await dailySiteSendTick(env,{...m,now});
- assert.equal(a.textAccepted,3);assert.equal(a.imageAccepted,3);
- assert.equal(a.bundlesAccepted,3);assert.equal(m.pushes.length,3);
- assert(m.pushes.every(p=>p.payload.messages.length===2));
+ assert.equal(a.textAccepted,3);assert.equal(a.imageAccepted,0);
+ assert.equal(a.bundlesAccepted,0);assert.equal(m.pushes.length,3);
+ assert(m.pushes.every(p=>p.payload.messages.length===1&&p.payload.messages[0].type==='text'));
  const b=await dailySiteSendTick(env,{...m,now});
- assert.equal(b.textAccepted+b.imageAccepted,0);assert.equal(m.pushes.length,3);
+ assert.equal(b.textAccepted,0);assert.equal(b.imageAccepted,3);assert.equal(m.pushes.length,6);
+ assert(m.pushes.slice(3).every(p=>p.payload.messages.length===1&&p.payload.messages[0].type==='image'));
+ const c=await dailySiteSendTick(env,{...m,now});
+ assert.equal(c.textAccepted+c.imageAccepted,0);assert.equal(m.pushes.length,6);
  assert.equal(new Set(m.metas.map(x=>x.p_event_key)).size,6);
- assert.equal(m.pushes[1].payload.messages[1].originalContentUrl,
-              m.pushes[2].payload.messages[1].originalContentUrl);
- assert.notEqual(m.pushes[1].payload.to,m.pushes[2].payload.to);
+ assert.equal(m.pushes[4].payload.messages[0].originalContentUrl,
+              m.pushes[5].payload.messages[0].originalContentUrl);
+ assert.notEqual(m.pushes[4].payload.to,m.pushes[5].payload.to);
 });
 
-test('legacy text already delivered plus uncertain image retries IMAGE only on same key',async()=>{
+test('legacy delivered text with uncertain image stays held, no automated replay',async()=>{
  const {dailySiteSendTick}=await load();const m=mock();
  const imageKey='b'.repeat(64),textKey='a'.repeat(64);
  m.ledger.set(textKey,{status:'already_sent'});
  m.ledger.set(imageKey,{status:'in_flight'});
  const x=await dailySiteSendTick(env,{...m,now:new Date('2026-10-21T01:12:00Z')});
- assert.equal(x.textAccepted,0);assert.equal(x.imageAccepted,1);
- assert.equal(m.pushes.length,1);
- assert.deepEqual(m.pushes[0].payload.messages.map(v=>v.type),['image']);
+ assert.equal(x.textAccepted,0);assert.equal(x.imageAccepted,0);
+ assert.equal(m.pushes.length,0);
 });

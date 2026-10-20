@@ -78,12 +78,11 @@ async function dailyGroupMemberCount(env,groupId,transport=fetch){
     return Number.isSafeInteger(data?.count)&&data.count>0?data.count:null;
   }catch{return null;}
 }
-// Retry only in a few predefined short windows on the SAME report day.
-// LINE de-duplicates an unchanged retry key for 24h; we never create a
-// replacement key and the morning-only policy prevents retries after 24h.
-const RETRY_SLOTS=new Set(['08:12','08:32','09:02','10:02']);
-export function dailyRetryWindow(when){
-  return RETRY_SLOTS.has(when.localTime) && when.day>='2026-10-20';
+// An ambiguous LINE result is never retried automatically, even with the
+// same provider retry key. Manual recipient/provider reconciliation is required.
+// Retained as a disabled compatibility export for older consumers.
+export function dailyRetryWindow(_when){
+  return false;
 }
 function dailyLineErrorClass(status,message){
   const s=String(message||'').toLowerCase().slice(0,400);
@@ -219,38 +218,28 @@ export async function dailySiteSendTick(env,{db,hash,transport=fetch,now=new Dat
       continue;
     }
     try{
+      // Claim/send FORM first. Do not claim the image until a later tick
+      // confirms FORM delivery in the durable ledger. No combined push.
       const text=await claim(route,groupId,'form_text',null);
       if(text.status==='blocked'){stats.blocked++;continue;}
-      const image=await claim(route,groupId,'image',images.get(asset).sha256);
-      if(image.status==='blocked'){stats.blocked++;continue;}
-      if(text.status==='already_sent'&&image.status==='already_sent')continue;
-      let sending=[],token,records=[];
-      if(text.status==='already_sent'){
-        if(image.status==='new'||image.status==='in_flight'&&dailyRetryWindow(when)){
-          sending=[imageMessage(images.get(asset))];token=image.retry;records=[image];
-        }
-      }else if(image.status==='already_sent'){
-        if(text.status==='new'||text.status==='in_flight'&&dailyRetryWindow(when)){
-          sending=[{type:'text',text:DAILY_FORM_TEXT}];token=text.retry;records=[text];
-        }
-      }else if(text.status===image.status
-        &&(text.status==='new'||text.status==='in_flight'&&dailyRetryWindow(when))){
-        // New mornings: one billed push request containing two message
-        // objects. Both ledger stages are acknowledged with the same result.
-        sending=[{type:'text',text:DAILY_FORM_TEXT},
-          imageMessage(images.get(asset))];
-        token=text.retry;records=[text,image];
+      let one,messages,stage;
+      if(text.status==='new'){
+        one=text;stage='text';messages=[{type:'text',text:DAILY_FORM_TEXT}];
+      }else if(text.status==='already_sent'){
+        const image=await claim(route,groupId,'image',images.get(asset).sha256);
+        if(image.status==='already_sent')continue;
+        if(image.status!=='new'){stats.blocked++;continue;}
+        one=image;stage='image';messages=[imageMessage(images.get(asset))];
+      }else{
+        // in_flight/uncertain: never resend before provider/recipient review.
+        stats.blocked++;continue;
       }
-      if(!sending.length)continue;
-      const sent=await push(groupId,sending,token);
-      // Every attempted push decrements our optimistic budget to prevent
-      // the same cron from oversubscribing quota while LINE settles usage.
+      const sent=await push(groupId,messages,one.retry);
       if(budget!==null)budget=Math.max(0,budget-memberCount);
-      for(const record of records)await ack(record,sent);
+      await ack(one,sent);
       if(sent.accepted){
-        if(records.some(x=>x===text))stats.textAccepted++;
-        if(records.some(x=>x===image))stats.imageAccepted++;
-        if(records.length===2)stats.bundlesAccepted++;
+        if(stage==='text')stats.textAccepted++;
+        else stats.imageAccepted++;
       }else stats.uncertain++;
     }catch{
       stats.uncertain++;
@@ -268,7 +257,7 @@ const OWNER_SUMMARY_ROUTES=Object.freeze([
   ['above_condo_a','Condo A'],
   ['above_condo_b','Condo B']
 ]);
-const OWNER_SUMMARY_RETRY_SLOTS=new Set(['08:44','09:04','10:04']);
+// An uncertain private owner DM also remains held for manual reconciliation.
 function ownerStageLabel(status,http){
   if(status==='delivered')return 'สำเร็จ';
   if(status==='missing')return 'ยังไม่ส่ง';
@@ -351,9 +340,7 @@ export async function dailyOwnerSummaryTick(env,{db,hash,transport=fetch,now=new
     return {...base,mode:'OWNER_CLAIM_INVALID'};
   if(claim.claim_status==='already_sent')
     return {...base,mode:'OWNER_ALREADY_SENT',delivered:true};
-  if(claim.claim_status!=='new'
-    &&!(claim.claim_status==='in_flight'
-      &&OWNER_SUMMARY_RETRY_SLOTS.has(when.localTime)))
+  if(claim.claim_status!=='new')
     return {...base,mode:'OWNER_NO_RETRY'};
   let status=null,accepted=false;
   try{

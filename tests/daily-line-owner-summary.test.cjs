@@ -97,7 +97,7 @@ test('unverified source report cannot trigger owner DM',async()=>{
  const r=await dailyOwnerSummaryTick(env,{...m,now:moment('01:40')});
  assert.equal(r.mode,'OWNER_LOG_INVALID');assert.equal(m.pushes.length,0);
 });
-test('429 owner DM retry reuses same LINE retry key, no blind immediate resend',async()=>{
+test('429 owner DM is uncertain and must not automatically resend',async()=>{
  const {dailyOwnerSummaryTick}=await load(),m=fixture();
  const original=m.transport;let first=true;
  m.transport=async(u,o)=>{
@@ -113,9 +113,9 @@ test('429 owner DM retry reuses same LINE retry key, no blind immediate resend',
  const b=await dailyOwnerSummaryTick(env,{...m,now:moment('01:20')});
  assert.equal(b.mode,'OWNER_NO_RETRY');assert.equal(m.pushes.length,1);
  const c=await dailyOwnerSummaryTick(env,{...m,now:moment('01:44')});
- assert.equal(c.mode,'OWNER_ACCEPTED');assert.equal(m.pushes.length,2);
- assert.equal(m.pushes[0].headers['X-Line-Retry-Key'],
-              m.pushes[1].headers['X-Line-Retry-Key']);
+ assert.equal(c.mode,'OWNER_NO_RETRY');assert.equal(m.pushes.length,1);
+ const d=await dailyOwnerSummaryTick(env,{...m,now:moment('02:04')});
+ assert.equal(d.mode,'OWNER_NO_RETRY');assert.equal(m.pushes.length,1);
 });
 test('owner summary SQL is locked to service_role and no raw group identifiers',()=>{
  const fs=require('node:fs');
