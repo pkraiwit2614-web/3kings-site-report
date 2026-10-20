@@ -64,6 +64,9 @@ jobs:
       - name: Work Order sticky header, Combine and Excel sync safety
         run: node --test tests/work-order-auto-sync.test.cjs
 
+      - name: Excel-first Defect chat details and non-hotel Work Order regression
+        run: node --test tests/defect-excel-chat-workorder-20261019.test.cjs
+
       - name: Defect Report update timestamp source and security regression
         run: node --test tests/defect-report-last-change.test.cjs
 
