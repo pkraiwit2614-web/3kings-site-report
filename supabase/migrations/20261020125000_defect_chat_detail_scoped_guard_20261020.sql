@@ -123,6 +123,9 @@ begin
       or c.hotel_remarks is distinct from coalesce(nullif(r->>'hotel_remarks',''), c.hotel_remarks)
       -- Scoped Excel-first chat detail; leave unrelated descriptions untouched.
       or (v_room in ('A311','A401','B204','B502','B707') and coalesce(r->>'defect_detail','') like '%รายการ Defect แจ้งผ่านแชต:%'
+          and not exists (select 1 from public.defect_web_overrides w
+            where w.room_no = v_room
+              and (w.source_sync_state <> 'synced' or w.source_synced_at is null))
           and c.defect_detail is distinct from r->>'defect_detail')
     )
     into v_needs_write
@@ -149,6 +152,9 @@ begin
           hotel_complete_color = coalesce(nullif(r->>'hotel_complete_color',''), c.hotel_complete_color),
           hotel_remarks = coalesce(nullif(r->>'hotel_remarks',''), c.hotel_remarks),
           defect_detail = case when v_room in ('A311','A401','B204','B502','B707') and coalesce(r->>'defect_detail','') like '%รายการ Defect แจ้งผ่านแชต:%'
+          and not exists (select 1 from public.defect_web_overrides w
+            where w.room_no = v_room
+              and (w.source_sync_state <> 'synced' or w.source_synced_at is null))
             then r->>'defect_detail' else c.defect_detail end,
           source_file_id = coalesce(nullif(p_source_file_id,''), c.source_file_id),
           source_file_name = coalesce(nullif(p_source_file,''), c.source_file_name),
