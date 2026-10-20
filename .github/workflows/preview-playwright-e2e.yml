@@ -1,0 +1,115 @@
+name: Protected Preview Playwright E2E (read-only)
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/preview-playwright-e2e.yml'
+      - 'scripts/preview-playwright-e2e.mjs'
+      - 'tests/preview-playwright-contract.test.mjs'
+      - 'docs/preview-playwright-qa.md'
+  deployment_status:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Enforce isolated viewer DB, Preview allowlist and read-only policy
+        run: node --test tests/preview-playwright-contract.test.mjs
+
+  browser_anonymous:
+    if: >-
+      github.event_name == 'deployment_status' &&
+      github.event.deployment_status.state == 'success' &&
+      (github.event.deployment.environment == 'Preview' ||
+       github.event.deployment.environment == 'preview') &&
+      github.event.repository.full_name == 'pkraiwit2614-web/3kings-site-report'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          # Immutable, reviewed browser-checker commit; never run deployed PR code with secrets.
+          ref: e9eddc400a95605109891bc5d467c23945c18f3a
+          persist-credentials: false
+      - name: Verify protected branch SHA and pinned browser runner
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_SHA: ${{ github.event.deployment.sha }}
+          DEPLOY_REF: ${{ github.event.deployment.ref }}
+        run: |
+          set -euo pipefail
+          [[ "$DEPLOY_SHA" =~ ^[a-f0-9]{40}$ ]] && [ "$DEPLOY_REF" = "$DEPLOY_SHA" ] || { echo "::error::BLOCK_DEPLOYMENT_REVISION"; exit 1; }
+          expected="$(gh api 'repos/pkraiwit2614-web/3kings-site-report/branches/test/preview-qa-automation-20261019' --jq '.commit.sha')"
+          [ "$DEPLOY_SHA" = "$expected" ] || { echo "::error::BLOCK_UNTRUSTED_PREVIEW_SHA"; exit 1; }
+          [ "$(git rev-parse HEAD)" = "e9eddc400a95605109891bc5d467c23945c18f3a" ] || { echo "::error::BLOCK_BROWSER_CHECKER_REVISION"; exit 1; }
+          [ "$(git rev-parse HEAD:scripts/preview-playwright-e2e.mjs)" = "fdae3595e4e3aa387ab715e943941f04223fa35c" ] || { echo "::error::BLOCK_BROWSER_CHECKER_HASH"; exit 1; }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned Playwright runtime (do not change committed dependencies)
+        run: |
+          npm install --no-save --package-lock=false --ignore-scripts --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Test Login and anonymous access denial on real Preview
+        env:
+          PREVIEW_ENV_URL: ${{ github.event.deployment_status.environment_url }}
+          KINGS_VERCEL_PREVIEW_BYPASS: ${{ secrets.KINGS_VERCEL_PREVIEW_BYPASS }}
+        run: node scripts/preview-playwright-e2e.mjs anonymous
+
+  browser_viewer:
+    # This test deliberately stays skipped until a separate Supabase test DB,
+    # dedicated viewer identity, and reviewed branch-specific environment exist.
+    if: >-
+      github.event_name == 'deployment_status' &&
+      github.event.deployment_status.state == 'success' &&
+      (github.event.deployment.environment == 'Preview' ||
+       github.event.deployment.environment == 'preview') &&
+      github.event.repository.full_name == 'pkraiwit2614-web/3kings-site-report' &&
+      vars.KINGS_E2E_VIEWER_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: e9eddc400a95605109891bc5d467c23945c18f3a
+          persist-credentials: false
+      - name: Verify protected branch SHA and pinned browser runner
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_SHA: ${{ github.event.deployment.sha }}
+          DEPLOY_REF: ${{ github.event.deployment.ref }}
+        run: |
+          set -euo pipefail
+          [[ "$DEPLOY_SHA" =~ ^[a-f0-9]{40}$ ]] && [ "$DEPLOY_REF" = "$DEPLOY_SHA" ] || { echo "::error::BLOCK_DEPLOYMENT_REVISION"; exit 1; }
+          expected="$(gh api 'repos/pkraiwit2614-web/3kings-site-report/branches/test/preview-qa-automation-20261019' --jq '.commit.sha')"
+          [ "$DEPLOY_SHA" = "$expected" ] || { echo "::error::BLOCK_UNTRUSTED_PREVIEW_SHA"; exit 1; }
+          [ "$(git rev-parse HEAD)" = "e9eddc400a95605109891bc5d467c23945c18f3a" ] || { echo "::error::BLOCK_BROWSER_CHECKER_REVISION"; exit 1; }
+          [ "$(git rev-parse HEAD:scripts/preview-playwright-e2e.mjs)" = "fdae3595e4e3aa387ab715e943941f04223fa35c" ] || { echo "::error::BLOCK_BROWSER_CHECKER_HASH"; exit 1; }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned Playwright runtime (do not change committed dependencies)
+        run: |
+          npm install --no-save --package-lock=false --ignore-scripts --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Test real Viewer login, Defect, Materials, Site Operations and RBAC
+        env:
+          PREVIEW_ENV_URL: ${{ github.event.deployment_status.environment_url }}
+          KINGS_VERCEL_PREVIEW_BYPASS: ${{ secrets.KINGS_VERCEL_PREVIEW_BYPASS }}
+          KINGS_E2E_ISOLATED_DB: ${{ vars.KINGS_E2E_ISOLATED_DB }}
+          KINGS_E2E_PREVIEW_SUPABASE_ORIGIN: ${{ vars.KINGS_E2E_PREVIEW_SUPABASE_ORIGIN }}
+          KINGS_E2E_VIEWER_LOGIN: ${{ secrets.KINGS_E2E_VIEWER_LOGIN }}
+          KINGS_E2E_VIEWER_PASSWORD: ${{ secrets.KINGS_E2E_VIEWER_PASSWORD }}
+          KINGS_E2E_RLS_OTHER_PROFILE_ID: ${{ vars.KINGS_E2E_RLS_OTHER_PROFILE_ID }}
+          KINGS_E2E_RLS_PAYROLL_RECORD_ID: ${{ vars.KINGS_E2E_RLS_PAYROLL_RECORD_ID }}
+        run: node scripts/preview-playwright-e2e.mjs viewer
