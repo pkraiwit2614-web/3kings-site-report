@@ -160,7 +160,7 @@ test('group cannot receive system alerts even if transport receives a forged pre
 
 test('no production scheduler or source mutations introduced by the alert policy',()=>{
  const vercel=fs.readFileSync(path.resolve(__dirname,'..','vercel.json'),'utf8')
- assert.equal(Object.keys(JSON.parse(vercel)).length,0)
+ assert.deepEqual(JSON.parse(vercel),{ignoreCommand:'node scripts/vercel-preview-gate.cjs'})
  const receiver=fs.readFileSync(path.resolve(__dirname,'..','app/api/line/webhook/route.ts'),'utf8')
  assert.match(receiver,/mode:'receiver_only'/)
  const sources=['lib/lineAutoPilotNotifications.ts','lib/lineAutoPilotDelivery.ts']
