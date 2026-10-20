@@ -123,7 +123,7 @@ function mapProjectsFromLocation(location: unknown): string[] {
   // Parse complete site numbers; Plot 30/60 and P30 must not alias Plot 3/6.
   // Keep multi-Plot procurement associations together without silently choosing a project.
   for (const match of s.matchAll(/\b(?:Plot\s*|AV-P\s*|P\s*)(\d+)(?:\s*[/,+&]\s*(?:Plot\s*|AV-P\s*|P\s*)?\d+)*(?![\w])/gi)) {
-    const numbers = match[0].match(/\d+/g) || []
+    const numbers: string[] = match[0].match(/\d+/g) ?? []
     if (numbers.includes('3')) {
       // Plot 3 aliases may name a shared procurement row, e.g. P3/P6.
       for (const number of numbers) {
