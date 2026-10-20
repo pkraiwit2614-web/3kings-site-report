@@ -18,6 +18,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: PR #187 Daily Report, PNG and LINE Delivery Gateway unchanged
+        if: github.event_name == 'pull_request' && github.event.pull_request.number == 187
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          node --test tests/daily-line-merge-gate.test.cjs
+          node scripts/daily-line-merge-gate.cjs
 
       - name: Setup Node
         uses: actions/setup-node@v4
