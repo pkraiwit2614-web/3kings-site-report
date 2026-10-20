@@ -15,7 +15,7 @@ function assertResult(expr,value){
 const oldFixture=file('tests/sql/defect-override-reconcile-fixture.sql');
 psql(oldFixture);
 psql(file('supabase/migrations/20261019132800_defect_override_field_reconcile_20261019.sql'));
-psql(String.raw\`
+psql(String.raw`
 ALTER TABLE public.condo_room_status
   ADD COLUMN building text,ADD COLUMN floor integer,
   ADD COLUMN hotel_participation text,ADD COLUMN customer_status text,
@@ -57,7 +57,7 @@ INSERT INTO public.defect_web_overrides (
 ('A311',null,null,null,'Pending Web note','pending','2026-10-19 08:00+07',null),
 ('B707',null,null,null,'Acknowledged Web note','synced',
  '2026-10-19 08:00+07','2026-10-19 09:00+07');
-CREATE TEMP TABLE candidate_rows AS
+CREATE TABLE public.defect_184_candidate_rows AS
  SELECT jsonb_agg(jsonb_build_object(
   'room_no',room_no,'building',building,'floor',floor,
   'hotel_participation',hotel_participation,'customer_status',customer_status,
@@ -72,10 +72,10 @@ CREATE TEMP TABLE candidate_rows AS
     WHEN 'A301' THEN 'รายการ Defect แจ้งผ่านแชต: forbidden outside scope'
     ELSE NULL END
  )) AS payload FROM public.condo_room_status;
-\`);
+`);
 assertResult('(SELECT count(*) FROM public.condo_room_status)',263);
-assertResult('(SELECT count(*) FROM public.condo_room_status WHERE building=''A'')',162);
-assertResult('(SELECT count(*) FROM public.condo_room_status WHERE building=''B'')',101);
+assertResult("(SELECT count(*) FROM public.condo_room_status WHERE building='A')",162);
+assertResult("(SELECT count(*) FROM public.condo_room_status WHERE building='B')",101);
 psql(file('tests/sql/defect-184-canonical-rpc-baseline.sql'));
 const migration=file('supabase/migrations/20261020125000_defect_chat_detail_scoped_guard_20261020.sql');
 const originals=['122f81d4065030c7fb95b21c28bc6a28','e8e902111b5f5f01d74e05d0c95d4d63'];
@@ -95,7 +95,7 @@ assert.notEqual(getHash(sig),localRpc,'Migration did not install its limited det
 const use=(key,src,count,dry)=>'SELECT public.drive_sync_apply_condo_defects('+
  "'"+key+"','"+src+"','1MEeB1E7D_35MTndRPi1aBTlVfI2aR0Wj',"+
  "'2026-10-20 10:00+07'::timestamptz,"+
- (count===263?'(SELECT payload FROM candidate_rows)':"(SELECT jsonb_agg(x) FROM (SELECT jsonb_array_elements(payload) x FROM candidate_rows LIMIT 1) t)")+','+(dry?'true':'false')+')::text;';
+ (count===263?'(SELECT payload FROM public.defect_184_candidate_rows)':"(SELECT jsonb_agg(x) FROM (SELECT jsonb_array_elements(payload) x FROM public.defect_184_candidate_rows LIMIT 1) t)")+','+(dry?'true':'false')+')::text;';
 const source='Handover_Defect_Summary_Updated_28-09-2026.xlsx';
 function jsonResult(query){return JSON.parse(psql(query).split('\n').at(-1))}
 assert.equal(jsonResult(use('wrong_key',source,263,true)).ok,false);
