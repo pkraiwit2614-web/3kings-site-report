@@ -39,15 +39,74 @@ export async function dailyLineRpc(env,path,args,transport=fetch){
  if(!res.ok)throw Error('DAILY_BRIDGE_RPC_'+res.status);
  return await res.json();
 }
+// Read-only LINE quota checks; do not attempt a chargeable push when the quota
+// service cannot be verified. The LINE quota API returns quota per recipient,
+// not per message object.
+export async function dailyLineQuota(env,transport=fetch){
+  const token=env.LINE_CHANNEL_ACCESS_TOKEN;
+  if(!token)return {allow:false,reason:'QUOTA_TOKEN_MISSING'};
+  async function get(path){
+    const r=await transport('https://api.line.me/v2/bot/message/'+path,{
+      method:'GET',headers:{authorization:'Bearer '+token},
+      signal:AbortSignal.timeout(10000)
+    });
+    if(!r.ok)throw Error('QUOTA_HTTP_'+r.status);
+    return await r.json();
+  }
+  try{
+    const limit=await get('quota');
+    if(limit?.type==='none')return {allow:true,remaining:null};
+    if(limit?.type!=='limited'||!Number.isSafeInteger(limit.value)||limit.value<0)
+      return {allow:false,reason:'QUOTA_UNRECOGNIZED'};
+    const used=await get('quota/consumption');
+    if(!Number.isSafeInteger(used?.totalUsage)||used.totalUsage<0)
+      return {allow:false,reason:'QUOTA_USAGE_UNRECOGNIZED'};
+    const remaining=Math.max(0,limit.value-used.totalUsage);
+    return {allow:remaining>0,remaining,
+      reason:remaining>0?'QUOTA_AVAILABLE':'QUOTA_EXHAUSTED'};
+  }catch{return {allow:false,reason:'QUOTA_API_UNAVAILABLE'};}
+}
+async function dailyGroupMemberCount(env,groupId,transport=fetch){
+  try{
+    const r=await transport('https://api.line.me/v2/bot/group/'+
+      encodeURIComponent(groupId)+'/members/count',{
+      method:'GET',headers:{authorization:'Bearer '+env.LINE_CHANNEL_ACCESS_TOKEN},
+      signal:AbortSignal.timeout(10000)
+    });
+    if(!r.ok)return null;
+    const data=await r.json();
+    return Number.isSafeInteger(data?.count)&&data.count>0?data.count:null;
+  }catch{return null;}
+}
+// Retry only in a few predefined short windows on the SAME report day.
+// LINE de-duplicates an unchanged retry key for 24h; we never create a
+// replacement key and the morning-only policy prevents retries after 24h.
+const RETRY_SLOTS=new Set(['08:12','08:32','09:02','10:02']);
+export function dailyRetryWindow(when){
+  return RETRY_SLOTS.has(when.localTime) && when.day>='2026-10-20';
+}
+function dailyLineErrorClass(status,message){
+  const s=String(message||'').toLowerCase().slice(0,400);
+  if(status===429&&(/monthly limit|quota|target limit/.test(s)))
+    return 'MONTHLY_QUOTA';
+  if(status===429&&(/rate limit|too many requests/.test(s)))
+    return 'RATE_LIMIT';
+  if(status===429)return 'LIMIT_UNKNOWN';
+  if(status===409)return 'RETRY_CONFLICT';
+  if(status===null)return 'NETWORK_UNCERTAIN';
+  return 'HTTP_'+status;
+}
 export async function dailySiteSendTick(env,{db,hash,transport=fetch,now=new Date()}={}){
   const when=dailyBangkokPolicy(now);
   const stats={mode:'NO_SEND',reportDate:when.reportDate,ready:false,
-    routesChecked:0,textAccepted:0,imageAccepted:0,blocked:0,uncertain:0};
+    routesChecked:0,textAccepted:0,imageAccepted:0,bundlesAccepted:0,
+    blocked:0,uncertain:0,quotaStatus:'NOT_CHECKED'};
   if(env.DAILY_SITE_LINE_ENABLED!=='true'||!env.DAILY_LINE_BRIDGE_TOKEN
-    ||!env.LINE_CHANNEL_ACCESS_TOKEN||!env.SUPABASE_URL) return stats;
+    ||!env.LINE_CHANNEL_ACCESS_TOKEN||!env.SUPABASE_URL)return stats;
   if(when.dayOfWeek===0||when.day<'2026-10-20'
     ||when.localTime<'08:00'||when.localTime>'13:00')return stats;
-  if(typeof db!=='function'||typeof hash!=='function')throw Error('DB_DEPENDENCY_MISSING');
+  if(typeof db!=='function'||typeof hash!=='function')
+    throw Error('DB_DEPENDENCY_MISSING');
   const endpoint=env.SUPABASE_URL.replace(/\/$/,'')+
     '/functions/v1/kings_daily_line_images/ready?date='+encodeURIComponent(when.reportDate);
   let ready;
@@ -61,24 +120,28 @@ export async function dailySiteSendTick(env,{db,hash,transport=fetch,now=new Dat
   if(!ready||ready.ready!==true||!Array.isArray(ready.assets)
     ||ready.assets.length!==4)return {...stats,mode:'QA_BLOCKED'};
   const images=new Map();
-  for(const image of ready.assets){
-    if(!validSha(image.sha256)||typeof image.url!=='string'
-      ||!image.url.startsWith(env.SUPABASE_URL.replace(/\/$/,'')+
+  for(const item of ready.assets){
+    if(!validSha(item.sha256)||typeof item.url!=='string'
+      ||!item.url.startsWith(env.SUPABASE_URL.replace(/\/$/,'')+
           '/functions/v1/kings_daily_line_images/image?')
-      ||!/^https:\/\//.test(image.url)
-      ||!Number.isInteger(image.width)||image.width!==2947
-      ||!Number.isInteger(image.height)||image.height<101
-      ||('size' in image && (!Number.isInteger(image.size)||image.size<=0||image.size>1048576)))
+      ||!/^https:\/\//.test(item.url)
+      ||!Number.isInteger(item.width)||item.width!==2947
+      ||!Number.isInteger(item.height)||item.height<101
+      ||('size' in item&&(!Number.isInteger(item.size)||item.size<=0||item.size>1048576)))
       return {...stats,mode:'IMAGE_METADATA_BLOCKED'};
-    images.set(image.site,image);
+    images.set(item.site,item);
   }
   if(images.size!==4)return {...stats,mode:'IMAGE_METADATA_BLOCKED'};
-  stats.ready=true;stats.mode='LIVE_GATED';
+  stats.ready=true;
+  const quota=await dailyLineQuota(env,transport);
+  stats.quotaStatus=quota.reason||(quota.allow?'QUOTA_AVAILABLE':'QUOTA_UNKNOWN');
+  if(!quota.allow)return {...stats,mode:'QUOTA_BLOCKED'};
+  let budget=quota.remaining;
+  stats.mode='LIVE_GATED';
   async function claim(route,groupId,stage,sha){
-    const key=await hash(['3kings','daily_site_report',when.reportDate,route,groupId,stage].join('|'));
+    const key=await hash(['3kings','daily_site_report',when.reportDate,
+      route,groupId,stage].join('|'));
     if(!validSha(key))throw Error('INVALID_EVENT_KEY');
-    // Persist the typed log before claiming a retry key. Failure is retryable
-    // and cannot strand the atomic claim without an outbound attempt.
     const logged=await db(env,'/rest/v1/rpc/daily_line_record_delivery',{
       p_event_key:key,p_report_date:when.reportDate,p_site_code:route,
       p_group_id:groupId,p_stage:stage,p_asset_sha256:sha||null});
@@ -87,58 +150,112 @@ export async function dailySiteSendTick(env,{db,hash,transport=fetch,now=new Dat
       p_event_key:key,p_alert_kind:'daily_site_report',
       p_target_scope:'site_group',
       p_summary:'Daily Site '+when.reportDate+' '+route+' '+stage});
-    const r=Array.isArray(result)?result[0]:null;
-    if(!r||!['new','already_sent','in_flight'].includes(r.claim_status))
+    const record=Array.isArray(result)?result[0]:null;
+    if(!record||!['new','already_sent','in_flight'].includes(record.claim_status))
       return {status:'blocked'};
-    if(r.claim_status!=='new')return {status:r.claim_status};
-    if(!validRetry(r.retry_key))return {status:'blocked'};
-    return {status:'new',key,retry:r.retry_key};
+    if(record.claim_status==='already_sent')return {status:'already_sent'};
+    if(!validRetry(record.retry_key))return {status:'blocked'};
+    return {status:record.claim_status,key,retry:record.retry_key};
   }
-  async function push(groupId,messages,token){
-    let status=null;
+  async function push(groupId,messages,retryKey){
     try{
       const r=await transport('https://api.line.me/v2/bot/message/push',{
-        method:'POST',headers:{authorization:'Bearer '+env.LINE_CHANNEL_ACCESS_TOKEN,
-          'content-type':'application/json','X-Line-Retry-Key':token},
-        body:JSON.stringify({to:groupId,messages}),signal:AbortSignal.timeout(10000)});
-      status=r.status;
-    }catch{ /* no blind re-send if the outcome is uncertain */ }
-    return {status,accepted:status!==null&&status>=200&&status<300};
+        method:'POST',headers:{
+          authorization:'Bearer '+env.LINE_CHANNEL_ACCESS_TOKEN,
+          'content-type':'application/json','X-Line-Retry-Key':retryKey
+        },
+        body:JSON.stringify({to:groupId,messages}),
+        signal:AbortSignal.timeout(10000)
+      });
+      // A 409 with an accepted-request header confirms LINE had already
+      // accepted this exact retry key; do not issue another send.
+      const accepted=r.status>=200&&r.status<300||
+        (r.status===409&&!!r.headers?.get?.('x-line-accepted-request-id'));
+      let message='';
+      if(!accepted){
+        try{
+          const data=await r.json();
+          message=typeof data?.message==='string'?data.message:'';
+        }catch{}
+      }
+      const errorClass=accepted?null:dailyLineErrorClass(r.status,message);
+      if(errorClass)console.warn('daily_line_push_rejected',{
+        http:r.status,reason:errorClass
+      });
+      return {status:r.status,accepted,errorClass};
+    }catch{
+      console.warn('daily_line_push_rejected',{reason:'NETWORK_UNCERTAIN'});
+      return {status:null,accepted:false,errorClass:'NETWORK_UNCERTAIN'};
+    }
   }
+  async function ack(one,sent){
+    const ok=await db(env,'/rest/v1/rpc/line_autopilot_ack',{
+      p_event_key:one.key,p_retry_key:one.retry,
+      p_status:sent.accepted?'delivered':'uncertain',
+      p_http_status:sent.status});
+    if(ok!==true)throw Error('DELIVERY_ACK_FAILED');
+  }
+  const imageMessage=image=>({type:'image',
+    originalContentUrl:image.url,previewImageUrl:image.url});
   for(const {route,asset} of DAILY_ROUTES){
     stats.routesChecked++;
     let preview;
     try{
-      const res=await db(env,'/rest/v1/rpc/line_autopilot_daily_route',{
+      const r=await db(env,'/rest/v1/rpc/line_autopilot_daily_route',{
         p_site_code:route});
-      preview=Array.isArray(res)?res[0]:null;
+      preview=Array.isArray(r)?r[0]:null;
     }catch{stats.blocked++;continue;}
     if(!preview||preview.would_send_line!==true
       ||!validGroup(preview.group_id)||!images.has(asset)){
       stats.blocked++;continue;
     }
-    const groupId=preview.group_id;
+    const groupId=preview.group_id,memberCount=await dailyGroupMemberCount(env,groupId,transport);
+    // For a limited plan, never exceed the known remaining quota based on
+    // the verified group-member count. Unknown membership fails closed.
+    if(budget!==null&&(memberCount===null||memberCount>budget)){
+      stats.blocked++;
+      console.warn('daily_line_quota_group_blocked',{route,
+        reason:memberCount===null?'MEMBER_COUNT_UNKNOWN':'INSUFFICIENT_QUOTA'});
+      continue;
+    }
     try{
       const text=await claim(route,groupId,'form_text',null);
-      if(text.status==='new'){
-        const sent=await push(groupId,[{type:'text',text:DAILY_FORM_TEXT}],text.retry);
-        await db(env,'/rest/v1/rpc/line_autopilot_ack',{
-          p_event_key:text.key,p_retry_key:text.retry,
-          p_status:sent.accepted?'delivered':'uncertain',p_http_status:sent.status});
-        if(sent.accepted)stats.textAccepted++;else stats.uncertain++;
-        continue; // image follows on a subsequent cron invocation
+      if(text.status==='blocked'){stats.blocked++;continue;}
+      const image=await claim(route,groupId,'image',images.get(asset).sha256);
+      if(image.status==='blocked'){stats.blocked++;continue;}
+      if(text.status==='already_sent'&&image.status==='already_sent')continue;
+      let sending=[],token,records=[];
+      if(text.status==='already_sent'){
+        if(image.status==='new'||image.status==='in_flight'&&dailyRetryWindow(when)){
+          sending=[imageMessage(images.get(asset))];token=image.retry;records=[image];
+        }
+      }else if(image.status==='already_sent'){
+        if(text.status==='new'||text.status==='in_flight'&&dailyRetryWindow(when)){
+          sending=[{type:'text',text:DAILY_FORM_TEXT}];token=text.retry;records=[text];
+        }
+      }else if(text.status===image.status
+        &&(text.status==='new'||text.status==='in_flight'&&dailyRetryWindow(when))){
+        // New mornings: one billed push request containing two message
+        // objects. Both ledger stages are acknowledged with the same result.
+        sending=[{type:'text',text:DAILY_FORM_TEXT},
+          imageMessage(images.get(asset))];
+        token=text.retry;records=[text,image];
       }
-      if(text.status!=='already_sent')continue;
-      const image=images.get(asset);
-      const claimImage=await claim(route,groupId,'image',image.sha256);
-      if(claimImage.status!=='new')continue;
-      const sent=await push(groupId,[{type:'image',
-        originalContentUrl:image.url,previewImageUrl:image.url}],claimImage.retry);
-      await db(env,'/rest/v1/rpc/line_autopilot_ack',{
-        p_event_key:claimImage.key,p_retry_key:claimImage.retry,
-        p_status:sent.accepted?'delivered':'uncertain',p_http_status:sent.status});
-      if(sent.accepted)stats.imageAccepted++;else stats.uncertain++;
-    }catch{stats.uncertain++;}
+      if(!sending.length)continue;
+      const sent=await push(groupId,sending,token);
+      // Every attempted push decrements our optimistic budget to prevent
+      // the same cron from oversubscribing quota while LINE settles usage.
+      if(budget!==null)budget=Math.max(0,budget-memberCount);
+      for(const record of records)await ack(record,sent);
+      if(sent.accepted){
+        if(records.some(x=>x===text))stats.textAccepted++;
+        if(records.some(x=>x===image))stats.imageAccepted++;
+        if(records.length===2)stats.bundlesAccepted++;
+      }else stats.uncertain++;
+    }catch{
+      stats.uncertain++;
+      console.warn('daily_line_stage_unverified',{route});
+    }
   }
   return stats;
 }
