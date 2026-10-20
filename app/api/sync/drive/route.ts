@@ -120,7 +120,23 @@ function mapProjectsFromLocation(location: unknown): string[] {
   const s = String(location ?? '').normalize('NFKC').replace(/\s+/g, ' ').trim()
   const codes = new Set<string>()
 
-  for (const match of s.matchAll(/Plot\s*(3|[6-9])/gi)) codes.add(`AV-P${match[1]}`)
+  // Parse complete site numbers; Plot 30/60 and P30 must not alias Plot 3/6.
+  // Keep multi-Plot procurement associations together without silently choosing a project.
+  for (const match of s.matchAll(/\b(?:Plot\s*|AV-P\s*|P\s*)(\d+)(?:\s*[/,+&]\s*(?:Plot\s*|AV-P\s*|P\s*)?\d+)*(?![\w])/gi)) {
+    const numbers: string[] = match[0].match(/\d+/g) ?? []
+    if (numbers.includes('3')) {
+      // Plot 3 aliases may name a shared procurement row, e.g. P3/P6.
+      for (const number of numbers) {
+        if (['3', '6', '7', '8', '9'].includes(number)) codes.add('AV-P' + number)
+      }
+    } else {
+      // Non-P3 rows retain the original "Plot N" semantics; bare P6/AV-P6
+      // and shorthand Plot 6/7 do not acquire new associations.
+      for (const explicit of match[0].matchAll(/\bPlot\s*([6-9])\b(?!\w)/gi)) {
+        codes.add('AV-P' + explicit[1])
+      }
+    }
+  }
   if (/Above\s*Condo\s*A\b|Condo\s*Building\s*A\b/i.test(s)) codes.add('CONDO-A')
   if (/Above\s*Condo\s*B\b|Condo\s*Building\s*B\b/i.test(s)) codes.add('CONDO-B')
   if (/\bMirage\b/i.test(s)) codes.add('MIRAGE')
@@ -369,6 +385,11 @@ async function parseMaterials(buffer: Buffer) {
     const projectCode = mapProjectFromLocation(sourceLocation)
     const itemName = text(valueByHeader(r, headers, 'รายการวัสดุ/งาน'))
     if (!itemName) continue
+    // Master material rows accept one project only. Shared P3 rows belong in Purchasing.
+    const plotCodes = mapProjectsFromLocation(sourceLocation).filter((code) => code.startsWith('AV-P'))
+    if (plotCodes.includes('AV-P3') && plotCodes.length > 1) {
+      throw new Error('Ambiguous shared Plot 3 material at row ' + (i + 1))
+    }
 
     materials.push({
       project_code: projectCode,
@@ -486,6 +507,14 @@ export async function POST(request: NextRequest) {
     if (!syncKey) return NextResponse.json({ ok: false, error: 'missing_sync_key' }, { status: 401 })
     if (kind !== 'schedule' && kind !== 'materials' && kind !== 'defects') {
       return NextResponse.json({ ok: false, error: 'invalid_kind' }, { status: 400 })
+    }
+    // Only the Defect RPC implements a transactional dry run. Never simulate a no-write
+    // Materials/Schedule operation by silently calling its write-capable RPC.
+    if (dryRun && kind !== 'defects') {
+      return NextResponse.json({ ok: false, error: 'dry_run_not_supported', writes_performed: false }, { status: 400 })
+    }
+    if (kind === 'materials' && sourceFile && /REFERENCE[ _-]*ONLY|PR[ _-]*Plot[ _-]*3[ _-]*Working/i.test(sourceFile)) {
+      return NextResponse.json({ ok: false, error: 'reference_or_working_pr_not_materials_master', writes_performed: false }, { status: 422 })
     }
 
     const arrayBuffer = await request.arrayBuffer()
