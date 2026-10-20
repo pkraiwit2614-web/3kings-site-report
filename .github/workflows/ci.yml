@@ -215,6 +215,26 @@ jobs:
           set -euo pipefail
           cd tests/e2e/local-stack
           supabase start
+      - name: PostgreSQL isolated SOP v2 publisher gate (synthetic, transaction rollback)
+        if: github.event_name == 'pull_request' && github.event.pull_request.number == 188
+        run: |
+          set -euo pipefail
+          test ! -e tests/e2e/local-stack/supabase/.temp/project-ref
+          db_container="supabase_db_3kings_ci_viewer_e2e"
+          docker inspect --format '{{.State.Running}}' "$db_container" | grep -qx 'true'
+          { 
+            cat tests/line-autopilot/sql/isolated-setup.sql
+            cat docs/release-candidates/20261020_daily_line_sop_v2_GATE_PROPOSAL_NOT_DEPLOYED.sql
+            cat tests/line-autopilot/sql/isolated-assertions.sql
+          } | docker exec -i "$db_container" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres > /tmp/line-gate-isolated-qa.txt 2>&1 || {
+            sed -n '1,100p' /tmp/line-gate-isolated-qa.txt
+            exit 1
+          }
+          grep -Fq 'LINE_SOP_V2_ISOLATED_TESTS_PASS' /tmp/line-gate-isolated-qa.txt
+          grep -Fq 'LINE_SOP_V2_ISOLATED_ROLLBACK_PASS' /tmp/line-gate-isolated-qa.txt
+          echo 'SQL Gate v2.0 tested in disposable Supabase Local, real PostgreSQL, rollback, zero production access'
+          echo '### SQL Gate v2.0: isolated PostgreSQL PASS (synthetic; rollback)' >> "$GITHUB_STEP_SUMMARY"
+
       - name: Export only local Supabase values to CI environment
         run: |
           set -euo pipefail
