@@ -352,7 +352,6 @@ export default function HotelWorkPlanPage(){
     {selected.updated_at&&<p className="work-history">แก้ไขล่าสุด {selected.updated_by_name||'ผู้ใช้'} · {new Date(selected.updated_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})} · Revision {selected.revision} · {selected.sync_state==='pending'?'รอซิงก์ Excel':selected.sync_state==='conflict'?'ข้อมูลขัดแย้ง':'ซิงก์แล้ว'}</p>}
     <p><Link href={'/defects?q='+encodeURIComponent(selected.room_no)+'#room-list'}>เปิด Defect Report ของห้องนี้</Link></p>
    </section>}
-   <p className="muted small">Excel Day 1–9 ยังคงทั้ง 267 รายการและลำดับอ้างอิงเดิม · หน้าแผนเลือกห้องจาก Defect และ OOO ล่าสุดโดยไม่เขียนทับต้นทาง · ห้อง Combine นับหนึ่งชุด · แก้ไขเฉพาะวันที่ในแผน</p>
   </>}
   {saveDialog&&<div className="work-save-overlay" role="presentation"
     onMouseDown={e=>{if(e.target===e.currentTarget&&saveDialog.phase!=='saving'&&!saving)setSaveDialog(null)}}>
