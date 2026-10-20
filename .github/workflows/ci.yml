@@ -40,6 +40,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Consolidated LINE AutoPilot no-send P1 regression
+        run: node --test tests/consolidated-line-autopilot.test.cjs tests/daily-line-autopilot.test.cjs tests/daily-line-runtime.test.cjs tests/daily-line-owner-summary.test.cjs
+
       - name: Preview gate and Hosted authorization regression
         run: node --test tests/vercel-preview-gate.test.cjs tests/hosted-preview-authorization.test.mjs
 
