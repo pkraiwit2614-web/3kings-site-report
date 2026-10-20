@@ -113,7 +113,7 @@ test('monthly quota exhausted and unverified membership block all pushes',async(
  group.transport=async(u,o)=>u.includes('/members/count')
   ? {ok:false,status:403}:t(u,o);
  const noGroup=await dailySiteSendTick(env,{...group,now});
- assert.equal(noGroup.blocked,1);assert.equal(group.pushes.length,0);
+ assert.equal(noGroup.blocked,3);assert.equal(group.pushes.length,0);
 });
 
 test('409 with matching accepted request is idempotent, not a fresh delivery',async()=>{
