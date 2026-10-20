@@ -1,0 +1,154 @@
+name: Authorized Hosted Preview QA (no deployment)
+# Manual only. Normal PR Preview remains in Actions/Supabase Local.
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'Open first-party PR number (current HEAD only)'
+        required: true
+        type: string
+      commit_sha:
+        description: 'Exact 40-character PR HEAD SHA'
+        required: true
+        type: string
+      preview_url:
+        description: 'Existing exact-deployment Vercel Preview URL (not branch alias)'
+        required: true
+        type: string
+      browser_qa:
+        description: 'Also run anonymous protected Playwright route-security QA'
+        required: true
+        type: boolean
+        default: true
+      reason:
+        description: 'Specific hosted-only risk that Local QA cannot verify'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
+concurrency:
+  group: hosted-preview-${{ inputs.pr_number }}-${{ inputs.commit_sha }}
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    name: Verify owner + first-party PR + exact SHA + green CI (no secrets)
+    if: github.repository == 'pkraiwit2614-web/3kings-site-report' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify checked-in guard unit tests
+        run: node --test tests/hosted-preview-authorization.test.mjs tests/vercel-preview-gate.test.cjs
+      - name: Check first-party owner, exact PR HEAD and successful same-SHA CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_REF: ${{ github.ref }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+          PR_SHA: ${{ inputs.commit_sha }}
+          PREVIEW_ENV_URL: ${{ inputs.preview_url }}
+        run: node scripts/authorize-hosted-preview.mjs
+      - name: Record reason for exceptional hosted testing
+        env:
+          REASON: ${{ inputs.reason }}
+        run: |
+          if [ -z "${REASON// /}" ]; then
+            echo "::error::BLOCK_HOSTED_PREVIEW_REASON_MISSING"
+            exit 1
+          fi
+          echo "Manual hosted-only reason recorded (not emitted to public artifacts)."
+
+  hosted_qa:
+    name: Read-only URL, identity and optional anonymous browser
+    needs: authorize
+    if: needs.authorize.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    environment: 3kings-hosted-preview-qa
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Recheck PR/SHA/CI immediately before credential access
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_REF: ${{ github.ref }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+          PR_SHA: ${{ inputs.commit_sha }}
+          PREVIEW_ENV_URL: ${{ inputs.preview_url }}
+        run: node scripts/authorize-hosted-preview.mjs
+      - name: Verify actual Vercel deployment project + Preview SHA (read-only API)
+        env:
+          KINGS_VERCEL_READ_TOKEN: ${{ secrets.KINGS_VERCEL_READ_TOKEN }}
+          PREVIEW_ENV_URL: ${{ inputs.preview_url }}
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_REF: ${{ github.ref }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+          PR_SHA: ${{ inputs.commit_sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "$KINGS_VERCEL_READ_TOKEN" ]; then
+            echo "::error::BLOCK_READONLY_VERCEL_TOKEN_NOT_CONFIGURED"
+            exit 1
+          fi
+          host="$(node -e 'console.log(new URL(process.env.PREVIEW_ENV_URL).hostname)')"
+          case "$host" in
+            3kings-site-report-*-kraiwit-p-golfiiz-sqr.vercel.app) ;;
+            *) echo "::error::BLOCK_PREVIEW_HOST"; exit 1 ;;
+          esac
+          echo "VERCEL_DEPLOYMENT_JSON=$RUNNER_TEMP/vercel-hosted-identity.json" >> "$GITHUB_ENV"
+          curl --proto '=https' --tlsv1.2 --silent --show-error --fail --max-time 20 \
+            --header "Authorization: Bearer $KINGS_VERCEL_READ_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$host?teamId=team_el2ch8nepuJK8ZVtAJRGdpQ5" \
+            --output "$RUNNER_TEMP/vercel-hosted-identity.json"
+          node scripts/authorize-hosted-preview.mjs verify-deployment
+      - name: Probe protected Vercel URL without modifying app data
+        env:
+          PREVIEW_ENV_URL: ${{ inputs.preview_url }}
+          KINGS_VERCEL_PREVIEW_BYPASS: ${{ secrets.KINGS_VERCEL_PREVIEW_BYPASS }}
+        run: node scripts/preview-readonly-smoke.mjs
+      - name: Install pinned Playwright for on-demand anonymous QA
+        if: inputs.browser_qa
+        run: |
+          npm ci --no-audit --no-fund
+          npm install --no-save --package-lock=false --ignore-scripts --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Browser Login + anonymous API and route denial (no Viewer credentials)
+        if: inputs.browser_qa
+        env:
+          PREVIEW_ENV_URL: ${{ inputs.preview_url }}
+          KINGS_VERCEL_PREVIEW_BYPASS: ${{ secrets.KINGS_VERCEL_PREVIEW_BYPASS }}
+        run: node scripts/preview-playwright-e2e.mjs anonymous
+      - name: Record scope of evidence
+        env:
+          SHA: ${{ inputs.commit_sha }}
+        run: |
+          {
+            echo "### Authorized Hosted Preview QA"
+            echo "- Exact PR HEAD SHA: \`$SHA\`"
+            echo "- Vercel deployment: original Preview SHA verified against Vercel API"
+            echo "- Run type: manual read-only; no Vercel build/deploy"
+            echo "- Authorization: repository owner only, GitHub CI success required"
+            echo "- Hosted Viewer login: UNTESTED until isolated Preview DB independently verified"
+            echo "- This is not Production QA, deployment approval, or proof of data isolation"
+          } >> "$GITHUB_STEP_SUMMARY"
