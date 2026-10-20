@@ -8,8 +8,8 @@ import os
 import re
 from collections import Counter
 
-CAMERA = re.compile(r"^(?:IMG|DSC|PXL|DCIM|DSCF|IMAGE|PHOTO)[_-]?\\d+", re.I)
-DAY = re.compile(r"^\\d{8}$")
+CAMERA = re.compile(r"^(?:IMG|DSC|PXL|DCIM|DSCF|IMAGE|PHOTO)[_-]?\d+", re.I)
+DAY = re.compile(r"^\d{8}$")
 IMAGE = {"image/jpeg", "image/png"}
 SOP_TITLE = "SOP_09_Progress_Photo_Mapping_v1.3_FastTrack_2026-10-20"
 
@@ -164,8 +164,8 @@ def main():
     if missing:
         raise SystemExit("Missing configuration: " + ", ".join(missing))
     if args.apply:
-        for k in ["PHOTO_ENABLE_WRITE", "PHOTO_WEB_PARSER_VERIFIED", "PHOTO_AUDIT_FOLDER_ID"]:
-            if not os.getenv(k) or (k != "PHOTO_AUDIT_FOLDER_ID" and os.getenv(k) != "YES"):
+        for k in ["PHOTO_ENABLE_WRITE", "PHOTO_WEB_PARSER_VERIFIED", "PHOTO_AUDIT_FOLDER_ID", "PHOTO_VERIFIED_MATCHES_JSON"]:
+            if not os.getenv(k) or (k in ("PHOTO_ENABLE_WRITE", "PHOTO_WEB_PARSER_VERIFIED") and os.getenv(k) != "YES"):
                 raise SystemExit("Write gate missing: " + k)
     from google.oauth2 import service_account
     from googleapiclient.discovery import build
