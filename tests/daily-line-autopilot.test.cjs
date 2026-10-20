@@ -4,9 +4,11 @@ const assert=require('node:assert/strict');
 const {PAGES,FORM_TEXT,SCHEDULE,reportPolicyFromBangkok,reportDateFromBangkok,expectedFiles,
   checkRoute,validateManualRunGate,prepareAfterManualRunDryRun,prepareDryRun}=require('../lib/dailyLineAutopilotCore.cjs');
 const TRUE_EVIDENCE={
-  sopIndexRead:true,sopV13Read:true,sourceFresh:true,formColumnsVerified:true,
-  formRowsReconciled:true,monthlySheetVerified:true,sheetFormulaPreserved:true,
-  pdf4PagesVerified:true,pdfA4LandscapeVerified:true
+  sopIndexRead:true,sopSheetsV2Read:true,sopPublishV2Read:true,
+  sourceFresh:true,formColumnsVerified:true,formRowsReconciled:true,
+  monthlySheetVerified:true,sheetFormulaPreserved:true,sheetReadbackVerified:true,
+  pdf4PagesVerified:true,pdfA4LandscapeVerified:true,png4Verified:true,
+  driveReadbackVerified:true
 };
 const IMG_EVIDENCE={
   derivedFromFinalPdf:true,cropHeaderComplete:true,cropNotesComplete:true,
@@ -75,7 +77,7 @@ test('SOP exact names; Henessy filename is intentionally not Hennessy',()=>{
     'Daily_Site_Report_18-10-2026_Page_04_Henessy.png');
   assert.match(FORM_TEXT,/forms\.gle\/UDTk8uxG3iwQaW5y8/);
   assert.deepEqual(SCHEDULE.map(x=>x.bangkok),
-    ['07:30','07:50','08:00','08:02','08:05']);
+    ['07:45','07:55','08:00','08:02','08:05']);
   assert.throws(()=>expectedFiles('2026-02-30'),/BLOCK_INVALID_DATE/);
 });
 test('real 19 October folder file names alone cannot bypass missing QA/mapping',()=>{
@@ -274,3 +276,16 @@ test('no Sunday LINE even with an otherwise complete synthetic manual proof',()=
   assert.equal(validateManualRunGate(input).reason,'SKIP_SUNDAY');
   assert.equal(prepareAfterManualRunDryRun(input).deliveryLog.length,0);
 });
+
+// v2.0 Daily Sync and PDF/PNG Publisher are separate verification sources.
+test('active SOP v2.0 requires both Sheets and Publisher evidence independently',()=>{
+  const a=fixture();a.evidence.sopSheetsV2Read=false;
+  const missingSheet=prepareDryRun(a);
+  assert(missingSheet.reportOutput.every(x=>x.qa==='BLOCK_QA_sopSheetsV2Read'));
+  const b=fixture();b.evidence.sopPublishV2Read=false;
+  const missingPublish=prepareDryRun(b);
+  assert(missingPublish.reportOutput.every(x=>x.qa==='BLOCK_QA_sopPublishV2Read'));
+  const d=fixture();d.evidence.driveReadbackVerified=false;
+  const missingDrive=prepareDryRun(d);
+  assert(missingDrive.reportOutput.every(x=>x.qa==='BLOCK_QA_driveReadbackVerified'));
+})
