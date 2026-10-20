@@ -1,6 +1,13 @@
 import {NextRequest,NextResponse} from 'next/server'
 import {createHash,timingSafeEqual} from 'node:crypto'
 import {stageExpressInSheets} from '@/lib/express-po/sheets-sync'
+// Node-only deterministic delta planner; does not write or authorize Materials.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const {planExpressDelta}=require('../../../../lib/express-po/delta.cjs') as {
+ planExpressDelta:(report:unknown,staged:unknown,canonical:unknown,options?:unknown)=>{
+  summary:{[key:string]:number};pages:unknown[];gate:string
+ }
+}
 import {exchangeVercelOidcToken} from '@/lib/agentGoogleDrive'
 
 export const runtime='nodejs'
@@ -90,13 +97,18 @@ export async function POST(request:NextRequest){
   const {file,bytes}=await latestCsv(token,source as SourceMode)
   const report=parseExpressPoReport(bytes)
   const fatal=report.qa.some(q=>['REPORT_COUNT_MISMATCH','REPORT_SUM_MISMATCH',
-   'PO_HEADER_UNREADABLE','ORPHAN_ITEM','DOC_TYPE_CONFLICT'].includes(q.code))
+   'PO_HEADER_UNREADABLE','ORPHAN_ITEM','DOC_TYPE_CONFLICT',
+   'DOCUMENT_HEADER_UNRECOGNIZED','DOCUMENT_DATE_UNREADABLE'].includes(q.code))
   if(fatal&&mode==='stage_only')throw Error('SOURCE_REPORT_QA_BLOCK')
   // Existing four-tab staging is deliberately limited to dated PO-only small batches.
   // History snapshots require a separately verified incremental, locked staging design.
   if(mode==='stage_only'&&(source!=='po_daily'||report.reportType!=='PO_PL'||
      report.documents.length>500||report.summary.lineItems>3000))
    throw Error('SOURCE_STAGING_DELTA_REQUIRED')
+  // Canonical records are intentionally NOT inferred from a missing preview DB snapshot.
+  // This preview-only classification blocks all import candidates until verified
+  // source-to-existing-row identity is supplied to a separate controlled executor.
+  const delta=planExpressDelta(report,[],null,{maxDocumentsPerPage:100,maxItemsPerPage:1000})
   const hold=new Set(report.summary.quarantinedDocuments)
   const documents=report.documents.map(d=>({...d,receiptStatus:'unverified',
    importDecision:hold.has(d.poNo)?'hold_qa':d.projectMapping==='unmapped'?
@@ -104,6 +116,7 @@ export async function POST(request:NextRequest){
   const response={source:{fileName:file.name,modifiedTime:file.modifiedTime,
     sha256:report.sourceSha256,sourceMode:source,reportType:report.reportType},
    summary:report.summary,qaTotal:report.qa.length,qa:report.qa.slice(0,100),
+   delta:{gate:delta.gate,summary:delta.summary,pageCount:delta.pages.length},
    decisions:{verified:documents.filter(d=>d.importDecision==='staged_verified').length,
     holdMapping:documents.filter(d=>d.importDecision==='hold_mapping').length,
     holdQa:documents.filter(d=>d.importDecision==='hold_qa').length},

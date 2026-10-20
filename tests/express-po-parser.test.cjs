@@ -98,3 +98,18 @@ test('masked total count and alphanumeric PL suffix remain safely readable',()=>
  assert.deepEqual(report.documents[0].projectCodes,['AV-P6','AV-P7'])
  assert.equal(report.qa.length,0)
 })
+
+test('unusual but real 20-Oct PC/PR document ID lengths are not skipped',()=>{
+ const b=cp874([
+  'บริษัท ตัวอย่าง','  รายงานใบขอซื้อ แยกตามผู้จำหน่าย',
+  '  ผู้จำหน่าย ตัวอย่าง /AP-0001',
+  '  PC60409002  09/04/69  20/04/69   30  2                  100.00         7.00       107.00  N',
+  '                1 D5122-07 ทดสอบ                                        1.00งาน             100.00                 100.00',
+  '  PR0000001  24/06/68  24/06/68   30  2                  100.00         7.00       107.00  N',
+  '                1 D5122-08 ทดสอบ                                        1.00งาน             100.00                 100.00',
+  'รวมทั้งสิ้น  2 ใบ                                         200.00        14.00       214.00'].join('\r\n'))
+ const r=parseExpressPoReport(b)
+ assert.equal(r.documents.length,2)
+ assert.equal(r.summary.lineItems,2)
+ assert.ok(!r.qa.some(x=>x.code==='DOCUMENT_HEADER_UNRECOGNIZED'))
+})
