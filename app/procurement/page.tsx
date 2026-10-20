@@ -10,7 +10,6 @@ import { getSupabase } from '@/lib/supabase'
 import { createLiveLoader, requireSuccessfulReads } from '@/lib/liveLoader'
 import { dateTH } from '@/lib/format'
 import type { Project } from '@/lib/types'
-import ProcurementEditPanel from '@/components/ProcurementEditPanel'
 
 function dateTimeTH(value:string|null|undefined){
   if(!value)return '-'
@@ -203,7 +202,6 @@ export default function ProcurementPage(){
       <div className="management-action-meta"><span>นำเข้าข้อมูลล่าสุด</span><b>{dateTimeTH(latestImportAt)}</b></div>
       <Link href="/?section=purchasing-followup#dashboard-purchasing" className="button management-action-dashboard">← Dashboard</Link>
     </div>}/>
-    <ProcurementEditPanel/>
 
     <section className="panel" style={{marginBottom:10,position:'sticky',top:0,zIndex:18,padding:8,borderRadius:14}}>
       <div className="toolbar" style={{padding:0,background:'var(--surface)',borderRadius:10,marginBottom:0,flexWrap:'wrap',gap:6,alignItems:'center'}}>

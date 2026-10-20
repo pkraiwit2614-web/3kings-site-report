@@ -265,6 +265,11 @@ async function parseDefects(buffer: Buffer) {
       source_note: text(valueByHeader(r, headers, 'Source Note')),
       hotel_complete_color: text(valueByHeader(r, headers, 'Hotel Complete Color')),
       hotel_remarks: text(valueByHeader(r, headers, 'Hotel Remarks')),
+      // Chat-sourced detail only: never import other historical descriptions.
+      defect_detail: (() => {
+        const detail = text(valueByHeader(r, headers, 'Defect Detail (Web App)'))
+        return detail?.includes('รายการ Defect แจ้งผ่านแชต:') ? detail : null
+      })(),
     })
   }
 

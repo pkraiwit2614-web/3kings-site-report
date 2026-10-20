@@ -6,3 +6,7 @@ node_modules
 *.log
 .DS_Store
 *.tsbuildinfo
+
+# Task Observer private outputs must never enter this public repository
+skill-observations/
+skill-updates/

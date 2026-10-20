@@ -1,0 +1,38 @@
+name: Agent Core Read-only QA
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/agentCore.ts'
+      - 'lib/agentGoogleDrive.ts'
+      - 'lib/agentReadOnlyChecks.ts'
+      - 'lib/agentSyncEvidence.ts'
+      - 'app/api/agent/access-check/route.ts'
+      - 'app/api/agent/production-oidc-probe/route.ts'
+      - 'app/data-health/agent-security-qa/page.tsx'
+      - 'app/agent-access-qa/page.tsx'
+      - 'app/api/agent/read-only/route.ts'
+      - 'tests/agent-core-readonly.test.cjs'
+      - 'tests/agent-readonly-inspectors.test.cjs'
+      - 'tests/agent-oidc-google.test.cjs'
+      - 'tests/agent-sync-evidence.test.cjs'
+      - 'tests/phase1-materials-reconciliation.test.cjs'
+      - 'tests/phase1-rpc-audit.test.cjs'
+      - 'lib/materialsReconciliation.ts'
+      - 'supabase/audits/phase1_rpc_permissions_readonly.sql'
+      - '.github/workflows/agent-core-readonly.yml'
+jobs:
+  agent-core-test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - run: node --test tests/agent-core-readonly.test.cjs tests/agent-readonly-inspectors.test.cjs tests/agent-oidc-google.test.cjs tests/agent-sync-evidence.test.cjs tests/phase1-materials-reconciliation.test.cjs tests/phase1-rpc-audit.test.cjs
+      - run: npm run build

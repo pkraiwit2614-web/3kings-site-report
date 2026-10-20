@@ -10,7 +10,7 @@ const groups=read('lib/hotelRoomGroups.ts')
 const css=read('app/defects/print.css')
 
 test('Work Plan and Defect Report use the exact same label, tone, and color system',()=>{
- assert.match(report,/import \{statusLabel,statusTone\} from '@\/lib\/defectStatusPresentation'/)
+ assert.match(report,/import \{DEFECT_AWAITING_ACCEPTANCE_LABEL,statusLabel,statusTone\} from '@\/lib\/defectStatusPresentation'/)
  assert.match(plan,/import \{statusLabel,statusTone\} from '@\/lib\/defectStatusPresentation'/)
  assert.match(report,/state-badge \$\{statusTone\(r\)\}/)
  assert.match(plan,/work-defect-badge '+/)
@@ -47,6 +47,8 @@ test('Combine writes are atomic, revision checked, audited and keep other module
  assert.doesNotMatch(sql,/UPDATE public\.condo_room_status|UPDATE public\.hotel_room_availability|DELETE FROM public\.|DROP TABLE/i)
  assert.doesNotMatch(sql,/source_room\s*=|source_row\s*=|source_synced_day\s*=/i)
  assert.match(report,/<th>Work Plan \/ Hotel Status<\/th><th>ต้องทำต่อ<\/th>/)
- assert.ok(report.indexOf('<td className="work-plan-cell">')<report.indexOf("<td>{r.next_action||r.follow_up||'-'}</td>"))
+ const workPlanCell=report.indexOf('<td className="work-plan-cell">')
+ const nextActionCell=report.indexOf("<td>{r.next_action||r.follow_up||'-'}")
+ assert.ok(workPlanCell>=0&&nextActionCell>workPlanCell,'Work Plan/Hotel Status column precedes remaining work, including Combine member details')
  assert.match(css,/\.defect-table th:nth-child\(9\)/)
 })

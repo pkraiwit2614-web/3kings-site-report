@@ -1,1 +1,3 @@
-{}
+{
+  "ignoreCommand": "node scripts/vercel-preview-gate.cjs"
+}

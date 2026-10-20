@@ -33,4 +33,11 @@ assert.match(migration,/work_calendar_save_event/)
 assert.match(migration,/viewer_editor'',''purchase/)
 assert.doesNotMatch(migration,/update public\.procurement_items\s+set/i)
 assert.doesNotMatch(migration,/update public\.materials\s+set/i)
+
+// Procurement status entry is retired; existing PO readers and calendar linking stay available.
+const procurementPage=fs.readFileSync('app/procurement/page.tsx','utf8')
+assert.doesNotMatch(procurementPage,/import\s+ProcurementEditPanel\s+from/)
+assert.doesNotMatch(procurementPage,/<ProcurementEditPanel\s*\/>/)
+assert.match(procurementPage,/\.from\('procurement_items'\)\.select\('\*'\)/)
+
 console.log('Calendar CRUD, procurement due-date narrow overlay and role guards: PASS')

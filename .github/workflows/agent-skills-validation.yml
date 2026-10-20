@@ -1,0 +1,30 @@
+name: Agent Skills (SOP) validation
+
+on:
+  pull_request:
+    paths:
+      - 'AGENTS.md'
+      - '.agents/skills/**'
+      - 'docs/agent-skills/**'
+      - 'scripts/validate-agent-skills.mjs'
+      - 'scripts/validate-superpowers-integration.mjs'
+      - 'docs/vendor/superpowers/**'
+      - '.github/workflows/agent-skills-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-agent-skills:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify 17 skills, manifest and safety contract
+        run: node scripts/validate-agent-skills.mjs
+      - name: Verify 7 Superpowers methods and 17 SOP mappings
+        run: node scripts/validate-superpowers-integration.mjs
+      - name: Validate read-only Task Observer and all 17 mappings
+        run: node scripts/validate-task-observer.mjs
+      - name: Validate optional curated Skills against original SOP contracts
+        run: node scripts/validate-curated-skills.mjs

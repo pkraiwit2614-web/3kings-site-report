@@ -1,0 +1,174 @@
+{
+  "schema_version": 1,
+  "name": "3kings-task-observer",
+  "based_on": "docs/agent-skills/manifest.json",
+  "authority": "Live SOP Gate and current linked Google Drive SOP precede observer",
+  "runtime_enforcement": false,
+  "auto_install": false,
+  "writes_authorized": false,
+  "storage": "private_only_after_verified_configuration; otherwise user-visible handoff NOT PERSISTED",
+  "stages": [
+    "SOP Gate + live SOP",
+    "numbered Skill + matched Superpowers",
+    "read-only observation",
+    "human-reviewable proposal"
+  ],
+  "shortcuts": [
+    {
+      "number": 1,
+      "shortcut": "อัปเดต Defect ตามเดิม",
+      "skill": "3kings-01-defect-flow",
+      "mode": "authorized_write",
+      "observer": "3kings-task-observer",
+      "activation": "after_live_sop_preflight",
+      "observer_privilege": "advisory_read_only"
+    },
+    {
+      "number": 2,
+      "shortcut": "ตรวจยอด Defect",
+      "skill": "3kings-02-defect-reconciliation",
+      "mode": "read_only",
+      "observer": "3kings-task-observer",
+      "activation": "after_live_sop_preflight",
+      "observer_privilege": "advisory_read_only"
+    },
+    {
+      "number": 3,
+      "shortcut": "ทำใบแจกงาน",
+      "skill": "3kings-03-work-dispatch",
+      "mode": "document_only",
+      "observer": "3kings-task-observer",
+      "activation": "after_live_sop_preflight",
+      "observer_privilege": "advisory_read_only"
+    },
+    {
+      "number": 4,
+      "shortcut": "ตรวจ Defect 7 วัน",
+      "skill": "3kings-04-defect-7-days",
+      "mode": "read_only",
+      "observer": "3kings-task-observer",
+      "activation": "after_live_sop_preflight",
+      "observer_privilege": "advisory_read_only"
+    },
+    {
+      "number": 5,
+      "shortcut": "ตรวจ Hotel Defect",
+      "skill": "3kings-05-hotel-defect-check",
+      "mode": "read_only",
+      "observer": "3kings-task-observer",
+      "activation": "after_live_sop_preflight",
+      "observer_privilege": "advisory_read_only"
+    },
+    {
+      "number": 6,
+      "shortcut": "อัปเดตวัสดุตามเดิม",
+      "skill": "3kings-06-materials-update",
+      "mode": "authorized_write",
+      "observer": "3kings-task-observer",
+      "activation": "after_live_sop_preflight",
+      "observer_privilege": "advisory_read_only"
+    },
+    {
+      "number": 7,
+      "shortcut": "เช็ก PO",
+      "skill": "3kings-07-po-inspection",
+      "mode": "read_only",
+      "observer": "3kings-task-observer",
+      "activation": "after_live_sop_preflight",
+      "observer_privilege": "advisory_read_only"
+    },
+    {
+      "number": 8,
+      "shortcut": "สรุป Progress",
+      "skill": "3kings-08-progress-summary",
+      "mode": "document_only",
+      "observer": "3kings-task-observer",
+      "activation": "after_live_sop_preflight",
+      "observer_privilege": "advisory_read_only"
+    },
+    {
+      "number": 9,
+      "shortcut": "จัดรูป Progress",
+      "skill": "3kings-09-progress-photos",
+      "mode": "authorized_write",
+      "observer": "3kings-task-observer",
+      "activation": "after_live_sop_preflight",
+      "observer_privilege": "advisory_read_only"
+    },
+    {
+      "number": 10,
+      "shortcut": "ทำ Labour PDF",
+      "skill": "3kings-10-labour-pdf",
+      "mode": "document_only",
+      "observer": "3kings-task-observer",
+      "activation": "after_live_sop_preflight",
+      "observer_privilege": "advisory_read_only"
+    },
+    {
+      "number": 11,
+      "shortcut": "สรุป Weekly Recap",
+      "skill": "3kings-11-weekly-recap",
+      "mode": "document_only",
+      "observer": "3kings-task-observer",
+      "activation": "after_live_sop_preflight",
+      "observer_privilege": "advisory_read_only"
+    },
+    {
+      "number": 12,
+      "shortcut": "อัปเดตปฏิทินงาน",
+      "skill": "3kings-12-work-calendar",
+      "mode": "authorized_write",
+      "observer": "3kings-task-observer",
+      "activation": "after_live_sop_preflight",
+      "observer_privilege": "advisory_read_only"
+    },
+    {
+      "number": 13,
+      "shortcut": "ตรวจ Sync",
+      "skill": "3kings-13-sync-check",
+      "mode": "read_only",
+      "observer": "3kings-task-observer",
+      "activation": "after_live_sop_preflight",
+      "observer_privilege": "advisory_read_only"
+    },
+    {
+      "number": 14,
+      "shortcut": "ตรวจ Production",
+      "skill": "3kings-14-production-inspection",
+      "mode": "read_only",
+      "observer": "3kings-task-observer",
+      "activation": "after_live_sop_preflight",
+      "observer_privilege": "advisory_read_only"
+    },
+    {
+      "number": 15,
+      "shortcut": "แก้เว็บเฉพาะจุด",
+      "skill": "3kings-15-surgical-web-edit",
+      "mode": "code_change",
+      "observer": "3kings-task-observer",
+      "activation": "after_live_sop_preflight",
+      "observer_privilege": "advisory_read_only"
+    },
+    {
+      "number": 16,
+      "shortcut": "Deploy Production",
+      "skill": "3kings-16-deploy-production",
+      "mode": "deploy",
+      "observer": "3kings-task-observer",
+      "activation": "after_live_sop_preflight",
+      "observer_privilege": "advisory_read_only"
+    },
+    {
+      "number": 17,
+      "shortcut": "ตรวจสิทธิ์ผู้ใช้",
+      "skill": "3kings-17-access-check",
+      "mode": "read_only",
+      "observer": "3kings-task-observer",
+      "activation": "after_live_sop_preflight",
+      "observer_privilege": "advisory_read_only"
+    }
+  ],
+  "updated_on": "2026-10-20",
+  "nonblocking": true,
+  "invocation_policy": "advisory only when available and relevant; never a completion dependency, never repeat SOP/QA reads, no extra permission round"
+}

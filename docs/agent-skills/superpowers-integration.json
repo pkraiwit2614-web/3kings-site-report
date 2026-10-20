@@ -1,0 +1,307 @@
+{
+  "schema_version": 1,
+  "upstream": {
+    "repository": "obra/superpowers",
+    "commit": "bb92a77741419a4ab5f06e711a283343f1ada0c3",
+    "license": "MIT"
+  },
+  "priority": "Live current 3 Kings SOP and six central rules > user-authorized scope/RBAC/RLS > guarded adapter > vendored upstream method",
+  "enforcement": "agent-guidance-only; not an enforced server-side SOP gate, not a ChatGPT global plugin",
+  "selected_skills": [
+    {
+      "name": "systematic-debugging",
+      "adapter": "3kings-sp-systematic-debugging",
+      "source_path": "docs/vendor/superpowers/skills/systematic-debugging/SKILL.md",
+      "use": "Only on bugs or conflicting source/sync evidence: identify root cause before proposing a fix."
+    },
+    {
+      "name": "verification-before-completion",
+      "adapter": "3kings-sp-verification-before-completion",
+      "source_path": "docs/vendor/superpowers/skills/verification-before-completion/SKILL.md",
+      "use": "All 17 commands: report actual evidence and readback rather than unverified Done."
+    },
+    {
+      "name": "test-driven-development",
+      "adapter": "3kings-sp-test-driven-development",
+      "source_path": "docs/vendor/superpowers/skills/test-driven-development/SKILL.md",
+      "use": "Only approved application logic/bugfix changes: failing test, minimal code, green regression."
+    },
+    {
+      "name": "requesting-code-review",
+      "adapter": "3kings-sp-requesting-code-review",
+      "source_path": "docs/vendor/superpowers/skills/requesting-code-review/SKILL.md",
+      "use": "Code changes and PR readiness: review diff, scope, security and regression before proposing merge."
+    },
+    {
+      "name": "using-git-worktrees",
+      "adapter": "3kings-sp-using-git-worktrees",
+      "source_path": "docs/vendor/superpowers/skills/using-git-worktrees/SKILL.md",
+      "use": "Code edits: isolate by existing branch or supported local worktree; do not mutate main."
+    },
+    {
+      "name": "writing-plans",
+      "adapter": "3kings-sp-writing-plans",
+      "source_path": "docs/vendor/superpowers/skills/writing-plans/SKILL.md",
+      "use": "Complex, multi-file code changes: plan smallest viable implementation and verification."
+    },
+    {
+      "name": "writing-skills",
+      "adapter": "3kings-sp-writing-skills",
+      "source_path": "docs/vendor/superpowers/skills/writing-skills/SKILL.md",
+      "use": "Skill/manifest maintenance only: validate new or changed agent instructions."
+    }
+  ],
+  "shortcuts": [
+    {
+      "number": 1,
+      "shortcut": "อัปเดต Defect ตามเดิม",
+      "mode": "authorized_write",
+      "process_skills": [
+        "verification-before-completion",
+        "systematic-debugging"
+      ],
+      "conditional": "Only use matching process when applicable; skills maintenance only when editing skills."
+    },
+    {
+      "number": 2,
+      "shortcut": "ตรวจยอด Defect",
+      "mode": "read_only",
+      "process_skills": [
+        "verification-before-completion",
+        "systematic-debugging"
+      ],
+      "conditional": "Only use matching process when applicable; skills maintenance only when editing skills."
+    },
+    {
+      "number": 3,
+      "shortcut": "ทำใบแจกงาน",
+      "mode": "document_only",
+      "process_skills": [
+        "verification-before-completion"
+      ],
+      "conditional": "Only use matching process when applicable; skills maintenance only when editing skills."
+    },
+    {
+      "number": 4,
+      "shortcut": "ตรวจ Defect 7 วัน",
+      "mode": "read_only",
+      "process_skills": [
+        "verification-before-completion"
+      ],
+      "conditional": "Only use matching process when applicable; skills maintenance only when editing skills."
+    },
+    {
+      "number": 5,
+      "shortcut": "ตรวจ Hotel Defect",
+      "mode": "read_only",
+      "process_skills": [
+        "verification-before-completion",
+        "systematic-debugging"
+      ],
+      "conditional": "Only use matching process when applicable; skills maintenance only when editing skills."
+    },
+    {
+      "number": 6,
+      "shortcut": "อัปเดตวัสดุตามเดิม",
+      "mode": "authorized_write",
+      "process_skills": [
+        "verification-before-completion"
+      ],
+      "conditional": "Only use matching process when applicable; skills maintenance only when editing skills."
+    },
+    {
+      "number": 7,
+      "shortcut": "เช็ก PO",
+      "mode": "read_only",
+      "process_skills": [
+        "verification-before-completion"
+      ],
+      "conditional": "Only use matching process when applicable; skills maintenance only when editing skills."
+    },
+    {
+      "number": 8,
+      "shortcut": "สรุป Progress",
+      "mode": "document_only",
+      "process_skills": [
+        "verification-before-completion"
+      ],
+      "conditional": "Only use matching process when applicable; skills maintenance only when editing skills."
+    },
+    {
+      "number": 9,
+      "shortcut": "จัดรูป Progress",
+      "mode": "authorized_write",
+      "process_skills": [
+        "verification-before-completion"
+      ],
+      "conditional": "Only use matching process when applicable; skills maintenance only when editing skills."
+    },
+    {
+      "number": 10,
+      "shortcut": "ทำ Labour PDF",
+      "mode": "document_only",
+      "process_skills": [
+        "verification-before-completion"
+      ],
+      "conditional": "Only use matching process when applicable; skills maintenance only when editing skills."
+    },
+    {
+      "number": 11,
+      "shortcut": "สรุป Weekly Recap",
+      "mode": "document_only",
+      "process_skills": [
+        "verification-before-completion"
+      ],
+      "conditional": "Only use matching process when applicable; skills maintenance only when editing skills."
+    },
+    {
+      "number": 12,
+      "shortcut": "อัปเดตปฏิทินงาน",
+      "mode": "authorized_write",
+      "process_skills": [
+        "verification-before-completion",
+        "systematic-debugging"
+      ],
+      "conditional": "Only use matching process when applicable; skills maintenance only when editing skills."
+    },
+    {
+      "number": 13,
+      "shortcut": "ตรวจ Sync",
+      "mode": "read_only",
+      "process_skills": [
+        "verification-before-completion",
+        "systematic-debugging"
+      ],
+      "conditional": "Only use matching process when applicable; skills maintenance only when editing skills."
+    },
+    {
+      "number": 14,
+      "shortcut": "ตรวจ Production",
+      "mode": "read_only",
+      "process_skills": [
+        "verification-before-completion",
+        "systematic-debugging"
+      ],
+      "conditional": "Only use matching process when applicable; skills maintenance only when editing skills."
+    },
+    {
+      "number": 15,
+      "shortcut": "แก้เว็บเฉพาะจุด",
+      "mode": "code_change",
+      "process_skills": [
+        "using-git-worktrees",
+        "writing-plans",
+        "systematic-debugging",
+        "test-driven-development",
+        "requesting-code-review",
+        "verification-before-completion",
+        "writing-skills"
+      ],
+      "conditional": "Only use matching process when applicable; skills maintenance only when editing skills."
+    },
+    {
+      "number": 16,
+      "shortcut": "Deploy Production",
+      "mode": "deploy",
+      "process_skills": [
+        "requesting-code-review",
+        "verification-before-completion"
+      ],
+      "conditional": "Only use matching process when applicable; skills maintenance only when editing skills."
+    },
+    {
+      "number": 17,
+      "shortcut": "ตรวจสิทธิ์ผู้ใช้",
+      "mode": "read_only",
+      "process_skills": [
+        "verification-before-completion",
+        "systematic-debugging"
+      ],
+      "conditional": "Only use matching process when applicable; skills maintenance only when editing skills."
+    }
+  ],
+  "vendored_blobs": [
+    {
+      "path": "docs/vendor/superpowers/skills/systematic-debugging/SKILL.md",
+      "sha1": "62fc752aaef59a8bbed5d305f4cadc60f8ae07ed"
+    },
+    {
+      "path": "docs/vendor/superpowers/skills/verification-before-completion/SKILL.md",
+      "sha1": "7d45333cc4a49c57a80df6c1fe2fa777a207afbc"
+    },
+    {
+      "path": "docs/vendor/superpowers/skills/test-driven-development/SKILL.md",
+      "sha1": "46838cc9e893c06259e3bdad0fc2425b36242f15"
+    },
+    {
+      "path": "docs/vendor/superpowers/skills/requesting-code-review/SKILL.md",
+      "sha1": "68d338a58ecdd8b77bfbb519b781ef223dbbb842"
+    },
+    {
+      "path": "docs/vendor/superpowers/skills/using-git-worktrees/SKILL.md",
+      "sha1": "1381dacb3516b94382dd6ec736ede21ee8ede2b3"
+    },
+    {
+      "path": "docs/vendor/superpowers/skills/writing-plans/SKILL.md",
+      "sha1": "4cf0275d88d67aa4ef09f4bbca9970ed6ff74a00"
+    },
+    {
+      "path": "docs/vendor/superpowers/skills/writing-skills/SKILL.md",
+      "sha1": "182dfad177c9940d8ea388be322aadddd6c4db5f"
+    },
+    {
+      "path": "docs/vendor/superpowers/skills/systematic-debugging/root-cause-tracing.md",
+      "sha1": "0e72e8f9566b7ef85e814633d1feacad9d0c5868"
+    },
+    {
+      "path": "docs/vendor/superpowers/skills/systematic-debugging/defense-in-depth.md",
+      "sha1": "e2483354dc2b62478a2624e34ca18bc0efe887b2"
+    },
+    {
+      "path": "docs/vendor/superpowers/skills/systematic-debugging/condition-based-waiting.md",
+      "sha1": "70994f777c586f7d4c43033aac34c7cf0da6688b"
+    },
+    {
+      "path": "docs/vendor/superpowers/skills/test-driven-development/writing-good-tests.md",
+      "sha1": "d3c4482fd30b4f9084bb61545fe73939a7502c28"
+    },
+    {
+      "path": "docs/vendor/superpowers/skills/requesting-code-review/code-reviewer.md",
+      "sha1": "6d358b5d7d450c83cacbe450b7dbd4e673b694ad"
+    },
+    {
+      "path": "docs/vendor/superpowers/skills/writing-skills/anthropic-best-practices.md",
+      "sha1": "15ea9eae223d9081b602618849791c07a7758f3d"
+    },
+    {
+      "path": "docs/vendor/superpowers/skills/writing-skills/persuasion-principles.md",
+      "sha1": "9756416a59600b70ecca4044e0919ee7d4a37b21"
+    },
+    {
+      "path": "docs/vendor/superpowers/skills/writing-skills/testing-skills-with-subagents.md",
+      "sha1": "a5acfeac86f34c7bc625d064e10c8a2f8180b696"
+    },
+    {
+      "path": "docs/vendor/superpowers/skills/writing-skills/graphviz-conventions.dot",
+      "sha1": "3509e2f028cacaa8118cbc8c80025efb089ec28e"
+    },
+    {
+      "path": "docs/vendor/superpowers/skills/writing-skills/render-graphs.js",
+      "sha1": "59e74b54e8538ff0a358d05c770479b3eb8484aa"
+    },
+    {
+      "path": "docs/vendor/superpowers/skills/writing-skills/examples/CLAUDE_MD_TESTING.md",
+      "sha1": "47881fc85bd6c01b32b84d52ed9a0c73c8d6a089"
+    },
+    {
+      "path": "docs/vendor/superpowers/skills/using-superpowers/references/codex-tools.md",
+      "sha1": "e4488fb224bb0fa0a33e9ac7dc961174e9f0c150"
+    },
+    {
+      "path": "docs/vendor/superpowers/skills/using-superpowers/references/gemini-tools.md",
+      "sha1": "b01b65238a50981aeed22ae52ee20f8b55d16b42"
+    }
+  ],
+  "updated_on": "2026-10-20",
+  "execution_policy": "No blanket Superpowers activation. verification-before-completion for each job; debugging only real errors; plan/worktrees/TDD/code review only code changes; writing-skills only skill maintenance; reuse same-invocation live SOP and valid artifacts; never trigger extra build/Preview or approval for routine docs/data."
+}
