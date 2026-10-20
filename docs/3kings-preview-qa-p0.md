@@ -1,6 +1,6 @@
 # 3 Kings Preview QA — unified P0 test branch
 
-Authority: Drive SOP 15 v1.1, 2026-10-19. CI/tests/docs only. No Production release, migration, data change or SOP edit.
+Authority: Drive SOP 15 v1.2, 2026-10-20. CI/tests/docs only. No Production release, migration, data change or SOP edit.
 
 ## P0-1 — Use existing CI
 The existing .github/workflows/ci.yml retains all its original build/regression steps, and adds:
@@ -42,3 +42,6 @@ Do not merge, release, create a Production Viewer or send a protected Vercel byp
 5. Inspect Vercel build-rate-limit and Actions quota. No release claim without SOP 16 and live readback.
 
 Historical benchmark: PR #155, commit d1636279, GitHub Actions #39260952136; these results do not prove the new branch passed.
+
+## Main branch reconciliation (2026-10-20)
+Merged against main while preserving newer Defect/Work Order CI regressions and all standalone Preview / Local Viewer workflows. Existing standalone suites remain enabled; if their path filters match, they may run alongside this unified CI and consume GitHub Actions minutes. No separate Vercel build is explicitly requested here.

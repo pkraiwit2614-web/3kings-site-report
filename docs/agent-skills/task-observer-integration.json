@@ -167,5 +167,8 @@
       "activation": "after_live_sop_preflight",
       "observer_privilege": "advisory_read_only"
     }
-  ]
+  ],
+  "updated_on": "2026-10-20",
+  "nonblocking": true,
+  "invocation_policy": "advisory only when available and relevant; never a completion dependency, never repeat SOP/QA reads, no extra permission round"
 }
