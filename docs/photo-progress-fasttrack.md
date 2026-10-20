@@ -15,13 +15,13 @@ Visual similarity (ORB homography) in `scripts/progress_photo_fasttrack.py` curr
 - Read-only live SOP Index + complete current Docs content check before operations.
 - Safe-by-default CLI dry-run with Plot 6–9 scope and recent-date-first processing.
 - Candidate filename detection, day-folder and EXIF consistency check, geometric image similarity prefilter, same-Plot references, ambiguity/collision handling.
-- Apply mode is separately gated by exact verified per-file mapping with two landmark observations, web naming compatibility QA flag, explicit enablement, and a private audit folder. Writes use `files.update(name)` with the same file ID; readback checks parent, hash, size, type and ID.
+- Apply mode is separately gated by exact verified per-file mapping with two distinct landmark observations and verified_source, a filename-date guard, a repeated per-folder collision check, web naming compatibility QA flag, explicit enablement, and a private audit folder. Writes use `files.update(name)` with the same file ID; readback checks parent, hash, size, type and ID.
 - Offline unit tests and GitHub Actions branch PR checks. No Production write trigger from a PR.
 
 ## Configuration (repository secrets; never commit IDs or credentials)
 `PHOTO_SA_JSON`: existing approved service-account credential with exact required Drive/Docs/Sheets permissions. Before enabling, verify access to SOP, Photo folder and private audit folder. Reuse an existing account if it already has the least privileges; do not ask for broader rights by default.
 
-`PHOTO_PLOT_FOLDERS_JSON`: a JSON object keyed exactly `6`, `7`, `8`, `9`, with current Drive folder IDs. `PHOTO_SOP_INDEX_ID` and `PHOTO_SOP_DOC_ID`: current connected Drive objects, maintained privately. `PHOTO_AUDIT_FOLDER_ID`: private owner-controlled folder. `PHOTO_VERIFIED_MATCHES_JSON`: an independent verified mapping array with file_id, old, new, reference_id, landmarks. `PHOTO_WEB_PARSER_VERIFIED` and `PHOTO_ENABLE_WRITE` must both equal `YES` before applying.
+`PHOTO_PLOT_FOLDERS_JSON`: a JSON object keyed exactly `6`, `7`, `8`, `9`, with current Drive folder IDs. `PHOTO_SOP_INDEX_ID` and `PHOTO_SOP_DOC_ID`: current connected Drive objects, maintained privately. `PHOTO_AUDIT_FOLDER_ID`: private owner-controlled folder. `PHOTO_VERIFIED_MATCHES_JSON`: an independent verified mapping array with file_id, old, new, reference_id, plot, day, landmarks and verified_source. Every accepted pair must have independently verified evidence of at least two distinct permanent architectural landmarks; a matching CV score by itself is insufficient. `PHOTO_WEB_PARSER_VERIFIED` and `PHOTO_ENABLE_WRITE` must both equal `YES` before applying.
 
 No extra paid service is required in code; GitHub Actions, Drive and API usage remain subject to their quotas and current account entitlements.
 
@@ -43,3 +43,10 @@ No extra paid service is required in code; GitHub Actions, Drive and API usage r
 
 ### Blast radius
 The branch touches only SOP Skill/manifest, isolated script/tests/workflow and this documentation. It does **not** modify Defect, Materials, Daily Report, Payroll, Calendar, RBAC/RLS, Supabase migrations, existing web Photo Mapping, or Vercel. The eventual Drive rename could affect existing photo filename indexing; that is why live parser + sync regression are mandatory before apply.
+
+## Authorization and current evidence
+- The user authorized work within the requested scope without repeated per-item approvals whenever actual access and all technical checks are satisfied. This never implies that service-account edit access, the independent visual verifier, or authenticated dispatch is currently configured.
+- SOP 09 v1.3 and INDEX were read from the current owner Drive; the branch Skill and manifest point to the same title.
+- Offline unit and static skill validation passed on the test branch. The independent live visual matching + Drive write/readback E2E checks have **not** been performed.
+- Protected-preview Playwright checks on this branch cannot be used as evidence of live visual/photo QA: the workflow stops at a branch/SHA precondition before browsing.
+- Keep Production writes disabled until the remaining gates above pass. Do not request routine photo-by-photo approvals once the system can verify these gates automatically.
