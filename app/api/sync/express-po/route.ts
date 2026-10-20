@@ -1,6 +1,5 @@
 import {NextRequest,NextResponse} from 'next/server'
 import {createHash,timingSafeEqual} from 'node:crypto'
-import {stageExpressInSheets} from '@/lib/express-po/sheets-sync'
 // Node-only deterministic delta planner; does not write or authorize Materials.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const {planExpressDelta}=require('../../../../lib/express-po/delta.cjs') as {
@@ -122,10 +121,11 @@ export async function POST(request:NextRequest){
     holdQa:documents.filter(d=>d.importDecision==='hold_qa').length},
    note:'Express received-all flag is not confirmed physical receipt.'}
   if(mode==='dry_run')return reply({...response,result:'DRY_RUN_ONLY_NO_WRITES'},200)
-  const staged=await stageExpressInSheets({readerToken:token,
-   oidcToken:request.headers.get('x-vercel-oidc-token')||'',
-   source:{fileName:file.name,modifiedTime:file.modifiedTime},report})
-  return reply({...response,...staged,note:'Private Google Sheets Preview only; Materials and Production unchanged.'},200)
+  // Fail closed: the legacy Sheets append path is NOT cross-instance atomic.
+  // A real distributed lease plus verified canonical+line snapshot must be
+  // integrated before any staged import. Dry-run remains available.
+  if(delta.gate!=='STAGING_CANDIDATES_ONLY')throw Error('SOURCE_CANONICAL_RECONCILIATION_REQUIRED')
+  throw Error('SHEETS_ATOMIC_LOCK_REQUIRED')
  }catch(e){
   // Do not expose supplier names, private file text or privileged backend messages.
   const message=e instanceof Error?e.message:''
