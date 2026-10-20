@@ -55,3 +55,7 @@ These skills are agent guidance, **not** a server-side authorization, authentica
 ## Superpowers process layer — subordinate, not permission granting
 
 After the live Drive SOP and scope preflight, consult `docs/agent-skills/superpowers-integration.json` and read applicable `.agents/skills/3kings-sp-*/SKILL.md` adapters. Use verification-before-completion for every command; debugging on anomalies; TDD, plan, worktree and code review only for authorized coding work; writing-skills only for agent Skill maintenance. Skip any vendor method that conflicts with the SOP, current authorization, protected folders, RBAC/RLS, or no-deploy instruction. This is not an installed backend write Gate or universal ChatGPT auto-start hook.
+
+
+## FAST-TRACK precedence — 20 October 2026
+Use Google Drive INDEX + linked full ACTIVE SOP once per invocation, share snapshots and checks with numbered Skills and optional helpers. One explicit scoped instruction and verified actual ACL authorizes all required substeps, without repeated approval or separate supporting-SOP requests. Read-only requests remain read-only. No Git/CI/Preview for ordinary data/document/photo/Calendar tasks. For code and release preserve branch/diff/risk-based tests/Preview and reuse valid exact-SHA/config artifacts; do not create redundant builds. Observer is advisory and nonblocking. Keep six rules, RBAC/RLS, Source of Truth, conflict isolation and actual destination readback. This is agent guidance, not server-side enforcement.
