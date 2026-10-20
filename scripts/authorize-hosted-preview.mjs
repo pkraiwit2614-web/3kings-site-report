@@ -15,7 +15,10 @@ export function validateRequest({ repo, actor, ref, prNumber, sha, previewUrl },
   if (repo !== REPO || actor !== 'pkraiwit2614-web' || ref !== 'refs/heads/main') block('UNAUTHORIZED_DISPATCH')
   if (!/^[1-9][0-9]{0,5}$/.test(String(prNumber || '')) || !SHA.test(sha || '')) block('BAD_PR_OR_SHA')
   const url = choosePreviewUrl([previewUrl])
-  if (!pr || pr.number !== Number(prNumber) || pr.state !== 'open' || pr.draft ||
+  // Exact deployment URLs are immutable. Branch aliases can move after verification.
+  if (!/^3kings-site-report-[a-z0-9]{9}-kraiwit-p-golfiiz-sqr\\.vercel\\.app$/.test(new URL(url).hostname))
+    block('MUTABLE_OR_NONDEPLOYMENT_URL')
+  if (!pr || pr.number !== Number(prNumber) || pr.state !== 'open' ||
       pr.base?.ref !== 'main' || pr.head?.repo?.full_name !== REPO ||
       pr.head?.sha !== sha) block('PR_SHA_NOT_CURRENT_FIRST_PARTY')
   const ok = (runs || []).some(r => r.head_sha === sha && r.event === 'pull_request' &&
@@ -28,7 +31,7 @@ export function validateDeployment(raw, sha, url) {
   const host = new URL(choosePreviewUrl([url])).hostname
   const deployment = raw?.result || raw
   if (!deployment || deployment.projectId !== VERCEL_PROJECT ||
-      deployment.target === 'production' || deployment.readyState !== 'READY' ||
+      (deployment.target != null && deployment.target !== 'preview') || deployment.readyState !== 'READY' ||
       deployment.url !== host) block('PREVIEW_DEPLOYMENT_IDENTITY')
   // Two metadata sources must agree if both exist.
   const gitSHA = deployment.gitSource?.sha

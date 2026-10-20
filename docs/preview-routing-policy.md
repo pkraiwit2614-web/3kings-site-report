@@ -18,7 +18,7 @@ Effective only after this PR is merged, the Vercel project honors the committed 
 
 The manual workflow `.github/workflows/hosted-preview-on-demand.yml` runs code checked out from trusted `main`, not PR source. Its authorizer checks:
 1. GitHub actor is the verified repository owner; dispatch ref is `main`.
-2. Open, non-draft, first-party PR HEAD matches the explicit commit SHA; CI for that exact SHA completed successfully.
+2. Open first-party PR HEAD (draft allowed for early risk testing) matches the explicit commit SHA; CI for that exact SHA completed successfully.
 3. URL is HTTPS root of an exact 3 Kings deployment on the allowed Vercel team hostname; never arbitrary URLs/redirects.
 4. Vercel API (using a **read-only** token) proves deployment project ID, READY, non-Production and git SHA == PR SHA. Unknown/mismatched SHA → BLOCK, not PASS.
 5. Protected read-only HTTP QA and optional anonymous Playwright run only after those checks. Viewer login stays UNTESTED until the actual Preview DB has independent isolation evidence.
