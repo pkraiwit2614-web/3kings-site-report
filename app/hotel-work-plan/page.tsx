@@ -5,7 +5,7 @@ import Link from 'next/link'
 import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
 import useAccessRole from '@/components/useAccessRole'
-import {canEditWorkPlan} from '@/lib/accessControl'
+import {canEditWorkPlan,canAccessPath} from '@/lib/accessControl'
 import {getSupabase} from '@/lib/supabase'
 import {hotelRoomKey,hotelRoomLabel,hotelRoomMembers,normalizeHotelRoom} from '@/lib/hotelRoomGroups'
 import {statusLabel,statusTone} from '@/lib/defectStatusPresentation'
@@ -278,7 +278,7 @@ export default function HotelWorkPlanPage(){
      <span>อัพเดทล่าสุด</span>
      <b className={!excelVerifiedAt?'work-update-unverified':undefined}>{excelVerifiedAt?<time dateTime={excelVerifiedAt}>{verifiedSyncTimeTH(excelVerifiedAt)}</time>:'ยังไม่ยืนยันการซิงก์ Excel'}</b>
     </div>
-    <Link className="button" href="/calendar">Work Calendar</Link>
+    {role!==null&&canAccessPath(role,'/calendar')&&<Link className="button" href={'/calendar?view=work-plan-defect'+(day?.planned_date?'&date='+day.planned_date:'')}>ปฏิทิน Work Plan Defect</Link>}
    </div>}/> 
   {error&&<div className="panel" role="alert" style={{color:'#9e312d'}}>โหลด/บันทึกข้อมูลไม่ได้: {error} <button className="button" onClick={()=>{void refresh().then(()=>setError('')).catch(e=>setError(String(e)))}}>ลองใหม่</button></div>}
   {loading?<div className="panel">กำลังโหลดแผนโรงแรม…</div>:<>
