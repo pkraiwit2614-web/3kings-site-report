@@ -19,5 +19,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Validate synthetic parser + Google Sheets staging
-        run: node --test tests/express-po-parser.test.cjs tests/express-po-staging.test.cjs tests/express-po-materials-security.test.cjs tests/express-po-delta.test.cjs
+      - name: Validate synthetic parser, delta and isolated atomic staging
+        run: node --test tests/express-po-parser.test.cjs tests/express-po-staging.test.cjs tests/express-po-materials-security.test.cjs tests/express-po-delta.test.cjs tests/express-po-atomic-staging.test.cjs
