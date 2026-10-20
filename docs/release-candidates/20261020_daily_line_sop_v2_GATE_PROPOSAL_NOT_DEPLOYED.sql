@@ -47,5 +47,4 @@ BEGIN
  ON CONFLICT(report_date) DO UPDATE SET qa=excluded.qa,completed_at=excluded.completed_at,verified_at=now();
  RETURN jsonb_build_object('status','QA_FINALIZED','date',p_report_date,'png_count',v_count);
 END;
-$function$
-
+$function$;

@@ -9,6 +9,7 @@ test('SOP v2 publisher gate is reference-only, not auto-applied',()=>{
   assert.match(src,/REFERENCE-ONLY P2 RELEASE CANDIDATE/);
   assert(!fs.readdirSync('supabase/migrations').some(x=>x.includes('daily_line_sop_v2')));
   assert.equal((src.match(/CREATE OR REPLACE FUNCTION/g)||[]).length,1);
+  assert.match(src,/\$function\$;\s*$/);
   assert.match(src,/public\.daily_line_finalize\(/);
   const executable=src.split('\n').filter(line=>!line.trimStart().startsWith('--')).join('\n');
   assert.doesNotMatch(executable,/^\s*(GRANT|REVOKE|DROP|TRUNCATE|DELETE\s+FROM|UPDATE\s+line_autopilot)\b/im);
