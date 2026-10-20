@@ -33,7 +33,10 @@ export function assessSnapshot(input) {
     checks.push({ name: c.name ?? "unnamed", conclusion, head_matches: true });
     if (FAIL.has(conclusion)) blockers.push("CHECK_FAILED");
     if (!OK.has(conclusion)) {
-      if (conclusion === "skipped" || conclusion === "neutral") notes.push("CHECK_NOT_PROVEN_PASS");
+      if (conclusion === "skipped" || conclusion === "neutral") {
+        blockers.push("CHECK_NOT_PROVEN_PASS");
+        notes.push("CHECK_NOT_PROVEN_PASS");
+      }
       else if (!FAIL.has(conclusion)) blockers.push("CHECK_PENDING_OR_UNKNOWN");
     }
     if (MATCH_LIMIT.test(String(c.summary || ""))) limitEvidence = true;
