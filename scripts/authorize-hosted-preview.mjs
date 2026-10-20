@@ -16,7 +16,7 @@ export function validateRequest({ repo, actor, ref, prNumber, sha, previewUrl },
   if (!/^[1-9][0-9]{0,5}$/.test(String(prNumber || '')) || !SHA.test(sha || '')) block('BAD_PR_OR_SHA')
   const url = choosePreviewUrl([previewUrl])
   // Exact deployment URLs are immutable. Branch aliases can move after verification.
-  if (!/^3kings-site-report-[a-z0-9]{9}-kraiwit-p-golfiiz-sqr\\.vercel\\.app$/.test(new URL(url).hostname))
+  if (!/^3kings-site-report-[a-z0-9]{9}-kraiwit-p-golfiiz-sqr\.vercel\.app$/.test(new URL(url).hostname))
     block('MUTABLE_OR_NONDEPLOYMENT_URL')
   if (!pr || pr.number !== Number(prNumber) || pr.state !== 'open' ||
       pr.base?.ref !== 'main' || pr.head?.repo?.full_name !== REPO ||
