@@ -41,7 +41,7 @@ jobs:
         run: npm run build
 
       - name: Consolidated LINE AutoPilot no-send P1 regression
-        run: node --test tests/consolidated-line-autopilot.test.cjs tests/daily-line-autopilot.test.cjs tests/daily-line-runtime.test.cjs tests/daily-line-owner-summary.test.cjs
+        run: node --test tests/consolidated-line-autopilot.test.cjs tests/daily-line-autopilot.test.cjs tests/daily-line-runtime.test.cjs tests/daily-line-owner-summary.test.cjs tests/daily-line-sop-v2-gate-proposal.test.cjs
 
       - name: Preview gate and Hosted authorization regression
         run: node --test tests/vercel-preview-gate.test.cjs tests/hosted-preview-authorization.test.mjs
