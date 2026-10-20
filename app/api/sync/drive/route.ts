@@ -123,8 +123,18 @@ function mapProjectsFromLocation(location: unknown): string[] {
   // Parse complete site numbers; Plot 30/60 and P30 must not alias Plot 3/6.
   // Keep multi-Plot procurement associations together without silently choosing a project.
   for (const match of s.matchAll(/\b(?:Plot\s*|AV-P\s*|P\s*)(\d+)(?:\s*[/,+&]\s*(?:Plot\s*|AV-P\s*|P\s*)?\d+)*(?![\w])/gi)) {
-    for (const number of match[0].match(/\d+/g) || []) {
-      if (['3', '6', '7', '8', '9'].includes(number)) codes.add('AV-P' + number)
+    const numbers = match[0].match(/\d+/g) || []
+    if (numbers.includes('3')) {
+      // Plot 3 aliases may name a shared procurement row, e.g. P3/P6.
+      for (const number of numbers) {
+        if (['3', '6', '7', '8', '9'].includes(number)) codes.add('AV-P' + number)
+      }
+    } else {
+      // Non-P3 rows retain the original "Plot N" semantics; bare P6/AV-P6
+      // and shorthand Plot 6/7 do not acquire new associations.
+      for (const explicit of match[0].matchAll(/\bPlot\s*([6-9])\b(?!\w)/gi)) {
+        codes.add('AV-P' + explicit[1])
+      }
     }
   }
   if (/Above\s*Condo\s*A\b|Condo\s*Building\s*A\b/i.test(s)) codes.add('CONDO-A')
