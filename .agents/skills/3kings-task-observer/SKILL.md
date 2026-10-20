@@ -40,8 +40,13 @@ No universal ChatGPT hook, filesystem watcher, cloud polling, automatic skill in
 1. Compile observations by Skill and de-duplicate by underlying cause. Summarize impact and show affected safeguards.
 2. Propose a minimal diff for an existing Skill, its test, or a NEW candidate, keeping the original SOP authoritative.
 3. Stage proposed changes on a separate branch/draft PR. Do NOT edit the live SOP or numbered Skill solely because an observation exists.
-4. Get the user's explicit approval for changes that would modify SOP, code, source data, permissions or deployment. Approval of observation capture is NOT approval of these changes.
+4. Changes to SOP, code, source data, permissions or deployment require an explicit authorization covering the change type and scope. A standing or current approval for low-risk SOP editorial improvements may cover those changes without repeated approvals. Observation alone grants no authorization; security/RBAC/RLS/payroll/schema and Production changes must follow their respective gates.
 5. Validate manifest still contains exactly 17 original shortcuts, all mapping entries remain 1:1, applicable regression checks pass, and no private data leaks; read back actual artifacts and report PASS/FAIL/UNTESTED.
 6. Don't assert any independent runtime enforcement from this repository instruction.
 
 **Safe outcome:** suggestion or reviewable documentation only. The original app, Excel/Sheets, Supabase, Apps Script, Vercel, 17 Skills, RBAC/RLS and Production remain unchanged unless separately and explicitly authorized.
+
+## SOP v2.0 self-improvement boundaries
+- Observe repeated failures, classify root cause (SOP wording / routing / executor / source / service limits), deduplicate and form a minimal policy change candidate with a negative-test or QA plan.
+- Purely editorial revisions within a verified pre-approved policy may be staged automatically on a branch, with version and index checks. Never overwrite an ACTIVE SOP solely from observer output. Activation must complete full 21-row mapping validation and independent readback first.
+- Never self-approve a weakened safeguard, new write authority, production deployment, secret use or customer/payroll data access. Without verified private persistence, improvement observations remain NOT PERSISTED.

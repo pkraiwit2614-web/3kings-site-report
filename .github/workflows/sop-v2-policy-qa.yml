@@ -1,0 +1,24 @@
+name: SOP v2 Policy QA
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/agent-skills/manifest.json'
+      - '.agents/skills/3kings-sop-gate/SKILL.md'
+      - '.agents/skills/3kings-task-observer/SKILL.md'
+      - 'lib/sopV2Policy.cjs'
+      - 'tests/sop-v2-policy.test.cjs'
+      - '.github/workflows/sop-v2-policy-qa.yml'
+jobs:
+  policy-test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test tests/sop-v2-policy.test.cjs

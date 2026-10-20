@@ -17,7 +17,7 @@ Before interpreting any of the 17 standard 3 Kings shortcut commands:
 - Never change code, data or statuses not within the explicitly requested scope. Avoid touching any folder starting `Data`.
 - Analyse UI→API→DB→Print→i18n→Roles→Sync blast radius before source change.
 - Keep status differences explicit (Actual vs Target vs Schedule vs Unknown). Do not infer successful sync or deployment.
-- Run relevant regressions and verify actual Preview/Production data when authorized. Do not deploy based on the presence of skills.
+- Run affected-scope regressions. Hosted Preview is conditional on unprovable local/CI integration behavior, not a default gate; Production verification only for authorized releases. Do not deploy based on the presence of skills.
 - Never commit private Google Drive document IDs, credentials, access tokens or secrets.
 
 The SOP original in Drive outranks a summary in this repository. Changes to this routing system must be reviewed on a branch; do not silently change application runtime or CI gates.
@@ -30,7 +30,7 @@ Vendor methods are subordinate to the real 3 Kings SOP, user scope and RBAC/RLS.
 
 ## Read-only Task Observer (17 skills)
 
-For task-oriented sessions involving any of the 17 SOP shortcuts, complete the **live SOP Gate preflight first**. Then load the numbered Skill and mapped Superpowers methods; also read `.agents/skills/3kings-task-observer/SKILL.md` and `docs/agent-skills/task-observer-integration.json` for **advisory read-only** observation of repeatable corrections, skill gaps and safety/test issues. The observer does not interrupt the user's task, weaken any SOP mode, grant writes, edit live SOP, or deploy. Capture only supported, privacy-safe generalized improvements and stage any proposal for explicit review.
+For task-oriented sessions involving any of the 17 SOP shortcuts, complete the **live SOP Gate preflight first**. Then load the numbered Skill and mapped Superpowers methods; also read `.agents/skills/3kings-task-observer/SKILL.md` and `docs/agent-skills/task-observer-integration.json` for **advisory read-only** observation of repeatable corrections, skill gaps and safety/test issues. The observer does not interrupt the user's task, weaken any SOP mode, grant writes, edit live SOP, or deploy. Capture only supported, privacy-safe generalized improvements and stage a reviewable proposal; user-approved low-risk documentation changes may follow the authorized policy without repeated substep approval, but no observer-granted data write or deployment.
 
 Authorized connected coding agents should also read `docs/agent-skills/private-observer-routing.md` and resolve the owner-controlled Drive folder by **names only**, rechecking permissions and actual write/readback each session. This config does not create a global ChatGPT listener or guarantee that a scheduled review can access the connector.
 
@@ -49,3 +49,10 @@ The curated adapters add domain/PR discipline and report diagram/slide *instruct
 - **Work-type gates**: Drive document/Sheets/Excel/photo rename/Calendar updates and inspections do not require Git branch, CI, Vercel Preview or Production deploy. For changes to code, database schema or runtime config, keep authorized branch, diff, risk-based CI/Preview gates; reuse existing artifacts only if SHA/config/dependencies/schema/environment/role are proven unchanged. Never create redundant builds or claim an absent build was tested.
 - **Nonblocking helpers**: load only relevant Superpowers methods when they add value; the Task Observer is advisory and must never block or add a permission round. Reuse one live SOP read and one verified snapshot within the same invocation. Internal preflight is not an extra user approval step.
 - **No implicit production changes**: this policy affects agent guidance, not web runtime enforcement, auto-triggering, external permissions, or deployment. Keep all six central safety rules, backend RBAC/RLS and destination readback proof.
+
+## SOP v2.0 Consolidated activation and risk-based execution
+- The live Google Drive INDEX is authoritative for **all 21 entries** (17 core + EX, SUP-PR, SUP-VO, SUP-PUBLISH). The 21 v2.0 documents are not authoritative until INDEX explicitly marks them ACTIVE; do not select STAGING solely because the GitHub manifest lists their titles.
+- One explicit scoped instruction with verified effective ACL authorizes ordinary internal substeps, downstream supporting SOPs and bounded readback. Read-only shortcuts never gain write permissions. Independently conflicting items are quarantined while safe items proceed.
+- Classify work as read-only / document-only / scoped data write / code change / Production release / critical permissions-schema-payroll. No Git CI/Preview for routine documents or data; run GitHub affected QA for code and use Hosted Preview only when necessary. Do not waive actual required branch protection or RLS. Evidence reuse requires exact SHA, config, dependencies, schema, environment, role and source revision match.
+- SOP/Skill improvements may be proposed from evidence and promoted automatically only in explicitly pre-authorized low-risk editorial scope with source readback and index-mapping validation; changes to safety policy, RBAC/RLS, Payroll, schema, Source of Truth or Production require risk-specific authorization. No unattended autonomous service exists merely by committing these documents.
+- After verifying the new 21-row ACTIVE INDEX and all links, archive superseded copies; never archive before an independently verified activation. Do not touch any unrelated subsystem.

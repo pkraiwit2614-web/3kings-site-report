@@ -20,7 +20,6 @@ on:
       - 'tests/phase1-rpc-audit.test.cjs'
       - 'lib/materialsReconciliation.ts'
       - 'supabase/audits/phase1_rpc_permissions_readonly.sql'
-      - 'docs/agent-skills/manifest.json'
       - '.github/workflows/agent-core-readonly.yml'
 jobs:
   agent-core-test:
