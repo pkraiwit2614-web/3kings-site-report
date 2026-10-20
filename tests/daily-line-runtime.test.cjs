@@ -5,7 +5,7 @@ const url='https://wtqubwdduzedmcvyhbgs.supabase.co';
 const env={DAILY_SITE_LINE_ENABLED:'true',SUPABASE_URL:url,
   SUPABASE_SERVER_KEY:'test-only',DAILY_LINE_BRIDGE_TOKEN:'dedicated-test-token',LINE_CHANNEL_ACCESS_TOKEN:'test-only'};
 const load=()=>import('../cloudflare/dailySiteSendTick.mjs');
-const now=new Date('2026-10-20T01:04:00Z');
+const now=new Date('2026-10-21T01:04:00Z');
 function mock(){
  const pushes=[],ledger=new Map(),metas=[];
  const assets=['above_villa','above_condo','mirage','henessy'].map(site=>({
@@ -51,10 +51,16 @@ test('Sunday and disabled flag send nothing',async()=>{
  const b=await dailySiteSendTick({...env,DAILY_SITE_LINE_ENABLED:'false'},{...m,now});
  assert.equal(b.mode,'NO_SEND');assert.equal(m.pushes.length,0);
 });
+test('manual Condo B 20 October must not receive any automated replay',async()=>{
+ const {dailySiteSendTick}=await load();const m=mock();
+ const result=await dailySiteSendTick(env,{...m,now:new Date('2026-10-20T03:02:00Z')});
+ assert.equal(result.mode,'NO_SEND');
+ assert.equal(m.pushes.length,0);
+});
 test('select Saturday on Monday, yesterday otherwise',async()=>{
  const {dailyBangkokPolicy}=await load();
  assert.equal(dailyBangkokPolicy(new Date('2026-10-19T01:02:00Z')).reportDate,'2026-10-17');
- assert.equal(dailyBangkokPolicy(now).reportDate,'2026-10-19');
+ assert.equal(dailyBangkokPolicy(now).reportDate,'2026-10-20');
 });
 test('No messages when QA gateway missing',async()=>{
  const {dailySiteSendTick}=await load();const m=mock();
@@ -89,14 +95,14 @@ test('429 is recorded uncertain; reuses same retry key only in a bounded slot',a
  };
  const failed=await dailySiteSendTick(env,{...m,now});
  assert.equal(failed.uncertain,1);assert.equal(m.pushes.length,1);
- const tooSoon=await dailySiteSendTick(env,{...m,now:new Date('2026-10-20T01:10:00Z')});
+ const tooSoon=await dailySiteSendTick(env,{...m,now:new Date('2026-10-21T01:10:00Z')});
  assert.equal(tooSoon.textAccepted+tooSoon.imageAccepted,0);
  assert.equal(m.pushes.length,1);
- const recovered=await dailySiteSendTick(env,{...m,now:new Date('2026-10-20T01:12:00Z')});
+ const recovered=await dailySiteSendTick(env,{...m,now:new Date('2026-10-21T01:12:00Z')});
  assert.equal(recovered.bundlesAccepted,1);
  assert.equal(m.pushes.length,2);
  assert.equal(m.pushes[0].retry,m.pushes[1].retry);
- const done=await dailySiteSendTick(env,{...m,now:new Date('2026-10-20T01:32:00Z')});
+ const done=await dailySiteSendTick(env,{...m,now:new Date('2026-10-21T01:32:00Z')});
  assert.equal(done.textAccepted+done.imageAccepted,0);
  assert.equal(m.pushes.length,2);
 });
@@ -199,7 +205,7 @@ test('legacy text already delivered plus uncertain image retries IMAGE only on s
  const imageKey='b'.repeat(64),textKey='a'.repeat(64);
  m.ledger.set(textKey,{status:'already_sent'});
  m.ledger.set(imageKey,{status:'in_flight'});
- const x=await dailySiteSendTick(env,{...m,now:new Date('2026-10-20T01:12:00Z')});
+ const x=await dailySiteSendTick(env,{...m,now:new Date('2026-10-21T01:12:00Z')});
  assert.equal(x.textAccepted,0);assert.equal(x.imageAccepted,1);
  assert.equal(m.pushes.length,1);
  assert.deepEqual(m.pushes[0].payload.messages.map(v=>v.type),['image']);
