@@ -6,7 +6,7 @@ description: "3 Kings Construction shortcut 'แก้เว็บเฉพา�
 # 15 — แก้เว็บเฉพาะจุด
 
 **Shortcut:** `แก้เว็บเฉพาะจุด`  
-**SOP title (resolve via live Drive index):** `SOP_15_Surgical_Web_Change_v1.0`  
+**SOP title (resolve via live Drive index):** `SOP_15_Surgical_Web_Change_v1.1_2026-10-19`  
 **Mode:** `code_change`
 
 ## Before any action

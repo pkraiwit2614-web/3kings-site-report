@@ -6,7 +6,7 @@ description: "3 Kings Construction shortcut 'สรุป Progress'. Create only
 # 08 — สรุป Progress
 
 **Shortcut:** `สรุป Progress`  
-**SOP title (resolve via live Drive index):** `SOP_08_Construction_Progress_v1.0`  
+**SOP title (resolve via live Drive index):** `SOP_08_Construction_Progress_v1.1_2026-10-19`  
 **Mode:** `document_only`
 
 ## Before any action

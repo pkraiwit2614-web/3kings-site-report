@@ -6,7 +6,7 @@ description: "3 Kings Construction shortcut 'ตรวจ Production'. READ-ONLY
 # 14 — ตรวจ Production
 
 **Shortcut:** `ตรวจ Production`  
-**SOP title (resolve via live Drive index):** `SOP_14_Production_Inspection_v1.0`  
+**SOP title (resolve via live Drive index):** `SOP_14_Production_Inspection_v1.1_2026-10-19`  
 **Mode:** `read_only`
 
 ## Before any action

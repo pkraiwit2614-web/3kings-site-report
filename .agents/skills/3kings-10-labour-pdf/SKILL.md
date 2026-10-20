@@ -6,7 +6,7 @@ description: "3 Kings Construction shortcut 'ทำ Labour PDF'. Create only the
 # 10 — ทำ Labour PDF
 
 **Shortcut:** `ทำ Labour PDF`  
-**SOP title (resolve via live Drive index):** `SOP_10_Labour_PDF_GSheets_2026-10-15_v1.2_FINAL.md`  
+**SOP title (resolve via live Drive index):** `SOP_10_Labour_PDF_GSheets_v1.3_2026-10-19`  
 **Mode:** `document_only`
 
 ## Before any action
