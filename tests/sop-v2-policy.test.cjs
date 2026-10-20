@@ -29,8 +29,8 @@ test('exact same evidence must match every dimension',()=>{
  assert.equal(g.requireBranch,true)
 })
 test('Hosted Preview only for affected code integration',()=>{
- const p={explicitScope:true,actualPermission:true,sourceVerified:true,hostedIntegrationRequired:true}
- assert.equal(gate({...p,mode:'authorized_write'}).hostedPreview,false)
+ const p={explicitScope:true,actualPermission:true,sourceVerified:true,hostedIntegrationRequired:true,requestedAction:'change_code'}
+ assert.equal(gate({...p,mode:'authorized_write',requestedAction:'write'}).hostedPreview,false)
  assert.equal(gate({...p,mode:'code_change'}).hostedPreview,true)
 })
 test('resumable job never restarts verified step',()=>{
@@ -46,4 +46,21 @@ test('observation proposals require repeat evidence and never self publish',()=>
  assert.equal(out.length,1)
  assert.equal(out[0].status,'REVIEW_CANDIDATE')
  assert.equal(out[0].allowedToAutoPublish,false)
+})
+
+test('unspecified and cross-mode actions are rejected without widening role permissions',()=>{
+ const base={explicitScope:true,actualPermission:true,sourceVerified:true}
+ for(const mode of ['read_only','document_only','authorized_write','code_change','deploy'])
+   assert.equal(gate({...base,mode}).reason,'ACTION_NOT_AUTHORIZED')
+ assert.equal(gate({...base,mode:'document_only',requestedAction:'write'}).allowed,false)
+ assert.equal(gate({...base,mode:'code_change',requestedAction:'write'}).allowed,false)
+ assert.equal(gate({...base,mode:'deploy',requestedAction:'write'}).allowed,false)
+ assert.equal(gate({...base,mode:'authorized_write',requestedAction:'change_code'}).allowed,false)
+ assert.equal(gate({...base,mode:'document_only',requestedAction:'create_artifact'}).allowed,true)
+ assert.equal(gate({...base,mode:'read_only',requestedAction:'read'}).allowed,true)
+})
+test('critical approval must be a verified boolean true, not a truthy value',()=>{
+ const ctx={mode:'code_change',requestedAction:'change_code',explicitScope:true,sourceVerified:true,changeImpact:['RLS']}
+ assert.equal(gate({...ctx,actualPermission:{criticalApproval:'false'}}).allowed,false)
+ assert.equal(gate({...ctx,actualPermission:{criticalApproval:true}}).allowed,true)
 })
