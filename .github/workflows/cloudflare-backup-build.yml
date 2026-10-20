@@ -1,0 +1,60 @@
+name: Cloudflare Backup Build (dry run)
+
+# Test-branch only. Does not create, publish, or change any Cloudflare Worker.
+# Does not touch existing Vercel Production or production Supabase.
+on:
+  push:
+    branches:
+      - feature/cloudflare-backup-preview-20261020
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-backup-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-dry-run:
+    if: github.ref == 'refs/heads/feature/cloudflare-backup-preview-20261020'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: "true"
+      NEXT_PUBLIC_SUPABASE_URL: https://preview.invalid
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_preview_placeholder
+    steps:
+      - name: Checkout test branch
+        uses: actions/checkout@v4
+
+      - name: Setup Node without changing production build
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Restore pinned application dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Check isolation and migration risks
+        run: node --test scripts/check-cloudflare-preview.cjs
+
+      # Build-only dependencies are deliberately ephemeral. Do not edit the
+      # application lockfile, Next scripts, or the Vercel build configuration.
+      - name: Install Cloudflare adapter in CI only
+        run: npm install --no-save --no-package-lock --no-audit --no-fund @opennextjs/cloudflare@latest wrangler@latest
+
+      - name: Stage Cloudflare-only build settings
+        run: |
+          cp cloudflare-preview/open-next.config.ts.template open-next.config.ts
+          cp cloudflare-preview/wrangler.jsonc wrangler.jsonc
+
+      - name: Build Next.js for Cloudflare Workers (no upload)
+        run: npx --no-install opennextjs-cloudflare build
+
+      - name: Validate generated Worker bundle without deployment
+        run: npx --no-install wrangler deploy --dry-run --outdir /tmp/3kings-cloudflare-dry-run
+
+      - name: Verify production package and lockfile unchanged
+        run: git diff --exit-code -- package.json package-lock.json next.config.ts vercel.json

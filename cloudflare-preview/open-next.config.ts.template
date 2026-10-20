@@ -1,0 +1,5 @@
+// Copy to the repository root only in the isolated Cloudflare build runner.
+// Not checked in as a .ts file, so ordinary Vercel builds remain unchanged.
+import { defineCloudflareConfig } from "@opennextjs/cloudflare";
+
+export default defineCloudflareConfig();

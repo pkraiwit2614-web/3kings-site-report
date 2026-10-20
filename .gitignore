@@ -7,6 +7,15 @@ node_modules
 .DS_Store
 *.tsbuildinfo
 
+# Cloudflare backup experiment outputs; never commit generated build configuration.
+.open-next/
+.wrangler/
+/wrangler.jsonc
+/open-next.config.ts
+/cloudflare-env.d.ts
+.dev.vars
+.dev.vars.*
+
 # Task Observer private outputs must never enter this public repository
 skill-observations/
 skill-updates/
