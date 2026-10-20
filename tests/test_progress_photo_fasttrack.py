@@ -63,6 +63,27 @@ class FastTrackSafetyTests(unittest.TestCase):
         self.assertFalse(m.independent_match_verified(row, [{**good, "verified_source": "auto_score"}]))
         self.assertTrue(m.independent_match_verified(row, [good]))
 
+    def test_live_sop_v2_index_and_document(self):
+        sheets = Mock()
+        docs = Mock()
+        row = ["09", "จัดรูป Progress", "", "", "", "",
+               "https://docs.google.com/document/d/sop-id/edit",
+               "APPROVED / ACTIVE — SOP v2.0 Consolidated (20/10/2026)"]
+        sheets.spreadsheets.return_value.values.return_value.get.return_value.execute.return_value = {
+            "values": [["ลำดับ", "คำสั่งลัด"], row]}
+        docs.documents.return_value.get.return_value.execute.return_value = {
+            "title": m.SOP_TITLE,
+            "tabs": [{"documentTab": {"body": {"content": [
+                {"paragraph": {"elements": [{"textRun": {
+                    "content": "SOP 09 | CONSOLIDATED v2.0 | 20/10/2026 | Fast-Track"
+                }}]}}]}}}]
+        }
+        self.assertTrue(m.verify_live_sop(sheets, docs, "index", "sop-id"))
+        sheets.spreadsheets.return_value.values.return_value.get.return_value.execute.return_value = {
+            "values": [row[:7] + ["APPROVED / ACTIVE — SOP v1.3"]]}
+        with self.assertRaises(RuntimeError):
+            m.verify_live_sop(sheets, docs, "index", "sop-id")
+
     def test_drive_scope_parent_and_private_audit(self):
         fake = Mock()
         objects = {

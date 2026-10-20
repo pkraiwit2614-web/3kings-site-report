@@ -301,5 +301,7 @@
       "path": "docs/vendor/superpowers/skills/using-superpowers/references/gemini-tools.md",
       "sha1": "b01b65238a50981aeed22ae52ee20f8b55d16b42"
     }
-  ]
+  ],
+  "updated_on": "2026-10-20",
+  "execution_policy": "No blanket Superpowers activation. verification-before-completion for each job; debugging only real errors; plan/worktrees/TDD/code review only code changes; writing-skills only skill maintenance; reuse same-invocation live SOP and valid artifacts; never trigger extra build/Preview or approval for routine docs/data."
 }

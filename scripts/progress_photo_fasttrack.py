@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SOP 09 v1.3 Fast-Track, isolated Drive-only prototype. Dry-run by default."""
+"""SOP 09 v2.0 Fast-Track, isolated Drive-only prototype. Dry-run by default."""
 import argparse
 import datetime as dt
 import io
@@ -11,7 +11,7 @@ from collections import Counter
 CAMERA = re.compile(r"^(?:IMG|DSC|PXL|DCIM|DSCF|IMAGE|PHOTO)[_-]?\d+", re.I)
 DAY = re.compile(r"^\d{8}$")
 IMAGE = {"image/jpeg", "image/png"}
-SOP_TITLE = "SOP_09_Progress_Photo_Mapping_v1.3_FastTrack_2026-10-20"
+SOP_TITLE = "SOP_09_Progress_Photo_Mapping_v2.0_Consolidated_2026-10-20"
 
 
 def source_day(name):
@@ -148,19 +148,23 @@ def get_bytes(drive, item_id):
 
 
 def verify_live_sop(sheets, docs, index_id, sop_id):
+    """Read the ACTIVE live SOP row and complete linked document; reject stale revisions."""
     rows = sheets.spreadsheets().values().get(
-        spreadsheetId=index_id, range="'SOP_INDEX'!B10:H10").execute().get("values", [])
-    if len(rows) != 1 or len(rows[0]) < 7:
-        raise RuntimeError("SOP INDEX row unavailable")
-    r = rows[0]
-    if r[0] != "จัดรูป Progress" or sop_id not in r[5] or "v1.3" not in r[6]:
-        raise RuntimeError("SOP 09 INDEX is not v1.3")
+        spreadsheetId=index_id, range="'SOP_INDEX'!A1:J1000").execute().get("values", [])
+    matches = [r for r in rows if len(r) > 7 and str(r[0]).zfill(2) == "09"
+               and r[1] == "จัดรูป Progress"]
+    if len(matches) != 1:
+        raise RuntimeError("SOP 09 ACTIVE INDEX row unavailable or ambiguous")
+    row = matches[0]
+    if (f"/d/{sop_id}/" not in row[6] or
+            "APPROVED / ACTIVE" not in row[7] or "v2.0" not in row[7]):
+        raise RuntimeError("SOP 09 ACTIVE revision or link mismatch")
     doc = docs.documents().get(documentId=sop_id, includeTabsContent=True).execute()
     if SOP_TITLE != doc.get("title"):
-        raise RuntimeError("SOP document title mismatch")
+        raise RuntimeError("SOP 09 document title mismatch")
     body = json.dumps(doc, ensure_ascii=False)
-    if "Fast-Track" not in body or "20/10/2026" not in body:
-        raise RuntimeError("SOP 09 full document not verified")
+    if not all(x in body for x in ("SOP 09", "CONSOLIDATED v2.0", "20/10/2026", "Fast-Track")):
+        raise RuntimeError("SOP 09 complete ACTIVE document not verified")
     return True
 
 
@@ -172,6 +176,15 @@ def create_audit(drive, folder, data):
         body={"name": "photo-rename-audit-" + dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ") + ".json",
               "parents": [folder]}, media_body=media, fields="id", supportsAllDrives=True).execute()
     return created["id"]
+
+
+def persist_audit(drive, audit_id, data):
+    """Checkpoint every processed file; fail closed if private audit cannot be saved."""
+    from googleapiclient.http import MediaIoBaseUpload
+    payload = json.dumps(data, ensure_ascii=False, indent=2).encode()
+    drive.files().update(fileId=audit_id, media_body=MediaIoBaseUpload(
+        io.BytesIO(payload), mimetype="application/json", resumable=False),
+        supportsAllDrives=True).execute()
 
 
 def verify_drive_scope(drive, root_id, folders, audit_folder=None):
@@ -223,6 +236,8 @@ def main():
     folders = json.loads(os.environ["PHOTO_PLOT_FOLDERS_JSON"])
     if set(folders) != {"6", "7", "8", "9"}:
         raise SystemExit("Expected exactly Plot 6,7,8,9")
+    verify_drive_scope(drive, os.environ["PHOTO_ROOT_FOLDER_ID"], folders,
+                       os.environ.get("PHOTO_AUDIT_FOLDER_ID") if args.apply else None)
     audit = []
     tally = Counter()
     for plot, root in folders.items():
@@ -307,10 +322,9 @@ def main():
             except Exception:
                 row["status"] = "FAIL_API"
                 tally["FAIL"] += 1
-        from googleapiclient.http import MediaIoBaseUpload
-        payload = json.dumps(audit, ensure_ascii=False, indent=2).encode()
-        drive.files().update(fileId=audit_id, media_body=MediaIoBaseUpload(io.BytesIO(payload),
-            mimetype="application/json"), supportsAllDrives=True).execute()
+            finally:
+                # Durable per-file outcome, including REVIEW; resume never trusts a partial batch.
+                persist_audit(drive, audit_id, audit)
     print(json.dumps({"mode": "APPLY" if args.apply else "DRY_RUN",
                       "counts": dict(tally), "web_qa": "UNTESTED",
                       "audit": "PRIVATE_DRIVE" if args.apply and audit else "NOT_PERSISTED"},

@@ -26,8 +26,46 @@ jobs:
       - name: Enforce isolated viewer DB, Preview allowlist and read-only policy
         run: node --test tests/preview-playwright-contract.test.mjs
 
-  browser_anonymous:
+  preview_trust:
+    name: QA / Trusted deployment event (no secrets)
     if: >-
+      github.event_name == 'deployment_status' &&
+      github.event.deployment_status.state == 'success' &&
+      (github.event.deployment.environment == 'Preview' ||
+       github.event.deployment.environment == 'preview') &&
+      github.event.repository.full_name == 'pkraiwit2614-web/3kings-site-report'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+    outputs:
+      trusted: ${{ steps.verify.outputs.trusted }}
+    steps:
+      - name: Compare deployment revision to protected first-party branch
+        id: verify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_SHA: ${{ github.event.deployment.sha }}
+          DEPLOY_REF: ${{ github.event.deployment.ref }}
+        run: |
+          set -euo pipefail
+          echo "trusted=false" >> "$GITHUB_OUTPUT"
+          if [[ ! "$DEPLOY_SHA" =~ ^[a-f0-9]{40}$ ]] || [ "$DEPLOY_REF" != "$DEPLOY_SHA" ]; then
+            echo "SKIP_UNTRUSTED_DEPLOYMENT_REVISION"
+            exit 0
+          fi
+          expected="$(gh api 'repos/pkraiwit2614-web/3kings-site-report/branches/test/preview-qa-automation-20261019' --jq '.commit.sha')" || exit 0
+          if [ "$DEPLOY_SHA" != "$expected" ]; then
+            echo "SKIP_UNTRUSTED_PREVIEW_SHA"
+            exit 0
+          fi
+          echo "trusted=true" >> "$GITHUB_OUTPUT"
+          echo "TRUSTED_PREVIEW_EVENT"
+
+  browser_anonymous:
+    needs: preview_trust
+    if: >-
+      needs.preview_trust.outputs.trusted == 'true' &&
       github.event_name == 'deployment_status' &&
       github.event.deployment_status.state == 'success' &&
       (github.event.deployment.environment == 'Preview' ||
@@ -67,9 +105,11 @@ jobs:
         run: node scripts/preview-playwright-e2e.mjs anonymous
 
   browser_viewer:
+    needs: preview_trust
     # This test deliberately stays skipped until a separate Supabase test DB,
     # dedicated viewer identity, and reviewed branch-specific environment exist.
     if: >-
+      needs.preview_trust.outputs.trusted == 'true' &&
       github.event_name == 'deployment_status' &&
       github.event.deployment_status.state == 'success' &&
       (github.event.deployment.environment == 'Preview' ||

@@ -6,7 +6,7 @@ description: "3 Kings Construction shortcut 'จัดรูป Progress'. Write
 # 09 — จัดรูป Progress
 
 **Shortcut:** `จัดรูป Progress`  
-**SOP title (resolve via live Drive index):** `SOP_09_Progress_Photo_Mapping_v1.3_FastTrack_2026-10-20`  
+**SOP title (resolve via live Drive index):** `SOP_09_Progress_Photo_Mapping_v2.0_Consolidated_2026-10-20`  
 **Mode:** `authorized_write`
 
 ## Before any action
@@ -22,7 +22,7 @@ Live Google Drive `3Kings Construction/Above/VILLA/Picture Progress/Plot 6–9`,
 1. Resolve this command's row in the live SOP index and open the current SOP; follow its full ordered instructions.
 2. Fetch and reconcile current source data, scope, identities and evidence; identify out-of-scope dependencies.
 3. Enforce mode `authorized_write`: Validate explicit authorization for affected records and target. Use minimal write + readback; don't broaden scope.
-4. When a **separate photo-renaming request** is authorized, inventory the **most recent dates first** within scoped plots and progressively cover historical days; no dependency on completing an all-history baseline before closing a verified Plot × date batch; record Drive File ID, original name/extension, plot, folder, reliable capture date, link and initial counts.
+4. When a **separate photo-renaming request** is authorized, inventory **all dates, including every historical date** within the scoped plots; record Drive File ID, original name/extension, plot, folder, reliable capture date, link and initial counts.
 5. Distinguish correctly named reference images (read-only, never rename) from unstandardized camera-name/unnamed candidates. Compare candidates with named references from **any date in the same plot** (earlier or later), requiring multiple fixed architectural landmarks and an identifiable matching or reliably near-identical viewpoint. Never pair across plots or infer a match from materials/color alone.
 6. Determine photo date from reliable folder/source evidence and EXIF when available; **do not substitute Drive modified time** for capture date. Leave contradictory, uncertain or unmatched records unchanged as `รอตรวจยืนยัน`.
 7. Prepare a **dry-run mapping** before bulk changes: plot/date, candidate File ID and old name, proposed name, reference image name/File ID and matching-angle evidence. Derive plot, viewpoint, date, suffix, and extension exclusively from verified existing naming patterns; never invent a camera-angle code.
@@ -50,9 +50,9 @@ SOP not retrieved or mismatched with the live Drive index; wrong source/file typ
 These skills are agent guidance, **not** a server-side authorization, authentication or runtime SOP enforcement mechanism.
 
 
-## Fast-Track v1.3 — 2026-10-20
-- One command authorizes the complete eligible Plot × date batch: live SOP Gate once → recent-date-first candidate discovery → same-plot visual verification → collision and web-parser guard → Drive metadata-only rename → per-file readback → private reversible log.
-- Complete safe batches without waiting for all historical days. Resume backlog and changed/REVIEW checkpoints incrementally; rescan only invalidated scopes.
-- Do not require repeated approvals for each photo when permissions, evidence, and scope are verified. Hold only ambiguous files, not the entire batch.
-- Drive File ID, parents, bytes, EXIF, existing correct filenames and excluded Data folders must stay unchanged. Automated image similarity alone is not sufficient evidence of matching architectural landmarks.
-- Regular photo rename needs no branch, preview or deploy. Executor development does; do not say Production automation is enabled without a live end-to-end check.
+## Single-command Fast-Track routing — 20/10/2026
+- Resolve live ACTIVE SOP from Google Drive INDEX, open full document once per invocation; repo title is only a hint. Prior conflicting instructions about approvals/scan order are superseded by the newer live SOP.
+- Mode: authorized_write. Do not infer permission to change unrelated data/production. One clear authorized command with verified current ACL/source permits scoped execution and readback without micro-approvals.
+- 'จัดรูป Progress' itself authorizes renaming eligible verified candidate photos; the old wording 'separate photo-renaming request' is superseded. Preserve SOP v1.3 newest-first batch/Checkpoint/Delta; no Preview/CI/Deploy for routine Drive rename.
+- No Git branch/CI/Preview/Production Deploy for read-only reports, documents or routine Drive/Sheet updates. Use existing QA snapshot/Checkpoint when revision/freshness verified; pause only conflicting records; prove success with destination readback.
+- Superpowers/Task Observer are conditional, advisory, non-blocking and must not reload identical SOP or trigger extra network/build operations.

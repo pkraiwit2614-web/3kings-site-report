@@ -72,7 +72,7 @@ test('no bypass credential is sent to an invalid domain, even with a valid secre
 })
 
 test('workflow disallows arbitrary deployment revisions before bypass secret can be read', () => {
-  const workflow = fs.readFileSync(new URL('../.github/workflows/preview-readonly-smoke.yml', import.meta.url), 'utf8')
+  const workflow = fs.readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8')
   const guard = workflow.indexOf('- name: Verify deployed SHA equals trusted first-party branch HEAD')
   const secret = workflow.indexOf('KINGS_VERCEL_PREVIEW_BYPASS: ${{ secrets.KINGS_VERCEL_PREVIEW_BYPASS }}')
   assert.ok(guard > 0 && secret > guard, 'trusted SHA gate must precede secret use')

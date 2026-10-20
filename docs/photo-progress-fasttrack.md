@@ -1,7 +1,7 @@
-# SOP 09 v1.3 — Photo Progress Fast-Track Executor (test branch only)
+# SOP 09 v2.0 — Photo Progress Fast-Track Executor (test branch only)
 
 ## Current status (20 October 2026)
-- Source of truth: current SOP 09 v1.3 in private Google Drive; the INDEX is always reread before any run.
+- Source of truth: current SOP 09 v2.0 ACTIVE in private Google Drive; the INDEX is always reread before any run.
 - **Prototype, not Production-enabled**. No scheduled rename, no DB migration, no change to the web app.
 - Existing `/photo-mapping` works with a Supabase photo index/task mapping. It does **not** rename the original Drive file. This isolated executor uses Drive metadata only.
 - This branch must not be merged automatically. It does not authorize new scopes or grant access to the service account.
@@ -46,7 +46,12 @@ The branch touches only SOP Skill/manifest, isolated script/tests/workflow and t
 
 ## Authorization and current evidence
 - The user authorized work within the requested scope without repeated per-item approvals whenever actual access and all technical checks are satisfied. This never implies that service-account edit access, the independent visual verifier, or authenticated dispatch is currently configured.
-- SOP 09 v1.3 and INDEX were read from the current owner Drive; the branch Skill and manifest point to the same title.
+- SOP 09 v2.0 and INDEX are authoritative. This integration preserves the latest main Skill and manifest v2.0 mapping; the Executor now rejects a stale SOP.
 - Offline unit and static skill validation passed on the test branch. The independent live visual matching + Drive write/readback E2E checks have **not** been performed.
 - Protected-preview Playwright checks on this branch cannot be used as evidence of live visual/photo QA: the workflow stops at a branch/SHA precondition before browsing.
 - Keep Production writes disabled until the remaining gates above pass. Do not request routine photo-by-photo approvals once the system can verify these gates automatically.
+
+## 21 October integration safety
+- Rebuilt from the latest main tree to preserve all 17 current SOP v2.0 Skills and mappings; no old manifest or Skill file was replayed.
+- Executor checks LIVE ACTIVE INDEX and complete v2.0 SOP, verifies the root/Plot Drive folder identities before scanning, and persists a private per-file outcome after every apply attempt.
+- Branch QA is synthetic/offline only until independently verified real Drive access, same-Plot landmarks, parser/readback and controlled 1-photo reversible test exist. Do not enable live writing, workflow apply or claim one-command ChatGPT dispatch is installed.
