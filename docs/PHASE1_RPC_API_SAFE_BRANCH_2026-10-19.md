@@ -41,3 +41,10 @@
 4. Test exact Materials identity collisions, Excel insertion and new PR replacement in a **copy**. Verify both source preservation and no duplicate IDs.
 5. Establish source → parser → written → readback → authenticated Web UI evidence. Report FAIL/UNVERIFIED on gaps.
 6. Review any Production action against SOP 16 separately. This branch and PR are **not** approval to merge or deploy.
+
+## Scoped read-only review — 20 October 2026
+- Integrated current main while preserving all current SOP discovery titles and Fast-Track guidance.
+- Scope retained: catalog SELECT audit, unwired Materials staging helper, Owner-only Sync diagnostic classification, tests. No write path, ACL/RLS change, migration, source import or trigger change.
+- Materials staging now rejects incomplete identities and many-to-one existing identity collisions.
+- The historical source findings above are not a fresh audit or proof that live Materials conflicts are resolved.
+- Operational importer/ACL work remains deferred; merging this read-only code does not authorize it.

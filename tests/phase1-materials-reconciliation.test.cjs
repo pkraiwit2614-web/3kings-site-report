@@ -41,3 +41,18 @@ test('ambiguous matching fails closed without deleting source rows',()=>{
  assert.equal(actual.rows[0].reason,'AMBIGUOUS')
  assert.equal(/\.delete\(|\.upsert\(|\.insert\(|\.update\(|\.rpc\(/.test(raw),false)
 })
+
+test('two existing records cannot silently claim one incoming identity',()=>{
+ const result=inspect([old,{...old,id:'old-2'}],[old])
+ assert.equal(result.status,'BLOCK_WRITE')
+ assert.equal(result.matched,0)
+ assert.equal(result.reviewRequired,2)
+})
+test('incomplete existing identity always requires review',()=>{
+ for(const key of ['id','sourceSheet','projectCode','sourceItemNo','itemName']){
+  const row={...old,[key]:''}
+  const result=inspect([row],[row])
+  assert.equal(result.status,'BLOCK_WRITE',key)
+  assert.equal(result.rows[0].reason,'INSUFFICIENT_IDENTITY',key)
+ }
+})

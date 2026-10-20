@@ -20,6 +20,13 @@ export function stageMaterialsReconciliation(existing:MaterialRow[],incoming:Mat
   const rows:ReconciliationRow[]=existing.map(old=>{
     const id=String(old.id||'')
     const sheet=norm(old.sourceSheet),project=norm(old.projectCode),code=norm(old.sourceItemNo)
+    if(!id.trim()||!sheet||!project||!code||!norm(old.itemName))
+      return {existingId:id,status:'REVIEW_REQUIRED' as const,reason:'INSUFFICIENT_IDENTITY' as const,sourceRow:null,candidateCount:0}
+    const duplicateExisting=existing.filter(row=>norm(row.sourceSheet)===sheet&&
+      norm(row.projectCode)===project&&norm(row.sourceItemNo)===code).length>1 ||
+      existing.filter(row=>String(row.id||'')===id).length>1
+    if(duplicateExisting)
+      return {existingId:id,status:'REVIEW_REQUIRED' as const,reason:'AMBIGUOUS' as const,sourceRow:null,candidateCount:0}
     const pool=incoming.filter(next=>norm(next.sourceSheet)===sheet&&norm(next.projectCode)===project)
     // Item codes must be unique inside one site and source sheet to be trusted.
     const byCode=code?pool.filter(next=>norm(next.sourceItemNo)===code):[]

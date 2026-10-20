@@ -1,1 +1,3 @@
-{}
+{
+  "ignoreCommand": "if [ \"$VERCEL_ENV\" = \"preview\" ]; then case \"$(git log -1 --pretty=%B 2>/dev/null)\" in *\"[skip-preview]\"*) exit 0;; esac; fi; exit 1"
+}

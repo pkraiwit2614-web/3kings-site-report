@@ -9,12 +9,15 @@ test('security audit SQL cannot change privileges or source tables',()=>{
  assert.match(commands,/p\.prosecdef/)
  assert.match(commands,/has_function_privilege\('anon'/)
 })
-test('Phase 1 keeps all 17 SOP skill definitions and align only three live SOP names',()=>{
+test('Phase 1 keeps all 17 SOP skill definitions and preserve current SOP discovery without pinning historical revisions',()=>{
  const manifest=require('../docs/agent-skills/manifest.json')
  assert.equal(manifest.shortcuts.length,17)
  for(const id of [13,15,17]){
   const row=manifest.shortcuts.find(s=>s.number===id)
-  assert.match(row.sop_title,/v1\.1_2026-10-19$/)
+  assert.equal(row.requires_live_drive_read,true)
+  assert.ok(row.sop_title.includes('_v'))
+  const skill=fs.readFileSync('.agents/skills/'+row.name+'/SKILL.md','utf8')
+  assert.ok(skill.includes(row.sop_title))
  }
  assert.equal(manifest.shortcuts.find(s=>s.number===13).mode,'read_only')
  assert.equal(manifest.shortcuts.find(s=>s.number===17).mode,'read_only')

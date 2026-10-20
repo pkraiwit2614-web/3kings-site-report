@@ -1,0 +1,31 @@
+project_id = "3kings_ci_viewer_e2e"
+[api]
+enabled = true
+port = 54321
+schemas = ["public","graphql_public"]
+extra_search_path = ["public", "extensions"]
+[db]
+port = 54322
+major_version = 17
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+[auth]
+enabled = true
+enable_signup = false
+site_url = "http://127.0.0.1:3010"
+additional_redirect_urls = ["http://127.0.0.1:3010"]
+[auth.email]
+enable_signup = true
+[studio]
+enabled = false
+[realtime]
+enabled = false
+[storage]
+enabled = false
+[analytics]
+enabled = false
+[inbucket]
+enabled = false
+[edge_runtime]
+enabled = false
