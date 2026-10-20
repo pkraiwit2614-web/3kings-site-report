@@ -6,7 +6,7 @@ description: "3 Kings Construction shortcut 'สรุป Weekly Recap'. Create 
 # 11 — สรุป Weekly Recap
 
 **Shortcut:** `สรุป Weekly Recap`  
-**SOP title (resolve via live Drive index):** `SOP_11_Weekly_Recap_v1.0`  
+**SOP title (resolve via live Drive index):** `SOP_11_Weekly_Recap_v1.1_2026-10-19`  
 **Mode:** `document_only`
 
 ## Before any action
