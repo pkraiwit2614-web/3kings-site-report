@@ -108,7 +108,7 @@ def choose_match(candidates, minimum=.83, margin=.16):
 
 def proposed_label_matches_date(name, target_day):
     """Never copy a reference label that embeds an older capture date."""
-    explicit = re.findall(r"(?<!\\d)20\\d{6}(?!\\d)", name)
+    explicit = re.findall(r"(?<!\d)20\d{6}(?!\d)", name)
     return not explicit or all(x == target_day.strftime("%Y%m%d") for x in explicit)
 
 
