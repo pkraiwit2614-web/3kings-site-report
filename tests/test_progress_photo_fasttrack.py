@@ -45,6 +45,24 @@ class FastTrackSafetyTests(unittest.TestCase):
         evidence = {"landmarks":["one landmark"]}
         self.assertLess(len(set(evidence["landmarks"])), 2)
 
+    def test_reference_date_guard(self):
+        from datetime import date
+        day = date(2026, 10, 20)
+        self.assertTrue(m.proposed_label_matches_date("งานหลังคา.JPG", day))
+        self.assertTrue(m.proposed_label_matches_date("Roof_20261020.JPG", day))
+        self.assertFalse(m.proposed_label_matches_date("Roof_20260901.JPG", day))
+
+    def test_independent_visual_evidence_is_mandatory(self):
+        row = {"file_id": "f1", "old": "IMG_1.JPG",
+               "new": "Roof.JPG", "reference_id": "r1", "plot": "6", "day": "2026-10-20"}
+        good = {**row, "landmarks": ["fixed column at left", "balcony opening at right"],
+                "verified_source": "independent_visual_check"}
+        self.assertFalse(m.independent_match_verified(row, []))
+        self.assertFalse(m.independent_match_verified(row, [{**good, "reference_id": "wrong"}]))
+        self.assertFalse(m.independent_match_verified(row, [{**good, "landmarks": ["one landmark"]}]))
+        self.assertFalse(m.independent_match_verified(row, [{**good, "verified_source": "auto_score"}]))
+        self.assertTrue(m.independent_match_verified(row, [good]))
+
     def test_drive_scope_parent_and_private_audit(self):
         fake = Mock()
         objects = {
