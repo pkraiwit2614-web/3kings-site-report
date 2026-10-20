@@ -37,8 +37,10 @@ test('deployment QA status only evaluates successful first-party Preview events'
   const start = workflow.indexOf('  qa_preview_status:')
   assert.ok(start > 0, 'deployment summary job exists')
   const job = workflow.slice(start)
-  assert.match(job, /github\\.event_name == 'deployment_status'/)
-  assert.match(job, /github\\.event\\.deployment_status\\.state == 'success'/)
-  assert.match(job, /github\\.event\\.deployment\\.environment == 'Preview'/)
-  assert.match(job, /github\\.event\\.repository\\.full_name == 'pkraiwit2614-web\\/3kings-site-report'/)
+  for (const expected of [
+    "github.event_name == 'deployment_status'",
+    "github.event.deployment_status.state == 'success'",
+    "github.event.deployment.environment == 'Preview'",
+    "github.event.repository.full_name == 'pkraiwit2614-web/3kings-site-report'"
+  ]) assert.ok(job.includes(expected), 'Preview status guard missing: ' + expected)
 })
