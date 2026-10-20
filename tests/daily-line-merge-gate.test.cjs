@@ -28,7 +28,7 @@ test('only the ten scoped Preview QA paths may change in PR #187',()=>{
 test('CI checks every named Daily Site Report source and never defines a delivery command',()=>{
   assert.equal(DAILY_LINE_SOURCES.length,4)
   assert.equal(new Set(DAILY_LINE_SOURCES).size,4)
-  assert.ok(DAILY_LINE_SOURCES.every(p=>p.includes('daily')||p.includes('Daily')||p.includes('apps-script')))
+  assert.ok(DAILY_LINE_SOURCES.every(p=>/daily|apps-script/i.test(p)))
 })
 test('change scoping cannot be bypassed by an outside path',()=>{
   const x=classify(['vercel.json','lib/new/report-delivery.ts'])
