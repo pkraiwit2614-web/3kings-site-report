@@ -15,6 +15,7 @@ type WorkOrder={
   received_date:string|null;due_date:string|null;work_status:string|null;
   evidence_url:string|null;qa_status:string|null;conflict_note:string|null;
   source_sync_note:string|null;source_modified_at:string;imported_at:string;
+  web_completed_at:string|null;writeback_state:'pending'|'error'|'synced'|null;writeback_error:string|null;
 }
 type RoomStatus={room_no:string;status_group:string|null;latest_source:string|null;source_note:string|null}
 type Quick='ALL'|'A'|'B'|'OVERDUE'
@@ -108,9 +109,9 @@ export default function WorkOrderViewer(){
  const reload=useCallback(async()=>{
   const sb=getSupabase()
   const [order,master,inactive]=await Promise.all([
-   sb.from('defect_work_order_snapshot').select('work_id,room_group,building,contractor,defect_item,next_action,received_date,due_date,work_status,evidence_url,qa_status,conflict_note,source_sync_note,source_modified_at,imported_at').eq('source_active',true).order('work_id'),
+   sb.from('defect_work_order_snapshot').select('work_id,room_group,building,contractor,defect_item,next_action,received_date,due_date,work_status,evidence_url,qa_status,conflict_note,source_sync_note,source_modified_at,imported_at,web_completed_at,writeback_state,writeback_error').eq('source_active',true).order('work_id'),
    sb.from('condo_room_status').select('room_no,status_group,latest_source,source_note'),
-   sb.from('defect_work_order_snapshot').select('work_id,room_group,building,contractor,defect_item,next_action,work_status,source_modified_at,imported_at').eq('source_active',false).order('work_id')
+   sb.from('defect_work_order_snapshot').select('work_id,room_group,building,contractor,defect_item,next_action,work_status,source_modified_at,imported_at,web_completed_at,writeback_state,writeback_error').eq('source_active',false).order('work_id')
   ])
   if(order.error||master.error||inactive.error)throw new Error(order.error?.message||master.error?.message||inactive.error?.message||'อ่านข้อมูลไม่สำเร็จ')
   setRows((order.data||[]) as WorkOrder[])
@@ -145,6 +146,14 @@ export default function WorkOrderViewer(){
  },[reload])
 
  const roomMap=useMemo(()=>new Map(rooms.map(r=>[r.room_no,r.status_group])),[rooms])
+ // The server RPC currently permits only Hotel - Incomplete rooms. Keep the
+ // read-only Non-Hotel work list, but do not offer its users a write action.
+ const canCompleteWorkId=(r:WorkOrder)=>{
+  const members=[...new Set(r.room_group.toUpperCase().match(/[AB]\d{3}/g)||[])]
+  return members.length>0&&members.every(room=>roomMap.get(room)==='Hotel - Incomplete')
+ }
+ const completionReceipts=useMemo(()=>rows.filter(r=>r.web_completed_at).sort((a,b)=>
+  (b.web_completed_at||'').localeCompare(a.web_completed_at||'')).slice(0,8),[rows])
  const noticeMap=useMemo(()=>new Map(rooms.map(r=>[r.room_no,hotelNoticeISO(r)])),[rooms])
  const todayISO=todayInBangkok()
  const noticeForRow=(r:WorkOrder):string|null=>ids(r.room_group).map(room=>noticeMap.get(room)||null).filter((v):v is string=>Boolean(v)).sort()[0]||null
@@ -197,6 +206,13 @@ export default function WorkOrderViewer(){
   <PageHeader title="Above Condo — Work Order" subtitle={canComplete?'รายการงานค้างรายจุด • ปิดงานตาม Work ID (รอเขียนกลับ Excel)':'รายการงานค้างรายจุด • สำหรับทีม 3 Kings • อ่านอย่างเดียว'}
    action={<div className="wo-update-meta"><span>ข้อมูลอัปเดต</span><b>{dateTimeTH(latestWorkDetailSourceAt)}</b></div>}/>
   {completionMessage&&<div className="panel wo-completion-notice" role="status">{completionMessage}</div>}
+  {canComplete&&completionReceipts.length>0&&<section className="panel wo-completion-receipts" aria-label="สถานะเขียนกลับ Excel">
+   <b>สถานะยืนยันงานราย Work ID (ล่าสุด)</b>
+   <div>{completionReceipts.map(r=><div key={r.work_id} className="wo-receipt-row">
+    <span>{r.work_id}</span><span>{r.writeback_state==='synced'?'Excel Synced':r.writeback_state==='error'?'Excel Error — รอตรวจสอบ':'Pending — รอเขียน Excel'}</span>
+    {r.writeback_state==='error'&&r.writeback_error&&<small>{r.writeback_error}</small>}
+   </div>)}</div>
+  </section>}
   {error&&<div className="panel wo-error" role="alert">ไม่สามารถตรวจข้อมูล Work Order กับ Defect Report ได้: {error} <button type="button" className="button" onClick={()=>{setLoading(true);void reload().then(()=>setError('')).catch(e=>setError(String(e))).finally(()=>setLoading(false))}}>ลองใหม่</button></div>}
   {loading?<div className="panel">กำลังตรวจสอบข้อมูล Work Order ล่าสุด…</div>:!error&&<>
    <section className="wo-kpis" aria-label="กรองรายการตามจำนวนงาน">
@@ -242,7 +258,7 @@ export default function WorkOrderViewer(){
       <td>{r.defect_item}</td>
       <td>{r.next_action||'รอระบุรายละเอียด'}{r.conflict_note&&<small className="wo-conflict">ตรวจข้อขัดแย้ง: {r.conflict_note}</small>}</td>
       <td><b>{r.contractor}</b></td>
-      <td><b>{displayWorkStatus(r.work_status)}</b><small>{r.qa_status||'รอตรวจรายการ'}</small>{canComplete&&<button type="button" className="wo-complete-btn" onClick={()=>{setSaveError('');setConfirmRow(r)}}>ยืนยันงานเสร็จ</button>}</td>
+      <td><b>{displayWorkStatus(r.work_status)}</b><small>{r.qa_status||'รอตรวจรายการ'}</small>{canComplete&&canCompleteWorkId(r)&&<button type="button" className="wo-complete-btn" onClick={()=>{setSaveError('');setConfirmRow(r)}}>ยืนยันงานเสร็จ</button>}</td>
       <td className="wo-evidence-col">{r.evidence_url?.startsWith('https://drive.google.com/')?<a target="_blank" rel="noreferrer" href={r.evidence_url}>เปิดภาพ / PDF</a>:<small>รอหลักฐาน</small>}</td>
       <td className="wo-print-only wo-signoff"><div>□ ตรวจงานแล้ว</div><div>ลงชื่อ ........................</div><div>วันที่ ....../....../......</div></td>
      </tr>})}
