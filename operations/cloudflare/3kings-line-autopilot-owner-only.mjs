@@ -648,7 +648,7 @@ export default {
   async scheduled(controller,env){
     // Owner-only mode: NEVER invoke the former group sender or summary DM.
     try {
-      const r=await dailyOwnerSummaryTick(env,{db:sb,hash:sha256hex});
+      const r=await dailyOwnerSummaryTick(env,{db:dailyLineRpc,hash:sha256hex});
       console.info('daily_owner_report_tick',{mode:r.mode,accepted:r.delivered,
         reportDate:r.reportDate,http:r.http??null});
     }catch{console.warn('daily_owner_report_tick_failed');}
