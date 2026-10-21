@@ -399,6 +399,8 @@ def main():
             item["new"] = verified_label
             reserved[folder_key].add(verified_label.casefold())
             eligible.append(item)
+        if not eligible:
+            raise SystemExit("RENAME_BLOCKED: No candidate passed independent visual/date/label evidence")
         # Cap this execution, not the entire verified backlog. Newest Plot/day
         # candidates are visited first; deferred items remain eligible next run.
         if len(eligible) > args.max_renames:
