@@ -158,4 +158,20 @@ test('QA isolated: ZIP-typed XLSX, single Work ID write/readback/ACK, formula pr
   assert.match(edited,/dimension ref="A1:P5"/);
   // QA restore never modifies Google Drive: restore only this in-memory fixture.
   current=pristine.slice();assert.equal(current[2].getDataAsString(),sheet);
+  queue=[{work_id:'DF-A213-99',web_completed_at:'2026-10-21T12:00:00Z'}];
+  const failed=env.workOrderCompletionSyncNow20261015();
+  assert.equal(failed.status,'partial');
+  assert.equal(failed.queued,1);assert.equal(failed.verified,0);
+  assert.equal(failed.errors.length,1);
+  assert.match(failed.errors[0].error,/Work ID missing or duplicated/);
+  assert.equal(acks,1,'a failed Work ID must not be acknowledged');
+  assert.equal(uploads,1,'a failed Work ID must not rewrite XLSX');
+  assert.equal(fails,1,'failed item must be reported for retry');
+  assert.equal(current[2].getDataAsString(),sheet);
+  queue=[{work_id:'DF-A212-01',web_completed_at:'2026-10-21T12:00:00Z'}];
+  const retry=env.workOrderCompletionSyncNow20261015();
+  assert.equal(retry.status,'success');assert.equal(retry.verified,1);
+  assert.equal(acks,2);assert.equal(uploads,2);
+  // Clear synthetic state; neither a real queue nor an approved XLSX was touched.
+  current=pristine.slice();assert.equal(current[2].getDataAsString(),sheet);
 });
