@@ -175,3 +175,31 @@ test('QA isolated: ZIP-typed XLSX, single Work ID write/readback/ACK, formula pr
   // Clear synthetic state; neither a real queue nor an approved XLSX was touched.
   current=pristine.slice();assert.equal(current[2].getDataAsString(),sheet);
 });
+
+
+test('QA release gate guards the canonical XLSX and performs isolated real Drive write/readback/restore',()=>{
+  const qa=fs.readFileSync('docs/apps-script/WorkOrderSingleWriterIsolatedQA_2026-10-21.gs','utf8')
+  assert.doesNotThrow(()=>new vm.Script(qa))
+  const context=vm.createContext({})
+  vm.runInContext(source+'\n'+qa,context)
+  assert.equal(typeof context.workOrderIsolatedQaWriteRestore20261021,'function')
+  assert.match(qa,/WORK_ORDER_QA_FOLDER_ID/)
+  assert.match(qa,/QA_Excel_Writeback_Test_2026-10-19_DO_NOT_SYNC/)
+  assert.match(qa,/copy\.getId\(\)===prod\.id/)
+  assert.match(qa,/copy=source\.makeCopy\(source\.getName\(\),folder\)/)
+  assert.match(qa,/workOrderWbApply20261015_\(qaConfig,candidate,true\)/)
+  assert.match(qa,/workOrderWbApply20261015_\(qaConfig,candidate,false\)/)
+  assert.match(qa,/originalBytes=copy\.getBlob\(\)\.getBytes\(\)/)
+  assert.match(qa,/source\.getLastUpdated\(\)\.getTime\(\)!==srcModified/)
+  assert.match(qa,/zip_members:beforeNames\.length/)
+  assert.match(qa,/strip\(oldSheet\)!==strip\(newSheet\)/)
+  assert.match(qa,/QA_SAME_ID_WRITE_AND_RESTORE_PASS/)
+  assert.match(qa,/RESTORE FAILED/)
+  assert.match(qa,/SHA_256/)
+  assert.match(qa,/finally\s*\{/)
+  assert.doesNotMatch(qa,/setProperty\(['"]WORK_ORDER_SINGLE_WRITER_ENABLED/)
+  assert.doesNotMatch(qa,/function installWorkOrderCompletionTrigger20261015/)
+  assert.doesNotMatch(qa,/defect_work_order_writeback_(ack|fail|pull)/)
+  assert.doesNotMatch(qa,/defect_work_order_complete/)
+  assert.doesNotMatch(qa,/ScriptApp\.newTrigger/)
+})
