@@ -1,0 +1,30 @@
+name: LINE Owner-Only No-Send QA
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'operations/cloudflare/3kings-line-autopilot-owner-only.mjs'
+      - 'tests/line-owner-delivery.test.cjs'
+      - 'tests/line-owner-bridge.test.cjs'
+      - 'operations/supabase/kings_daily_line_images-owner-only.ts'
+      - '.github/workflows/line-owner-delivery.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'operations/cloudflare/3kings-line-autopilot-owner-only.mjs'
+      - 'tests/line-owner-delivery.test.cjs'
+permissions:
+  contents: read
+jobs:
+  line-owner-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Static Node syntax QA
+        run: node --check operations/cloudflare/3kings-line-autopilot-owner-only.mjs
+      - name: Owner-only delivery mock and negative QA (never sends LINE)
+        run: node --test tests/line-owner-delivery.test.cjs tests/line-owner-bridge.test.cjs
