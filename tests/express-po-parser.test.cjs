@@ -113,3 +113,13 @@ test('unusual but real 20-Oct PC/PR document ID lengths are not skipped',()=>{
  assert.equal(r.summary.lineItems,2)
  assert.ok(!r.qa.some(x=>x.code==='DOCUMENT_HEADER_UNRECOGNIZED'))
 })
+
+test('2023-current quoted exports with trailing comma-only columns parse without changing totals',()=>{
+ const lines=sample().toString('latin1').split('\\r\\n')
+ const exportBytes=Buffer.from(lines.map(line=>'"'+line+'",,,,,,,,,,,').join('\\r\\n'),'latin1')
+ const r=parseExpressPoReport(exportBytes)
+ assert.equal(r.summary.validDocuments,1)
+ assert.equal(r.summary.lineItems,1)
+ assert.equal(r.documents[0].totalCents,10700)
+ assert.equal(r.qa.length,0)
+})
