@@ -140,7 +140,7 @@ export default function ContactBookPage(){
           </label>
           <label>ประเภท
             <select aria-label="ประเภทผู้ติดต่อ" value={category} onChange={e=>setCategory(e.target.value)}>
-              <option value="">ทุกประเภท</option><option>ผู้รับเหมา</option><option>ร้านค้า</option><option>ภายใน</option>
+              <option value="">ทุกประเภท</option><option>ผู้รับเหมา</option><option>ร้านค้า</option><option>ภายใน</option><option>ภายใน</option>
             </select>
           </label>
           <label>ประเภทงาน
