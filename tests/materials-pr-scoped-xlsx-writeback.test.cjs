@@ -49,3 +49,25 @@ test('existing shared strings are resolved, and no duplicate cell changes allowe
   const next=sandbox.xlsxScopedPatch_(old,['one','two','ไทย'],[{cell:'C12',expected:'ไทย',value:'ใหม่'}])
   assert.equal(sandbox.xlsxScopedCell_(next,'C12',[]).old,'ใหม่')
 })
+
+
+test('namespaced Excel XML fixture matches the QA workbook encoding and preserves formulas', () => {
+  const blob = value => ({ getDataAsString:() => value })
+  const parts = {
+    'xl/workbook.xml':blob('<x:workbook><x:sheets><x:sheet name="ตามจัดซื้อ" sheetId="1" r:id="rId1" /></x:sheets></x:workbook>'),
+    'xl/_rels/workbook.xml.rels':blob('<Relationships><Relationship Id="rId1" Target="/xl/worksheets/sheet1.xml" /></Relationships>'),
+    'xl/sharedStrings.xml':blob('<x:sst><x:si><x:t xml:space="preserve">ไทย &amp; &#60;ok&#62;</x:t></x:si></x:sst>'),
+    'xl/worksheets/sheet1.xml':blob('<x:worksheet><x:sheetData><x:row r="2"><x:c r="A2" s="5" t="s"><x:v>0</x:v></x:c><x:c r="B2" s="6"><x:f>1+1</x:f><x:v>2</x:v></x:c></x:row></x:sheetData></x:worksheet>')
+  }
+  assert.equal(sandbox.xlsxScopedSheetPath_(parts,'ตามจัดซื้อ'),'xl/worksheets/sheet1.xml')
+  const shared=sandbox.xlsxScopedSharedStrings_(parts)
+  assert.equal(shared[0],'ไทย & <ok>')
+  const xml=parts['xl/worksheets/sheet1.xml'].getDataAsString()
+  assert.equal(sandbox.xlsxScopedCell_(xml,'A2',shared).old,'ไทย & <ok>')
+  const changed=sandbox.xlsxScopedPatch_(xml,shared,[{cell:'A2',expected:'ไทย & <ok>',value:'ใหม่ & ทดสอบ'}])
+  assert.match(changed, /<x:c r="A2" s="5" t="inlineStr"><x:is><x:t xml:space="preserve">ใหม่ &amp; ทดสอบ<\/x:t><\/x:is><\/x:c>/)
+  assert.match(changed, /<x:f>1\+1<\/x:f><x:v>2<\/x:v>/)
+  assert.equal(sandbox.xlsxScopedCell_(changed,'A2',shared).old,'ใหม่ & ทดสอบ')
+  assert.throws(()=>sandbox.xlsxScopedPatch_(xml,shared,[{cell:'B2',expected:'2',value:4}]), /Refusing formula/)
+  assert.throws(()=>sandbox.xlsxScopedPatch_(xml,shared,[{cell:'C2',expected:'',value:'not allowed'}]), /Existing worksheet cell not found/)
+})
