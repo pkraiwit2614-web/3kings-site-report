@@ -399,9 +399,11 @@ def main():
             item["new"] = verified_label
             reserved[folder_key].add(verified_label.casefold())
             eligible.append(item)
+        # Cap this execution, not the entire verified backlog. Newest Plot/day
+        # candidates are visited first; deferred items remain eligible next run.
         if len(eligible) > args.max_renames:
-            raise SystemExit("Write cap exceeded: independently verify a smaller acceptance batch")
-        audit = eligible
+            tally["DEFERRED_WRITE_CAP"] += len(eligible) - args.max_renames
+        audit = eligible[:args.max_renames]
     if args.apply and audit:
         audit_id = create_audit(drive, os.environ["PHOTO_AUDIT_FOLDER_ID"], audit)
         for row in audit:
