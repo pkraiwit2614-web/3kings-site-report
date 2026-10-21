@@ -2,7 +2,10 @@
 import importlib.util
 import pathlib
 import unittest
+import datetime as dt
+import io
 from unittest.mock import Mock
+from PIL import Image
 
 path = pathlib.Path(__file__).resolve().parents[1] / "scripts" / "progress_photo_fasttrack.py"
 spec = importlib.util.spec_from_file_location("progress_photo_fasttrack", path)
@@ -27,6 +30,26 @@ class FastTrackSafetyTests(unittest.TestCase):
         self.assertFalse(m.safe_name("../something.JPG", ".JPG"))
         self.assertFalse(m.safe_name("test.png", ".jpg"))
         self.assertFalse(m.safe_name("IMG_0001.JPG", ".JPG"))
+
+    def test_exif_tiff_datetime_fallback_detects_conflicting_capture_day(self):
+        # Real 20-Oct photo IMG_6034.JPG uses EXIF TIFF DateTime rather than tag 36867.
+        out = io.BytesIO()
+        image = Image.new("RGB", (8, 8))
+        exif = Image.Exif()
+        exif[306] = "2026:10:20 08:56:26"
+        image.save(out, format="JPEG", exif=exif)
+        self.assertTrue(m.capture_date_ok(out.getvalue(), dt.date(2026, 10, 20)))
+        self.assertFalse(m.capture_date_ok(out.getvalue(), dt.date(2026, 10, 21)))
+
+    def test_inventory_summary_requires_no_media_reads(self):
+        metadata = [
+            (dt.date(2026, 10, 20), {"id": "d1"},
+             [{"name": "IMG_1.JPG"}, {"name": "งานฐานราก.JPG"}], [{"name": "IMG_1.JPG"}]),
+            (dt.date(2026, 10, 17), {"id": "d2"},
+             [{"name": "งานพื้น.JPG"}], []),
+        ]
+        self.assertEqual(m.summarize_inventory(metadata),
+                         {"days": 2, "images": 3, "candidates": 1, "named": 2})
 
     def test_no_visual_evidence_means_review(self):
         self.assertIsNone(m.choose_match([]))
