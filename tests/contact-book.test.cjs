@@ -82,7 +82,7 @@ test('integration only adds a dedicated permission row and print-scoped editor',
   assert.match(page,/data-contact-book-editor/)
   assert.match(print,/data-contact-book-editor/)
   assert.match(migration,/contact_book_directory_read/)
-  assert.match(migration,/public\\.contact_book_save/)
+  assert.match(migration,/public\.contact_book_save/)
   assert.doesNotMatch(migration,/truncate|delete from public\\./i)
 })
 
