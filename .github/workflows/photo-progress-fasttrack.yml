@@ -52,6 +52,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: photo-inventory-qa
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -59,10 +62,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Authenticate via Google Workload Identity Federation (no private key)
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.PHOTO_WIF_PROVIDER }}
+          service_account: ${{ vars.PHOTO_SA_EMAIL }}
+          create_credentials_file: true
       - run: python -m pip install google-api-python-client google-auth
       - name: Read-only live SOP and complete Plot/day metadata inventory (no image media or rename)
         env:
-          PHOTO_SA_JSON: ${{ secrets.PHOTO_SA_JSON }}
           PHOTO_PLOT_FOLDERS_JSON: ${{ secrets.PHOTO_PLOT_FOLDERS_JSON }}
           PHOTO_ROOT_FOLDER_ID: ${{ secrets.PHOTO_ROOT_FOLDER_ID }}
           PHOTO_SOP_INDEX_ID: ${{ secrets.PHOTO_SOP_INDEX_ID }}
@@ -74,15 +82,24 @@ jobs:
     needs: offline-tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    environment: photo-inventory-qa
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Authenticate via Google Workload Identity Federation (no private key)
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.PHOTO_WIF_PROVIDER }}
+          service_account: ${{ vars.PHOTO_SA_EMAIL }}
+          create_credentials_file: true
       - run: pip install google-api-python-client google-auth Pillow opencv-python-headless numpy
       - name: Inspect Drive, propose only (no writes)
         env:
-          PHOTO_SA_JSON: ${{ secrets.PHOTO_SA_JSON }}
           PHOTO_PLOT_FOLDERS_JSON: ${{ secrets.PHOTO_PLOT_FOLDERS_JSON }}
           PHOTO_ROOT_FOLDER_ID: ${{ secrets.PHOTO_ROOT_FOLDER_ID }}
           PHOTO_SOP_INDEX_ID: ${{ secrets.PHOTO_SOP_INDEX_ID }}
@@ -96,6 +113,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: photo-rename-production
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -104,7 +124,6 @@ jobs:
       - run: pip install google-api-python-client google-auth Pillow opencv-python-headless numpy
       - name: Apply only independently verified pairs, readback and private audit
         env:
-          PHOTO_SA_JSON: ${{ secrets.PHOTO_SA_JSON }}
           PHOTO_PLOT_FOLDERS_JSON: ${{ secrets.PHOTO_PLOT_FOLDERS_JSON }}
           PHOTO_ROOT_FOLDER_ID: ${{ secrets.PHOTO_ROOT_FOLDER_ID }}
           PHOTO_SOP_INDEX_ID: ${{ secrets.PHOTO_SOP_INDEX_ID }}
