@@ -249,6 +249,32 @@ def verify_drive_scope(drive, root_id, folders, audit_folder=None):
             raise RuntimeError("Private audit folder permissions unverified")
 
 
+def keyless_adc_credentials(apply=False):
+    """Use only action-generated external_account ADC; reject stored SA private keys."""
+    path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+    if not path:
+        raise SystemExit("Keyless WIF credentials unavailable: GOOGLE_APPLICATION_CREDENTIALS not set")
+    try:
+        with open(path, encoding="utf-8") as source:
+            config = json.load(source)
+    except (OSError, ValueError) as err:
+        raise SystemExit("Keyless WIF credentials file unavailable or invalid") from err
+    url = config.get("service_account_impersonation_url")
+    if (config.get("type") != "external_account" or
+            not isinstance(url, str) or "/serviceAccounts/" not in url or
+            not url.endswith(":generateAccessToken")):
+        raise SystemExit("Expected external_account WIF credentials with service account impersonation; private keys prohibited")
+    import google.auth
+    scopes = [
+        "https://www.googleapis.com/auth/drive" if apply
+        else "https://www.googleapis.com/auth/drive.readonly",
+        "https://www.googleapis.com/auth/spreadsheets.readonly",
+        "https://www.googleapis.com/auth/documents.readonly",
+    ]
+    credentials, _ = google.auth.default(scopes=scopes)
+    return credentials
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--apply", action="store_true", help="Requires additional verified production gates")
@@ -262,7 +288,7 @@ def main():
         ap.error("--inventory-only and --apply are mutually exclusive")
     if args.max_renames < 1:
         ap.error("max-renames must be >= 1")
-    required = ["PHOTO_SA_JSON", "PHOTO_PLOT_FOLDERS_JSON", "PHOTO_ROOT_FOLDER_ID", "PHOTO_SOP_INDEX_ID", "PHOTO_SOP_DOC_ID"]
+    required = ["PHOTO_PLOT_FOLDERS_JSON", "PHOTO_ROOT_FOLDER_ID", "PHOTO_SOP_INDEX_ID", "PHOTO_SOP_DOC_ID"]
     missing = [k for k in required if not os.getenv(k)]
     if missing:
         raise SystemExit("Missing configuration: " + ", ".join(missing))
@@ -270,14 +296,8 @@ def main():
         for k in ["PHOTO_ENABLE_WRITE", "PHOTO_WEB_PARSER_VERIFIED", "PHOTO_AUDIT_FOLDER_ID", "PHOTO_VERIFIED_MATCHES_JSON"]:
             if not os.getenv(k) or (k in ("PHOTO_ENABLE_WRITE", "PHOTO_WEB_PARSER_VERIFIED") and os.getenv(k) != "YES"):
                 raise SystemExit("Write gate missing: " + k)
-    from google.oauth2 import service_account
     from googleapiclient.discovery import build
-    cred = service_account.Credentials.from_service_account_info(
-        json.loads(os.environ["PHOTO_SA_JSON"]),
-        scopes=["https://www.googleapis.com/auth/drive" if args.apply else
-                "https://www.googleapis.com/auth/drive.readonly",
-                "https://www.googleapis.com/auth/spreadsheets.readonly",
-                "https://www.googleapis.com/auth/documents.readonly"])
+    cred = keyless_adc_credentials(apply=args.apply)
     drive = build("drive", "v3", credentials=cred, cache_discovery=False)
     sheets = build("sheets", "v4", credentials=cred, cache_discovery=False)
     docs = build("docs", "v1", credentials=cred, cache_discovery=False)
