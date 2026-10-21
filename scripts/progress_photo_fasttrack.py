@@ -361,7 +361,7 @@ def main():
                 else:
                     proposed = []
                     src_feat = image_features(raw)
-                    for ref_date, ref in sorted(reference, key=lambda x: abs((day-x[0]).days)[:65]:
+                    for ref_date, ref in sorted(reference, key=lambda x: abs((day-x[0]).days))[:65]:
                         if os.path.splitext(ref["name"])[1].lower() != os.path.splitext(src["name"])[1].lower():
                             continue
                         score = match_score(src_feat, feat(ref["id"]))
