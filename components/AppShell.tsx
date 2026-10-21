@@ -19,12 +19,12 @@ const standardNav: NavItem[] = [
   ['/presentation', 'Executive Presentation'],
   ['/schedule', 'แผนงานที่กำหนด'],
   ['/materials', 'วัสดุ / เครื่องมือ / จัดซื้อจัดจ้าง'],
-  ['/contact-book', 'Contact Book'],
   ['/defect-flow', 'Defect Report'],
   ['/reports', 'Site Operations'],
   ['/site-photos', 'รูปภาพหน้างาน'],
   ['/weekly', 'รายงานการทำงานประจำสัปดาห์'],
-  ['/calendar', 'Work Calendar']
+  ['/calendar', 'Work Calendar'],
+  ['/contact-book', 'Contact Book']
 ]
 
 const defectContributorNav: NavItem[] = [
