@@ -187,9 +187,16 @@ class FastTrackSafetyTests(unittest.TestCase):
         plots = {x:f"P{x}" for x in ("6","7","8","9")}
         m.verify_drive_scope(fake,"ROOT",plots,"AUDIT")
         objects["P6"]["parents"] = ["WRONG"]
-        with self.assertRaises(RuntimeError):
+        with self.assertRaisesRegex(RuntimeError, "Plot 6 parent ID mismatch"):
+            m.verify_drive_scope(fake,"ROOT",plots,"AUDIT")
+        objects["P6"]["parents"] = []
+        with self.assertRaisesRegex(RuntimeError, "Plot 6 parent metadata missing"):
             m.verify_drive_scope(fake,"ROOT",plots,"AUDIT")
         objects["P6"]["parents"] = ["ROOT"]
+        objects["P6"]["name"] = "Plot 60"
+        with self.assertRaisesRegex(RuntimeError, "Plot 6 folder identity mismatch"):
+            m.verify_drive_scope(fake,"ROOT",plots,"AUDIT")
+        objects["P6"]["name"] = "Plot 6"
         fake.permissions.return_value.list.return_value.execute.return_value = {
             "permissions":[{"type":"anyone","role":"reader"}]
         }
