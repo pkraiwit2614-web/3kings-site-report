@@ -22,10 +22,15 @@ Latest GitHub source, shared components, related API/DB, Preview and rights.
 1. Resolve this command's row in the live SOP index and open the current SOP; follow its full ordered instructions.
 2. Fetch and reconcile current source data, scope, identities and evidence; identify out-of-scope dependencies.
 3. Enforce mode `code_change`: Create change on isolated development branch, no main merge or Production. If task scope includes only edits, leave deploy unchanged.
-4. Create limited patch after UI→API→DB→Print→i18n→Role→Sync impact analysis, affected regression and conditional Hosted Preview QA.
+4. Create a limited patch after UI→API→DB→Print→i18n→Role→Sync impact analysis and affected GitHub Actions functional/security regression. If those tests prove the affected behavior and security fully, do not run Vercel Preview. If Local/CI cannot prove a relevant hosted/Auth/API/RLS/integration requirement, use Hosted Vercel Preview as the last-resort targeted QA, with exact-SHA and Preview test-data isolation. Fix failing tests instead of bypassing them.
 5. Preserve unrelated code and functions, RLS/RBAC, TH/EN/RU, Owner Reset; editing is not permission to deploy.
 6. Perform operation only within explicit authorization and when safeguards pass. Validate changed targets by independent readback; for `read_only`, verify evidence without modifying source.
 7. Report source version/time, specific results, unmatched/untested data, side effects, QA and exact remaining blockers.
+
+## Hosted Preview unblock (SOP 15, ACTIVE 21/10 amendment)
+
+- When GitHub Actions evidence fully covers the affected behavior, Hosted Preview is NOT REQUIRED.
+- When only hosted integration remains unproven and Vercel Preview is blocked by the default ignored build, escalate automatically under the existing authorized PR scope to `docs/agent-skills/hosted-preview-unblock.md` and SOP16's exact-SHA on-demand path. Do not disable protection globally, create redundant builds or falsely mark untested security behavior as PASS.
 
 ## Stop conditions
 
@@ -49,6 +54,6 @@ These skills are agent guidance, **not** a server-side authorization, authentica
 ## Single-command Fast-Track routing — 20/10/2026
 - Read current ACTIVE Google Drive SOP INDEX and full linked SOP once per invocation; Drive outranks any cached/title hint here. Preserve six permanent safety rules, RBAC/RLS and source readback.
 - Mode: code_change. A clear authorization for the same scope and existing rights includes the necessary substeps; no repeated approval prompts where scope, identity and evidence are already verified.
-- Use branch + surgical diff + risk-proportionate CI/Preview. Reuse valid same-SHA artifacts; do not spawn extra Vercel builds merely for process. Explicit 'fix web' is not authorization to deploy.
+- Use branch + surgical diff + risk-proportionate GitHub Actions QA first. Hosted Preview is NOT REQUIRED when affected functionality/security is proven; use last-resort Vercel Preview only for documented Local/CI proof gaps. Reuse valid same-SHA/config/role artifacts; do not spawn extra Vercel builds merely for process or treat failed required checks as passed. Explicit 'fix web' is not authorization to deploy.
 - Run only QA tied to real blast radius. Git branch/CI/Preview apply to actual code/release, not to plain data/document/read-only tasks. Preserve valid same-SHA CI/Preview evidence; never report Production DONE without live confirmation.
 - Advisory Superpowers and Task Observer are conditional and must not block the main task, request extra authorizations or re-open the same SOP.
