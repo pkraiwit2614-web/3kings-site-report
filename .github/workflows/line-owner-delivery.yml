@@ -5,6 +5,8 @@ on:
     paths:
       - 'operations/cloudflare/3kings-line-autopilot-owner-only.mjs'
       - 'tests/line-owner-delivery.test.cjs'
+      - 'tests/line-owner-bridge.test.cjs'
+      - 'operations/supabase/kings_daily_line_images-owner-only.ts'
       - '.github/workflows/line-owner-delivery.yml'
   push:
     branches: [main]
@@ -25,4 +27,4 @@ jobs:
       - name: Static Node syntax QA
         run: node --check operations/cloudflare/3kings-line-autopilot-owner-only.mjs
       - name: Owner-only delivery mock and negative QA (never sends LINE)
-        run: node --test tests/line-owner-delivery.test.cjs
+        run: node --test tests/line-owner-delivery.test.cjs tests/line-owner-bridge.test.cjs
