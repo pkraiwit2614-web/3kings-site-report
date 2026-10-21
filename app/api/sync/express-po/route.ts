@@ -7,6 +7,10 @@ const {planExpressDelta}=require('../../../../lib/express-po/delta.cjs') as {
   summary:{[key:string]:number};pages:unknown[];gate:string
  }
 }
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const {selectExpressCsv}=require('../../../../lib/express-po/source-selection.cjs') as {
+ selectExpressCsv:(files:DriveFile[],mode:SourceMode)=>DriveFile
+}
 import {exchangeVercelOidcToken} from '@/lib/agentGoogleDrive'
 
 export const runtime='nodejs'
@@ -51,16 +55,7 @@ async function latestCsv(token:string,sourceMode:SourceMode):Promise<{file:Drive
  const files=await json<{files?:DriveFile[];nextPageToken?:string}>(token,
   'https://www.googleapis.com/drive/v3/files?'+params)
  if(files.nextPageToken)throw Error('SOURCE_FOLDER_TOO_LARGE')
- const matches=(files.files||[]).filter(f=>f.mimeType==='text/csv'&&Number(f.size)>0&&
-  Number(f.size)<=8_000_000&&(
-   sourceMode==='po_history'?f.name==='PO2024-Now.csv':
-   sourceMode==='pr_history'?f.name==='PR2024-Now.csv':
-   sourceMode==='po_daily'?/^\d{12}\.csv$/i.test(f.name):
-   /^PR-\d{12}\.csv$/i.test(f.name)))
- if(!matches.length)throw Error('NO_VALID_EXPRESS_CSV')
- matches.sort((a,b)=>b.modifiedTime.localeCompare(a.modifiedTime))
- if(sourceMode.endsWith('history')&&matches.length!==1)throw Error('SOURCE_AMBIGUOUS')
- const file=matches[0]
+ const file=selectExpressCsv(files.files||[],sourceMode)
  const url='https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(file.id)
  const r=await fetch(url+'?alt=media',{headers:{Authorization:'Bearer '+token},
   cache:'no-store',signal:AbortSignal.timeout(30000)})
