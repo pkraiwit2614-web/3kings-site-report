@@ -75,7 +75,7 @@ test('integration only adds a dedicated permission row and print-scoped editor',
   const matrix=fs.readFileSync('components/RolePermissionMatrix.tsx','utf8')
   const page=fs.readFileSync('app/contact-book/page.tsx','utf8')
   const print=fs.readFileSync('components/PrintButton.tsx','utf8')
-  const migration=fs.readFileSync('supabase/migrations/20261015120000_contact_book_access_and_lease.sql','utf8')
+  const migration=fs.readFileSync('docs/contact-book-migration-reference-20261015.sql','utf8')
   assert.match(shell,/\['\/contact-book', 'Contact Book'\]/)
   assert.match(permission,/contact_book/)
   assert.match(matrix,/label: 'Contact Book'/)
