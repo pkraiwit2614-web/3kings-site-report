@@ -121,6 +121,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Authenticate via Google Workload Identity Federation (no private key)
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.PHOTO_WIF_PROVIDER }}
+          service_account: ${{ vars.PHOTO_SA_EMAIL }}
+          create_credentials_file: true
       - run: pip install google-api-python-client google-auth Pillow opencv-python-headless numpy
       - name: Apply only independently verified pairs, readback and private audit
         env:
