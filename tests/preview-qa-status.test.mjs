@@ -13,8 +13,10 @@ test('PASS, SKIPPED, BLOCK are distinct; unknown and cancelled fail closed',()=>
 test('PR green local suite is not a Production release approval',()=>{
   const result=report({mode:'pr',build:'success',contract:'success',local:'success'})
   assert.equal(result.mandatoryPass,true)
-  assert.match(result.release,/^BLOCK_/)
-  assert.match(result.markdown,/BLOCK_VERCEL_PREVIEW_NOT_VERIFIED_BY_PR/)
+  assert.equal(result.release,'NOT_EVALUATED_SOP16_RELEASE_GATE')
+  assert.match(result.markdown,/Hosted Preview requirement.*RISK-BASED/)
+  assert.match(result.markdown,/required checks, risk-based integration evidence/)
+  assert.doesNotMatch(result.markdown,/BLOCK_VERCEL_PREVIEW_NOT_VERIFIED_BY_PR/)
 })
 test('unexpected skipped local Viewer is not converted to PASS',()=>{
   const result=report({mode:'pr',build:'success',contract:'success',local:'skipped'})
