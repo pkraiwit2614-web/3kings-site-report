@@ -97,10 +97,10 @@ test('Apps Script QA canary matches the actual .xlsx filename and blocks other n
   assert.equal(sandbox.xlsxScopedConnectionProbe().status,'OWNER_OAUTH_READ_PROBE_PASS')
   assert.equal(sandbox.xlsxScopedConnectionProbe().probeVersion,'CANARY_PROBE_V3')
   actualName='QA_PR_Original_Copy_20261019.xlsx'
-  assert.throws(()=>sandbox.xlsxScopedConnectionProbe(),/BLOCK_CANARY_NOT_ISOLATED/)
+  assert.throws(()=>sandbox.xlsxScopedConnectionProbe(),/BLOCK_CANARY_NAME_MISMATCH/)
   actualName=name
   actualMime='application/vnd.google-apps.spreadsheet'
-  assert.throws(()=>sandbox.xlsxScopedConnectionProbe(),/BLOCK_CANARY_NOT_ISOLATED/)
+  assert.throws(()=>sandbox.xlsxScopedConnectionProbe(),/BLOCK_CANARY_MIME_MISMATCH/)
   actualMime=scope
   const calls=[]
   sandbox.xlsxScopedPreview = req => {
