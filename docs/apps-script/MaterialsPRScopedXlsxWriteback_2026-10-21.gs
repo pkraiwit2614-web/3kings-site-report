@@ -26,7 +26,11 @@ function xlsxScopedAttr_(tag, name) {
   return m ? m[1] : null;
 }
 function xlsxScopedUnescape_(s) {
-  return String(s).replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+  return String(s).replace(/&#(?:x([0-9a-fA-F]+)|([0-9]+));/g, function(m, hex, dec) {
+    const number=parseInt(hex || dec, hex ? 16 : 10);
+    return number <= 0x10ffff && !(number >= 0xd800 && number <= 0xdfff)
+      ? String.fromCodePoint(number) : m;
+  }).replace(/&quot;/g, '"').replace(/&apos;/g, "'")
     .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 }
 function xlsxScopedEscape_(s) {
@@ -52,14 +56,14 @@ function xlsxScopedParts_(fileBlob) {
 function xlsxScopedSheetPath_(parts, sheetName) {
   const workbook = parts['xl/workbook.xml'].getDataAsString();
   const links = parts['xl/_rels/workbook.xml.rels'].getDataAsString();
-  const sheets = workbook.match(/<sheet\b[^>]*\/?\s*>/g) || [];
+  const sheets = workbook.match(/<(?:[A-Za-z_][\w.-]*:)?sheet\b[^>]*\/?\s*>/g) || [];
   const hit = sheets.filter(function(tag) {
     return xlsxScopedUnescape_(xlsxScopedAttr_(tag, 'name') || '') === sheetName;
   });
   if (hit.length !== 1) throw Error('Worksheet name missing/ambiguous');
   const rid = xlsxScopedAttr_(hit[0], 'r:id');
   if (!rid) throw Error('Worksheet relation missing');
-  const rels = links.match(/<Relationship\b[^>]*\/?\s*>/g) || [];
+  const rels = links.match(/<(?:[A-Za-z_][\w.-]*:)?Relationship\b[^>]*\/?\s*>/g) || [];
   const rel = rels.filter(function(tag) { return xlsxScopedAttr_(tag, 'Id') === rid; });
   if (rel.length !== 1) throw Error('Worksheet relation ambiguous');
   const target = xlsxScopedAttr_(rel[0], 'Target');
@@ -73,54 +77,61 @@ function xlsxScopedSharedStrings_(parts) {
   const blob = parts['xl/sharedStrings.xml'];
   if (!blob) return [];
   const xml = blob.getDataAsString();
-  return (xml.match(/<si(?:\s[^>]*)?>[\s\S]*?<\/si>/g) || [])
+  return (xml.match(/<(?:[A-Za-z_][\w.-]*:)?si(?:\s[^>]*)?>[\s\S]*?<\/(?:[A-Za-z_][\w.-]*:)?si>/g) || [])
     .map(function(si) {
-      return (si.match(/<t(?:\s[^>]*)?>[\s\S]*?<\/t>/g) || [])
-        .map(function(t) { return xlsxScopedUnescape_(t.replace(/^<t[^>]*>/, '').replace(/<\/t>$/, '')); }).join('');
+      return (si.match(/<(?:[A-Za-z_][\w.-]*:)?t(?:\s[^>]*)?>[\s\S]*?<\/(?:[A-Za-z_][\w.-]*:)?t>/g) || [])
+        .map(function(t) {
+          return xlsxScopedUnescape_(t.replace(/^<(?:[A-Za-z_][\w.-]*:)?t[^>]*>/, '')
+            .replace(/<\/(?:[A-Za-z_][\w.-]*:)?t>$/, ''));
+        }).join('');
     });
 }
 function xlsxScopedCell_(row, address, shared) {
-  const safe = address.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const re = new RegExp('<c\\b[^>]*\\br="' + safe + '"[^>]*(?:\\/>|>[\\s\\S]*?<\\/c>)');
+  // Addresses are validated before patch; no regex metacharacters are permitted.
+  const re = new RegExp('<(?:[A-Za-z_][\\w.-]*:)?c\\b[^>]*\\br="' + address +
+    '"[^>]*(?:\\/>|>[\\s\\S]*?<\\/(?:[A-Za-z_][\\w.-]*:)?c>)');
   const match = row.match(re);
-  if (!match) return {old: '', element: null, formula: false, style: null};
-  const element = match[0];
-  const kind = xlsxScopedAttr_(element, 't');
-  const formula = /<f(?:\s|>)/.test(element);
-  let value = '';
-  if (kind === 'inlineStr') {
-    value = (element.match(/<t[^>]*>([\s\S]*?)<\/t>/) || [,''])[1];
-    value = xlsxScopedUnescape_(value);
+  if (!match) return {old:'',element:null,formula:false,style:null,prefix:''};
+  const element=match[0];
+  const kind=xlsxScopedAttr_(element,'t');
+  const formula=/<(?:[A-Za-z_][\w.-]*:)?f(?:\s|>)/.test(element);
+  const prefix=(element.match(/^<([A-Za-z_][\w.-]*:)?c\b/) || [,''])[1] || '';
+  let value='';
+  if (kind==='inlineStr') {
+    value=(element.match(/<(?:[A-Za-z_][\w.-]*:)?t[^>]*>([\s\S]*?)<\/(?:[A-Za-z_][\w.-]*:)?t>/) || [,''])[1];
+    value=xlsxScopedUnescape_(value);
   } else {
-    value = (element.match(/<v>([\s\S]*?)<\/v>/) || [,''])[1];
-    value = kind === 's' ? (shared[Number(value)] || '') : xlsxScopedUnescape_(value);
+    value=(element.match(/<(?:[A-Za-z_][\w.-]*:)?v>([\s\S]*?)<\/(?:[A-Za-z_][\w.-]*:)?v>/) || [,''])[1];
+    value=kind==='s'?(shared[Number(value)] || ''):xlsxScopedUnescape_(value);
   }
-  return {old: String(value), element: element, formula: formula, style: xlsxScopedAttr_(element, 's')};
+  return {old:String(value),element:element,formula:formula,style:xlsxScopedAttr_(element,'s'),prefix:prefix,kind:kind};
 }
 function xlsxScopedPatch_(xml, shared, changes) {
-  let result = xml;
+  let result=xml;
   changes.forEach(function(change) {
-    const addr = change.cell;
+    const addr=change.cell;
     if (!/^[A-Z]{1,3}[1-9]\d{0,6}$/.test(addr)) throw Error('Bad cell address');
-    if (typeof change.expected !== 'string') throw Error('expected must be a string');
-    if (typeof change.value !== 'string' && (typeof change.value !== 'number' || !isFinite(change.value)))
+    if (typeof change.expected!=='string') throw Error('expected must be a string');
+    if (typeof change.value!=='string' && (typeof change.value!=='number' || !isFinite(change.value)))
       throw Error('Only text/numeric values supported');
-    const rowNumber = Number((addr.match(/\d+/) || [])[0]);
-    const re = new RegExp('(<row\\b[^>]*\\br="' + rowNumber + '"[^>]*>)([\\s\\S]*?)(<\\/row>)');
-    const rows = result.match(re);
-    if (!rows) throw Error('Existing worksheet row not found: ' + rowNumber);
-    const cell = xlsxScopedCell_(rows[2], addr, shared);
-    // Never append a new <c> at the row end: XLSX requires ordered cell references.
-    if (!cell.element) throw Error('Existing worksheet cell not found: ' + addr);
-    if (cell.formula) throw Error('Refusing formula cell write: ' + addr);
-    if (cell.old !== change.expected) throw Error('Previous value changed: ' + addr);
-    const style = cell.style ? ' s="' + cell.style + '"' : '';
-    const element = typeof change.value === 'number'
-      ? '<c r="' + addr + '"' + style + '><v>' + change.value + '</v></c>'
-      : '<c r="' + addr + '"' + style + ' t="inlineStr"><is><t xml:space="preserve">' +
-        xlsxScopedEscape_(change.value) + '</t></is></c>';
-    const body = cell.element ? rows[2].replace(cell.element, element) : rows[2] + element;
-    result = result.replace(re, function() { return rows[1] + body + rows[3]; });
+    const rowNumber=Number((addr.match(/\d+/)||[])[0]);
+    const re=new RegExp('(<(?:[A-Za-z_][\\w.-]*:)?row\\b[^>]*\\br="' + rowNumber +
+      '"[^>]*>)([\\s\\S]*?)(<\\/(?:[A-Za-z_][\\w.-]*:)?row>)');
+    const rows=result.match(re);
+    if (!rows) throw Error('Existing worksheet row not found: '+rowNumber);
+    const cell=xlsxScopedCell_(rows[2],addr,shared);
+    if (!cell.element) throw Error('Existing worksheet cell not found: '+addr);
+    if (cell.formula || cell.kind==='e' || cell.kind==='b')
+      throw Error('Refusing formula/error/boolean cell write: '+addr);
+    if (cell.old!==change.expected) throw Error('Previous value changed: '+addr);
+    const style=cell.style ? ' s="'+cell.style+'"' : '';
+    const p=cell.prefix;
+    const element=typeof change.value==='number'
+      ? '<'+p+'c r="'+addr+'"'+style+'><'+p+'v>'+change.value+'</'+p+'v></'+p+'c>'
+      : '<'+p+'c r="'+addr+'"'+style+' t="inlineStr"><'+p+'is><'+p+'t xml:space="preserve">' +
+        xlsxScopedEscape_(change.value)+'</'+p+'t></'+p+'is></'+p+'c>';
+    const body=rows[2].replace(cell.element,element);
+    result=result.replace(re,function(){return rows[1]+body+rows[3]});
   });
   return result;
 }
@@ -195,7 +206,7 @@ function xlsxScopedRun_(request, apply) {
     request.changes.forEach(function(change) {
       const expected = String(change.value);
       const rowNum = Number((change.cell.match(/\d+/) || [])[0]);
-      const row = afterXml.match(new RegExp('<row\\b[^>]*\\br="' + rowNum + '"[^>]*>[\\s\\S]*?<\\/row>'));
+      const row = afterXml.match(new RegExp('<(?:[A-Za-z_][\\w.-]*:)?row\\b[^>]*\\br="' + rowNum + '"[^>]*>[\\s\\S]*?<\\/(?:[A-Za-z_][\\w.-]*:)?row>'));
       if (!row || xlsxScopedCell_(row[0], change.cell, xlsxScopedSharedStrings_(post.parts)).old !== expected)
         throw Error('READBACK_FAILED: ' + change.cell);
     });
