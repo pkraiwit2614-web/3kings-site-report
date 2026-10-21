@@ -95,3 +95,17 @@
  body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-table tr{break-inside:avoid!important;page-break-inside:avoid!important}
  body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-table tbody td{break-inside:avoid!important;page-break-inside:avoid!important}
 }
+
+/* Optional Work ID completion (feature flag off by default). Print remains read-only. */
+.wo-complete-btn{display:block;margin-top:6px;padding:6px 9px;border:1px solid #2a6a79;border-radius:6px;background:transparent;color:inherit;font:inherit;cursor:pointer}
+.wo-complete-btn:focus-visible{outline:2px solid currentColor;outline-offset:2px}
+.wo-completion-notice{margin:9px 0}
+.wo-modal-backdrop{position:fixed;z-index:1200;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);padding:16px}
+.wo-confirm-panel{width:min(100%,540px);max-height:90vh;overflow:auto;padding:22px;background:var(--surface,#fff);color:var(--text,#171717);border:1px solid var(--border,#bbb);border-radius:10px;box-shadow:0 15px 60px rgba(0,0,0,.2)}
+.wo-confirm-panel h2{margin:0 0 12px;font-size:1.1rem}
+.wo-modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:15px}
+.wo-modal-actions button{padding:8px 12px;border:1px solid #888;border-radius:6px;cursor:pointer}
+@media print{.wo-complete-btn,.wo-modal-backdrop,.wo-completion-notice{display:none!important}}
+body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-complete-btn,
+body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-modal-backdrop,
+body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-completion-notice{display:none!important}
