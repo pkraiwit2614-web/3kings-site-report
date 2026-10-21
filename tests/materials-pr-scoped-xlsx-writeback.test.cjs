@@ -88,12 +88,21 @@ test('Apps Script QA canary matches the actual .xlsx filename and blocks other n
   sandbox.PropertiesService = {getScriptProperties:() => ({getProperty:key => data[key] || null})}
   let actualName = name, actualMime = scope
   sandbox.DriveApp = {getFileById:(_id) => ({
-    getName:()=>actualName, getMimeType:()=>actualMime, getBlob:()=>({})
+    getName:()=>actualName, getMimeType:()=>actualMime,
+    getBlob:()=>({getBytes:()=>[80,75,3,4],getName:()=>actualName})
   })}
-  sandbox.Utilities = {unzip:()=>[
-    {getName:()=> 'xl/workbook.xml'},
-    {getName:()=> 'xl/_rels/workbook.xml.rels'}
-  ]}
+  sandbox.Utilities = {
+    newBlob:(bytes,mime,name)=>({getBytes:()=>bytes,getContentType:()=>mime,getName:()=>name}),
+    unzip:zipBlob=>{
+      assert.equal(zipBlob.getContentType(),'application/zip')
+      assert.equal(zipBlob.getName(),name)
+      assert.deepEqual(Array.from(zipBlob.getBytes()),[80,75,3,4])
+      return [
+        {getName:()=> 'xl/workbook.xml'},
+        {getName:()=> 'xl/_rels/workbook.xml.rels'}
+      ]
+    }
+  }
   assert.equal(sandbox.xlsxScopedConnectionProbe().status,'OWNER_OAUTH_READ_PROBE_PASS')
   assert.equal(sandbox.xlsxScopedConnectionProbe().probeVersion,'CANARY_PROBE_V3')
   actualName='QA_PR_Original_Copy_20261019.xlsx'
@@ -115,4 +124,34 @@ test('Apps Script QA canary matches the actual .xlsx filename and blocks other n
   assert.equal(calls.filter(x=>x.type==='apply').length,2)
   assert.equal(calls[1].req.changes[0].value,'QA_CANARY_20261021')
   assert.equal(calls[3].req.changes[0].value,'previous value')
+})
+
+test('XLSX zip reader relabels only a temporary blob, never the Drive source', () => {
+  const bytes=[80,75,3,4]
+  const source={
+    getName:()=> 'QA_TEST_DO_NOT_SYNC.xlsx',
+    getContentType:()=> 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    getBytes:()=>bytes
+  }
+  const old= sandbox.Utilities
+  const unzipCalls=[]
+  sandbox.Utilities={
+    newBlob:(data,mime,name)=>({getBytes:()=>data,getContentType:()=>mime,getName:()=>name}),
+    unzip:blob=>{
+      unzipCalls.push({mime:blob.getContentType(),name:blob.getName()})
+      assert.equal(blob.getContentType(),'application/zip')
+      return [
+        {getName:()=> 'xl/workbook.xml'},
+        {getName:()=> 'xl/_rels/workbook.xml.rels'}
+      ]
+    }
+  }
+  try {
+    const parsed=sandbox.xlsxScopedParts_(source)
+    assert.equal(Object.keys(parsed.parts).length,2)
+    assert.equal(source.getContentType(),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    assert.deepEqual(unzipCalls,[{mime:'application/zip',name:'QA_TEST_DO_NOT_SYNC.xlsx'}])
+  } finally {
+    sandbox.Utilities=old
+  }
 })
