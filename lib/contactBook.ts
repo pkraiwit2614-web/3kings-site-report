@@ -1,6 +1,3 @@
-export const CONTACT_BOOK_CSV_FILE_ID = '1pea9ALaYxhVNvBzuGb615s7_M8rYesic'
-export const CONTACT_BOOK_SOURCE_URL = 'https://drive.google.com/file/d/1pea9ALaYxhVNvBzuGb615s7_M8rYesic/view'
-
 export const CONTACT_FIELDS = [
   'contact_id', 'category', 'service_group', 'organization', 'contact_name', 'phone',
   'work_scope', 'project_area', 'verified_status', 'review_note', 'source_file',
