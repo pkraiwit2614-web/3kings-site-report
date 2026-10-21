@@ -208,3 +208,19 @@ test('QA release gate guards the canonical XLSX and performs isolated real Drive
   assert.doesNotMatch(qa,/defect_work_order_complete/)
   assert.doesNotMatch(qa,/ScriptApp\.newTrigger/)
 })
+
+
+test('Work Order confirmation matches existing server eligibility and exposes only real queue receipt states',()=>{
+  const page=fs.readFileSync('app/work-order/page.tsx','utf8')
+  const css=fs.readFileSync('app/work-order/work-order.css','utf8')
+  assert.match(page,/const canCompleteWorkId=\(r:WorkOrder\)=>/)
+  assert.match(page,/members\.every\(room=>roomMap\.get\(room\)==='Hotel - Incomplete'\)/)
+  assert.match(page,/canComplete&&canCompleteWorkId\(r\)&&<button/)
+  assert.match(page,/web_completed_at,writeback_state,writeback_error/)
+  assert.match(page,/r\.writeback_state==='synced'\?'Excel Synced'/)
+  assert.match(page,/r\.writeback_state==='error'\?'Excel Error/)
+  assert.match(page,/Pending — รอเขียน Excel/)
+  assert.match(css,/@media print\{[\s\S]*\.wo-completion-receipts/)
+  assert.doesNotMatch(page,/\.from\('defect_work_order_snapshot'\)\.update\(/)
+  assert.doesNotMatch(page,/\.from\('condo_room_status'\)\.update\(/)
+});
