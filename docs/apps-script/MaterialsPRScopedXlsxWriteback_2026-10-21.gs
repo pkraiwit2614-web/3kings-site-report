@@ -238,18 +238,26 @@ function xlsxScopedApply(request) { return xlsxScopedRun_(request, true); }
  * QA .xlsx file. This function does not modify any file.
  */
 function xlsxScopedConnectionProbe() {
-  const props = PropertiesService.getScriptProperties();
-  const id = props.getProperty('MATERIAL_PR_XLSX_CANARY_ID');
+  const props=PropertiesService.getScriptProperties();
+  const id=props.getProperty('MATERIAL_PR_XLSX_CANARY_ID');
   if (!id) throw Error('MISSING_CANARY_ID');
-  const allow = JSON.parse(props.getProperty(XLSX_SCOPED.allowlistKey) || '[]');
-  if (!Array.isArray(allow) || !allow.includes(id)) throw Error('BLOCK_CANARY_NOT_ALLOWLISTED');
-  const file = DriveApp.getFileById(id);
-  if (!/^QA_.*DO_NOT_SYNC\.xlsx$/.test(file.getName()) || file.getMimeType() !== XLSX_SCOPED.mime)
-    throw Error('BLOCK_CANARY_NOT_ISOLATED');
-  const parts = xlsxScopedParts_(file.getBlob());
-  return {ok:true,status:'OWNER_OAUTH_READ_PROBE_PASS',
-    fileName:file.getName(),parts:Object.keys(parts.parts).length,
-    warning:'This does not prove Drive write access or Apps Script remote execution'};
+  const allow=JSON.parse(props.getProperty(XLSX_SCOPED.allowlistKey)||'[]');
+  if (!Array.isArray(allow)||!allow.includes(id)) throw Error('BLOCK_CANARY_NOT_ALLOWLISTED');
+  const file=DriveApp.getFileById(id);
+  const actualName=String(file.getName());
+  const actualMime=String(file.getMimeType());
+  const allowedName=actualName.startsWith('QA_') && actualName.endsWith('_DO_NOT_SYNC.xlsx');
+  const allowedMime=actualMime===XLSX_SCOPED.mime;
+  console.log(JSON.stringify({probeVersion:'CANARY_PROBE_V3',fileName:actualName,
+    mimeType:actualMime,allowedName:allowedName,allowedMime:allowedMime}));
+  if (!allowedName) throw Error('BLOCK_CANARY_NAME_MISMATCH: '+actualName);
+  if (!allowedMime) throw Error('BLOCK_CANARY_MIME_MISMATCH: '+actualMime);
+  const parts=xlsxScopedParts_(file.getBlob());
+  const result={ok:true,status:'OWNER_OAUTH_READ_PROBE_PASS',
+    probeVersion:'CANARY_PROBE_V3',fileName:actualName,parts:Object.keys(parts.parts).length,
+    warning:'Read-only probe; no Drive write or remote executor verified'};
+  console.log(JSON.stringify(result));
+  return result;
 }
 
 /**
@@ -270,7 +278,7 @@ function xlsxScopedCanaryWriteAndRestore() {
   const raw=props.getProperty('MATERIAL_PR_XLSX_CANARY_REQUEST');
   if (!raw) throw Error('MISSING_CANARY_REQUEST');
   const req=JSON.parse(raw);
-  if (!req || !/^QA_.*DO_NOT_SYNC\.xlsx$/.test(String(req.expectedName||'')) ||
+  if (!req || !(String(req.expectedName||'').startsWith('QA_') && String(req.expectedName||'').endsWith('_DO_NOT_SYNC.xlsx')) ||
       !Array.isArray(req.changes) || req.changes.length!==1)
     throw Error('BLOCK_CANARY_REQUEST_NOT_ISOLATED');
   if (req.fileId!==props.getProperty('MATERIAL_PR_XLSX_CANARY_ID'))
