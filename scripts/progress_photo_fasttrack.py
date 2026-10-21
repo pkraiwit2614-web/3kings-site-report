@@ -315,6 +315,10 @@ def main():
     attested_matches = json.loads(os.environ["PHOTO_VERIFIED_MATCHES_JSON"]) if args.apply else []
     if not isinstance(attested_matches, list):
         raise SystemExit("Verified matches must be a JSON list")
+    if args.apply and not attested_matches:
+        # Never declare APPLY successful when there is no independently verified photo.
+        raise SystemExit("RENAME_BLOCKED: No independently verified photo matches; no writes attempted")
+    verified_ids = {row.get("file_id") for row in attested_matches if isinstance(row, dict)} if args.apply else set()
     audit = []
     tally = Counter()
     inventory_reports = {}
@@ -342,21 +346,28 @@ def main():
             names = {p["name"].casefold() for p in photos}
             for src in pending:
                 tally["candidate"] += 1
-                proposed = []
+                if args.apply and src["id"] not in verified_ids:
+                    # Do not download, compare or mutate unrelated candidate images.
+                    tally["AWAITING_VERIFICATION"] += 1
+                    continue
                 raw = get_bytes(drive, src["id"])
                 if not capture_date_ok(raw, day):
                     tally["REVIEW"] += 1
                     continue
-                src_feat = image_features(raw)
-                for ref_date, ref in sorted(reference, key=lambda x: abs((day-x[0]).days))[:65]:
-                    if os.path.splitext(ref["name"])[1].lower() != os.path.splitext(src["name"])[1].lower():
-                        continue
-                    score = match_score(src_feat, feat(ref["id"]))
-                    if score:
-                        proposed.append({"id": ref["id"], "name": ref["name"], "score": score})
-                best = choose_match(proposed)
-                if not best and args.apply:
+                if args.apply:
+                    # Independently attested viewpoint evidence decides write eligibility;
+                    # an ORB score cannot replace or contradict the verified reference.
                     best = verified_fallback_reference(src, plot, day, reference, attested_matches)
+                else:
+                    proposed = []
+                    src_feat = image_features(raw)
+                    for ref_date, ref in sorted(reference, key=lambda x: abs((day-x[0]).days)[:65]:
+                        if os.path.splitext(ref["name"])[1].lower() != os.path.splitext(src["name"])[1].lower():
+                            continue
+                        score = match_score(src_feat, feat(ref["id"]))
+                        if score:
+                            proposed.append({"id": ref["id"], "name": ref["name"], "score": score})
+                    best = choose_match(proposed)
                 if not best:
                     tally["REVIEW"] += 1
                     continue
