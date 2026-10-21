@@ -27,6 +27,12 @@ Approved branch/PR and exact SHA, GitHub Actions/required checks, Vercel Product
 6. Perform operation only within explicit authorization and when safeguards pass. Validate changed targets by independent readback; for `read_only`, verify evidence without modifying source.
 7. Report source version/time, specific results, unmatched/untested data, side effects, QA and exact remaining blockers.
 
+## Hosted Preview unblock (SOP 16, ACTIVE 21/10 amendment)
+
+- When CI/Local QA cannot prove required hosted integration, follow `docs/agent-skills/hosted-preview-unblock.md` in the same authorized release operation; do not leave a PR blocked merely because the automatic Vercel Preview was intentionally skipped.
+- Verify actual Vercel cause, first-party HEAD SHA, required checks and preview-only isolated environment. Reuse matching READY deployments or authorize exactly one branch+SHA-scoped Preview build through the guarded `scripts/vercel-preview-gate.cjs`; keep SSO and RBAC/RLS unchanged.
+- Verify Preview identity and the missing integration behavior, revoke the temporary Preview allowance, and report actual PASS/FAIL. A genuine quota/security/credential error still requires HOLD for the affected PR; do not turn a failed check into a pass.
+
 ## Stop conditions
 
 SOP not retrieved; wrong source/file type; required evidence missing; conflicting IDs/timestamps/Combine mapping; unauthorized write/deploy; cannot perform trustworthy readback. Stop only the unsafe operation, report the precise issue, and preserve all other working processes.
