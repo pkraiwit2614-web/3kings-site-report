@@ -244,7 +244,7 @@ function xlsxScopedConnectionProbe() {
   const allow = JSON.parse(props.getProperty(XLSX_SCOPED.allowlistKey) || '[]');
   if (!Array.isArray(allow) || !allow.includes(id)) throw Error('BLOCK_CANARY_NOT_ALLOWLISTED');
   const file = DriveApp.getFileById(id);
-  if (!/^QA_.*DO_NOT_SYNC\\.xlsx$/.test(file.getName()) || file.getMimeType() !== XLSX_SCOPED.mime)
+  if (!/^QA_.*DO_NOT_SYNC\.xlsx$/.test(file.getName()) || file.getMimeType() !== XLSX_SCOPED.mime)
     throw Error('BLOCK_CANARY_NOT_ISOLATED');
   const parts = xlsxScopedParts_(file.getBlob());
   return {ok:true,status:'OWNER_OAUTH_READ_PROBE_PASS',
@@ -270,7 +270,7 @@ function xlsxScopedCanaryWriteAndRestore() {
   const raw=props.getProperty('MATERIAL_PR_XLSX_CANARY_REQUEST');
   if (!raw) throw Error('MISSING_CANARY_REQUEST');
   const req=JSON.parse(raw);
-  if (!req || !/^QA_.*DO_NOT_SYNC\\.xlsx$/.test(String(req.expectedName||'')) ||
+  if (!req || !/^QA_.*DO_NOT_SYNC\.xlsx$/.test(String(req.expectedName||'')) ||
       !Array.isArray(req.changes) || req.changes.length!==1)
     throw Error('BLOCK_CANARY_REQUEST_NOT_ISOLATED');
   if (req.fileId!==props.getProperty('MATERIAL_PR_XLSX_CANARY_ID'))
