@@ -33,7 +33,7 @@
 - No payroll, defects, procurement, materials, or existing Google Calendar changes.
 
 ## Historical setup checklist (read the verified current state above)
-1. Apply `supabase/migrations/20261015120000_contact_book_access_and_lease.sql` to the **3 Kings** Supabase project `wtqubwdduzedmcvyhbgs` only, after review. This appends 7 cells for the NEW Contact Book module; it never updates existing module permissions.
+1. Apply `docs/contact-book-migration-reference-20261015.sql` (historical reference only — already installed in Supabase under migration version `20261015023849`; never reapply) to the **3 Kings** Supabase project `wtqubwdduzedmcvyhbgs` only, after review. This appends 7 cells for the NEW Contact Book module; it never updates existing module permissions.
 2. Create a Google Cloud service account for Contact Book only, enable Google Drive API, and give that service-account email **Editor** access to the single CSV file. Do NOT make the file public and do not share the whole Drive.
 3. Configure `GOOGLE_CONTACT_BOOK_SERVICE_ACCOUNT_JSON` as a protected server-only Vercel environment variable containing the service-account JSON, in the environment being tested; never prefix with NEXT_PUBLIC. Minimize the service account's Drive shares. Rotate and revoke if compromised.
 4. Verify the account can GET metadata/content and PATCH the above exact file ID. Test on an isolated copy first; only after QA authorize editing the original.
