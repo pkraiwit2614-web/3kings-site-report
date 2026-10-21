@@ -1,6 +1,7 @@
 name: SOP 09 Photo Fast-Track (isolated)
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
     paths:
       - 'scripts/progress_photo_fasttrack.py'
       - 'tests/test_progress_photo_fasttrack.py'
@@ -37,6 +38,36 @@ jobs:
           python-version: '3.11'
       - run: python -m pip install Pillow
       - run: python -m unittest discover -s tests -p 'test_progress_photo_fasttrack.py' -v
+
+  drive-inventory-acceptance:
+    # No live Drive secrets for arbitrary PRs. Owner approval is required by a
+    # preconfigured GitHub Environment; without the label this job is SKIPPED.
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.number == 209 &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'fix/206-photo-fasttrack-safe-executor-20261021' &&
+      contains(github.event.pull_request.labels.*.name, 'photo-live-qa')
+    needs: offline-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: photo-inventory-qa
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install google-api-python-client google-auth
+      - name: Read-only live SOP and complete Plot/day metadata inventory (no image media or rename)
+        env:
+          PHOTO_SA_JSON: ${{ secrets.PHOTO_SA_JSON }}
+          PHOTO_PLOT_FOLDERS_JSON: ${{ secrets.PHOTO_PLOT_FOLDERS_JSON }}
+          PHOTO_ROOT_FOLDER_ID: ${{ secrets.PHOTO_ROOT_FOLDER_ID }}
+          PHOTO_SOP_INDEX_ID: ${{ secrets.PHOTO_SOP_INDEX_ID }}
+          PHOTO_SOP_DOC_ID: ${{ secrets.PHOTO_SOP_DOC_ID }}
+        run: python scripts/progress_photo_fasttrack.py --inventory-only
 
   drive-preview:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.mode == 'dry-run'
