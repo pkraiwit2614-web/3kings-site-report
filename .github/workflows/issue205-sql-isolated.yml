@@ -58,7 +58,7 @@ jobs:
             db="issue205_${scenario}"
             createdb "$db"
             export PGDATABASE="$db"
-            psql -X -v ON_ERROR_STOP=1 -f tests/sql/defect-override-reconcile-fixture.sql >/dev/null
+            sed -e '/^CREATE ROLE anon;$/d' -e '/^CREATE ROLE authenticated;$/d' tests/sql/defect-override-reconcile-fixture.sql | psql -X -v ON_ERROR_STOP=1 >/dev/null
             psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/20261019132800_defect_override_field_reconcile_20261019.sql >/dev/null
             psql -X -v ON_ERROR_STOP=1 -f tests/sql/issue205-four-room-fixture.sql >/dev/null
             case "$scenario" in
@@ -93,6 +93,6 @@ jobs:
           set -euo pipefail
           export PGDATABASE=issue205_regression
           createdb "$PGDATABASE"
-          psql -X -v ON_ERROR_STOP=1 -f tests/sql/defect-override-reconcile-fixture.sql >/dev/null
+          sed -e '/^CREATE ROLE anon;$/d' -e '/^CREATE ROLE authenticated;$/d' tests/sql/defect-override-reconcile-fixture.sql | psql -X -v ON_ERROR_STOP=1 >/dev/null
           psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/20261019132800_defect_override_field_reconcile_20261019.sql >/dev/null
           psql -X -v ON_ERROR_STOP=1 -f tests/sql/defect-override-reconcile-assertions.sql
