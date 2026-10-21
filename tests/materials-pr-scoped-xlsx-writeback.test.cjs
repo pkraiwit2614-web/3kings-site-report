@@ -95,6 +95,7 @@ test('Apps Script QA canary matches the actual .xlsx filename and blocks other n
     {getName:()=> 'xl/_rels/workbook.xml.rels'}
   ]}
   assert.equal(sandbox.xlsxScopedConnectionProbe().status,'OWNER_OAUTH_READ_PROBE_PASS')
+  assert.equal(sandbox.xlsxScopedConnectionProbe().probeVersion,'CANARY_PROBE_V3')
   actualName='QA_PR_Original_Copy_20261019.xlsx'
   assert.throws(()=>sandbox.xlsxScopedConnectionProbe(),/BLOCK_CANARY_NOT_ISOLATED/)
   actualName=name
