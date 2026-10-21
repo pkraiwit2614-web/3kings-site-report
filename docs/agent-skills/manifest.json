@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "project": "3 Kings Construction",
-  "updated_on": "2026-10-20",
+  "updated_on": "2026-10-21",
   "sop_index_name": "00-SOP_INDEX - 3Kings Construction",
   "sop_folder": "3Kings Construction/0-SOP & AI Commands",
   "source_authority": "Live Google Drive SOP INDEX and current linked full SOP per invocation",
@@ -214,5 +214,6 @@
       "sop_title": "SOP_SUP_Daily_Report_PDF_PNG_Publish_v2.0_Consolidated_2026-10-20",
       "mode": "document_only"
     }
-  ]
+  ],
+  "technical_mapping_reference": "docs/agent-skills/sop-technical-mapping.json"
 }
