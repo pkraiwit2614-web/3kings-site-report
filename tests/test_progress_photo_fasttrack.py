@@ -4,7 +4,10 @@ import pathlib
 import unittest
 import datetime as dt
 import io
-from unittest.mock import Mock
+import json
+import os
+import tempfile
+from unittest.mock import Mock, patch
 from PIL import Image
 
 path = pathlib.Path(__file__).resolve().parents[1] / "scripts" / "progress_photo_fasttrack.py"
@@ -14,6 +17,35 @@ spec.loader.exec_module(m)
 
 
 class FastTrackSafetyTests(unittest.TestCase):
+    def test_keyless_credentials_reject_private_service_account_key(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", encoding="utf-8") as file:
+            json.dump({"type": "service_account", "private_key": "MUST-NOT-BE-LOADED"}, file)
+            file.flush()
+            with patch.dict(os.environ, {"GOOGLE_APPLICATION_CREDENTIALS": file.name}):
+                with self.assertRaisesRegex(SystemExit, "private keys prohibited"):
+                    m.keyless_adc_credentials()
+    
+    def test_keyless_credentials_requires_adc_env(self):
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaisesRegex(SystemExit, "GOOGLE_APPLICATION_CREDENTIALS"):
+                m.keyless_adc_credentials()
+
+    def test_keyless_credentials_reject_unimpersonated_external_identity(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", encoding="utf-8") as file:
+            json.dump({"type": "external_account"}, file)
+            file.flush()
+            with patch.dict(os.environ, {"GOOGLE_APPLICATION_CREDENTIALS": file.name}):
+                with self.assertRaisesRegex(SystemExit, "service account impersonation"):
+                    m.keyless_adc_credentials()
+
+    def test_workflow_uses_oidc_not_service_account_json(self):
+        workflow = (pathlib.Path(__file__).resolve().parents[1] /
+                    ".github/workflows/photo-progress-fasttrack.yml").read_text(encoding="utf-8")
+        self.assertNotIn("PHOTO_SA_JSON", workflow)
+        self.assertEqual(workflow.count("uses: google-github-actions/auth@v3"), 3)
+        self.assertEqual(workflow.count("id-token: write"), 3)
+        self.assertIn("photo-inventory-qa", workflow)
+
     def test_valid_date_and_bad_date(self):
         self.assertEqual(str(m.source_day("20102026")), "2026-10-20")
         self.assertIsNone(m.source_day("31112026"))
