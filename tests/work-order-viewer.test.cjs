@@ -186,5 +186,10 @@ test('read-only discrepancies use current room classification and preserve role,
  assert.match(page,/finished\(r\.work_status\)/)
  assert.match(page,/<details className="panel wo-reconciliation">/)
  assert.match(css,/body\.report-print-mode\[data-print-report="Above Condo — Work Order"\] \.wo-reconciliation,/)
- assert.doesNotMatch(page,/\.rpc\(|\.insert\(|\.update\(|\.delete\(|\.upsert\(/)
+ // Reconciliation remains read-only; only the separate disabled-by-default
+ // Work-ID completion flow is permitted to call one authorization-checked RPC.
+ assert.match(page,/NEXT_PUBLIC_WORK_ORDER_COMPLETION_ENABLED==='true'/)
+ assert.equal([...page.matchAll(/\.rpc\(/g)].length,1)
+ assert.match(page,/\.rpc\('defect_work_order_complete'/)
+ assert.doesNotMatch(page,/\.insert\(|\.update\(|\.delete\(|\.upsert\(/)
 })
