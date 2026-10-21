@@ -102,6 +102,22 @@ class FastTrackSafetyTests(unittest.TestCase):
         self.assertIsNone(m.verified_write_label(row, [{**good, "new": "Roof_20260901.JPG"}]))
         self.assertEqual(m.verified_write_label({**row, "new": None}, [good]), "Roof.JPG")
 
+    def test_supervised_same_plot_fallback_without_orb_false_positive(self):
+        # Geometric prefilter can miss true viewpoints when construction changes;
+        # a separately confirmed label and permanent-landmark evidence is mandatory.
+        src = {"id": "candidate1", "name": "IMG_6034.JPG"}
+        refs = [(dt.date(2026, 10, 17), {"id": "ref17", "name": "งานสระน้ำ.JPG"})]
+        row = {"file_id": "candidate1", "old": "IMG_6034.JPG",
+               "reference_id": "ref17", "plot": "7", "day": "2026-10-20",
+               "new": "งานสระน้ำ.JPG", "label_verified": True,
+               "label_evidence": "Current view shows pool, patio and back wall",
+               "verified_source": "supervised_visual_check",
+               "landmarks": ["permanent pool boundary", "paired patio columns"]}
+        self.assertEqual(m.verified_fallback_reference(src,"7",dt.date(2026,10,20),refs,[row])["id"],"ref17")
+        self.assertIsNone(m.verified_fallback_reference(src,"6",dt.date(2026,10,20),refs,[row]))
+        self.assertIsNone(m.verified_fallback_reference(src,"7",dt.date(2026,10,20),refs,[{**row,"landmarks":["only one"]}]))
+        self.assertIsNone(m.verified_fallback_reference(src,"7",dt.date(2026,10,20),refs,[{**row,"reference_id":"missing"}]))
+
     def test_live_sop_v2_index_and_document(self):
         sheets = Mock()
         docs = Mock()
