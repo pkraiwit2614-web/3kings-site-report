@@ -116,11 +116,21 @@ export async function dailySiteSendTick(env,{db,hash,transport=fetch,now=new Dat
     if(!result.ok)return {...stats,mode:'GATEWAY_NOT_READY'};
     ready=await result.json();
   }catch{return {...stats,mode:'GATEWAY_UNAVAILABLE'};}
-  if(!ready||ready.ready!==true||!Array.isArray(ready.assets)
+  // Publisher v2.0 hands off a finalized PDF manifest and four named PNGs.
+  // Never infer the report date or accept files belonging to another revision.
+  if(!ready||ready.ready!==true||ready.report_date!==when.reportDate
+    ||!validSha(ready.pdf_sha256)||!Array.isArray(ready.assets)
     ||ready.assets.length!==4)return {...stats,mode:'QA_BLOCKED'};
+  const suffixBySite={
+    above_villa:'Page_01_Above_Villa',above_condo:'Page_02_Above_Condo',
+    mirage:'Page_03_Mirage',henessy:'Page_04_Henessy'
+  };
+  const dayLabel=when.reportDate.split('-').reverse().join('-');
   const images=new Map();
   for(const item of ready.assets){
-    if(!validSha(item.sha256)||typeof item.url!=='string'
+    const suffix=suffixBySite[item.site];
+    if(!suffix||item.filename!=='Daily_Site_Report_'+dayLabel+'_'+suffix+'.png'
+      ||!validSha(item.sha256)||typeof item.url!=='string'
       ||!item.url.startsWith(env.SUPABASE_URL.replace(/\/$/,'')+
           '/functions/v1/kings_daily_line_images/image?')
       ||!/^https:\/\//.test(item.url)

@@ -8,11 +8,17 @@ const load=()=>import('../cloudflare/dailySiteSendTick.mjs');
 const now=new Date('2026-10-21T01:04:00Z');
 function mock(){
  const pushes=[],ledger=new Map(),metas=[];
+ const suffixes={
+   above_villa:'Page_01_Above_Villa',above_condo:'Page_02_Above_Condo',
+   mirage:'Page_03_Mirage',henessy:'Page_04_Henessy'
+ };
  const assets=['above_villa','above_condo','mirage','henessy'].map(site=>({
-   site,sha256:'c'.repeat(64),width:2947,height:2000,
+   site,filename:'Daily_Site_Report_20-10-2026_'+suffixes[site]+'.png',
+   sha256:'c'.repeat(64),width:2947,height:2000,
    url:url+'/functions/v1/kings_daily_line_images/image?site='+site}));
  const transport=async (request,options)=>{
-  if(request.includes('/ready?'))return {ok:true,status:200,json:async()=>({ready:true,assets})};
+  if(request.includes('/ready?'))return {ok:true,status:200,json:async()=>({
+    ready:true,report_date:'2026-10-20',pdf_sha256:'d'.repeat(64),assets})};
   if(request.endsWith('/message/quota'))return {
     ok:true,status:200,json:async()=>({type:'limited',value:1000})};
   if(request.endsWith('/message/quota/consumption'))return {
@@ -42,7 +48,7 @@ function mock(){
    throw Error('unexpected RPC');
  };
  const hash=async input=>input.includes('|form_text')?'a'.repeat(64):'b'.repeat(64);
- return {pushes,ledger,metas,transport,db,hash};
+ return {pushes,ledger,metas,transport,db,hash,assets};
 }
 test('Sunday and disabled flag send nothing',async()=>{
  const {dailySiteSendTick}=await load();const m=mock();
@@ -240,4 +246,30 @@ test('legacy delivered text with uncertain image stays held, no automated replay
  const x=await dailySiteSendTick(env,{...m,now:new Date('2026-10-21T01:12:00Z')});
  assert.equal(x.textAccepted,0);assert.equal(x.imageAccepted,0);
  assert.equal(m.pushes.length,0);
+});
+
+test('Publisher v2.0 handoff blocks stale PDF date, bad PDF hash and incorrect PNG names before LINE',async()=>{
+ const {dailySiteSendTick}=await load();
+ const checks=[
+   {report_date:'2026-10-19'},
+   {pdf_sha256:'missing-or-stale'},
+   {assets:'wrong_name'}
+ ];
+ for(const invalid of checks){
+   const m=mock(),orig=m.transport;
+   m.transport=async(u,o)=>u.includes('/ready?')
+     ? {ok:true,status:200,json:async()=>({
+       ready:true,report_date:'2026-10-20',pdf_sha256:'d'.repeat(64),
+       assets:invalid.assets==='wrong_name'
+         ? m.assets.map((asset,index)=>index===0?{...asset,filename:'old.png'}:asset)
+         :m.assets,
+       ...('report_date' in invalid?{report_date:invalid.report_date}:{}),
+       ...('pdf_sha256' in invalid?{pdf_sha256:invalid.pdf_sha256}:{})
+     })}
+     :orig(u,o);
+   const r=await dailySiteSendTick(env,{...m,now});
+   assert.equal(r.mode,'QA_BLOCKED');
+   assert.equal(m.pushes.length,0);
+   assert.equal(m.metas.length,0);
+ }
 });
