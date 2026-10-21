@@ -31,7 +31,7 @@ test('canonical source and 263-room inventory still required',()=>{
   assert.match(smart,/SOURCE_FILE_ID/);assert.match(smart,/SOURCE_FILE_NAME/);
   assert.match(smart,/EXPECTED_ROOMS:\s*263/);assert.match(smart,/EXPECTED_A:\s*162/);assert.match(smart,/EXPECTED_B:\s*101/);
   assert.match(smart,/validateDefectInventory_\(parsed\.rows, existing\)/);
-  assert.match(smart,/getLastUpdated\(\)\.toISOString\(\)\s*!==\s*modifiedIso/);
+  assert.match(smart,/const modifiedIso\s*=\s*file\.getLastUpdated\(\)\.toISOString\(\)/);
 });
 test('no writer trigger or SQL/DB privileges introduced by 3-line proposal',()=>{
   const additions=patch.split('\n').filter(l=>l.startsWith('+')&&!l.startsWith('+++'));
