@@ -4,7 +4,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const {pathToFileURL}=require('node:url');
-const {createHash}=require('node:crypto');
+const {createHash,createHmac}=require('node:crypto');
 const filename=path.resolve(__dirname,'../operations/cloudflare/3kings-line-autopilot-owner-only.mjs');
 const source=fs.readFileSync(filename,'utf8');
 const modulePromise=import(pathToFileURL(filename).href);
@@ -113,4 +113,26 @@ test('owner endpoint disabled keeps zero outbound requests',async()=>{
  const f=fixture();const m=await modulePromise;
  const r=await m.dailyOwnerSummaryTick({...env,DAILY_SITE_LINE_ENABLED:'false'},{...f,now});
  assert.equal(r.mode,'OWNER_OFF');assert.equal(f.calls.length,0);
+});
+
+test('LINE webhook HMAC rejects invalid or tampered input; valid signed empty event stays receiver-only (no sends)',async()=>{
+ const worker=(await modulePromise).default;
+ const cfg={LINE_CHANNEL_SECRET:'synthetic-hmac-key-only',AUTOPILOT_ENABLED:'false',
+  DAILY_SITE_LINE_ENABLED:'false',LINE_GROUP_DISCOVERY_ENABLED:'false'};
+ const raw=JSON.stringify({destination:'U'+'f'.repeat(32),events:[]});
+ const signature=createHmac('sha256',cfg.LINE_CHANNEL_SECRET).update(raw).digest('base64');
+ const makeRequest=(sig,body=raw)=>new Request('https://example.test/line/webhook',{
+  method:'POST',headers:{'x-line-signature':sig},body
+ });
+ const originalFetch=global.fetch;
+ let outbound=0;
+ global.fetch=async()=>{outbound++;throw Error('unexpected external request');};
+ try{
+  assert.equal((await worker.fetch(makeRequest('invalid'),cfg)).status,401);
+  assert.equal((await worker.fetch(makeRequest(signature,raw+' '),cfg)).status,401);
+  const valid=await worker.fetch(makeRequest(signature),cfg);
+  assert.equal(valid.status,200);
+  assert.deepEqual(await valid.json(),{ok:true,processed:0,mode:'receiver_only'});
+  assert.equal(outbound,0,'receiver-only webhook must never dispatch LINE or make DB requests');
+ }finally{global.fetch=originalFetch;}
 });
