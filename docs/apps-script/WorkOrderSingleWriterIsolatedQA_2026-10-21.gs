@@ -147,7 +147,7 @@ function workOrderIsolatedQaWriteRestore20261021() {
     }
   }
   if(!restored)throw Error('QA HOLD: copy restore unverified; inspect QA folder');
-  return {status:'QA_SAME_ID_WRITE_AND_RESTORE_PASS',...report,restored:true};
+  return {...report,status:'QA_SAME_ID_WRITE_AND_RESTORE_PASS',restored:true};
 }
 function workOrderQaZipParts20261021_(bytes,name) {
   const parts={};
