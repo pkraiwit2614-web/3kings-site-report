@@ -41,3 +41,52 @@ Call `POST /api/sync/express-po` with `Authorization: Bearer <preview secret>`, 
 - PO/PL and PC/PR are different document types; Express flag in PR means pending approval, never receiving. Masked `***` document counts and suffixed PL numbers are parsed; malformed lines and accounting differences remain QA holds.
 - New complete history exports are **read-only dry run** until bounded incremental delta, document/line identity, duplicate-safe locking and verified staging + authenticated UI E2E are implemented. Existing staging sheet is intentionally **not** filled wholesale with 3,000+ documents; `stage_only` fails closed on full-history and PR sources.
 - No changes to Production schema, cron, Supabase Materials master, purchases, receipt status, Daily Reports, PNG or LINE Gateway. No automatic Vercel Preview build requested for code QA.
+
+
+## Owner-confirmed change of target — 21 October 2026
+
+The intended destination is **the existing XLSX Masters**, not a new independent staging
+sheet or direct PO upserts to Production Supabase. Current Preview-only routing and
+the old staging sheet stay isolated, read-only/fail-closed until validated otherwise.
+
+1. Operator exports current Express PO/PL and PC/PR CSV history into private Drive;
+   check file ID, modified time, exact SHA, document math and source QA.
+2. Compare confirmed PO/PL lines to **existing** Materials status and purchasing/PR
+   follow-up XLSX Masters. Read actual sheet layouts, cell formulas, current values,
+   revision and the Sync's canonical source IDs *at runtime*.
+3. Build a cell-scoped delta; an Express PO is evidence of an order **only**, while
+   PR/PC is requisition evidence and a physical receipt requires separate receipt.
+   Preserve existing requests not found in Express and all manual status notes.
+4. Apply only unambiguous, authorized, exact-line/Plot/supplier-linked cells to
+   **the same original XLSX file IDs** after revision/hash preconditions and formula
+   protection. New rows require an independently verified template + safe append;
+   never replace or re-export the entire workbook as a substitute for same-ID editing.
+5. Invoke the **existing** GAS/Drive-to-Supabase Materials/Procurement sync once,
+   when its source mapping/permissions are verified; then compare new/changed cells
+   with import-run logs, database and the user-visible Materials/Procurement rows.
+6. Re-run an unchanged input and prove zero additional cells/documents/rows changed.
+
+### In-scope implementation checkpoint
+
+- `lib/express-po/master-delta.cjs`: **pure read-only** verified-link comparator.
+  It emits only `materials.status: ยังไม่สั่ง → สั่งแล้ว` or an empty PO reference
+  on an exact-identified PR-follow-up row, with explicit Plot, supplier, item code,
+  description, quantity and unit; all other statuses, formula/locked cells and
+  ambiguous lines are HOLD. It does not perform Drive, Sync or Supabase writes.
+- `tests/express-po-master-delta.test.cjs`: fixed-line, multi-Plot, idempotent,
+  missing mapping, conflicting manual status, formula/quantity and QA quarantine.
+- Original XLSX writeback/append compatibility, actual up-to-date Master mapping,
+  Drive ACL, source revision guard and existing GAS trigger/run remain **UNTESTED**.
+  A separate draft helper for limited existing-cell XLSX writeback is not evidence
+  that row append, source-ID equivalence or whole pipeline is ready.
+- The existing Preview route's `stage_only` continues fail-closed. Neither this
+  comparator nor the synthetic GitHub CI proves a full real-data import.
+
+### Release acceptance (non-waivable)
+
+Actual source/master revision & permission readback → exact row delta, holds &
+duplicate check → disposable XLSX cell/formula/layout test → same-ID original file
+update (only after authorization/gates) → original GAS Sync run & logs → affected
+Supabase row identities/linked Plot counts → authenticated UI readback/timestamps.
+No new cron, schema, parallel importer, missing-PO cancellation or inferred
+receipts. Preserve other 3 Kings modules untouched.
