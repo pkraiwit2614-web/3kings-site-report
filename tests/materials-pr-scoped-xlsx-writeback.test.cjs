@@ -39,6 +39,7 @@ test('patch a specified cell and preserve unrelated formulas and XML', () => {
   assert.match(newXml, /<f>2\+3<\/f><v>5<\/v>/)
   assert.throws(() => sandbox.xlsxScopedPatch_(old,[],[{cell:'B2',expected:'5',value:6}]), /Refusing formula/)
   assert.throws(() => sandbox.xlsxScopedPatch_(old,[],[{cell:'A2',expected:'stale',value:'bad'}]), /Previous value changed/)
+  assert.throws(() => sandbox.xlsxScopedPatch_(old,[],[{cell:'C2',expected:'',value:'not allowed'}]), /Existing worksheet cell not found/)
   assert.throws(() => sandbox.xlsxScopedPatch_(old,[],[{cell:'A3',expected:'',value:'not allowed'}]), /Existing worksheet row not found/)
 })
 test('existing shared strings are resolved, and no duplicate cell changes allowed', () => {
