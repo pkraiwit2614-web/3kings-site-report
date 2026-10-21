@@ -148,6 +148,18 @@ def independent_match_verified(row, attestations):
     return label is not None and label == row.get("new")
 
 
+def verified_fallback_reference(src, plot, day, references, attestations):
+    """Allow a separately attested same-Plot viewpoint when ORB is a false negative."""
+    for ref_day, ref in references:
+        if ref["id"] == src["id"] or candidate(ref["name"]):
+            continue
+        row = {"file_id": src["id"], "old": src["name"], "plot": plot,
+               "day": day.isoformat(), "reference_id": ref["id"]}
+        if verified_write_label(row, attestations):
+            return {"id": ref["id"], "name": ref["name"], "score": 0.0}
+    return None
+
+
 def list_children(drive, parent):
     token = None
     while True:
@@ -275,6 +287,9 @@ def main():
         raise SystemExit("Expected exactly Plot 6,7,8,9")
     verify_drive_scope(drive, os.environ["PHOTO_ROOT_FOLDER_ID"], folders,
                        os.environ.get("PHOTO_AUDIT_FOLDER_ID") if args.apply else None)
+    attested_matches = json.loads(os.environ["PHOTO_VERIFIED_MATCHES_JSON"]) if args.apply else []
+    if not isinstance(attested_matches, list):
+        raise SystemExit("Verified matches must be a JSON list")
     audit = []
     tally = Counter()
     inventory_reports = {}
@@ -315,6 +330,8 @@ def main():
                     if score:
                         proposed.append({"id": ref["id"], "name": ref["name"], "score": score})
                 best = choose_match(proposed)
+                if not best and args.apply:
+                    best = verified_fallback_reference(src, plot, day, reference, attested_matches)
                 if not best:
                     tally["REVIEW"] += 1
                     continue
@@ -331,7 +348,7 @@ def main():
         return
     if args.apply:
         # A high CV score alone is never authorization to rename.
-        manifest = json.loads(os.environ["PHOTO_VERIFIED_MATCHES_JSON"])
+        manifest = attested_matches
         eligible = []
         reserved = {}
         for item in audit:
