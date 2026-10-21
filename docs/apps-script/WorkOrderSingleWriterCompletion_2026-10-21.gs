@@ -137,7 +137,11 @@ function workOrderWbApply20261015_(config,change,dryRun){
   if(isNaN(completed.getTime())||completed.getTime()>Date.now()+300000)throw Error('Invalid completed timestamp');
   const dateValue=Utilities.formatDate(completed,WORK_ORDER_AUTO_20261015.TZ,'dd/MM/yyyy HH:mm:ss');
   const modified=file.getLastUpdated().getTime();
-  const blobs=Utilities.unzip(file.getBlob());
+  // Apps Script unzip requires ZIP MIME even when the original workbook is XLSX.
+  // Retype only an in-memory blob; keep the approved Drive file untouched.
+  const xlsxBlob=file.getBlob();
+  const zipBlob=Utilities.newBlob(xlsxBlob.getBytes(),'application/zip',xlsxBlob.getName());
+  const blobs=Utilities.unzip(zipBlob);
   const parts={};blobs.forEach(b=>{parts[b.getName()]=b;});
   const sheetPath=workOrderWbSheetPath20261015_(parts);
   if(!parts[sheetPath])throw Error('Approved dispatch XML not found: '+sheetPath);
@@ -178,7 +182,8 @@ function workOrderWbApply20261015_(config,change,dryRun){
   if(res.getResponseCode()<200||res.getResponseCode()>=300)
     throw Error('Drive update '+res.getResponseCode()+': '+res.getContentText().slice(0,160));
   // Only acknowledge after fetching and validating this same workbook ID again.
-  const reread=Utilities.unzip(DriveApp.getFileById(config.id).getBlob());
+  const savedBlob=DriveApp.getFileById(config.id).getBlob();
+  const reread=Utilities.unzip(Utilities.newBlob(savedBlob.getBytes(),'application/zip',savedBlob.getName()));
   const fresh=reread.filter(b=>b.getName()===sheetPath)[0];
   if(!fresh)throw Error('Saved Excel worksheet missing');
   const newXml=fresh.getDataAsString();
