@@ -1,6 +1,6 @@
 # Work Order Excel writeback — single-writer consolidation (21 Oct 2026)
 
-**Status: design/implementation gate only; no runtime change.** Supersedes the divergent directions in PR #113 and PR #119. Do not infer that a GitHub merge installs Apps Script, applies SQL or activates website editing.
+**Status: staged guarded code on a review branch, NOT runtime or Production activation.** Supersedes PR #113 and PR #119. The new GAS completion writer and optional Web confirmation UI are staged with separate default-off gates; they do not install Apps Script, apply SQL, activate editing or write Excel by being committed.
 
 ## Verified baseline (21 Oct 2026)
 
@@ -42,6 +42,7 @@
 1. **Supersede #113** as an independently scheduled Excel writer; keep its guarded read-only room-mirror logic as a reference, but retire its fixed inventory gate/legacy trigger. No need to write room-status mirror values to XLSX for the initial completion feature.
 2. **Port only still-needed #119 code to a new main-based implementation**, not a merge of the old branch: per-ID UI action and confirmation, permission gate, existing DB queue integration, single XLSX executor, source import precedence, targeted tests. Recheck current role matrix and the *already existing* live functions, avoiding replay of duplicate/replacement SQL.
 3. Keep #159's optional owner-authorized Defect writeback worker disabled; if later required, route through the same Work Order writer contract rather than a second XLSX worker.
+   - The staged Work Order page calls the already-present `defect_work_order_complete` RPC only when `NEXT_PUBLIC_WORK_ORDER_COMPLETION_ENABLED=true`; this flag remains unset in existing deployments. The separate GAS writer checks `WORK_ORDER_SINGLE_WRITER_ENABLED=true` and preflight before any source write. **Neither flag is authorization to skip Excel readback, actual ACL or isolated E2E QA.**
 4. Run isolated synthetic regression: duplicate Work IDs, Combine/mismatch, manual conflicting completion, stale Excel revision, formula preservation, unchanged ZIP members, idempotent retry after write-before-ack, failure-before-write, other Work IDs unchanged, 32-current-inventory variability and concurrency.
 5. Run GitHub Actions affected Build/tests for the exact HEAD and separate-DB Auth/RBAC/RLS test; hosted Preview only if hosted integration cannot be proved in CI.
 6. In the **original** GAS project, verify only one Work Order writer handler and the existing importer; execute read-only dry-run, then a user-controlled **QA-only same-ID write + restore** with backup and readback, never a synthetic write to real historical work records.
