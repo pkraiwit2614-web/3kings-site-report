@@ -235,6 +235,7 @@ class FastTrackSafetyTests(unittest.TestCase):
         source = path.read_text(encoding="utf-8")
         self.assertIn('if args.apply and not attested_matches:', source)
         self.assertIn('RENAME_BLOCKED: No independently verified photo matches', source)
+        self.assertIn('RENAME_BLOCKED: No candidate passed independent visual/date/label evidence', source)
         self.assertIn('if args.apply and src["id"] not in verified_ids:', source)
         self.assertIn('tally["AWAITING_VERIFICATION"] += 1', source)
         self.assertIn('audit = eligible[:args.max_renames]', source)
