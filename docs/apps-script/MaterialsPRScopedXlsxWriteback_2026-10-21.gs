@@ -219,3 +219,71 @@ function xlsxScopedBackupOnce_(file) {
 }
 function xlsxScopedPreview(request) { return xlsxScopedRun_(request, false); }
 function xlsxScopedApply(request) { return xlsxScopedRun_(request, true); }
+
+
+/**
+ * One-time owner authorization/read-access probe from the Apps Script editor.
+ * Private Script Property MATERIAL_PR_XLSX_CANARY_ID must identify a disposable
+ * QA .xlsx file. This function does not modify any file.
+ */
+function xlsxScopedConnectionProbe() {
+  const props = PropertiesService.getScriptProperties();
+  const id = props.getProperty('MATERIAL_PR_XLSX_CANARY_ID');
+  if (!id) throw Error('MISSING_CANARY_ID');
+  const allow = JSON.parse(props.getProperty(XLSX_SCOPED.allowlistKey) || '[]');
+  if (!Array.isArray(allow) || !allow.includes(id)) throw Error('BLOCK_CANARY_NOT_ALLOWLISTED');
+  const file = DriveApp.getFileById(id);
+  if (!/^QA_.*DO_NOT_SYNC\\.xlsx$/.test(file.getName()) || file.getMimeType() !== XLSX_SCOPED.mime)
+    throw Error('BLOCK_CANARY_NOT_ISOLATED');
+  const parts = xlsxScopedParts_(file.getBlob());
+  return {ok:true,status:'OWNER_OAUTH_READ_PROBE_PASS',
+    fileName:file.getName(),parts:Object.keys(parts.parts).length,
+    warning:'This does not prove Drive write access or Apps Script remote execution'};
+}
+
+/**
+ * Optional one-time write credential smoke test, ONLY on isolated QA workbook.
+ * Private property MATERIAL_PR_XLSX_CANARY_REQUEST = JSON:
+ * {
+ *   "fileId":"<disposable QA id>",
+ *   "expectedName":"QA_...DO_NOT_SYNC.xlsx",
+ *   "sheetName":"<sheet>",
+ *   "changes":[{"cell":"<existing text cell>","expected":"<old text>","value":"QA_CANARY_20261021"}]
+ * }
+ * The fixture must contain an EXISTING non-formula text cell, and the dry-run
+ * must be manually reviewed first. This smoke test writes then restores it.
+ * If restore fails, STOP and repair only the disposable QA workbook.
+ */
+function xlsxScopedCanaryWriteAndRestore() {
+  const props=PropertiesService.getScriptProperties();
+  const raw=props.getProperty('MATERIAL_PR_XLSX_CANARY_REQUEST');
+  if (!raw) throw Error('MISSING_CANARY_REQUEST');
+  const req=JSON.parse(raw);
+  if (!req || !/^QA_.*DO_NOT_SYNC\\.xlsx$/.test(String(req.expectedName||'')) ||
+      !Array.isArray(req.changes) || req.changes.length!==1)
+    throw Error('BLOCK_CANARY_REQUEST_NOT_ISOLATED');
+  if (req.fileId!==props.getProperty('MATERIAL_PR_XLSX_CANARY_ID'))
+    throw Error('BLOCK_CANARY_ID_MISMATCH');
+  const change=req.changes[0];
+  if (typeof change.expected!=='string' || typeof change.value!=='string' ||
+      !/^QA_CANARY_[A-Za-z0-9_-]+$/.test(change.value) || change.expected===change.value)
+    throw Error('BLOCK_CANARY_VALUE_INVALID');
+  const before=xlsxScopedPreview(req);
+  if (before.status!=='DRY_RUN_PASS') throw Error('CANARY_DRY_RUN_FAILED');
+  const save=xlsxScopedApply(Object.assign({},req,{
+    expectedSha256:before.expectedSha256,expectedModifiedMs:before.expectedModifiedMs
+  }));
+  if (save.status!=='DRIVE_READBACK_PASS') throw Error('CANARY_WRITE_READBACK_FAILED');
+  const revert=Object.assign({},req,{changes:[{
+    cell:change.cell,expected:change.value,value:change.expected
+  }]});
+  const verify=xlsxScopedPreview(revert);
+  if (verify.status!=='DRY_RUN_PASS') throw Error('CANARY_ROLLBACK_PREFLIGHT_FAILED');
+  const restored=xlsxScopedApply(Object.assign({},revert,{
+    expectedSha256:verify.expectedSha256,expectedModifiedMs:verify.expectedModifiedMs
+  }));
+  if (restored.status!=='DRIVE_READBACK_PASS') throw Error('CANARY_RESTORE_FAILED');
+  return {ok:true,status:'QA_ONLY_SAME_ID_WRITE_AND_RESTORE_PASS',
+    fileName:req.expectedName,cell:change.cell,
+    warning:'No Materials/PR Master was changed; no inbound Sync or remote API connection proven'};
+}
