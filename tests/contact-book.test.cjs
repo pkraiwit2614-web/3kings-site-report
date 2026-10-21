@@ -75,7 +75,7 @@ test('integration only adds a dedicated permission row and print-scoped editor',
   const matrix=fs.readFileSync('components/RolePermissionMatrix.tsx','utf8')
   const page=fs.readFileSync('app/contact-book/page.tsx','utf8')
   const print=fs.readFileSync('components/PrintButton.tsx','utf8')
-  const migration=fs.readFileSync('docs/contact-book-migration-reference-20261015.sql','utf8')
+  const migration=fs.readFileSync('supabase/migrations/20261021235000_contact_book_directory.sql','utf8')
   assert.match(shell,/\['\/contact-book', 'Contact Book'\]/)
   assert.match(permission,/contact_book/)
   assert.match(matrix,/label: 'Contact Book'/)
@@ -89,4 +89,12 @@ test('internal contact category accepted without importing unverified staging',(
   const draft={category:'ภายใน',service_group:'ประสานงาน',organization:'3 Kings',contact_name:'ทดสอบ',phone:'089-888-1111',work_scope:'บริหารโครงการ',project_area:'Above Condo',review_note:'',secondary_phone:'',active:'ใช่',aliases:''}
   assert.equal(contacts.cleanContactInput(draft).category,'ภายใน')
   assert.equal(contacts.putContact(fixture(),null,draft).rows.length,42)
+})
+
+test('database source validates full contact schema and rejects accidental truncation',()=>{
+  const data=fixture()
+  assert.equal(contacts.validateContactBookEntries(data).length,41)
+  assert.throws(()=>contacts.validateContactBookEntries(data.slice(0,40)),/rows_below_baseline/)
+  const malformed=fixture();delete malformed[0].source_file
+  assert.throws(()=>contacts.validateContactBookEntries(malformed),/invalid_field/)
 })
