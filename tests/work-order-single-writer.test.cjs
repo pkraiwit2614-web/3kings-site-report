@@ -48,3 +48,17 @@ test('Surgical XLSX edit preserves other cells and blocks formulas',()=>{
   const formula='<worksheet><sheetData><row r="5"><c r="J5"><f>SUM(A1:A3)</f><v>0</v></c></row></sheetData></worksheet>'
   assert.throws(()=>put(formula,'J5','เสร็จแล้ว'),/Refusing to overwrite Excel formula/)
 })
+
+test('Optional Web completion is disabled by default, keeps server-side RPC role gate and print intact',()=>{
+  const page=fs.readFileSync('app/work-order/page.tsx','utf8')
+  const css=fs.readFileSync('app/work-order/work-order.css','utf8')
+  assert.match(page,/NEXT_PUBLIC_WORK_ORDER_COMPLETION_ENABLED==='true'/)
+  assert.match(page,/canComplete=permitted&&canEditDefect\(role\)&&completionEnabled/)
+  assert.match(page,/if\(!canComplete\|\|!confirmRow\|\|saving\)return/)
+  assert.match(page,/rpc\('defect_work_order_complete',\{p_work_id:confirmRow.work_id\}\)/)
+  assert.match(page,/aria-modal="true"/)
+  assert.match(page,/setConfirmRow\(null\)/)
+  assert.match(page,/Work ID/)
+  assert.match(css,/@media print\{\.wo-complete-btn,\.wo-modal-backdrop,\.wo-completion-notice\{display:none!important\}\}/)
+  assert.doesNotMatch(page,/\.from\('condo_room_status'\)\.update\(/)
+})
