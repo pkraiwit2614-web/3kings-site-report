@@ -4,8 +4,8 @@
  * and restores the COPY to its original bytes (same QA file ID).
  *
  * No Defect/Supabase/Web mutation. No production XLSX write, property changes,
- * new triggers, or automatic cleanup. Manually set the existing Script Property
- * WORK_ORDER_QA_FOLDER_ID to the private owner-only QA folder ID before running.
+ * new triggers, or automatic cleanup. Looks up the unique owner-only QA folder
+ * by exact name; no new Script Properties or private folder IDs required.
  *
  * Never add real secrets, file IDs or copied XLSX bytes to GitHub/CI.
  * Run workOrderIsolatedQaWriteRestore20261021() manually ONCE with the exact
@@ -20,13 +20,20 @@ function workOrderIsolatedQaWriteRestore20261021() {
     throw Error('QA HOLD: current Single Writer source missing');
 
   const prod=workOrderConfig20261015_();
-  const props=PropertiesService.getScriptProperties();
-  const folderId=props.getProperty('WORK_ORDER_QA_FOLDER_ID');
-  if(!folderId||!(/^[A-Za-z0-9_-]{20,200}$/.test(folderId)))
-    throw Error('QA HOLD: set WORK_ORDER_QA_FOLDER_ID to the private QA folder');
-  const folder=DriveApp.getFolderById(folderId);
-  if(folder.getName()!=='QA_Excel_Writeback_Test_2026-10-19_DO_NOT_SYNC')
-    throw Error('QA HOLD: unexpected QA folder; no copy created');
+  // Avoid adding Script Properties: require one exact-name, owner-only folder.
+  const folderName='QA_Excel_Writeback_Test_2026-10-19_DO_NOT_SYNC';
+  const matches=DriveApp.getFoldersByName(folderName);
+  if(!matches.hasNext())throw Error('QA HOLD: private DO_NOT_SYNC folder not found');
+  const folder=matches.next();
+  if(matches.hasNext()||folder.getName()!==folderName)
+    throw Error('QA HOLD: ambiguous DO_NOT_SYNC folder; refuse to copy');
+  if(folder.getSharingAccess()!==DriveApp.Access.PRIVATE ||
+     folder.getEditors().length!==0 || folder.getViewers().length!==0)
+    throw Error('QA HOLD: QA folder is not owner-only private');
+  const owner=folder.getOwner(),executor=Session.getEffectiveUser();
+  if(!owner||!executor||owner.getEmail()!==executor.getEmail())
+    throw Error('QA HOLD: running account is not the private QA folder owner');
+  const folderId=folder.getId();
   const source=DriveApp.getFileById(prod.id);
   if(source.getName()!==WORK_ORDER_AUTO_20261015.FILE_NAME ||
       source.getMimeType()!==WORK_ORDER_WB_20261015.MIME)
