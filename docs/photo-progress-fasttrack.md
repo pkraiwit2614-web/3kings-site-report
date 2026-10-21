@@ -74,3 +74,8 @@ The branch touches only SOP Skill/manifest, isolated script/tests/workflow and t
 ## Website source contract verified against main (read-only)
 - `app/photo-mapping/page.tsx` queries Supabase `drive_photo_index.file_name` for visible captions while its actual image tag uses `/api/drive-photo?fileId=<drive_file_id>`. `app/api/drive-photo/route.ts` resolves Drive image by File ID, not filename. A safe Drive rename retaining ID should preserve **this route's** image resolution, but its caption can remain stale until the existing photo-index sync updates the DB. This code does not modify Supabase or trigger that sync.
 - A scoped unit contract checks the live repo source for this fact. **Do not** infer Gallery, Presentation, importer or website source-to-DB readback PASS from that unit test; those still require independent live verification before an authorized apply.
+
+
+## Observed offline CV false-negative on real same-Plot reference photos
+- In Plot 7, labelled photos dated 17 and 20 October show the same permanent building corner, window arrangement, three condenser units and adjacent steps; the offline ORB test returned only 33 filtered matches, below the initial 45-match proposal threshold. That **does not** justify lowering matching safety thresholds globally.
+- Apply mode now allows a reviewed fallback *only* when an independent match record confirms same Plot, exact candidate/ref IDs, day, two named permanent architectural landmarks and a verified current-photo caption. Unknown mismatches remain REVIEW. This is not an automated semantic verifier; it requires valid trusted attestation and service-account/photo/web QA before actual writes.
