@@ -1,0 +1,98 @@
+name: Issue 205 SQL isolated PostgreSQL QA
+
+on:
+  push:
+    branches: [fix/issue205-four-room-legacy-reconcile-20261021]
+    paths:
+      - 'supabase/migrations/20261021185000_issue205_four_room_legacy_reconcile.sql'
+      - 'tests/sql/issue205-four-room-*.sql'
+      - '.github/workflows/issue205-sql-isolated.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  issue205-postgres-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test_only
+          POSTGRES_DB: issue205_positive
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d issue205_positive"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: test_only
+      PGDATABASE: issue205_positive
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client >/dev/null
+
+      - name: Run exact existing SQL guard with four synthetic legacy rows
+        run: |
+          set -euo pipefail
+          psql -X -v ON_ERROR_STOP=1 -f tests/sql/defect-override-reconcile-fixture.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/20261019132800_defect_override_field_reconcile_20261019.sql
+          psql -X -v ON_ERROR_STOP=1 -f tests/sql/issue205-four-room-fixture.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/20261021185000_issue205_four_room_legacy_reconcile.sql
+          psql -X -v ON_ERROR_STOP=1 -f tests/sql/issue205-four-room-positive.sql
+
+      - name: Assert fail-closed on conflicting or stale evidence (isolated databases)
+        run: |
+          set -euo pipefail
+          for scenario in pending newer_web stale_source bad_source prior_baseline manual_drift audit_drift; do
+            db="issue205_${scenario}"
+            createdb "$db"
+            export PGDATABASE="$db"
+            psql -X -v ON_ERROR_STOP=1 -f tests/sql/defect-override-reconcile-fixture.sql >/dev/null
+            psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/20261019132800_defect_override_field_reconcile_20261019.sql >/dev/null
+            psql -X -v ON_ERROR_STOP=1 -f tests/sql/issue205-four-room-fixture.sql >/dev/null
+            case "$scenario" in
+              pending)
+                psql -X -v ON_ERROR_STOP=1 -c "UPDATE public.defect_web_overrides SET source_sync_state='pending',source_synced_at=NULL WHERE room_no='A527';" >/dev/null ;;
+              newer_web)
+                psql -X -v ON_ERROR_STOP=1 -c "UPDATE public.defect_web_overrides SET updated_at='2026-10-21 09:19:00+00' WHERE room_no='A527';" >/dev/null ;;
+              stale_source)
+                psql -X -v ON_ERROR_STOP=1 -c "UPDATE public.condo_room_status SET source_modified_at='2026-10-20 09:00+00' WHERE room_no='A527';" >/dev/null ;;
+              bad_source)
+                psql -X -v ON_ERROR_STOP=1 -c "UPDATE public.condo_room_status SET source_file_id='wrong-master' WHERE room_no='A527';" >/dev/null ;;
+              prior_baseline)
+                psql -X -v ON_ERROR_STOP=1 -c "INSERT INTO private.defect_reconcile_field_versions (room_no,field_name,override_revision,last_source_revision,last_accepted_value) VALUES ('A527','current_status','2026-10-15 07:00+00','2026-10-15 07:05+00','Synthetic prior value');" >/dev/null ;;
+              manual_drift)
+                psql -X -v ON_ERROR_STOP=1 -c "BEGIN; SET LOCAL app.defect_manual_update='1'; UPDATE public.condo_room_status SET current_status='New Web state' WHERE room_no='A527'; COMMIT;" >/dev/null ;;
+              audit_drift)
+                psql -X -v ON_ERROR_STOP=1 -c "UPDATE private.defect_reconcile_field_audit SET proposed_excel_value='Unexpected proposal' WHERE room_no='A527' AND field_name='current_status';" >/dev/null ;;
+            esac
+            if psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/20261021185000_issue205_four_room_legacy_reconcile.sql > /tmp/issue205_scenario.log 2>&1; then
+              echo "FAIL: ${scenario} incorrectly accepted"
+              exit 1
+            fi
+            remaining=$(psql -X -At -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM private.defect_reconcile_field_versions WHERE room_no IN ('A527','A726','B102','B211') AND field_name IN ('current_status','status_group');")
+            case "$scenario" in prior_baseline) test "$remaining" = 1 ;; *) test "$remaining" = 0 ;; esac
+            adopted=$(psql -X -At -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM public.condo_room_status WHERE room_no IN ('A527','A726','B102','B211') AND current_status='Defect เสร็จแล้ว / รอ Hotel Engineer ตรวจ';")
+            test "$adopted" = 0
+            echo "PASS fail-closed: ${scenario}"
+          done
+
+      - name: Re-run the existing SQL guard regressions in another disposable database
+        run: |
+          set -euo pipefail
+          export PGDATABASE=issue205_regression
+          createdb "$PGDATABASE"
+          psql -X -v ON_ERROR_STOP=1 -f tests/sql/defect-override-reconcile-fixture.sql >/dev/null
+          psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/20261019132800_defect_override_field_reconcile_20261019.sql >/dev/null
+          psql -X -v ON_ERROR_STOP=1 -f tests/sql/defect-override-reconcile-assertions.sql
