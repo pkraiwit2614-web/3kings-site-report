@@ -2,8 +2,7 @@ import {NextRequest,NextResponse} from 'next/server'
 import {createClient} from '@supabase/supabase-js'
 import {canAccessPath,permissionDecision,resolveAccessRole} from '@/lib/accessControl'
 import {readPermissionSnapshot} from '@/lib/permissionServer'
-import {cleanContactInput,formatContactCsv,parseContactCsv,putContact} from '@/lib/contactBook'
-import {getContactCsvDrive,writeContactCsvDrive} from '@/lib/contactBookDrive'
+import {cleanContactInput,validateContactBookEntries} from '@/lib/contactBook'
 
 export const runtime='nodejs'
 export const dynamic='force-dynamic'
@@ -37,64 +36,42 @@ async function authorize(request:NextRequest,mode:'view'|'manage'){
 }
 function message(error:unknown){
   const text=error instanceof Error?error.message:'contact_book_unknown_error'
-  if(text.includes('CONTACT_BOOK_BUSY'))return {error:'contact_book_busy',status:409}
+  if(text.includes('CONTACT_BOOK_FORBIDDEN'))return {error:'forbidden',status:403}
   if(text.includes('duplicate_contact_phone'))return {error:'duplicate_contact_phone',status:409}
+  if(text.includes('contact_book_version_conflict'))return {error:'contact_book_source_changed_reload',status:409}
   if(text.includes('contact_not_found'))return {error:'contact_not_found',status:404}
   if(text.includes('invalid_')||text.includes('required_fields')||text.includes('field_too_long'))return {error:text,status:400}
-  if(text.includes('version_conflict')||text.includes('changed_during_read'))return {error:'contact_book_source_changed_reload',status:409}
-  if(text.includes('not_configured')||text.includes('not_shared_or_denied')||text.includes('write_permission_denied'))return {error:text,status:503}
-  return {error:text.startsWith('contact_')?text:'contact_book_request_failed',status:503}
+  if(text.includes('not_initialized')||text.includes('does not exist')||text.includes('schema cache'))return {error:'contact_book_not_initialized',status:503}
+  return {error:'contact_book_request_failed',status:503}
 }
 export async function GET(request:NextRequest){
   const gate=await authorize(request,'view')
   if(gate.error)return gate.error
   try{
-    const source=await getContactCsvDrive()
-    const rows=parseContactCsv(source.csv)
-    return respond({rows,sourceVersion:source.version,updatedAt:source.modifiedTime,driveWritable:source.canEdit,source:'drive_csv'})
+    const {data,error}=await gate.client!.from('contact_book_directory')
+      .select('entries,revision,updated_at').eq('id',1).maybeSingle()
+    if(error)throw error
+    if(!data)throw new Error('contact_book_not_initialized')
+    const rows=validateContactBookEntries(data.entries)
+    return respond({rows,sourceVersion:String(data.revision),updatedAt:data.updated_at,
+      canWrite:true,source:'supabase_contact_book'})
   }catch(error){const result=message(error);return respond(result,result.status)}
 }
 export async function POST(request:NextRequest){
   const gate=await authorize(request,'manage')
   if(gate.error)return gate.error
-  const client=gate.client!
-  let lease:string|null=null
-  let committed=false
   try{
     const input=await request.json()
     const existingId=input?.contactId===null||input?.contactId===''?null:String(input?.contactId||'')
-    if(existingId&&!/^3KC-\d{4,}$/.test(existingId))return respond({error:'invalid_contact_id'},400)
-    const expected=String(input?.expectedVersion||'').trim()
-    if(!/^\d+$/.test(expected))return respond({error:'contact_source_version_required'},400)
+    if(existingId&&!/^3KC-\\d{4,}$/.test(existingId))return respond({error:'invalid_contact_id'},400)
+    const expected=String(input?.expectedVersion||'')
+    if(!/^[1-9]\\d*$/.test(expected))return respond({error:'contact_source_version_required'},400)
     const contact=cleanContactInput(input?.contact||{})
-    const {data,error}=await client.rpc('contact_book_acquire_write')
-    if(error)throw error
-    if(typeof data!=='string')throw new Error('contact_book_lease_unavailable')
-    lease=data
-    // Exclusive lease across serverless instances serializes duplicate checks and writes.
-    const source=await getContactCsvDrive()
-    if(source.version!==expected)throw new Error('contact_drive_file_version_conflict')
-    const previous=parseContactCsv(source.csv)
-    const before=existingId?previous.find(x=>x.contact_id===existingId)||null:null
-    const {rows,record}=putContact(previous,existingId,contact,'https://drive.google.com/file/d/'+source.fileId+'/view')
-    await writeContactCsvDrive(formatContactCsv(rows),source.version)
-    committed=true
-    const verified=await getContactCsvDrive()
-    const reread=parseContactCsv(verified.csv)
-    const stored=reread.find(x=>x.contact_id===record.contact_id)
-    if(!stored||JSON.stringify(stored)!==JSON.stringify(record)||reread.length!==rows.length){
-      throw new Error('contact_drive_verification_failed_refresh_before_retry')
-    }
-    const {error:releaseError}=await client.rpc('contact_book_release_write',{
-      p_lease:lease,p_contact_id:record.contact_id,p_before:before,p_after:record,p_drive_version:verified.version
+    const {data,error}=await gate.client!.rpc('contact_book_save',{
+      p_expected_revision:Number(expected),p_existing_id:existingId,p_contact:contact
     })
-    if(releaseError)throw releaseError
-    lease=null
-    return respond({ok:true,record,sourceVersion:verified.version,updatedAt:verified.modifiedTime,driveVerified:true})
-  }catch(error){
-    const result=message(error)
-    return respond({...result,refreshBeforeRetry:committed},committed?503:result.status)
-  }finally{
-    if(lease){try{await client.rpc('contact_book_release_write',{p_lease:lease})}catch{/* stale leases expire after 2 minutes */}}
-  }
+    if(error)throw error
+    if(data?.saveVerified!==true)throw new Error('contact_book_save_not_verified')
+    return respond({ok:true,...data})
+  }catch(error){const result=message(error);return respond(result,result.status)}
 }
