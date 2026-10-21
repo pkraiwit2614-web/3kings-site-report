@@ -1,3 +1,4 @@
+// @ts-nocheck — Deno Edge source is deployed separately, outside Next.js typechecking.
 // 3 Kings Daily LINE image gateway: privately stored QA-verified PNGs.
 // Separate Edge Function; no ability to call LINE or approve group routes.
 const legacyKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
