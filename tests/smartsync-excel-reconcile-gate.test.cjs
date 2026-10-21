@@ -14,7 +14,7 @@ test('candidate is already present in Git reference, not a Live deployment',()=>
   for(const field of ['current_status','status_group','next_action']) {
     assert.match(smart,new RegExp('\\b'+field+': src\\.'+field+','));
     assert.doesNotMatch(smart,new RegExp('\\b'+field+': webConfirmed \\? old\\.'));
-    assert.match(patch,new RegExp('^-\\s*'+field+': webConfirmed \\? old\\.'+field+' : src\\.'+field+',','m').source==='(?!)'?/nomatch/:new RegExp('^-\\s*'+field+': webConfirmed \\? old\\.'+field+' : src\\.'+field+',','m'));
+    assert.ok(patch.includes('-        '+field+': webConfirmed ? old.'+field+' : src.'+field+','));
   }
 });
 test('evaluate exactly the three source expressions for manual-marked and unmarked records',()=>{
