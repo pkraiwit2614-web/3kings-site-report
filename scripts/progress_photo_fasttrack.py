@@ -237,8 +237,13 @@ def verify_drive_scope(drive, root_id, folders, audit_folder=None):
         raise RuntimeError("Wrong Picture Progress root")
     for plot, folder_id in folders.items():
         folder = drive.files().get(fileId=folder_id, fields=fields, supportsAllDrives=True).execute()
-        if folder.get("name") != "Plot " + plot or root_id not in folder.get("parents", []):
-            raise RuntimeError("Plot folder identity or parent mismatch")
+        if folder.get("name") != "Plot " + plot or folder.get("mimeType") != "application/vnd.google-apps.folder":
+            # Print only the scoped plot number: never expose raw Drive IDs or private file names in CI.
+            raise RuntimeError("Plot " + plot + " folder identity mismatch (name/type)")
+        if root_id not in folder.get("parents", []):
+            if not folder.get("parents"):
+                raise RuntimeError("Plot " + plot + " parent metadata missing or not visible to Service Account")
+            raise RuntimeError("Plot " + plot + " parent ID mismatch")
     if audit_folder:
         target = drive.files().get(fileId=audit_folder, fields=fields, supportsAllDrives=True).execute()
         if target.get("mimeType") != "application/vnd.google-apps.folder" or not target.get("capabilities", {}).get("canAddChildren"):
