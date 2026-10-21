@@ -115,8 +115,8 @@ test('unusual but real 20-Oct PC/PR document ID lengths are not skipped',()=>{
 })
 
 test('2023-current quoted exports with trailing comma-only columns parse without changing totals',()=>{
- const lines=sample().toString('latin1').split('\\r\\n')
- const exportBytes=Buffer.from(lines.map(line=>'"'+line+'",,,,,,,,,,,').join('\\r\\n'),'latin1')
+ const lines=sample().toString('latin1').split('\r\n')
+ const exportBytes=Buffer.from(lines.map(line=>'"'+line+'",,,,,,,,,,,').join('\r\n'),'latin1')
  const r=parseExpressPoReport(exportBytes)
  assert.equal(r.summary.validDocuments,1)
  assert.equal(r.summary.lineItems,1)
