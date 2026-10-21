@@ -118,7 +118,12 @@ test('Defect Report highlights only confirmed open Work Orders and never affects
 
 test('Work Order last-change header uses Work Order source editing time, not import time',()=>{
  assert.match(page,/rows\.map\(r=>r\.source_modified_at\)/)
- assert.doesNotMatch(page,/\.rpc\(/)
+ // The only new RPC is explicit per-Work-ID completion, disabled by default.
+ assert.match(page,/NEXT_PUBLIC_WORK_ORDER_COMPLETION_ENABLED==='true'/)
+ assert.match(page,/canComplete=permitted&&canEditDefect\(role\)&&completionEnabled/)
+ assert.match(page,/if\(!canComplete\|\|!confirmRow\|\|saving\)return/)
+ assert.match(page,/\.rpc\('defect_work_order_complete'/)
+ assert.equal([...page.matchAll(/\.rpc\(/g)].length,1)
  assert.match(page,/<span>ข้อมูลอัปเดต<\/span><b>\{dateTimeTH\(latestWorkDetailSourceAt\)\}<\/b>/)
  assert.doesNotMatch(page,/dateTimeTH\(latestImport\)/)
 })
