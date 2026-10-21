@@ -171,4 +171,4 @@ jobs:
           PHOTO_WEB_PARSER_VERIFIED: ${{ vars.PHOTO_WEB_PARSER_VERIFIED }}
           PHOTO_ENABLE_WRITE: ${{ vars.PHOTO_ENABLE_WRITE }}
           MAX_DAYS: ${{ inputs.max_days }}
-        run: python scripts/progress_photo_fasttrack.py --max-days "$MAX_DAYS" --max-renames "${{ inputs.max_renames }}" --apply
+        run: python scripts/progress_photo_fasttrack.py --max-days 0 --max-renames "${{ inputs.max_renames }}" --apply
