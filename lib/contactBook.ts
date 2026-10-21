@@ -41,14 +41,21 @@ export function parseContactCsv(csv:string):ContactEntry[]{
     if(r.length!==CONTACT_FIELDS.length)throw new Error('contact_book_csv_column_mismatch')
     return Object.fromEntries(CONTACT_FIELDS.map((field,i)=>[field,r[i]||''])) as ContactEntry
   })
-  if(entries.length<41)throw new Error('contact_book_csv_source_rows_below_baseline')
+  return validateContactBookEntries(entries)
+}
+export function validateContactBookEntries(value:unknown):ContactEntry[]{
+  if(!Array.isArray(value)||value.length<41)throw new Error('contact_book_rows_below_baseline')
   const ids=new Set<string>()
-  for(const entry of entries){
-    if(!/^3KC-\d{4,}$/.test(entry.contact_id)||ids.has(entry.contact_id))throw new Error('contact_book_csv_duplicate_or_invalid_id')
+  for(const entry of value){
+    if(!entry||typeof entry!=='object'||Array.isArray(entry))throw new Error('contact_book_invalid_row')
+    for(const field of CONTACT_FIELDS){
+      if(typeof entry[field]!=='string')throw new Error('contact_book_invalid_field:'+field)
+    }
+    if(!/^3KC-\\d{4,}$/.test(entry.contact_id)||ids.has(entry.contact_id))throw new Error('contact_book_duplicate_or_invalid_id')
     ids.add(entry.contact_id)
   }
-  validateUniquePhones(entries)
-  return entries
+  validateUniquePhones(value as ContactEntry[])
+  return value as ContactEntry[]
 }
 
 function csvCell(value:string){
@@ -90,7 +97,7 @@ export function cleanContactInput(value:Partial<EditableContact>):EditableContac
   if(!['ใช่','ไม่ใช่'].includes(out.active))throw new Error('invalid_active_value')
   return out
 }
-export function putContact(rows:ContactEntry[],id:string|null,input:EditableContact,sourceUrl=CONTACT_BOOK_SOURCE_URL){
+export function putContact(rows:ContactEntry[],id:string|null,input:EditableContact,sourceUrl=''){
   const list=rows.map(x=>({...x}))
   const clean=cleanContactInput(input)
   const index=id?list.findIndex(x=>x.contact_id===id):-1
