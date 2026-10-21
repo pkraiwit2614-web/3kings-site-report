@@ -35,6 +35,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - run: python -m pip install Pillow
       - run: python -m unittest discover -s tests -p 'test_progress_photo_fasttrack.py' -v
 
   drive-preview:
