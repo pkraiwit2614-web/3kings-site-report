@@ -27,6 +27,11 @@ Latest GitHub source, shared components, related API/DB, Preview and rights.
 6. Perform operation only within explicit authorization and when safeguards pass. Validate changed targets by independent readback; for `read_only`, verify evidence without modifying source.
 7. Report source version/time, specific results, unmatched/untested data, side effects, QA and exact remaining blockers.
 
+## Hosted Preview unblock (SOP 15, ACTIVE 21/10 amendment)
+
+- When GitHub Actions evidence fully covers the affected behavior, Hosted Preview is NOT REQUIRED.
+- When only hosted integration remains unproven and Vercel Preview is blocked by the default ignored build, escalate automatically under the existing authorized PR scope to `docs/agent-skills/hosted-preview-unblock.md` and SOP16's exact-SHA on-demand path. Do not disable protection globally, create redundant builds or falsely mark untested security behavior as PASS.
+
 ## Stop conditions
 
 SOP not retrieved; wrong source/file type; required evidence missing; conflicting IDs/timestamps/Combine mapping; unauthorized write/deploy; cannot perform trustworthy readback. Stop only the unsafe operation, report the precise issue, and preserve all other working processes.
