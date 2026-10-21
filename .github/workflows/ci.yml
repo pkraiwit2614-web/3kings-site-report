@@ -40,6 +40,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Contact Book Supabase, duplicate phone and permission regression
+        run: node --test tests/contact-book.test.cjs tests/contact-book-db.test.cjs
+
       - name: Apps Script P1 source comparator offline tests (no network or credentials)
         run: node --test tests/ai-operations-gas-source.test.cjs tests/ai-operations-gas-live.test.cjs
 

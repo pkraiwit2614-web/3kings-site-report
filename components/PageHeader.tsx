@@ -7,7 +7,8 @@ const printableTitles=new Set([
   'วัสดุ เครื่องมือและผู้รับเหมา',
   'Schedule / Plan vs Actual',
   'การจัดซื้อ/จัดจ้าง',
-  'Hotel Work Plan | Day 1–9'
+  'Hotel Work Plan | Day 1–9',
+  'Contact Book'
 ])
 
 export default function PageHeader({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode }) {

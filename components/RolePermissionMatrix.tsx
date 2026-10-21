@@ -42,6 +42,7 @@ export const MATRIX_SECTIONS: readonly PermissionSection[] = [
     canManage: canEditHotel},
   {label: 'วัสดุ / เครื่องมือ', path: '/materials', canManage: canManageMaterialsTools},
   {label: 'Procurement', path: '/procurement', canManage: canEditProcurement},
+  {label: 'Contact Book', path: '/contact-book', canManage: (role) => role === 'owner' || role === 'purchase'},
   {label: 'Work Calendar', path: '/calendar', canManage: canEditCalendar},
   {label: 'Labour / Payroll', path: '/reports/labour', canManage: canManageLabour},
   {label: 'System & Access', path: '/users', ownerManaged: true},
@@ -98,7 +99,7 @@ export default function RolePermissionMatrix() {
         <h2 id="permission-matrix-title">Role Permission Matrix</h2>
         <p>แก้ไขได้เฉพาะ Owner • เลือกสิทธิ์ ตรวจรายการเปลี่ยนแปลง แล้วกดยืนยันบันทึก</p>
       </div>
-      <span className="permission-matrix-count">7 Roles · 14 Modules</span>
+      <span className="permission-matrix-count">7 Roles · 15 Modules</span>
     </div>
 
     <div className="permission-matrix-legend" aria-label="คำอธิบายสถานะสิทธิ์">
