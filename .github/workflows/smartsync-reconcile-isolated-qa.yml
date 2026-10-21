@@ -1,0 +1,49 @@
+name: SmartSync Reconcile Isolated QA
+on:
+  push:
+    branches: [test/smartsync-reconcile-isolated-20261021]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smart-sync-isolated:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: synthetic_only
+          POSTGRES_DB: defect_smart_sync_fixture
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d defect_smart_sync_fixture"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 15
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: synthetic_only
+      PGDATABASE: defect_smart_sync_fixture
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Candidate Git reference and surgical patch contract
+        run: node --test tests/smartsync-excel-reconcile-gate.test.cjs
+      - name: Install PostgreSQL client for throwaway fixture
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client >/dev/null
+      - name: Build isolated synthetic schema
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/sql/defect-override-reconcile-fixture.sql
+      - name: Apply unchanged production SQL migration to synthetic fixture
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/20261019132800_defect_override_field_reconcile_20261019.sql
+      - name: Check pending synced newer approved Excel conflict and idempotency
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/sql/defect-override-reconcile-assertions.sql
