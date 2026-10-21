@@ -71,12 +71,15 @@ begin
       when 'secondary_phone' then 35 when 'active' then 10
       else 220 end then raise exception 'contact_field_too_long'; end if;
   end loop;
-  if p_contact->>'category' not in ('ผู้รับเหมา','ร้านค้า','ภายใน')
-    or p_contact->>'active' not in ('ใช่','ไม่ใช่')
+  if coalesce(p_contact->>'category','') not in ('ผู้รับเหมา','ร้านค้า','ภายใน')
+    or coalesce(p_contact->>'active','') not in ('ใช่','ไม่ใช่')
     or nullif(btrim(p_contact->>'organization'),'') is null
     or nullif(btrim(p_contact->>'contact_name'),'') is null
     or nullif(btrim(p_contact->>'work_scope'),'') is null
     or nullif(btrim(p_contact->>'project_area'),'') is null then
+    raise exception 'contact_required_fields';
+  end if;
+  if (select count(*) from jsonb_object_keys(p_contact))<>array_length(v_allowed,1) then
     raise exception 'contact_required_fields';
   end if;
   v_phone := regexp_replace(coalesce(p_contact->>'phone',''),'[^0-9]','','g');
