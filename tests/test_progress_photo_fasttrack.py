@@ -214,6 +214,30 @@ class FastTrackSafetyTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             m.verify_drive_scope(fake,"ROOT",plots,"AUDIT")
 
+    def test_attested_reference_used_without_cv_score_or_manual_second_approval(self):
+        row = {"file_id": "photo-1", "old": "IMG_0100.JPG", "reference_id": "ref-6",
+               "plot": "6", "day": "2026-10-21"}
+        approved = {**row, "new": "Plot6_Roof_20261021.JPG",
+                    "landmarks": ["fixed left concrete pillar", "permanent right balcony opening"],
+                    "verified_source": "independent_visual_check",
+                    "label_verified": True,
+                    "label_evidence": "Architectural view from independently verified matching landmarks"}
+        src = {"id": "photo-1", "name": "IMG_0100.JPG"}
+        references = [(dt.date(2026, 10, 20), {"id": "ref-6", "name": "Roof_20261020.JPG"})]
+        selected = m.verified_fallback_reference(src, "6", dt.date(2026, 10, 21), references, [approved])
+        self.assertEqual(selected["id"], "ref-6")
+        self.assertIsNone(m.verified_fallback_reference(src, "7", dt.date(2026, 10, 21), references, [approved]))
+        self.assertIsNone(m.verified_fallback_reference(src, "6", dt.date(2026, 10, 21), references, [
+            {**approved, "landmarks": ["one landmark only"]}
+        ]))
+
+    def test_apply_never_claims_success_without_verified_photo_evidence(self):
+        source = path.read_text(encoding="utf-8")
+        self.assertIn('if args.apply and not attested_matches:', source)
+        self.assertIn('RENAME_BLOCKED: No independently verified photo matches', source)
+        self.assertIn('if args.apply and src["id"] not in verified_ids:', source)
+        self.assertIn('tally["AWAITING_VERIFICATION"] += 1', source)
+
 
 if __name__ == "__main__":
     unittest.main()
