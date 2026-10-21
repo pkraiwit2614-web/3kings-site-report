@@ -42,9 +42,20 @@ class FastTrackSafetyTests(unittest.TestCase):
         workflow = (pathlib.Path(__file__).resolve().parents[1] /
                     ".github/workflows/photo-progress-fasttrack.yml").read_text(encoding="utf-8")
         self.assertNotIn("PHOTO_SA_JSON", workflow)
-        self.assertEqual(workflow.count("uses: google-github-actions/auth@v3"), 3)
-        self.assertEqual(workflow.count("id-token: write"), 3)
+        self.assertEqual(workflow.count("uses: google-github-actions/auth@v3"), 4)
+        self.assertEqual(workflow.count("id-token: write"), 4)
         self.assertIn("photo-inventory-qa", workflow)
+        self.assertIn("environment: photo-readonly-automation", workflow)
+        self.assertEqual(workflow.count("environment: photo-readonly-automation"), 2)
+        self.assertIn("environment: photo-rename-production", workflow)
+        # Never remove guarded PR approval or permit PR to impersonate trusted main.
+        self.assertIn("github.event.pull_request.number == 209", workflow)
+        self.assertIn("github.event.pull_request.head.repo.full_name == github.repository", workflow)
+        self.assertIn("contains(github.event.pull_request.labels.*.name, 'photo-live-qa')", workflow)
+        self.assertIn("github.ref == 'refs/heads/main' && inputs.mode == 'inventory'", workflow)
+        self.assertIn("github.ref == 'refs/heads/main' && inputs.mode == 'apply'", workflow)
+        self.assertIn("run: python scripts/progress_photo_fasttrack.py --inventory-only", workflow)
+        self.assertIn("--apply", workflow)
 
     def test_valid_date_and_bad_date(self):
         self.assertEqual(str(m.source_day("20102026")), "2026-10-20")
