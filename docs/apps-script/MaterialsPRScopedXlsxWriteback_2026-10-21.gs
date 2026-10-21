@@ -110,6 +110,8 @@ function xlsxScopedPatch_(xml, shared, changes) {
     const rows = result.match(re);
     if (!rows) throw Error('Existing worksheet row not found: ' + rowNumber);
     const cell = xlsxScopedCell_(rows[2], addr, shared);
+    // Never append a new <c> at the row end: XLSX requires ordered cell references.
+    if (!cell.element) throw Error('Existing worksheet cell not found: ' + addr);
     if (cell.formula) throw Error('Refusing formula cell write: ' + addr);
     if (cell.old !== change.expected) throw Error('Previous value changed: ' + addr);
     const style = cell.style ? ' s="' + cell.style + '"' : '';
