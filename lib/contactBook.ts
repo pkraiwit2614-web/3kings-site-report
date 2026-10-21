@@ -48,7 +48,7 @@ export function validateContactBookEntries(value:unknown):ContactEntry[]{
     for(const field of CONTACT_FIELDS){
       if(typeof entry[field]!=='string')throw new Error('contact_book_invalid_field:'+field)
     }
-    if(!/^3KC-\\d{4,}$/.test(entry.contact_id)||ids.has(entry.contact_id))throw new Error('contact_book_duplicate_or_invalid_id')
+    if(!/^3KC-\d{4,}$/.test(entry.contact_id)||ids.has(entry.contact_id))throw new Error('contact_book_duplicate_or_invalid_id')
     ids.add(entry.contact_id)
   }
   validateUniquePhones(value as ContactEntry[])
