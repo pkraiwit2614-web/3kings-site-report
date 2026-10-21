@@ -63,13 +63,13 @@ begin
     if not (v_key=any(v_allowed)) or jsonb_typeof(p_contact->v_key)<>'string' then
       raise exception 'contact_invalid_fields';
     end if;
-    if length(p_contact->>v_key)>case v_key
+    if length(p_contact->>v_key)>(case v_key
       when 'category' then 40 when 'service_group' then 140
       when 'organization' then 220 when 'contact_name' then 140
       when 'phone' then 35 when 'work_scope' then 500
       when 'project_area' then 220 when 'review_note' then 1200
       when 'secondary_phone' then 35 when 'active' then 10
-      else 220 end then raise exception 'contact_field_too_long'; end if;
+      else 220 end) then raise exception 'contact_field_too_long'; end if;
   end loop;
   if coalesce(p_contact->>'category','') not in ('ผู้รับเหมา','ร้านค้า','ภายใน')
     or coalesce(p_contact->>'active','') not in ('ใช่','ไม่ใช่')
