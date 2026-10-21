@@ -42,6 +42,10 @@ def capture_date_ok(data, folder_date):
             value = exif.get(36867)
             if not value and hasattr(exif, "get_ifd"):
                 value = exif.get_ifd(34665).get(36867)
+            # Some real iPhone/JPEG files expose TIFF DateTime (306), not DateTimeOriginal.
+            # A conflicting usable EXIF day must be REVIEW, never silently accepted.
+            if not value:
+                value = exif.get(306)
             if not value:
                 return True
             actual = dt.datetime.strptime(str(value)[:10], "%Y:%m:%d").date()
@@ -159,6 +163,16 @@ def list_children(drive, parent):
             break
 
 
+def summarize_inventory(inventory):
+    """Aggregate metadata-only counts; no IDs, filenames, or private photos in CI logs."""
+    return {
+        "days": len(inventory),
+        "images": sum(len(photos) for day, folder, photos, candidates in inventory),
+        "candidates": sum(len(candidates) for day, folder, photos, candidates in inventory),
+        "named": sum(len(photos) - len(candidates) for day, folder, photos, candidates in inventory),
+    }
+
+
 def get_bytes(drive, item_id):
     return drive.files().get_media(fileId=item_id, supportsAllDrives=True).execute()
 
@@ -226,11 +240,14 @@ def verify_drive_scope(drive, root_id, folders, audit_folder=None):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--apply", action="store_true", help="Requires additional verified production gates")
+    ap.add_argument("--inventory-only", action="store_true", help="Read SOP and all Plot/day Drive metadata without media downloads or writes")
     ap.add_argument("--max-days", type=int, default=4, help="Days with camera-name candidates per plot; 0 = all")
     ap.add_argument("--max-renames", type=int, default=1, help="Hard cap on reviewed file writes; 1 is the safe acceptance default")
     args = ap.parse_args()
     if args.max_days < 0:
         ap.error("max-days must be >= 0")
+    if args.inventory_only and args.apply:
+        ap.error("--inventory-only and --apply are mutually exclusive")
     if args.max_renames < 1:
         ap.error("max-renames must be >= 1")
     required = ["PHOTO_SA_JSON", "PHOTO_PLOT_FOLDERS_JSON", "PHOTO_ROOT_FOLDER_ID", "PHOTO_SOP_INDEX_ID", "PHOTO_SOP_DOC_ID"]
@@ -260,6 +277,7 @@ def main():
                        os.environ.get("PHOTO_AUDIT_FOLDER_ID") if args.apply else None)
     audit = []
     tally = Counter()
+    inventory_reports = {}
     for plot, root in folders.items():
         days = [(source_day(f["name"]), f) for f in list_children(drive, root)
                 if f["mimeType"] == "application/vnd.google-apps.folder" and source_day(f["name"])]
@@ -269,6 +287,9 @@ def main():
             photos = [f for f in list_children(drive, folder["id"]) if f["mimeType"] in IMAGE]
             candidates = [p for p in photos if candidate(p["name"])]
             inventory.append((day, folder, photos, candidates))
+        if args.inventory_only:
+            inventory_reports[plot] = summarize_inventory(inventory)
+            continue
         targets = [p for p in inventory if p[3]][:args.max_days or None]
         reference = [(day, p) for day, folder, photos, cs in inventory for p in photos
                      if not candidate(p["name"]) and safe_name(p["name"], os.path.splitext(p["name"])[1])]
@@ -303,6 +324,11 @@ def main():
                           "score": best["score"], "status": "PROPOSED_REQUIRES_VERIFICATION"}
                 audit.append(record)
                 tally["proposed"] += 1
+    if args.inventory_only:
+        print(json.dumps({"mode": "INVENTORY_READ_ONLY", "plots": inventory_reports,
+                          "drive_media_downloads": 0, "renames": 0},
+                         ensure_ascii=False))
+        return
     if args.apply:
         # A high CV score alone is never authorization to rename.
         manifest = json.loads(os.environ["PHOTO_VERIFIED_MATCHES_JSON"])
