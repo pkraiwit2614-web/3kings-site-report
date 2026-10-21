@@ -71,3 +71,47 @@ test('namespaced Excel XML fixture matches the QA workbook encoding and preserve
   assert.throws(()=>sandbox.xlsxScopedPatch_(xml,shared,[{cell:'B2',expected:'2',value:4}]), /Refusing formula/)
   assert.throws(()=>sandbox.xlsxScopedPatch_(xml,shared,[{cell:'C2',expected:'',value:'not allowed'}]), /Existing worksheet cell not found/)
 })
+
+
+test('Apps Script QA canary matches the actual .xlsx filename and blocks other names/MIME', () => {
+  const id = 'qa-mock-file-id-never-real-0000'
+  const name = 'QA_PR_Original_Copy_20261019_DO_NOT_SYNC.xlsx'
+  const scope = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  const data = {
+    MATERIAL_PR_XLSX_ALLOWLIST: JSON.stringify([id]),
+    MATERIAL_PR_XLSX_CANARY_ID: id,
+    MATERIAL_PR_XLSX_CANARY_REQUEST: JSON.stringify({
+      fileId:id, expectedName:name, sheetName:'QA',
+      changes:[{cell:'D11',expected:'previous value',value:'QA_CANARY_20261021'}]
+    })
+  }
+  sandbox.PropertiesService = {getScriptProperties:() => ({getProperty:key => data[key] || null})}
+  let actualName = name, actualMime = scope
+  sandbox.DriveApp = {getFileById:(_id) => ({
+    getName:()=>actualName, getMimeType:()=>actualMime, getBlob:()=>({})
+  })}
+  sandbox.Utilities = {unzip:()=>[
+    {getName:()=> 'xl/workbook.xml'},
+    {getName:()=> 'xl/_rels/workbook.xml.rels'}
+  ]}
+  assert.equal(sandbox.xlsxScopedConnectionProbe().status,'OWNER_OAUTH_READ_PROBE_PASS')
+  actualName='QA_PR_Original_Copy_20261019.xlsx'
+  assert.throws(()=>sandbox.xlsxScopedConnectionProbe(),/BLOCK_CANARY_NOT_ISOLATED/)
+  actualName=name
+  actualMime='application/vnd.google-apps.spreadsheet'
+  assert.throws(()=>sandbox.xlsxScopedConnectionProbe(),/BLOCK_CANARY_NOT_ISOLATED/)
+  actualMime=scope
+  const calls=[]
+  sandbox.xlsxScopedPreview = req => {
+    calls.push({type:'preview',req})
+    return {status:'DRY_RUN_PASS',expectedSha256:'mock-hash',expectedModifiedMs:1}
+  }
+  sandbox.xlsxScopedApply = req => {
+    calls.push({type:'apply',req})
+    return {status:'DRIVE_READBACK_PASS'}
+  }
+  assert.equal(sandbox.xlsxScopedCanaryWriteAndRestore().status,'QA_ONLY_SAME_ID_WRITE_AND_RESTORE_PASS')
+  assert.equal(calls.filter(x=>x.type==='apply').length,2)
+  assert.equal(calls[1].req.changes[0].value,'QA_CANARY_20261021')
+  assert.equal(calls[3].req.changes[0].value,'previous value')
+})
