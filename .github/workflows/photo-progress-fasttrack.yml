@@ -11,9 +11,9 @@ on:
     inputs:
       mode:
         type: choice
-        description: Dry-run is the default; apply requires verified per-file mapping and QA
-        options: [dry-run, apply]
-        default: dry-run
+        description: Inventory is safe default; apply runs read + verified rename + readback in one execution
+        options: [inventory, dry-run, apply]
+        default: inventory
       max_days:
         description: Candidate-bearing days per Plot (0 = all)
         required: true
@@ -77,12 +77,44 @@ jobs:
           PHOTO_SOP_DOC_ID: ${{ secrets.PHOTO_SOP_DOC_ID }}
         run: python scripts/progress_photo_fasttrack.py --inventory-only
 
+  drive-inventory-trusted:
+    # Main-only metadata inspection. Use a separately restricted WIF provider and a
+    # reader-only Service Account, in an Environment WITHOUT required reviewers.
+    # Do NOT remove protection on the PR-only photo-inventory-qa Environment.
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.mode == 'inventory'
+    needs: offline-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: photo-readonly-automation
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Authenticate via trusted main read-only WIF
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.PHOTO_WIF_PROVIDER }}
+          service_account: ${{ vars.PHOTO_SA_EMAIL }}
+          create_credentials_file: true
+      - run: python -m pip install google-api-python-client google-auth
+      - name: Verify live SOP and inventory all Plot/day metadata (no writes)
+        env:
+          PHOTO_PLOT_FOLDERS_JSON: ${{ secrets.PHOTO_PLOT_FOLDERS_JSON }}
+          PHOTO_ROOT_FOLDER_ID: ${{ secrets.PHOTO_ROOT_FOLDER_ID }}
+          PHOTO_SOP_INDEX_ID: ${{ secrets.PHOTO_SOP_INDEX_ID }}
+          PHOTO_SOP_DOC_ID: ${{ secrets.PHOTO_SOP_DOC_ID }}
+        run: python scripts/progress_photo_fasttrack.py --inventory-only
+
   drive-preview:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.mode == 'dry-run'
     needs: offline-tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    environment: photo-inventory-qa
+    environment: photo-readonly-automation
     permissions:
       contents: read
       id-token: write
