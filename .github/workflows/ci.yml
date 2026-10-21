@@ -275,7 +275,7 @@ jobs:
           supabase stop --no-backup || true
 
   qa_status:
-    name: QA / Local evidence (release remains blocked without Preview)
+    name: QA / Local evidence (SOP16 release gate separately)
     if: always() && github.event_name == 'pull_request'
     needs: [build, qa_contract, qa_local_viewer]
     runs-on: ubuntu-latest
