@@ -16,9 +16,13 @@ jobs:
   issue205-postgres-only:
     runs-on: ubuntu-latest
     timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres_version: ['16', '17']
     services:
       postgres:
-        image: postgres:16
+        image: postgres:${{ matrix.postgres_version }}
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: test_only
