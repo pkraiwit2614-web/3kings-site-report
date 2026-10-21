@@ -268,7 +268,7 @@ test('Publisher v2.0 handoff blocks stale PDF date, bad PDF hash and incorrect P
      })}
      :orig(u,o);
    const r=await dailySiteSendTick(env,{...m,now});
-   assert.equal(r.mode,'QA_BLOCKED');
+   assert.equal(r.mode,invalid.assets==='wrong_name'?'IMAGE_METADATA_BLOCKED':'QA_BLOCKED');
    assert.equal(m.pushes.length,0);
    assert.equal(m.metas.length,0);
  }
