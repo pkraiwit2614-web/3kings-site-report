@@ -43,7 +43,11 @@ function xlsxScopedDigest_(bytes) {
     .map(function(b) { return ('0' + ((b + 256) % 256).toString(16)).slice(-2); }).join('');
 }
 function xlsxScopedParts_(fileBlob) {
-  const items = Utilities.unzip(fileBlob), parts = {};
+  // Apps Script unzip requires the Blob content type to be application/zip.
+  // XLSX is a ZIP container, but Drive supplies the XLSX MIME type.
+  // Only relabel the temporary in-memory Blob; the original Drive file remains XLSX.
+  const zipBlob = Utilities.newBlob(fileBlob.getBytes(), 'application/zip', fileBlob.getName());
+  const items = Utilities.unzip(zipBlob), parts = {};
   items.forEach(function(part) {
     const name = part.getName();
     if (Object.prototype.hasOwnProperty.call(parts, name)) throw Error('Duplicate ZIP member');
