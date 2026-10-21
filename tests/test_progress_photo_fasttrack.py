@@ -237,6 +237,9 @@ class FastTrackSafetyTests(unittest.TestCase):
         self.assertIn('RENAME_BLOCKED: No independently verified photo matches', source)
         self.assertIn('if args.apply and src["id"] not in verified_ids:', source)
         self.assertIn('tally["AWAITING_VERIFICATION"] += 1', source)
+        self.assertIn('audit = eligible[:args.max_renames]', source)
+        workflow = (path.parent.parent / ".github/workflows/photo-progress-fasttrack.yml").read_text(encoding="utf-8")
+        self.assertIn('run: python scripts/progress_photo_fasttrack.py --max-days 0 --max-renames', workflow)
 
 
 if __name__ == "__main__":
