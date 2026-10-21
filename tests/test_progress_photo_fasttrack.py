@@ -41,6 +41,16 @@ class FastTrackSafetyTests(unittest.TestCase):
         self.assertTrue(m.capture_date_ok(out.getvalue(), dt.date(2026, 10, 20)))
         self.assertFalse(m.capture_date_ok(out.getvalue(), dt.date(2026, 10, 21)))
 
+    def test_current_photo_mapping_image_retrieval_is_drive_file_id_based(self):
+        root = pathlib.Path(__file__).resolve().parents[1]
+        page = (root / "app/photo-mapping/page.tsx").read_text(encoding="utf-8")
+        route = (root / "app/api/drive-photo/route.ts").read_text(encoding="utf-8")
+        self.assertIn("drive_photo_index", page)
+        self.assertIn("file_name", page)  # Visible caption is cached in Supabase.
+        self.assertIn("encodeURIComponent(photo.drive_file_id)", page)
+        self.assertIn("searchParams.get('fileId')", route)
+        # Scope: this proves Photo Mapping fetch contract only, not every presentation view.
+
     def test_inventory_summary_requires_no_media_reads(self):
         metadata = [
             (dt.date(2026, 10, 20), {"id": "d1"},
