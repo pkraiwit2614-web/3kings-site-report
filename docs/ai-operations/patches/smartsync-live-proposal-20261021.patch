@@ -1,0 +1,10 @@
+--- a/SmartSyncDefects_v1.3.gs
++++ b/SmartSyncDefects_v1.3.gs
+@@ -170,2 +170,2 @@
+-        current_status: webConfirmed ? old.current_status : src.current_status,
+-        status_group: webConfirmed ? old.status_group : src.status_group,
++        current_status: src.current_status,
++        status_group: src.status_group,
+@@ -174,1 +174,1 @@
+-        next_action: webConfirmed ? old.next_action : src.next_action,
++        next_action: src.next_action,
