@@ -45,7 +45,7 @@ async function json<T>(token:string,url:string):Promise<T>{
  if(!r.ok)throw Error('DRIVE_READ_FAILED')
  return r.json() as Promise<T>
 }
-type SourceMode='po_history'|'pr_history'|'po_daily'|'pr_daily'
+type SourceMode='po_history'|'pr_history'|'po_daily'|'pr_daily'|'po_range'|'pr_range'
 async function latestCsv(token:string,sourceMode:SourceMode):Promise<{file:DriveFile;bytes:Buffer}>{
  const folder=required('EXPRESS_PO_SOURCE_FOLDER_ID')
  if(!/^[\w-]{15,100}$/.test(folder))throw Error('INVALID_SOURCE_FOLDER')
@@ -84,7 +84,7 @@ export async function POST(request:NextRequest){
   return reply({error:'INVALID_REQUEST'},400)
  const mode=String((body as {mode:string}).mode)
  const source=String((body as {source?:unknown}).source||'po_history')
- if(!['po_history','pr_history','po_daily','pr_daily'].includes(source))
+ if(!['po_history','pr_history','po_daily','pr_daily','po_range','pr_range'].includes(source))
   return reply({error:'INVALID_SOURCE_MODE'},400)
  try{
   const token=await exchangeVercelOidcToken(request.headers.get('x-vercel-oidc-token')||'')
