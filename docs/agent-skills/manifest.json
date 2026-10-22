@@ -194,7 +194,7 @@
     "qa": "reuse same-revision snapshots and valid same-SHA/config artifacts; verify actual destination",
     "observer": "advisory and may propose changes; no self-authorize security/critical edits",
     "enforcement": "agent_guidance_only_not_server_gate",
-    "activation": "only_after_live_drive_index_links_all_21_active_v2",
+    "activation": "only_after_live_drive_index_links_all_21_active_current_revisions",
     "preview": "Github Actions affected QA by default; Hosted Preview only for proof not covered locally",
     "build_budget": "no redundant builds, reuse artifact only when SHA/config/deps/schema/environment/role match",
     "approvals": "one explicit scoped authorization plus actual permission; no substep approvals",
