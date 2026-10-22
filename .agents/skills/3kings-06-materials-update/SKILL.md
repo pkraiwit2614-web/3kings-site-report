@@ -6,7 +6,7 @@ description: "3 Kings Construction shortcut 'อัปเดตวัสดุ�
 # 06 — อัปเดตวัสดุตามเดิม
 
 **Shortcut:** `อัปเดตวัสดุตามเดิม`  
-**SOP title (resolve via live Drive index):** `SOP_06_Materials_Status_v2.0_Consolidated_2026-10-20`  
+**SOP title (resolve via live Drive index):** `SOP_06_Materials_PO_Check_Single_Flow_v3.0_2026-10-22`  
 **Mode:** `authorized_write`
 
 ## Before any action
@@ -15,13 +15,14 @@ Read [SOP Gate](../3kings-sop-gate/SKILL.md) and complete its live Drive SOP and
 
 ## Source of truth
 
-Current Drive Materials, PR/PO, delivery evidence, material web sync.
+Express-confirmed PO/PL/PR export first; then verified Drive PR/Plan, receipt, Materials master, and scoped existing Web sync.
 
 ## Workflow
 
 1. Resolve this command's row in the live SOP index and open the current SOP; follow its full ordered instructions.
-2. Fetch and reconcile current source data, scope, identities and evidence; identify out-of-scope dependencies.
-3. Enforce mode `authorized_write`: Validate explicit authorization for affected records and target. Use minimal write + readback; don't broaden scope.
+2. Mandatory STEP 1: inspect and verify the latest Express PO/PL/PR export/import snapshot (revision, PO line, supplier, item, unit, qty, Plot); do not treat unverified PO as Ordered.
+3. Only for the authorized materials-update trigger, reconcile Express against Drive PR/Plan, receipt and Materials; preserve unmatched planned PR; upsert scoped delta and use existing sync with independent Drive/Web readback.
+4. Enforce mode `authorized_write`: Validate explicit authorization for affected records and target. Use minimal write + readback; don't broaden scope.
 4. Record only verified status/receipt/procurement updates and read back in Excel and web.
 5. Ordered requires PO evidence; received requires receipt evidence; preserve existing formulas, source IDs and other plots.
 6. Perform operation only within explicit authorization and when safeguards pass. Validate changed targets by independent readback; for `read_only`, verify evidence without modifying source.
@@ -52,3 +53,8 @@ These skills are agent guidance, **not** a server-side authorization, authentica
 - **Mode:** authorized_write (only the user-scoped records; inspection-only messages remain read-only).
 - **Risk-proportionate workflow:** Data/document/read-only operations must NOT require Git branch, CI or new Vercel Preview. Reuse verified source snapshots/checks within the same command; pause conflicting records only; readback targeted outputs and report PASS/FAIL/PENDING accurately.
 - **Subordinate helpers:** Superpowers/Task Observer optional process helpers must not block the user-facing task or repeat SOP/source loads; six project safety rules and RBAC/RLS are unchanged.
+
+## Consolidated SOP 06/07 v3.0 router (22/10/2026)
+- This skill is Trigger 06 only (`อัปเดตวัสดุ`, `อัปเดตวัสดุตามเดิม`); the shared authoritative Drive SOP has both Trigger 06 and 07.
+- Trigger 07 (`เช็ก PO`, `เช็ค PO`, `ตรวจ PO`) remains READ_ONLY and Express-only. It cannot inherit the authorized_write permission of this skill.
+- Do not edit raw Express export, duplicate PO-line quantity across Plots, set Received without receipt, or delete unmatched PR/Plan. An unavailable sync is PENDING, not success.
