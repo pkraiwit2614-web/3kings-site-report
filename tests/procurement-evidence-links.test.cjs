@@ -7,7 +7,7 @@ const procurement=read('app/procurement/page.tsx')
 const materials=read('app/materials/page.tsx')
 const ui=read('components/ProcurementEvidenceLinks.tsx')
 const logic=read('lib/procurementEvidence.ts')
-const migration=read('supabase/migrations/20261022113000_procurement_evidence_links.sql')
+const migration=read('supabase/migrations/20261022074048_procurement_evidence_links_readonly.sql')
 
 // Read only: no changes to existing procurement status, payment, delivery or material records.
 assert.match(procurement,/from\('procurement_items'\)\.select\('\*'\)/)
