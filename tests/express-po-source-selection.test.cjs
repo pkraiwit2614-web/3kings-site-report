@@ -34,3 +34,20 @@ test('preview API delegates file selection to the isolated selector',()=>{
  assert.match(route,/SOURCE_FILE_CHANGED_DURING_READ/)
  assert.match(route,/process\.env\.VERCEL_ENV!=='preview'/)
 })
+
+
+test('bounded PO/PR period exports are distinct from cumulative history and validate dates',()=>{
+ const list=[
+  file('PO2023-211020260935.csv'),
+  file('PR2023-211020260935.csv'),
+  file('PO PL 15102026-21102026.csv','2026-10-22T01:56:42Z'),
+  file('PR 15102026-21102026.csv','2026-10-22T01:57:15Z'),
+ ]
+ assert.equal(selectExpressCsv(list,'po_range').name,'PO PL 15102026-21102026.csv')
+ assert.equal(selectExpressCsv(list,'pr_range').name,'PR 15102026-21102026.csv')
+ assert.equal(selectExpressCsv(list,'po_history').name,'PO2023-211020260935.csv')
+ assert.equal(selectExpressCsv(list,'pr_history').name,'PR2023-211020260935.csv')
+ assert.throws(()=>selectExpressCsv([file('PO PL 32132026-21102026.csv')],'po_range'),/NO_VALID_EXPRESS_CSV/)
+ assert.throws(()=>selectExpressCsv([file('PO PL 22102026-21102026.csv')],'po_range'),/NO_VALID_EXPRESS_CSV/)
+ assert.throws(()=>selectExpressCsv([file('PR 15102026-21102026.csv')],'po_range'),/NO_VALID_EXPRESS_CSV/)
+})
