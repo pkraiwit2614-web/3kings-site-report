@@ -62,3 +62,7 @@ The curated adapters add domain/PR discipline and report diagram/slide *instruct
 - When rendered UI QA is needed, first use GitHub Actions `Supabase Local Viewer E2E (no hosted DB)` through `workflow_dispatch` on the intended ref; review its synthetic-data screenshots and test logs. Its ephemeral localhost server is a **test Preview**, not a hosted public Preview URL or Production parity.
 - Require a separately authorized hosted Preview only for tests that cannot be proved locally (e.g., hosted OAuth/cookies, real deployment edge behavior, remote integrations, actual Vercel routing). Document why before temporarily enabling a hosted Preview. Do not weaken Preview/release gates when a hosted deployment is truly needed.
 - Keep Vercel Production builds/merges controlled by SOP 16, do not trigger unnecessary builds while quota-limited, and verify actual deployed SHA and live behavior. Never put real customer or payroll data in GitHub Actions artifacts.
+
+## 22 October 2026 — Canonical SOP 06/07 single-flow routing
+- Drive INDEX 06 (`อัปเดตวัสดุ`/`อัปเดตวัสดุตามเดิม`) and 07 (`เช็ก PO`) now share one canonical v3.0 SOP document. Retain both registered numbered Skills, aliases and their distinct modes; 07 is Express-only READ_ONLY and cannot inherit 06 scoped write privileges.
+- GitHub title/manifest is a non-authoritative discovery mirror. No runtime/production change, import, data edit or deployment follows merely from these routing-document updates.
