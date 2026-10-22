@@ -18,6 +18,7 @@ test('same follow-up classifier guards ambiguous completion text and payment evi
   assert.equal(needsProcurementFollowUp({current_status:'ต้องยืนยันว่าบริการเสร็จแล้วหรือยัง; ถ้าเสร็จรอวางบิล'}),true)
   assert.equal(needsProcurementFollowUp({current_status:'งานเสร็จและตรวจรับแล้ว • รอยืนยันชำระ'}),true)
   assert.equal(needsProcurementFollowUp({current_status:'รับสินค้าแล้ว / ปิดติดตาม'}),false)
+  assert.equal(needsProcurementFollowUp({current_status:'รับสินค้าแล้ว / ปิดติดตาม',payment_status:'รับสินค้าแล้ว • เครดิตครบกำหนด 31/10/2569'}),true)
   assert.equal(needsProcurementFollowUp({current_status:'ส่งครบแล้ว แต่รอชำระเงิน'}),true)
   assert.equal(needsProcurementFollowUp({current_status:'รับสินค้าแล้ว 1 ชุด • ไม่ใช่หลักฐานชำระเงิน'}),true)
   assert.equal(needsProcurementFollowUp({current_status:'ส่งครบแล้ว',payment_status:'ค้างชำระ'}),true)
