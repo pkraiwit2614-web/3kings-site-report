@@ -43,6 +43,8 @@ test('CP874, item, cancelled placeholder and receipt flag',()=>{
  assert.equal(x.summary.reportedDocuments,2)
  assert.equal(x.summary.validDocuments,1)
  assert.equal(x.summary.cancelledDocuments,1)
+ assert.equal(Object.hasOwn(x,'cancelled'),false)
+ assert.equal(JSON.stringify(x).includes('UNUSABLE_CANCELLED_REFERENCE'),false)
  assert.equal(x.summary.lineItems,1)
  assert.deepEqual(x.documents[0].projectCodes,['AV-P6','AV-P7'])
  assert.equal(x.documents[0].expressReceivedAllFlag,'Y')
