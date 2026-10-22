@@ -20,7 +20,7 @@ export type ProcurementFollowUpRow = {
 export type ProcurementFollowUpStage = 'pr' | 'ordered' | 'verify' | 'other' | 'closed'
 
 const explicitlyClosed = /(ปิดติดตาม|ปิดงาน|ส่งครบ|ส่งมอบเรียบร้อย|ติดตั้งเรียบร้อย|เสร็จสมบูรณ์|completed|closed)/i
-const outstanding = /(รอ|ยังไม่|ค้าง|ต้องยืนยัน|ต้องตรวจ|ไม่พบหลักฐาน|ไม่ใช่หลักฐาน|ต้องติดตาม|pending|outstanding|unconfirmed|not\s+(?:paid|received))/i
+const outstanding = /(รอ|ยังไม่|ค้าง|ต้องยืนยัน|ต้องตรวจ|ไม่พบหลักฐาน|ไม่ใช่หลักฐาน|ต้องติดตาม|เครดิตครบกำหนด|กำหนดชำระ|งวดถัดไป|pending|outstanding|unconfirmed|not\s+(?:paid|received))/i
 
 export function needsProcurementFollowUp(row: ProcurementFollowUpRow): boolean {
   const current = String(row.current_status || '').trim()
