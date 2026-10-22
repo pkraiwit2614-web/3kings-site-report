@@ -10,6 +10,7 @@ import { getSupabase } from '@/lib/supabase'
 import { createLiveLoader, requireSuccessfulReads } from '@/lib/liveLoader'
 import { dateTH } from '@/lib/format'
 import type { Project } from '@/lib/types'
+import { needsProcurementFollowUp } from '@/lib/procurementFollowUp'
 
 function dateTimeTH(value:string|null|undefined){
   if(!value)return '-'
@@ -21,14 +22,6 @@ function dateTimeTH(value:string|null|undefined){
 const thaiMonths:Record<string,number>={
   'ม.ค.':0,'ก.พ.':1,'มี.ค.':2,'เม.ย.':3,'พ.ค.':4,'มิ.ย.':5,
   'ก.ค.':6,'ส.ค.':7,'ก.ย.':8,'ต.ค.':9,'พ.ย.':10,'ธ.ค.':11
-}
-
-const completedStatusPattern=/(ส่งมอบเรียบร้อย|รับสินค้าเรียบร้อย|รับสินค้าแล้ว|ติดตั้งเรียบร้อย|ส่งครบ|ปิดงาน|ปิดติดตาม|งานเสร็จ|เสร็จสมบูรณ์|completed|done|closed)/i
-
-function needsFollowUp(row:any){
-  const current=String(row.current_status||'').trim()
-  if(current&&completedStatusPattern.test(current)) return false
-  return true
 }
 
 function parseDeliveryDate(row:any){
@@ -75,6 +68,7 @@ export default function ProcurementPage(){
     const params=new URLSearchParams(window.location.search)
     const qParam=params.get('q')||''
     if(qParam) setQ(qParam)
+    if(params.get('followup')==='1') setFollowUpOnly(true)
   },[])
 
   useEffect(()=>{
@@ -171,7 +165,7 @@ export default function ProcurementPage(){
       if(siteFilter&&!relatedIds.includes(siteFilter)) return false
       if(statusFilter&&String(x.current_status||'')!==statusFilter) return false
       if(updateFilter&&String(x.source_updated_at||'')!==updateFilter) return false
-      if(followUpOnly&&!needsFollowUp(x)) return false
+      if(followUpOnly&&!needsProcurementFollowUp(x)) return false
       if(!searchable([
         ...related.flatMap(p=>[p.code,p.name]),x.vendor,x.item_name,x.procurement_status,x.payment_status,x.current_status,
         x.pr_no,x.po_no,x.expected_delivery_text,x.condition_note,x.source_updated_at
