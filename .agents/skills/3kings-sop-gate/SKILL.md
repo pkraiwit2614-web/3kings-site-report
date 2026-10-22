@@ -71,3 +71,8 @@ Use Google Drive INDEX + linked full ACTIVE SOP once per invocation, share snaps
 - INDEX row 06 (`อัปเดตวัสดุ`) and row 07 (`เช็ก PO`) intentionally link to the same full canonical Drive document, but have DISTINCT enforcement modes.
 - Trigger 07: `read_only`, Express snapshot only, no other-system data reads or mutations; Trigger 06: `authorized_write` only after Express verification, then scoped Drive PR/Plan delta and existing sync/readback.
 - Keep 17 shortcut entries and both numbered Skills for compatibility. Never dedupe/remove Trigger 07, never infer write from the shared SOP document, and never rely on a cached repo title instead of the ACTIVE index.
+
+## Canonical mapping exception — SOP 08+11 consolidated v3.0 (22/10/2026)
+- Live Drive INDEX rows 08 and 11 intentionally reference one ACTIVE full SOP. Choose branch and permission by matched trigger, never by a broadened document-level mode: row 08 DAILY_PROGRESS, row 11 WEEKLY_RECAP.
+- Both have document_only output permissions and SOURCE_READ_ONLY inputs; creating a requested report is not permission to edit Schedule, Daily Report, Defect, Materials, Photo, Calendar, Payroll, RBAC/RLS or trigger Sync/Deploy.
+- Repo Skill/Manifest titles are hints only; resolve canonical file ID from live Drive INDEX each invocation. Archived v2.0 documents are historical, not live fallback.
