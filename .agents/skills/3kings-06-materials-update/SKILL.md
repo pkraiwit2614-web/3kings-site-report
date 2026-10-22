@@ -23,10 +23,10 @@ Express-confirmed PO/PL/PR export first; then verified Drive PR/Plan, receipt, M
 2. Mandatory STEP 1: inspect and verify the latest Express PO/PL/PR export/import snapshot (revision, PO line, supplier, item, unit, qty, Plot); do not treat unverified PO as Ordered.
 3. Only for the authorized materials-update trigger, reconcile Express against Drive PR/Plan, receipt and Materials; preserve unmatched planned PR; upsert scoped delta and use existing sync with independent Drive/Web readback.
 4. Enforce mode `authorized_write`: Validate explicit authorization for affected records and target. Use minimal write + readback; don't broaden scope.
-4. Record only verified status/receipt/procurement updates and read back in Excel and web.
-5. Ordered requires PO evidence; received requires receipt evidence; preserve existing formulas, source IDs and other plots.
-6. Perform operation only within explicit authorization and when safeguards pass. Validate changed targets by independent readback; for `read_only`, verify evidence without modifying source.
-7. Report source version/time, specific results, unmatched/untested data, side effects, QA and exact remaining blockers.
+5. Record only verified status/receipt/procurement updates and read back in Excel and web.
+6. Ordered requires PO evidence; received requires receipt evidence; preserve existing formulas, source IDs and other plots.
+7. Perform operation only within explicit authorization and when safeguards pass. Validate changed targets by independent readback; for `read_only`, verify evidence without modifying source.
+8. Report source version/time, specific results, unmatched/untested data, side effects, QA and exact remaining blockers.
 
 ## Stop conditions
 
