@@ -35,7 +35,8 @@ test('Combine mark and group names are sourced from the existing Defect grouping
  assert.match(groups,/"A213",\s*"A214"/)
  assert.match(groups,/"A221",\s*"A222"/)
  assert.match(groups,/"B610",\s*"B611"/)
- assert.match(page,/members\.every\(room=>roomMap\.get\(room\)==='Hotel - Incomplete'\)/)
+ assert.match(page,/ids\(r\.room_group\)\.length>0/)
+ assert.doesNotMatch(page,/members\.every\(room=>roomMap\.get\(room\)==='Hotel - Incomplete'\)/)
 })
 
 test('Read side excludes retired source Work IDs and cannot mutate master',()=>{
