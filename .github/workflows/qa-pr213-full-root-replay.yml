@@ -1,0 +1,66 @@
+name: PR 213 Full-Root Migration Replay (isolated QA only)
+
+on:
+  push:
+    branches:
+      - qa/pr213-full-migration-replay-20261022
+    paths:
+      - .github/workflows/qa-pr213-full-root-replay.yml
+
+permissions:
+  contents: read
+
+jobs:
+  migration-root-replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact PR213 source plus QA-only workflow
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Prove no duplicate canonical migration version
+        run: |
+          set -euo pipefail
+          node - <<'JS'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const names = fs.readdirSync('supabase/migrations');
+          const all = names.filter(x => x.endsWith('.sql'));
+          const canonical = all.filter(x => /^\d{14}_.+\.sql$/.test(x));
+          const versions = canonical.map(x => x.slice(0,14));
+          const dup = versions.filter((v,i) => versions.indexOf(v) !== i);
+          if (dup.length) throw new Error('DUPLICATE_MIGRATION_VERSIONS: ' + dup.join(','));
+          if (names.some(x => x.startsWith('20261013220000_'))) throw new Error('LEGACY_DUPLICATE_STILL_ACTIVE');
+          if (!names.includes('20261013152531_shared_calendar_procurement_dates_20261013.sql')) throw new Error('CALENDAR_CANONICAL_MISSING');
+          console.log('PASS_STATIC: canonical=' + canonical.length + ' total_sql=' + all.length);
+          JS
+      - name: Install pinned Supabase CLI
+        uses: supabase/setup-cli@v3
+        with:
+          version: 2.84.2
+      - name: Prepare disposable local-only config
+        run: |
+          set -euo pipefail
+          test ! -e supabase/.temp/project-ref
+          test ! -e supabase/config.toml
+          cp tests/e2e/local-stack/supabase/config.toml supabase/config.toml
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('supabase/config.toml')
+          data = p.read_text()
+          data = data.replace('project_id = "3kings_ci_viewer_e2e"', 'project_id = "3kings_pr213_full_root_qa"')
+          data = data.replace('[db.seed]\nenabled = true', '[db.seed]\nenabled = false')
+          p.write_text(data)
+          assert '[db.seed]\nenabled = false' in p.read_text()
+          PY
+          echo 'QA_ONLY_LOCAL: no cloud project ref, no secrets, no hosted credentials'
+      - name: Full-root Supabase migration replay on disposable database
+        run: |
+          set -euo pipefail
+          supabase start
+          supabase migration list --local
+          echo 'PASS_FULL_ROOT_SUPABASE_REPLAY'
+      - name: Destroy disposable local containers
+        if: always()
+        run: supabase stop --no-backup || true
