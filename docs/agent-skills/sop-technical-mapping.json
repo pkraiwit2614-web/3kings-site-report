@@ -112,10 +112,7 @@
       "sop_number": 7,
       "skill_name": "3kings-07-po-inspection",
       "domain": "Materials",
-      "candidate_tables": [
-        "procurement_items",
-        "procurement_item_projects"
-      ],
+      "candidate_tables": [],
       "candidate_sql_functions": [],
       "review_at_use": "UNVERIFIED_CURRENT_RUNTIME",
       "boundary": "Trigger 07 READ_ONLY: Express-only PO/PL/PR snapshot and report; no Drive PR/Plan or Web reads, imports, writes, sync or deploy; missing PO is not Cancelled."
