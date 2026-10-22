@@ -208,7 +208,7 @@ export default function WorkOrderViewer(){
       <td><div className="wo-room-label"><b>{groupLabel(r.room_group)}</b>{isCombine(r.room_group)&&<span className="wo-combine-code" title="ห้อง Combine">c</span>}</div>{isCombine(r.room_group)&&<span className="wo-combine-badge" title="ห้อง Combine ใช้งานชุดเดียวกัน">Combine: {ids(r.room_group).join(' + ')}</span>}<small>{r.work_id}</small></td>
       <td><small>วันที่แจ้ง : {noticeDateTH(notice)}</small><small>เหลือเวลา : {elapsed===null?'-':elapsed+' วัน'}</small>{elapsed!==null&&elapsed>7?<small className="wo-overdue">เกินกำหนด</small>:elapsed!==null&&elapsed>4?<small className="wo-warning">{warningText(elapsed)}</small>:null}</td>
       <td>{r.defect_item}</td>
-      <td>{r.next_action||'รอระบุรายละเอียด'}{r.conflict_note&&<small className="wo-conflict">ตรวจข้อขัดแย้ง: {r.conflict_note}</small>}</td>
+      <td>{r.next_action||'รอระบุรายละเอียด'}</td>
       <td><b>{r.contractor}</b></td>
       <td><b>{displayWorkStatus(r.work_status)}</b><small>{r.qa_status||'รอตรวจรายการ'}</small></td>
       <td className="wo-evidence-col">{r.evidence_url?.startsWith('https://drive.google.com/')?<a target="_blank" rel="noreferrer" href={r.evidence_url}>เปิดภาพ / PDF</a>:<small>รอหลักฐาน</small>}</td>
