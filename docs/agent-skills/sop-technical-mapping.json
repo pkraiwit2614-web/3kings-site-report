@@ -128,7 +128,7 @@
       ],
       "candidate_sql_functions": [],
       "review_at_use": "UNVERIFIED_CURRENT_RUNTIME",
-      "boundary": "Use verified progress source; keep Actual, Schedule and Target distinct."
+      "boundary": "Trigger 08 DAILY_PROGRESS — shared canonical SOP 08+11 v3.0 via live Drive Index; read Schedule Plan/Target, verified dated Actual and QA photos per Plot; preserve Actual/Schedule/Target/Unknown, evidence and source read-only."
     },
     {
       "sop_number": 9,
@@ -156,7 +156,7 @@
       ],
       "candidate_sql_functions": [],
       "review_at_use": "UNVERIFIED_CURRENT_RUNTIME",
-      "boundary": "Use verified Daily Reports, progress, Defect and Materials; distinguish Actual and Target."
+      "boundary": "Trigger 11 WEEKLY_RECAP — same canonical SOP 08+11 v3.0 via live Drive Index; Mon–Fri Bangkok, QA Daily/Progress/Defect/Materials snapshots, dedupe counts; evidence, Actual/Schedule/Target/Unknown and source read-only."
     },
     {
       "sop_number": 12,

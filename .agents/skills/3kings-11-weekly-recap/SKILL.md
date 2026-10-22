@@ -6,7 +6,7 @@ description: "3 Kings Construction shortcut 'สรุป Weekly Recap'. Create 
 # 11 — สรุป Weekly Recap
 
 **Shortcut:** `สรุป Weekly Recap`  
-**SOP title (resolve via live Drive index):** `SOP_11_Weekly_Recap_v2.0_Consolidated_2026-10-20`  
+**SOP title (resolve via live Drive index):** `SOP_08_11_Progress_Weekly_Recap_Single_Flow_v3.0_2026-10-22`  
 **Mode:** `document_only`
 
 ## Before any action
@@ -52,3 +52,9 @@ These skills are agent guidance, **not** a server-side authorization, authentica
 - Reuse verified Daily/Progress/Defect/Material/photo inputs; avoid rerunning write SOPs to generate a read-only executive report.
 - No Git branch/CI/Preview/Production Deploy for read-only reports, documents or routine Drive/Sheet updates. Use existing QA snapshot/Checkpoint when revision/freshness verified; pause only conflicting records; prove success with destination readback.
 - Superpowers/Task Observer are conditional, advisory, non-blocking and must not reload identical SOP or trigger extra network/build operations.
+
+## Canonical SOP 08+11 v3.0 — Trigger 11 (22/10/2026)
+- Resolve current ACTIVE Drive index row 11 and read the shared full SOP once; execute only WEEKLY_RECAP with Monday-Friday Asia/Bangkok boundaries, not DAILY_PROGRESS.
+- Read QA Native Daily Reports, Schedule, verified Defect/Work Order, Materials and procurement snapshots; separate Actual/Schedule/Target/Unknown and count missing workdays.
+- Deduplicate tasks, workers and Defect events across daily sources. Confirm PO/PR/Received separately. Source read-only; report artifacts only when requested. No source mutation, Sync, photo rename or Production effects.
+- The shared canonical title is a discovery hint only; Drive Index is authoritative, no private Drive File ID is stored in GitHub.

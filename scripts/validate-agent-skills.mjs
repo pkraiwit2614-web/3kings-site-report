@@ -36,5 +36,10 @@ for(const f of ["AGENTS.md","docs/agent-skills/README.md","docs/agent-skills/man
  const content=fs.readFileSync(path.join(root,f),"utf8");
  for(const pattern of forbidden)if(pattern.test(content))errors.push("Possible secret in "+f);
 }
+// Shared canonical SOP 08+11 is one full document with independent document-only triggers.
+const progress08=entries.find(x=>x.number===8);
+const weekly11=entries.find(x=>x.number===11);
+if (!progress08 || !weekly11 || progress08.sop_title !== weekly11.sop_title) errors.push("SOP 08 and 11 must share canonical full SOP title");
+if (progress08?.mode !== "document_only" || weekly11?.mode !== "document_only") errors.push("SOP 08/11 output-only roles must remain document_only");
 if(errors.length){console.error("FAIL",errors.join("\n"));process.exit(1);}
 console.log("PASS: 17 SOP-linked skills + gate and agent instructions; static contract only.");

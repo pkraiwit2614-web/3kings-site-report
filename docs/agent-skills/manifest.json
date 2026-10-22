@@ -88,11 +88,15 @@
       "number": 8,
       "name": "3kings-08-progress-summary",
       "shortcut": "สรุป Progress",
-      "sop_title": "SOP_08_Construction_Progress_v2.0_Consolidated_2026-10-20",
+      "sop_title": "SOP_08_11_Progress_Weekly_Recap_Single_Flow_v3.0_2026-10-22",
       "mode": "document_only",
       "sop_index": "00-SOP_INDEX - 3Kings Construction",
       "sop_location": "3Kings Construction/0-SOP & AI Commands",
-      "requires_live_drive_read": true
+      "requires_live_drive_read": true,
+      "aliases": [
+        "สรุป Progress รายวัน",
+        "สรุป Progress ราย Plot"
+      ]
     },
     {
       "number": 9,
@@ -118,11 +122,15 @@
       "number": 11,
       "name": "3kings-11-weekly-recap",
       "shortcut": "สรุป Weekly Recap",
-      "sop_title": "SOP_11_Weekly_Recap_v2.0_Consolidated_2026-10-20",
+      "sop_title": "SOP_08_11_Progress_Weekly_Recap_Single_Flow_v3.0_2026-10-22",
       "mode": "document_only",
       "sop_index": "00-SOP_INDEX - 3Kings Construction",
       "sop_location": "3Kings Construction/0-SOP & AI Commands",
-      "requires_live_drive_read": true
+      "requires_live_drive_read": true,
+      "aliases": [
+        "Weekly Recap",
+        "สรุปงานรายสัปดาห์"
+      ]
     },
     {
       "number": 12,
