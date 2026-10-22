@@ -256,7 +256,7 @@ export default function DefectDetailPage(){
       members.forEach(room=>open.add(room))
     }
     return open
-  },[workOrders]
+  },[workOrders])
 
   const workPlanContext=useMemo(()=>{
     const dates=new Map(hotelPlanDays.map(d=>[d.day_no,d.planned_date]))
