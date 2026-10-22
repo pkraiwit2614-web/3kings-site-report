@@ -367,6 +367,7 @@ export default function DashboardPage() {
           </div>
           <div className="resource-kpis" style={{gridTemplateColumns:'repeat(2,1fr)'}}><div><span>รายการต้องติดตาม</span><b>{openProc.length}</b><small>แยกงานค้างจริงจากการปิดติดตาม</small></div><div><span>มีข้อมูลทั้งหมด</span><b>{proc.length}</b><small>รายการใน Procurement (ไม่ใช่จำนวน PR Follow-up)</small></div></div>
           <div style={{padding:'0 14px 9px',fontSize:11,color:'var(--muted)'}}>รอ PO/PL {procurementStages.pr||0} • มีเลข PO/PL และยังติดตาม {procurementStages.ordered||0} • ตรวจรับ/เอกสาร/ชำระ {procurementStages.verify||0} • ต้องตรวจสอบ {procurementStages.other||0}</div>
+          <div style={{padding:'0 14px 9px',fontSize:11,color:'var(--muted)'}}>เอกสาร PR ติดตามแยก: <a href="https://docs.google.com/spreadsheets/d/1I8EdnL43kI-qBQfvgYxPyvJIETxrtYKj/edit" target="_blank" rel="noopener noreferrer">เปิด PR Follow-up Excel ↗</a> (ไม่รวมในยอด Supabase ข้างต้นจนกว่าจะจับคู่และนำเข้าผ่านระบบเดิม)</div>
           <div className="resource-list">{openProc.slice(0,8).map(x=>{
             const ids=procurementProjectIdsByItem.get(x.id)||[]
             const codes=ids.map(id=>projects.find(p=>p.id===id)?.code).filter(Boolean)
