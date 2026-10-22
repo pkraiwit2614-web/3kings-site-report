@@ -245,19 +245,18 @@ export default function DefectDetailPage(){
       .subscribe()
     return()=>{active=false;window.removeEventListener('focus',reload);window.clearInterval(timer);void supabase.removeChannel(channel)}
   },[role])
+  // An open Work ID remains actionable even after customer/Hotel acceptance.
+  // Room status is preserved for Flow; dispatch and its link use Work ID status.
   const workOpenByRoom=useMemo(()=>{
-    const roomStatus=new Map(rows.map(r=>[r.room_no,r.status_group]))
     const open=new Set<string>()
     for(const item of workOrders){
       if(/เสร็จแล้ว|งดแจก|ยกเลิก/.test(item.work_status||''))continue
       const members=[...new Set((item.room_group.toUpperCase().match(/[AB]\d{3}/g)||[])
         .flatMap(room=>hotelRoomMembers(room)))]
-      if(members.length&&(members.every(room=>roomStatus.get(room)==='Hotel - Incomplete') ||
-        (members.length===1&&members.every(room=>roomStatus.get(room)?.startsWith('Non-Hotel -')))))
-        members.forEach(room=>open.add(room))
+      members.forEach(room=>open.add(room))
     }
     return open
-  },[rows,workOrders])
+  },[workOrders])
 
   const workPlanContext=useMemo(()=>{
     const dates=new Map(hotelPlanDays.map(d=>[d.day_no,d.planned_date]))

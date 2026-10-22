@@ -23,15 +23,14 @@ test('Excel chat-marked detail is read by both existing importers without changi
   assert.doesNotMatch(sql, /DROP TABLE|DELETE FROM|ALTER TABLE/i)
 })
 
-test('Non-hotel unfinished jobs appear beside, not instead of, hotel Work Orders', () => {
-  assert.match(order, /members\.every\(room=>roomMap\.get\(room\)==='Hotel - Incomplete'\)/)
-  assert.match(order, /members\.length===1&&members\.every\(room=>roomMap\.get\(room\)\?\.startsWith\('Non-Hotel -'\)\)/)
-  assert.match(report, /members\.length===1&&members\.every\(room=>roomStatus\.get\(room\)\?\.startsWith\('Non-Hotel -'\)\)/)
+test('open Work IDs appear for hotel, non-hotel, handed-over, and Combine rooms without reclassifying the room', () => {
+  assert.match(order, /rows\.filter\(r=>!finished\(r\.work_status\)&&ids\(r\.room_group\)\.length>0\)/)
+  assert.match(report, /members\.forEach\(room=>open\.add\(room\)\)/)
+  assert.doesNotMatch(order, /members\.every\(room=>roomMap\.get\(room\)==='Hotel - Incomplete'\)/)
   assert.match(order, /\.eq\('source_active',true\)/)
   assert.doesNotMatch(order, /\.update\(|\.delete\(|\.upsert\(|\.insert\(/)
   assert.match(order, /canAccessWorkOrder\(role\)/)
 })
-
 
 test('functional 263-row master: Q chat updates change only a valid room Defect Detail', () => {
   const vm = require('node:vm')
