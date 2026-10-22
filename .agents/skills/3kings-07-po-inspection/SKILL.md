@@ -6,7 +6,7 @@ description: "3 Kings Construction shortcut 'เช็ก PO'. READ-ONLY: inspec
 # 07 — เช็ก PO
 
 **Shortcut:** `เช็ก PO`  
-**SOP title (resolve via live Drive index):** `SOP_07_Purchase_Order_Check_v2.0_Consolidated_2026-10-20`  
+**SOP title (resolve via live Drive index):** `SOP_06_Materials_PO_Check_Single_Flow_v3.0_2026-10-22`  
 **Mode:** `read_only`
 
 ## Before any action
@@ -15,12 +15,13 @@ Read [SOP Gate](../3kings-sop-gate/SKILL.md) and complete its live Drive SOP and
 
 ## Source of truth
 
-Approved PR, issued PO, supplier invoice and receipt documentation.
+Verified Express On Cloud export/import snapshot only (PO/PL/PR as present within Express). No Drive PR/Plan, Materials or Web reads in this trigger.
 
 ## Workflow
 
 1. Resolve this command's row in the live SOP index and open the current SOP; follow its full ordered instructions.
-2. Fetch and reconcile current source data, scope, identities and evidence; identify out-of-scope dependencies.
+2. Use Express only: confirm export timestamp/batch, PO No.+line identity, supplier, qty/unit, Plot and linked receipt if present in Express. Report missing evidence as Unknown, not as a cancellation.
+   Do not fetch Drive PR/Plan, non-Express receipt, Materials or Web data in this Trigger 07.
 3. Enforce mode `read_only`: No persistent mutations, including generated fixes to source, role updates, triggers, branch changes, or deployment. Reports may be provided in chat.
 4. Report actual ordering, supplier, quantities, outstanding balance and ETA only when documented.
 5. Checking is read-only; no PO or receipt inferred from intention or requisition.
@@ -52,3 +53,8 @@ These skills are agent guidance, **not** a server-side authorization, authentica
 - PO inspection is read-only; do not block the report on unrelated Express imports.
 - No Git branch/CI/Preview/Production Deploy for read-only reports, documents or routine Drive/Sheet updates. Use existing QA snapshot/Checkpoint when revision/freshness verified; pause only conflicting records; prove success with destination readback.
 - Superpowers/Task Observer are conditional, advisory, non-blocking and must not reload identical SOP or trigger extra network/build operations.
+
+## Consolidated SOP 06/07 v3.0 router (22/10/2026)
+- Both shortcuts resolve the same canonical Drive SOP via separate INDEX rows; retain this numbered skill for Trigger 07 compatibility.
+- This shortcut is `PO_CHECK_READ_ONLY`: Express-only report. **No persistent mutations**, source writes, import/sync, GitHub changes or deployment.
+- `อัปเดตวัสดุ` is a separate explicitly authorized Trigger 06; never upgrade this read-only trigger to write through default/fallback routing.

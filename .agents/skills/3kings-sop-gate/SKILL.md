@@ -66,3 +66,8 @@ Use Google Drive INDEX + linked full ACTIVE SOP once per invocation, share snaps
 - Risk tiers: read-only and document/data actions require only targeted source/destination checks; app code requires branch + affected CI QA; release requires true required checks, exact-SHA evidence and Production readback; critical auth/RLS/schema/payroll requires scoped security verification and explicit approval when not already covered.
 - Reuse a verified source snapshot only while ID/revision/timestamp/permissions match; reuse a Build/QA artifact only while SHA/config/deps/schema/environment/role match. Skip redundant Hosted Preview, but never treat SKIPPED as PASS for required checks.
 - If conflict, fail closed for the affected item only. Do not start Vercel Build/Deploy as a side effect of SOP publication.
+
+## Canonical mapping exception — SOP 06+07 consolidated v3.0 (22/10/2026)
+- INDEX row 06 (`อัปเดตวัสดุ`) and row 07 (`เช็ก PO`) intentionally link to the same full canonical Drive document, but have DISTINCT enforcement modes.
+- Trigger 07: `read_only`, Express snapshot only, no other-system data reads or mutations; Trigger 06: `authorized_write` only after Express verification, then scoped Drive PR/Plan delta and existing sync/readback.
+- Keep 17 shortcut entries and both numbered Skills for compatibility. Never dedupe/remove Trigger 07, never infer write from the shared SOP document, and never rely on a cached repo title instead of the ACTIVE index.
