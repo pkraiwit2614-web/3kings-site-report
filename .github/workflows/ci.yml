@@ -169,6 +169,9 @@ jobs:
       - name: Materials print pagination regression
         run: node tests/materials-print-layout.test.cjs
 
+      - name: Procurement evidence exact-match, read-only and RLS regression
+        run: node tests/procurement-evidence-links.test.cjs
+
 
       - name: Editable permission defaults and confirmed save workflow
         run: node --test tests/editable-role-matrix.test.cjs tests/editable-role-matrix-ui.test.cjs tests/access-role-preview-hook.test.cjs
