@@ -6,7 +6,7 @@ description: "3 Kings Construction shortcut 'อัปเดต Defect ตาม
 # 01 — อัปเดต Defect ตามเดิม
 
 **Shortcut:** `อัปเดต Defect ตามเดิม`  
-**SOP title (resolve via live Drive index):** `SOP_01_Defect_Flow_v2.0_Consolidated_2026-10-20`  
+**SOP title (resolve via live Drive index):** `SOP_DEFECT_01_02_04_Single_Flow_v3.0_2026-10-22`  
 **Mode:** `authorized_write`
 
 ## Before any action
@@ -26,6 +26,12 @@ Defect Excel master, condo_room_status, hotel evidence, Work Order/Work Plan.
 5. No inferred closures; room status separate from OOO/OOS; confirm group membership and Good01-05 aliases; never change hotel status from a Defect update.
 6. Perform operation only within explicit authorization and when safeguards pass. Validate changed targets by independent readback; for `read_only`, verify evidence without modifying source.
 7. Report source version/time, specific results, unmatched/untested data, side effects, QA and exact remaining blockers.
+
+## Consolidated Defect v3.0 guardrails
+
+- For this WRITE shortcut, check Web override/queue and row revision; hold conflicting Room/Work IDs, not the whole batch.
+- Treat Combine pairs atomically; retain Work ID/history and do not conflate 7-day eligibility with Hotel Engineer acceptance.
+- Prevent duplicate retries; prove Excel→Sync Log→Supabase→UI readback before PASS. Do not write OOO/OOS, Work Plan, Payroll, Materials or Calendar.
 
 ## Stop conditions
 

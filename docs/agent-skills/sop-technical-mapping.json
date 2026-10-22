@@ -1,10 +1,10 @@
 {
   "schema_version": 2,
-  "updated_on": "2026-10-21",
+  "updated_on": "2026-10-22",
   "project": "3 Kings Construction",
   "status": "ADVISORY_ONLY",
   "origin": "Curated candidate technical object names from unmerged PR #172; never treated as live verification.",
-  "source_authority": "At each invocation resolve the current ACTIVE Google Drive 00-SOP_INDEX and complete linked SOP. SOP v2.0 prevails over this file and older PR #172 text.",
+  "source_authority": "At each invocation resolve live ACTIVE Google Drive 00-SOP_INDEX and linked full SOP (Defect 01/02/04 share canonical v3.0); repository mapping is advisory and never overrides active Drive SOP.",
   "manifest_reference": "docs/agent-skills/manifest.json",
   "usage_rules": [
     "The manifest owns all 17 shortcut IDs and permission modes; this file adds no write, SQL execution, RPC or deployment permission.",
@@ -40,7 +40,7 @@
         "defect_writeback_status"
       ],
       "review_at_use": "UNVERIFIED_CURRENT_RUNTIME",
-      "boundary": "Use verified Defect Excel plus web/DB reconciliation; retain Combine/aliases and independent hotel OOO/OOS."
+      "boundary": "Authorized scoped Excel-first write with Web override/queue conflict hold, Combine atomicity, E2E Sync receipt, 7-day evidence gate, idempotent Work ID retry; never change OOO/OOS or Work Plan."
     },
     {
       "sop_number": 2,
@@ -52,7 +52,7 @@
       ],
       "candidate_sql_functions": [],
       "review_at_use": "UNVERIFIED_CURRENT_RUNTIME",
-      "boundary": "Read only: reconcile room/work counts, Combine and aliases; never close or edit Defect."
+      "boundary": "Read-only count reconciliation: source-vs-Flow/Report/Work Order by actual rooms, Combine=1 and Work ID; never write or sync."
     },
     {
       "sop_number": 3,
@@ -76,7 +76,7 @@
       ],
       "candidate_sql_functions": [],
       "review_at_use": "UNVERIFIED_CURRENT_RUNTIME",
-      "boundary": "Read only: evaluate seven-day evidence; never infer completion or write a status."
+      "boundary": "Read-only 7-day inspection: eligibility not Hotel acceptance; status writes require separate explicit authorized_write route 01."
     },
     {
       "sop_number": 5,
