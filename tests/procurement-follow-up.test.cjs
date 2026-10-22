@@ -26,7 +26,7 @@ test('same follow-up classifier guards ambiguous completion text and payment evi
 })
 
 test('never infer an issued purchase order solely from narrative status', () => {
-  assert.equal(procurementFollowUpStage({current_status:'สั่งแล้วตาม PO • ยังไม่พบหลักฐานรับสินค้า'}),'other')
+  assert.equal(procurementFollowUpStage({current_status:'สั่งแล้วตาม PO • ยังไม่พบหลักฐานรับสินค้า'}),'verify')
   assert.equal(procurementFollowUpStage({current_status:'รอสินค้าเข้า',po_no:'PL0000969'}),'ordered')
   assert.equal(procurementFollowUpStage({current_status:'PR / Pending PO verification'}),'pr')
   assert.equal(procurementFollowUpStage({current_status:'รับสินค้าแล้ว / ปิดติดตาม'}),'closed')
