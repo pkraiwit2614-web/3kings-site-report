@@ -66,7 +66,10 @@
       "number": 6,
       "name": "3kings-06-materials-update",
       "shortcut": "อัปเดตวัสดุตามเดิม",
-      "aliases": ["อัปเดตวัสดุ", "อัปเดต Materials"],
+      "aliases": [
+        "อัปเดตวัสดุ",
+        "อัปเดต Materials"
+      ],
       "sop_title": "SOP_06_Materials_PO_Check_Single_Flow_v3.0_2026-10-22",
       "mode": "authorized_write",
       "sop_index": "00-SOP_INDEX - 3Kings Construction",
@@ -77,7 +80,10 @@
       "number": 7,
       "name": "3kings-07-po-inspection",
       "shortcut": "เช็ก PO",
-      "aliases": ["เช็ค PO", "ตรวจ PO"],
+      "aliases": [
+        "เช็ค PO",
+        "ตรวจ PO"
+      ],
       "sop_title": "SOP_06_Materials_PO_Check_Single_Flow_v3.0_2026-10-22",
       "mode": "read_only",
       "sop_index": "00-SOP_INDEX - 3Kings Construction",
@@ -88,11 +94,15 @@
       "number": 8,
       "name": "3kings-08-progress-summary",
       "shortcut": "สรุป Progress",
-      "sop_title": "SOP_08_Construction_Progress_v2.0_Consolidated_2026-10-20",
+      "sop_title": "SOP_08_11_Progress_Weekly_Recap_Single_Flow_v3.0_2026-10-22",
       "mode": "document_only",
       "sop_index": "00-SOP_INDEX - 3Kings Construction",
       "sop_location": "3Kings Construction/0-SOP & AI Commands",
-      "requires_live_drive_read": true
+      "requires_live_drive_read": true,
+      "aliases": [
+        "สรุป Progress รายวัน",
+        "สรุป Progress ราย Plot"
+      ]
     },
     {
       "number": 9,
@@ -118,11 +128,15 @@
       "number": 11,
       "name": "3kings-11-weekly-recap",
       "shortcut": "สรุป Weekly Recap",
-      "sop_title": "SOP_11_Weekly_Recap_v2.0_Consolidated_2026-10-20",
+      "sop_title": "SOP_08_11_Progress_Weekly_Recap_Single_Flow_v3.0_2026-10-22",
       "mode": "document_only",
       "sop_index": "00-SOP_INDEX - 3Kings Construction",
       "sop_location": "3Kings Construction/0-SOP & AI Commands",
-      "requires_live_drive_read": true
+      "requires_live_drive_read": true,
+      "aliases": [
+        "Weekly Recap",
+        "สรุปงานรายสัปดาห์"
+      ]
     },
     {
       "number": 12,
