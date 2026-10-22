@@ -133,3 +133,26 @@ test('quoted Express rows with escaped trailing quotes stay parseable',()=>{
  assert.equal(r.documents[0].totalCents,10700)
  assert.equal(r.qa.length,0)
 })
+
+
+test('22-Oct bounded PO export retains plain numbered item lines and excludes starred cancellations',()=>{
+ const lines=[
+  'บริษัท ตัวอย่าง','  รายงานใบสั่งซื้อ เรียงตามผู้จำหน่าย',
+  '  บริษัททดสอบ /AP-0001',
+  '  PO691021001  21/10/69  21/10/69   30  2                   100.00        7.00       107.00  N    Plot 6',
+  '                1 12-02-039 แผ่นวัสดุ                  2.00แผ่น            50.00                  100.00',
+  ' *PL0000962    20/10/69  20/10/69       2                     0.00        0.00         0.00  N    Plot 9',
+  ' *PLP          20/10/69  20/10/69       0                     0.00        0.00         0.00  N',
+  'รวมทั้งสิ้น  3 ใบ                                        100.00        7.00       107.00'
+ ]
+ const r=parseExpressPoReport(cp874(lines.map(x=>'"'+x+'"').join('\r\n')))
+ assert.equal(r.reportType,'PO_PL')
+ assert.equal(r.documents.length,1)
+ assert.equal(r.summary.cancelledDocuments,2)
+ assert.equal(r.documents[0].poNo,'PO691021001')
+ assert.equal(r.documents[0].items.length,1)
+ assert.equal(r.documents[0].items[0].itemCode,'12-02-039')
+ assert.equal(r.documents[0].items[0].quantity,2)
+ assert.equal(r.summary.reportedDocuments,3)
+ assert.deepEqual(r.qa,[])
+})
