@@ -10,3 +10,6 @@ node_modules
 # Task Observer private outputs must never enter this public repository
 skill-observations/
 skill-updates/
+gas-inspection/
+.clasp.json
+
