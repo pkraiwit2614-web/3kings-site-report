@@ -6,6 +6,8 @@ import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
 import StatusBadge from '@/components/StatusBadge'
 import ReadableDetail from '@/components/ReadableDetail'
+import ProcurementEvidenceLinks from '@/components/ProcurementEvidenceLinks'
+import type {ProcurementEvidenceRow} from '@/lib/procurementEvidence'
 import { getSupabase } from '@/lib/supabase'
 import { createLiveLoader, requireSuccessfulReads } from '@/lib/liveLoader'
 import type { Project } from '@/lib/types'
@@ -52,6 +54,7 @@ export default function MaterialsPage(){
   const [rows,setRows]=useState<any[]>([])
   const [procurement,setProcurement]=useState<any[]>([])
   const [procurementLinks,setProcurementLinks]=useState<any[]>([])
+  const [evidenceRows,setEvidenceRows]=useState<ProcurementEvidenceRow[]>([])
   const [tools,setTools]=useState<any[]>([])
   const [project,setProject]=useState('')
   const [orderStatus,setOrderStatus]=useState('')
@@ -80,7 +83,7 @@ export default function MaterialsPage(){
     const s=getSupabase()
     const loader=createLiveLoader({
       load:async(signal)=>{
-        const [p,m,pr,prLinks,t,overrides,checked,imported]=await Promise.all([
+        const [p,m,pr,prLinks,t,overrides,checked,imported,evidence]=await Promise.all([
           s.from('projects').select('*').or('active.eq.true,code.eq.AV-P3').order('sort_order').abortSignal(signal),
           s.from('materials').select('*').order('project_id').order('source_row').abortSignal(signal),
           s.from('v_procurement_items').select('*').order('source_updated_at',{ascending:false}).order('source_row').abortSignal(signal),
@@ -88,7 +91,8 @@ export default function MaterialsPage(){
           s.from('tool_machine').select('*').order('item_no').abortSignal(signal),
           s.from('material_tool_web_overrides').select('*').abortSignal(signal),
           s.from('drive_sync_runs').select('created_at,status').eq('sync_type','materials').order('created_at',{ascending:false}).limit(1).abortSignal(signal).maybeSingle(),
-          s.from('drive_sync_runs').select('created_at').eq('status','success').eq('sync_type','materials').gt('rows_written',0).order('created_at',{ascending:false}).limit(1).abortSignal(signal).maybeSingle()
+          s.from('drive_sync_runs').select('created_at').eq('status','success').eq('sync_type','materials').gt('rows_written',0).order('created_at',{ascending:false}).limit(1).abortSignal(signal).maybeSingle(),
+          s.from('procurement_evidence_links').select('document_type,document_no,drive_file_id,file_name,file_format,evidence_scope').abortSignal(signal)
         ])
         requireSuccessfulReads([p,m,pr,prLinks,t,overrides,checked,imported])
         if(!alive||signal.aborted)return
@@ -105,6 +109,8 @@ export default function MaterialsPage(){
         setRows((m.data||[]).map((row:any)=>merge(row,'material')))
         setProcurement(pr.data||[])
         setProcurementLinks(prLinks.data||[])
+        // Isolated optional lookup: existing Materials and printing remain available.
+        setEvidenceRows(evidence.error?[]:(evidence.data||[]) as ProcurementEvidenceRow[])
         setTools((t.data||[]).map((row:any)=>merge(row,'tool')))
         setLatestCheckAt(checked.data?.created_at||null)
         setLatestSyncStatus(checked.data?.status||null)
@@ -301,7 +307,7 @@ export default function MaterialsPage(){
               <td><b>{x.item_name}</b><small>{x.quantity_unit||'ยังไม่ระบุปริมาณ/หน่วย'}</small></td>
               <td>{[x.brand,x.model_spec].filter(Boolean).join(' / ')||'-'}</td>
               <td><StatusBadge value={x.status}/>{x.__override_updated_at&&<small>Web App update</small>}{canManage&&<button type="button" className="button material-web-edit-button" style={{display:'block',marginTop:5}} onClick={()=>setEditTarget({type:'material',item:x})}>แก้ไข</button>}</td>
-              <td>{related?<>{related.po_no&&<small><b>สั่งแล้ว (มีเลขใบสั่ง)</b></small>}<b>{related.procurement_status||'-'}</b><small>{related.current_status||'-'}</small>{(related.po_no||related.pr_no)&&<small>{[related.pr_no,related.po_no].filter(Boolean).join(' / ')}</small>}{related.payment_status&&<small>ชำระเงิน: {related.payment_status}</small>}{related.expected_delivery_text&&<small>กำหนดส่ง: {related.expected_delivery_text}</small>}</>:<span className="muted">ยังไม่มีรายการจัดซื้อที่จับคู่ได้แน่นอน</span>}</td>
+              <td>{related?<>{related.po_no&&<small><b>สั่งแล้ว (มีเลขใบสั่ง)</b></small>}<b>{related.procurement_status||'-'}</b><small>{related.current_status||'-'}</small>{(related.po_no||related.pr_no)&&<div style={{marginTop:5}}><ProcurementEvidenceLinks prNo={related.pr_no} poNo={related.po_no} evidenceRows={evidenceRows}/></div>}{related.payment_status&&<small>ชำระเงิน: {related.payment_status}</small>}{related.expected_delivery_text&&<small>กำหนดส่ง: {related.expected_delivery_text}</small>}</>:<span className="muted">ยังไม่มีรายการจัดซื้อที่จับคู่ได้แน่นอน</span>}</td>
               <td><ReadableDetail parts={[...detail,related?.condition_note]}/>{related?.source_updated_at&&<small>ทะเบียนจัดซื้ออัปเดต {dateTH(related.source_updated_at)}</small>}</td>
               <td>{x.contact_name||x.contact_phone||related?.vendor?<><b>{x.contact_name||related?.vendor||'-'}</b><small>{x.contact_phone||''}</small></>:'-'}</td>
             </tr>
@@ -330,7 +336,7 @@ export default function MaterialsPage(){
           </thead>
           <tbody>{filteredProcurement.map(x=><tr key={x.id}>
             <td><b>{procurementPlotText(x)}</b></td>
-            <td><b>{[x.po_no,x.pr_no].filter(Boolean).join(' / ')||'-'}</b></td>
+            <td><ProcurementEvidenceLinks prNo={x.pr_no} poNo={x.po_no} evidenceRows={evidenceRows}/></td>
             <td>{x.vendor||'ยังไม่ระบุ'}</td>
             <td><b>{x.item_name||'-'}</b></td>
             <td>{x.po_no&&<small><b>สั่งแล้ว (มีเลขใบสั่ง)</b></small>}{x.payment_status||x.procurement_status||'-'}</td>
