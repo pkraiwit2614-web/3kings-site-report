@@ -6,7 +6,7 @@ const read=path=>fs.readFileSync(require('node:path').join(process.cwd(),path),'
 
 test('registry API is disabled by default, read only, paginated, JWT/RLS-bound',()=>{
  const api=read('app/api/materials/express-register/route.ts')
- assert.match(api,/EXPRESS_REGISTER_DISPLAY_ENABLED'!=='true'/)
+ assert.match(api,/process\.env\.EXPRESS_REGISTER_DISPLAY_ENABLED!=='true'/)
  assert.match(api,/auth\.getUser\(token\)/)
  assert.match(api,/profiles/)
  assert.match(api,/readPermissionSnapshot/)
