@@ -65,8 +65,3 @@ create policy express_register_rows_read on public.express_register_rows
  );
 -- Only the existing trusted Apps Script service-role key may write these rows.
 -- Never expose key to browser or create anon/authenticated write policies.
-
--- Synthetic Viewer grants for this isolated fixture only; never propagated to Production.
-INSERT INTO private.role_permission_matrix(role,module,level,default_level,locked)
-VALUES ('viewer','materials','view','view',false),('viewer','procurement','view','view',false)
-ON CONFLICT (role,module) DO NOTHING;
