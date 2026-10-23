@@ -66,3 +66,19 @@ The curated adapters add domain/PR discipline and report diagram/slide *instruct
 ## 22 October 2026 — Canonical SOP 06/07 single-flow routing
 - Drive INDEX 06 (`อัปเดตวัสดุ`/`อัปเดตวัสดุตามเดิม`) and 07 (`เช็ก PO`) now share one canonical v3.0 SOP document. Retain both registered numbered Skills, aliases and their distinct modes; 07 is Express-only READ_ONLY and cannot inherit 06 scoped write privileges.
 - GitHub title/manifest is a non-authoritative discovery mirror. No runtime/production change, import, data edit or deployment follows merely from these routing-document updates.
+
+## 2026-10-23 — Antigravity Autonomous Development & Execution Operational Framework
+To allow autonomous development, bug investigation, and task closure while strictly preserving safety boundaries:
+1. **Immediate Scoped Code Access (ตรวจสอบและแก้ไขโค้ดได้ทันที)**: When tasked with development, refactoring, or bug fixing, inspect and modify source code within the explicitly authorized task scope immediately without secondary permission.
+2. **Autonomous End-to-End Execution (ทำงานต่อเนื่องจบกระบวนการ)**: A single scoped user instruction authorizes the full development cycle: creating an isolated branch, editing files, running local build/tests, executing regression QA, and preparing PR/commits without pausing for repetitive substep micro-approvals.
+3. **Self-Healing Scoped Debug Loop (แก้ไขปัญหาในขอบเขตจนผ่าน)**: If an error, test failure, or regression related to the scoped task occurs, systematically diagnose root cause, implement minimal surgical fix, and re-test until green. Never modify unrelated systems outside the task scope.
+4. **GitHub Actions / Local QA First (QA ภายในเป็นหลัก)**: Prefer local node tests, build checks, and GitHub Actions (`Supabase Local Viewer E2E`) as the primary QA gate. Use Hosted Vercel Preview only when explicitly required by SOP 15 (e.g., when hosted OAuth/cookies or live edge behavior cannot be proved locally).
+5. **Governed Production Deployment — SOP 16 (Deploy ต่อเมื่อสั่งและผ่านเกณฑ์จริง)**: Production deployment is executed only upon an explicit deployment command, passing all required checks (no SKIPPED/FAILED), verifying real ACL/identity, and completing live Production readback.
+6. **Scoped External Data Writes (เขียนข้อมูลภายนอกตามสิทธิ์และ SOP ACTIVE)**: Modifications to Google Drive, Excel Master, Supabase, or Google Calendar are permitted only when explicitly requested, backed by verified effective ACL, and after reading the latest ACTIVE Google Drive SOP.
+7. **Strict Hard Stops / Zero-Touch Zones (เขตห้ามแตะต้องนอกขอบเขต)**: Never touch, modify, or infer changes to Payroll, RBAC/RLS, Defect Flow, Materials/PO, Daily Reports, Calendar, or any protected `Data*` folder outside the authorized scope.
+8. **Resilient Isolation & No False Stalls (ทำต่อในส่วนที่ปลอดภัย)**: Complete all authorized steps end-to-end without stopping to ask repetitive questions. If a specific step is blocked by permissions or safety, isolate/quarantine that item as `BLOCKED` and continue all remaining safe tasks.
+9. **Rigorous Blast Radius Verification (ตรวจผลกระทบรอบด้าน)**: Assess UI → API → DB → Print → i18n → Roles → Sync impacts before and after every code change.
+10. **Evidence-Based Truthful Reporting (รายงานตามหลักฐานจริง)**: Report results strictly as `PASS`, `FAIL`, or `BLOCKED` with verified readback evidence. Never claim sync, build, or deploy succeeded without tangible verification.
+
+*This framework defines agent operational autonomy and does not grant automatic production release or permission to mutate out-of-scope data.*
+
