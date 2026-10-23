@@ -76,6 +76,7 @@ jobs:
             echo "SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
             echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
             echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$ANON_KEY"
+            echo "EXPRESS_REGISTER_DISPLAY_ENABLED=true"
           } >> "$GITHUB_ENV"
           echo "LOCAL_SUPABASE_ONLY"
       - name: Bootstrap ephemeral real Auth users and profiles
