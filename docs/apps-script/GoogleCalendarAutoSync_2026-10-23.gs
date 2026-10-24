@@ -721,6 +721,24 @@ function dryRunGoogleCalendarSync(customStartOrOptions, customEnd) {
 }
 
 /**
+ * Interactive Owner-only authorization checkpoint for CalendarApp.
+ * Run from Apps Script Editor; no Calendar reads, writes, trigger changes or source queries.
+ * No try/catch: ScriptApp.requireScopes must be allowed to prompt for missing consent.
+ * Do not call this from an installable trigger or scheduled sync.
+ */
+function authorizeCalendarScope20261024() {
+  if (typeof ScriptApp === 'undefined' || typeof ScriptApp.requireScopes !== 'function') {
+    throw new Error('SCRIPTAPP_REQUIRE_SCOPES_NOT_AVAILABLE');
+  }
+  const calendarScope = 'https://www.googleapis.com/auth/calendar';
+  ScriptApp.requireScopes(ScriptApp.AuthMode.FULL, [calendarScope]);
+  if (typeof Logger !== 'undefined' && Logger.log) {
+    Logger.log('Calendar OAuth scope check complete; run diagnoseCalendarAccess20261024 to verify real access.');
+  }
+  return { status: 'CALENDAR_SCOPE_CHECK_COMPLETED', requestedScope: calendarScope, mutationCount: 0 };
+}
+
+/**
  * Standalone read-only diagnostic for Google Apps Script Web IDE.
  * Allows Owner to test all 7 calendars and Supabase connectivity in 1 click without mutations.
  */
@@ -1491,6 +1509,7 @@ if (typeof module !== 'undefined' && module.exports) {
     resolveCalendarIdForTask,
     dryRunGoogleCalendarSync,
     diagnoseCalendarAccess20261024,
+    authorizeCalendarScope20261024,
     syncGoogleCalendarScheduledJob,
     fetchAuthorizedCalendarSourceItems_,
     setGlobalCalendarSourceProvider_,
