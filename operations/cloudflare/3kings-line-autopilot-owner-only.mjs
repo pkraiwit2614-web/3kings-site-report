@@ -437,7 +437,7 @@ export async function dailySiteSendTick(env,{db,hash,transport=fetch,now=new Dat
 }
 
 
-// Daily owner DM, one report per Bangkok workday; allow bounded catch-up for QA finalized after 13:00. Reads only service-role
+// Daily owner DM, one report per Bangkok morning. Reads only service-role
 // Delivery Log summary; never reads group IDs or changes site-group delivery.
 const OWNER_SUMMARY_ROUTES=Object.freeze([
   ['above_villa','Above Villa'],
@@ -567,6 +567,74 @@ export async function dailyOwnerSummaryTick(env,{db,hash,transport=fetch,now=new
   return {...base,mode:accepted?'OWNER_BUNDLE_ACCEPTED':'OWNER_BUNDLE_UNCERTAIN',
     delivered:accepted,http};
 }
+
+// Owner-only evening command reminder; uses the existing Worker, ledger and quota checks.
+// A prefilled ChatGPT link is best-effort; the literal commands remain copyable.
+export async function eveningOwnerCommandsTick(env,{db,hash,transport=fetch,now=new Date()}={}){
+  const when=dailyBangkokPolicy(now);
+  const base={mode:'EVENING_NOT_DUE',date:when.day,delivered:false};
+  if(when.dayOfWeek===0 || when.localTime!=='19:30')return base;
+  if(env.DAILY_SITE_LINE_ENABLED!=='true'||!env.DAILY_LINE_BRIDGE_TOKEN||
+     !env.SUPABASE_URL||!env.LINE_CHANNEL_ACCESS_TOKEN||
+     !/^U[0-9a-f]{32}$/i.test(env.LINE_OWNER_USER_ID||''))
+    return {...base,mode:'EVENING_NOT_CONFIGURED'};
+  if(typeof db!=='function'||typeof hash!=='function')
+    throw Error('EVENING_DEPENDENCY_MISSING');
+  const quota=await dailyLineQuota(env,transport);
+  if(!quota.allow || (quota.remaining!==null && quota.remaining<1))
+    return {...base,mode:'EVENING_QUOTA_BLOCKED'};
+  const key=await hash('3kings|evening_commands_owner|'+when.day);
+  if(!validSha(key))return {...base,mode:'EVENING_KEY_BLOCKED'};
+  let claim;
+  try{
+    const rows=await db(env,'/rest/v1/rpc/line_autopilot_claim',{
+      p_event_key:key,p_alert_kind:'daily_site_report',p_target_scope:'owner',
+      p_summary:'Evening task shortcuts '+when.day
+    });
+    claim=Array.isArray(rows)?rows[0]:null;
+  }catch{return {...base,mode:'EVENING_CLAIM_FAILED'};}
+  if(claim?.claim_status==='already_sent')
+    return {...base,mode:'EVENING_ALREADY_SENT',delivered:true};
+  if(claim?.claim_status!=='new'||!validRetry(claim.retry_key))
+    return {...base,mode:'EVENING_NO_RETRY'};
+  const one='ทำ Daily Site Report ตามเดิม',two='ทำ Labour PDF';
+  const message=[
+    '3 Kings Construction • เตือนคำสั่งประจำวัน 19:30 น.',
+    '',
+    '1. '+one,
+    'เปิด ChatGPT: https://chatgpt.com/?q='+encodeURIComponent(one),
+    '',
+    '2. '+two,
+    'เปิด ChatGPT: https://chatgpt.com/?q='+encodeURIComponent(two),
+    '',
+    'หากลิงก์ไม่เติมคำสั่ง ให้วางข้อความด้านบนใน ChatGPT แล้วกดส่ง',
+    '(ส่งเฉพาะ Owner ไม่ส่งเข้ากลุ่ม)'
+  ].join('\n');
+  let http=null,accepted=false;
+  try{
+    const response=await transport('https://api.line.me/v2/bot/message/push',{
+      method:'POST',headers:{
+        authorization:'Bearer '+env.LINE_CHANNEL_ACCESS_TOKEN,
+        'content-type':'application/json','X-Line-Retry-Key':claim.retry_key
+      },
+      body:JSON.stringify({to:env.LINE_OWNER_USER_ID,messages:[{type:'text',text:message}]}),
+      signal:AbortSignal.timeout(10000)
+    });
+    http=response.status;
+    accepted=(http>=200&&http<300)||
+      (http===409&&!!response.headers?.get?.('x-line-accepted-request-id'));
+  }catch{console.warn('evening_owner_reminder_network_uncertain');}
+  try{
+    const ok=await db(env,'/rest/v1/rpc/line_autopilot_ack',{
+      p_event_key:key,p_retry_key:claim.retry_key,
+      p_status:accepted?'delivered':'uncertain',p_http_status:http
+    });
+    if(ok!==true)return {...base,mode:'EVENING_ACK_UNVERIFIED'};
+  }catch{return {...base,mode:'EVENING_ACK_FAILED'};}
+  return {...base,mode:accepted?'EVENING_ACCEPTED':'EVENING_UNCERTAIN',
+    delivered:accepted,http};
+}
+
 export default {
   async fetch(request,env){
     const url=new URL(request.url);
@@ -646,6 +714,15 @@ export default {
     return json({error:'not_found'},404);
   },
   async scheduled(controller,env){
+    // One dedicated UTC cron: 12:30 = 19:30 Bangkok, Monday-Saturday.
+    if(controller?.cron==='30 12 * * 1-6'){
+      try{
+        const r=await eveningOwnerCommandsTick(env,{db:dailyLineRpc,hash:sha256hex});
+        console.info('evening_owner_commands_tick',{mode:r.mode,accepted:r.delivered,http:r.http??null});
+      }catch{console.warn('evening_owner_commands_tick_failed');}
+      return;
+    }
+
     // Owner-only mode: NEVER invoke the former group sender or summary DM.
     try {
       const r=await dailyOwnerSummaryTick(env,{db:dailyLineRpc,hash:sha256hex});
