@@ -713,3 +713,228 @@ test('syncGoogleCalendarScheduledJob fails closed to reviewQueue when destinatio
   }
 });
 
+test('dryRunGoogleCalendarSync safely handles null/empty titles and timezone date formatting', () => {
+  const { dryRunGoogleCalendarSync } = require('../docs/apps-script/GoogleCalendarAutoSync_2026-10-23.gs');
+
+  const nullTitleEvent = {
+    getId: () => 'evt_null_title',
+    getTitle: () => null, // null title must not throw TypeError
+    getStartTime: () => new Date('2026-10-24T00:00:00+07:00'),
+  };
+
+  const emptyTitleEvent = {
+    getId: () => 'evt_empty_title',
+    getTitle: () => '',
+    getStartTime: () => new Date('2026-10-24T12:00:00+07:00'),
+  };
+
+  global.CalendarApp = {
+    getCalendarById: () => ({
+      getEvents: () => [nullTitleEvent, emptyTitleEvent],
+    }),
+  };
+
+  try {
+    const res = dryRunGoogleCalendarSync();
+    assert.equal(res.status, 'REVIEW_HOLD');
+    assert.equal(res.error, 'UNFORMATTED_EVENTS_DETECTED');
+    assert.equal(res.needsFormattingCount, 14); // 2 events * 7 calendars
+  } finally {
+    delete global.CalendarApp;
+  }
+});
+
+test('diagnoseCalendarAccess20261024 inspects all 7 calendars and Supabase connectivity', () => {
+  const { diagnoseCalendarAccess20261024, GCAL_AUTO_SYNC_20261023 } = require('../docs/apps-script/GoogleCalendarAutoSync_2026-10-23.gs');
+
+  const calendars = GCAL_AUTO_SYNC_20261023.CALENDARS;
+  // Mock where calendar 4 (Villa 6) is not accessible (returns null)
+  global.CalendarApp = {
+    getCalendarById: (id) => {
+      if (id === calendars[3].id) return null;
+      return {
+        getName: () => 'Mock ' + id.slice(0, 8),
+        getTimeZone: () => 'Asia/Bangkok',
+        getEvents: () => [{ id: 'evt_1' }, { id: 'evt_2' }],
+      };
+    },
+  };
+  global.Logger = { log: () => {} };
+
+  try {
+    const report = diagnoseCalendarAccess20261024();
+    assert.equal(report.calendarAppAvailable, true);
+    assert.equal(report.totalAccessible, 6);
+    assert.equal(report.calendars.length, 7);
+    assert.equal(report.calendars[3].accessible, false);
+    assert.equal(report.totalEvents, 12);
+  } finally {
+    delete global.CalendarApp;
+    delete global.Logger;
+  }
+});
+
+test('fetchAuthorizedCalendarSourceItems_ maps real actual_progress and site_status without fabricated values', () => {
+  const { fetchAuthorizedCalendarSourceItems_ } = require('../docs/apps-script/GoogleCalendarAutoSync_2026-10-23.gs');
+
+  const mockTasks = [
+    {
+      id: 'task_001',
+      source_identity: 'task:task_001',
+      task_name: 'งานสถาปัตยกรรม',
+      area: 'Plot 9',
+      category: 'สถาปัตย์',
+      planned_start: '2026-10-20',
+      planned_end: '2026-10-30',
+      actual_progress: 0.259, // 25.9% -> 26%
+      site_status: 'ล่าช้า',
+      plan_status: 'ตามแผน',
+    },
+    {
+      id: 'task_002',
+      source_identity: 'task:task_002',
+      task_name: 'Cleaning A221/A222',
+      area: 'Condo A',
+      category: 'Cleaning',
+      planned_start: '2026-10-22',
+      planned_end: '2026-10-25',
+      actual_progress: null, // No fabricated 0!
+      site_status: null,
+      plan_status: 'แผนช่วงบ่าย',
+    },
+  ];
+
+  global.buildContext_ = () => ({});
+  global.sbGetAll_ = (ctx, query) => {
+    assert(query.includes('actual_progress'));
+    assert(query.includes('site_status'));
+    assert(query.includes('plan_status'));
+    return mockTasks;
+  };
+
+  try {
+    const items = fetchAuthorizedCalendarSourceItems_();
+    assert.equal(items.length, 2);
+
+    // Task 1: has actual progress 25.9% -> 26%, site_status 'ล่าช้า'
+    assert.equal(items[0].progress, 26);
+    assert.equal(items[0].status, 'ล่าช้า');
+    assert.equal(items[0].detail, 'งานสถาปัตยกรรม 26%');
+    assert.equal(items[0].isActual, true);
+    assert.equal(items[0].domain, 'actual');
+
+    // Task 2: null progress preserved as null (never fabricated 0), plan_status used
+    assert.equal(items[1].progress, null);
+    assert.equal(items[1].status, 'แผนช่วงบ่าย');
+    assert.equal(items[1].detail, 'Cleaning A221/A222');
+    assert.equal(items[1].isActual, false);
+    assert.equal(items[1].domain, 'plan');
+  } finally {
+    delete global.buildContext_;
+    delete global.sbGetAll_;
+  }
+});
+
+test('syncGoogleCalendarScheduledJob supports skipLock to prevent nested LockService deadlock', () => {
+  const { syncGoogleCalendarScheduledJob } = require('../docs/apps-script/GoogleCalendarAutoSync_2026-10-23.gs');
+
+  let lockAcquired = false;
+  global.CalendarApp = {
+    getCalendarById: () => ({
+      getEvents: () => [],
+    }),
+  };
+  global.LockService = {
+    getScriptLock: () => ({
+      tryLock: () => {
+        lockAcquired = true;
+        return true;
+      },
+      releaseLock: () => {},
+    }),
+  };
+
+  try {
+    // When skipLock is true, LockService must NOT be acquired
+    syncGoogleCalendarScheduledJob([], { skipLock: true, allowCountMismatch: true });
+    assert.equal(lockAcquired, false, 'Lock must NOT be acquired when skipLock is true');
+
+    // When skipLock is false/omitted, LockService must be acquired
+    syncGoogleCalendarScheduledJob([], { skipLock: false, allowCountMismatch: true });
+    assert.equal(lockAcquired, true, 'Lock must be acquired when skipLock is false');
+  } finally {
+    delete global.CalendarApp;
+    delete global.LockService;
+  }
+});
+
+test('301 active tasks reconciliation: unmatched tasks fail closed without creating unwanted events', () => {
+  const { syncGoogleCalendarScheduledJob } = require('../docs/apps-script/GoogleCalendarAutoSync_2026-10-23.gs');
+
+  const p9CalId = '958f698c143282cd3a24c4d8563e2fbe505a8c1948f91806b3480ea1a25450f9@group.calendar.google.com';
+  let eventTitle = 'งานสถาปัตยกรรม 25.9% • ล่าช้า [Plot 9] [สถาปัตย์]';
+  const existingEvent = {
+    getId: () => 'gcal_existing_001',
+    getTitle: () => eventTitle,
+    getDescription: () => '[3Kings-Key: gcal:villa:plot_9:สถาปัตย์:งานสถาปัตยกรรม:2026-10-24]',
+    getTag: () => 'gcal:villa:plot_9:สถาปัตย์:งานสถาปัตยกรรม:2026-10-24',
+    getStartTime: () => new Date('2026-10-24T08:00:00+07:00'),
+    setTitle: (t) => { eventTitle = t; },
+    setTag: () => {},
+  };
+
+  global.CalendarApp = {
+    getCalendarById: (id) => ({
+      getEvents: () => id === p9CalId ? [existingEvent] : [],
+      createEvent: () => { throw new Error('MUST_NOT_BE_CALLED'); },
+    }),
+  };
+  global.LockService = {
+    getScriptLock: () => ({
+      tryLock: () => true,
+      releaseLock: () => {},
+    }),
+  };
+
+  try {
+    // Simulate 10 incoming tasks: 1 matched with progress change, 9 unmapped tasks
+    const tasks = [
+      {
+        calendarId: p9CalId,
+        detail: 'งานสถาปัตยกรรม 27.5%',
+        status: 'ล่าช้า',
+        location: 'Plot 9',
+        workGroup: 'สถาปัตย์',
+        date: '2026-10-24',
+      }
+    ];
+    for (let i = 1; i <= 9; i++) {
+      tasks.push({
+        calendarId: p9CalId,
+        detail: 'Unmatched Task ' + i,
+        status: 'แผนงาน',
+        location: 'Condo Area ' + i,
+        workGroup: 'งานระบบ',
+        date: '2026-11-0' + i,
+      });
+    }
+
+    // Run scheduled job with allowCountMismatch: true, dryRun: false, allowCreate: false
+    const res = syncGoogleCalendarScheduledJob(tasks, {
+      dryRun: false,
+      allowCreate: false,
+      allowCountMismatch: true,
+      failOnUnmatched: false,
+    });
+
+    assert.equal(res.status, 'SUCCESS');
+    assert.equal(res.updatedCount, 1);
+    assert.equal(res.createdCount, 0, 'Zero events created!');
+    assert.equal(res.unmatchedCount, 9, '9 tasks safely identified as unmatched');
+    assert.equal(eventTitle, 'งานสถาปัตยกรรม 27.5% • ล่าช้า [Plot 9] [สถาปัตย์]');
+  } finally {
+    delete global.CalendarApp;
+    delete global.LockService;
+  }
+});
+

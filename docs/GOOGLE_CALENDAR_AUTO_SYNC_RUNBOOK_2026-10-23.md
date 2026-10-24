@@ -87,7 +87,7 @@ To install or update the code in Google Apps Script:
 
 ## 6. Verification and Regression Test Evidence
 
-The regression suite [`tests/google-calendar-auto-sync.test.cjs`](file:///c:/Users/Acer/Projects/3kings-site-report/tests/google-calendar-auto-sync.test.cjs) was executed with 18 comprehensive test assertions:
+The regression suite [`tests/google-calendar-auto-sync.test.cjs`](file:///c:/Users/Acer/Projects/3kings-site-report/tests/google-calendar-auto-sync.test.cjs) was executed with 23 comprehensive test assertions:
 
 ```text
 ✔ GoogleCalendarAutoSync script compiles cleanly without syntax errors
@@ -108,24 +108,56 @@ The regression suite [`tests/google-calendar-auto-sync.test.cjs`](file:///c:/Use
 ✔ syncGoogleCalendarScheduledJob updates existing event title upon progress delta and preserves same Event ID
 ✔ syncGoogleCalendarScheduledJob called with NO ARGUMENTS fetches source from provider and verifies destination readback
 ✔ syncGoogleCalendarScheduledJob fails closed to reviewQueue when destination readback fails
+✔ dryRunGoogleCalendarSync safely handles null/empty titles and timezone date formatting
+✔ diagnoseCalendarAccess20261024 inspects all 7 calendars and Supabase connectivity
+✔ fetchAuthorizedCalendarSourceItems_ maps real actual_progress and site_status without fabricated values
+✔ syncGoogleCalendarScheduledJob supports skipLock to prevent nested LockService deadlock
+✔ 301 active tasks reconciliation: unmatched tasks fail closed without creating unwanted events
 
-PASS: 18 / 18 tests passed (0 failures)
+PASS: 23 / 23 tests passed (0 failures)
 ```
 
 ---
 
-## 7. Owner Action Required: One-Time Google Apps Script OAuth Authorization
+## 7. Diagnostic & Troubleshooting Protocol for Owner
 
-Because Google Apps Script requires interactive user consent for scripts accessing `CalendarApp` under the owner account:
+### Step 1: Copy Execution Error without Re-running
+If an error was previously reported, Owner does NOT need to re-run:
+1. Open Google Apps Script Executions:
+   `https://script.google.com/home/projects/1sKddwvs-DOav0ltdrcxyqPXYinXE3uCgFKmDzGu_XEb4VvMvYVwDUDeT/executions`
+2. Click on the failed execution row (`dryRunGoogleCalendarSync`).
+3. Copy the Error message, line number, and stack trace.
 
-1. **Owner (`p.kraiwit2614@gmail.com`) logs into Google Apps Script**:
-   - URL: `https://script.google.com/home/projects/1sKddwvs-DOav0ltdrcxyqPXYinXE3uCgFKmDzGu_XEb4VvMvYVwDUDeT/edit`
-2. **Select Function**:
-   - In the toolbar dropdown, select `dryRunGoogleCalendarSync`.
-3. **Click "Run"**:
-   - A modal dialog "Authorization Required" will appear asking for Google Calendar permissions.
-   - Click "Review permissions" -> select `p.kraiwit2614@gmail.com` -> click "Advanced" -> "Go to 3Kings-App (unsafe)" -> "Allow".
-4. **Readback Execution**:
-   - The execution log will display `=== Google Calendar Auto Sync Dry-Run Audit ===` with `Status: AUDIT_PASS` and `Total Events Found: 188`.
-5. **Scheduled Auto Sync Activation**:
-   - Once authorized, the hourly runner `syncShiftHourly20261013` will automatically execute `syncGoogleCalendarScheduledJob()` without further prompts.
+### Step 2: Run Read-Only Diagnostic Tool (`diagnoseCalendarAccess20261024`)
+A dedicated, 100% read-only diagnostic function is now deployed to Live GAS:
+1. Open Apps Script Editor:
+   `https://script.google.com/home/projects/1sKddwvs-DOav0ltdrcxyqPXYinXE3uCgFKmDzGu_XEb4VvMvYVwDUDeT/edit`
+2. Select function **`diagnoseCalendarAccess20261024`** from the function dropdown.
+3. Click **"Run"**.
+   - If prompted for authorization: click "Review permissions" -> choose Owner Google account -> "Advanced" -> "Go to 3Kings-App (unsafe)" -> "Allow".
+4. Review the Execution Log:
+   - Each of the 7 calendars is tested individually:
+     ```text
+     [OK] 3 Kings – Construction Plan ("3 Kings – Construction Plan"): 62 events (TZ: Asia/Bangkok)
+     [OK] 3 Kings – Site / Actual ("3 Kings – Site / Actual"): 90 events (TZ: Asia/Bangkok)
+     ...
+     Total Accessible Calendars: 7 / 7
+     Total Events Found: 188
+     [SUPABASE] Read 301 tasks successfully
+     ```
+   - If any calendar returns `[FAIL] ...: NOT ACCESSIBLE`, that calendar ID has not been added or shared with the account executing the script.
+
+### Step 3: Run `dryRunGoogleCalendarSync`
+Once all 7 calendars are accessible:
+1. Select function **`dryRunGoogleCalendarSync`** and click **"Run"**.
+2. Confirm status is **`AUDIT_PASS`** with 188 total events and 0 mutations.
+
+### Step 4: Activating Scheduled Writes (SOP 16 Release Gate Required)
+The hourly scheduler `syncShiftHourly20261013` currently has a **Fail-closed Gate**:
+- `output.calendar` executes `CALENDAR_SYNC_NOT_ENABLED_FAIL_CLOSED` by default.
+- Scheduled writes will NEVER execute until:
+  1. `dryRunGoogleCalendarSync` returns `AUDIT_PASS` in Live GAS.
+  2. Release gate passes and Owner explicitly sets Script Property:
+     `CALENDAR_SYNC_ENABLED = "true"`
+- All 5 existing triggers remain intact and unaffected.
+
