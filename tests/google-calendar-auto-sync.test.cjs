@@ -1434,4 +1434,67 @@ test('mapScheduleTaskToCalendarItem_ strictly forbids inferring Actual from actu
   assert.equal(mapped.detail, 'งานโครงสร้างชั้น 2 55%');
 });
 
-
+test('scheduled calendar auto sync defaults to HOLD with zero writes if source items are unmatched', () => {
+  const { syncGoogleCalendarScheduledJob } = require('../docs/apps-script/GoogleCalendarAutoSync_2026-10-23.gs');
+  const calendarId = '958f698c143282cd3a24c4d8563e2fbe505a8c1948f91806b3480ea1a25450f9@group.calendar.google.com';
+  let liveTitle = 'งานกระเบื้อง 50% • กำลังดำเนินการ [Plot 9] [กระเบื้อง]';
+  let writeCount = 0;
+  const existing = {
+    getId: () => 'existing-event-1',
+    getTitle: () => liveTitle,
+    getDescription: () => '',
+    getTag: () => '',
+    getStartTime: () => new Date('2026-10-24T08:00:00+07:00'),
+    setTitle: title => { writeCount++; liveTitle = title; },
+    setTag: () => { writeCount++; },
+  };
+  global.CalendarApp = {
+    getCalendarById: id => ({
+      getEvents: () => id === calendarId ? [existing] : [],
+    }),
+  };
+  global.LockService = {
+    getScriptLock: () => ({
+      tryLock: () => true,
+      releaseLock: () => {},
+    }),
+  };
+  global.Logger = { log: () => {} };
+  try {
+    const result = syncGoogleCalendarScheduledJob([
+      {
+        calendarId,
+        storedEventId: 'existing-event-1',
+        detail: 'งานกระเบื้อง 75%',
+        status: 'กำลังดำเนินการ',
+        location: 'Plot 9',
+        workGroup: 'กระเบื้อง',
+        date: '2026-10-24',
+      },
+      {
+        calendarId,
+        detail: 'งานใหม่ยังไม่จับคู่',
+        status: 'แผน',
+        location: 'Plot 9',
+        workGroup: 'งานระบบ',
+        date: '2026-11-20',
+      },
+    ], {
+      dryRun: false,
+      allowCreate: false,
+      allowCountMismatch: true,
+      // Intentionally omit failOnUnmatched: production default must be fail-closed.
+    });
+    assert.equal(result.status, 'HOLD');
+    assert.equal(result.unmatchedCount, 1);
+    assert.equal(result.reviewCount, 1);
+    assert.equal(result.updatedCount, 0);
+    assert.equal(result.createdCount, 0);
+    assert.equal(writeCount, 0, 'No setTitle/setTag should run for partially matched batches');
+    assert.equal(liveTitle, 'งานกระเบื้อง 50% • กำลังดำเนินการ [Plot 9] [กระเบื้อง]');
+  } finally {
+    delete global.CalendarApp;
+    delete global.LockService;
+    delete global.Logger;
+  }
+});
