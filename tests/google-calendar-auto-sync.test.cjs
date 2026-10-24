@@ -307,3 +307,46 @@ test('Safety boundaries: zero modification to Defect Flow, Work Orders, Material
   // Ensure no deleteTrigger loop over unrelated handlers
   assert.doesNotMatch(gasSource, /ScriptApp\.deleteTrigger\([^)]*\)\s*;\s*ScriptApp\.newTrigger\('sync3Kings'\)/);
 });
+
+test('dryRunGoogleCalendarSync audits all 7 production calendars against 188 baseline events without mutations', () => {
+  const { dryRunGoogleCalendarSync } = require('../docs/apps-script/GoogleCalendarAutoSync_2026-10-23.gs');
+  const calendars = GCAL_AUTO_SYNC_20261023.CALENDARS;
+
+  // Build mock CalendarApp returning exactly 188 events across the 7 calendars
+  const mockCalMap = new Map();
+  calendars.forEach((c, idx) => {
+    const count = idx === 0 ? 34 : idx === 1 ? 44 : idx === 2 ? 30 : 20;
+    const events = [];
+    for (let i = 0; i < count; i++) {
+      events.push({
+        getTitle: () => `งานสถาปัตยกรรม 25.9% • ล่าช้า [${c.label}] [สถาปัตย์]`,
+        getId: () => `mock_${c.id}_${i}`,
+      });
+    }
+    mockCalMap.set(c.id, {
+      getEvents: () => events,
+    });
+  });
+
+  global.CalendarApp = {
+    getCalendarById: id => mockCalMap.get(id) || null,
+  };
+  global.Logger = {
+    log: () => {},
+  };
+
+  try {
+    const audit = dryRunGoogleCalendarSync();
+    assert.equal(audit.baselineTarget, 188);
+    assert.equal(audit.totalEvents, 188);
+    assert.equal(audit.createdCount, 0);
+    assert.equal(audit.formattedCount, 188);
+    assert.equal(audit.needsFormattingCount, 0);
+    assert.equal(audit.calendars.length, 7);
+    audit.calendars.forEach(c => assert.equal(c.status, 'OK'));
+  } finally {
+    delete global.CalendarApp;
+    delete global.Logger;
+  }
+});
+

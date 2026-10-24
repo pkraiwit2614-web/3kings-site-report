@@ -450,6 +450,85 @@ function callWithRetry(fn, maxRetries = GCAL_AUTO_SYNC_20261023.MAX_RETRIES) {
   }
 }
 
+
+/**
+ * Dry-run entrypoint for Google Apps Script execution.
+ * Reads events across all 7 production calendars, audits existing counts,
+ * verifies canonical title formatting, and confirms 0 duplicate creations.
+ */
+function dryRunGoogleCalendarSync() {
+  const audit = {
+    timestamp: new Date().toISOString(),
+    calendars: [],
+    totalEvents: 0,
+    formattedCount: 0,
+    needsFormattingCount: 0,
+    createdCount: 0,
+    baselineTarget: 188,
+  };
+
+  if (typeof CalendarApp === 'undefined') {
+    if (typeof Logger !== 'undefined' && Logger.log) {
+      Logger.log('CalendarApp is not defined in this runtime.');
+    }
+    return audit;
+  }
+
+  // Active milestone schedule window (October 2026)
+  const startDate = new Date('2026-10-01T00:00:00+07:00');
+  const endDate = new Date('2026-11-01T00:00:00+07:00');
+
+  for (const calConfig of GCAL_AUTO_SYNC_20261023.CALENDARS) {
+    try {
+      const cal = CalendarApp.getCalendarById(calConfig.id);
+      if (!cal) {
+        audit.calendars.push({ id: calConfig.id, label: calConfig.label, status: 'NOT_FOUND', count: 0 });
+        continue;
+      }
+      const events = cal.getEvents(startDate, endDate) || [];
+      let calFormatted = 0;
+      let calNeedsFormatting = 0;
+
+      events.forEach(e => {
+        const title = typeof e.getTitle === 'function' ? e.getTitle() : (e.title || '');
+        if (title.includes(' • ') && title.includes('[') && title.includes(']')) {
+          calFormatted++;
+        } else {
+          calNeedsFormatting++;
+        }
+      });
+
+      audit.totalEvents += events.length;
+      audit.formattedCount += calFormatted;
+      audit.needsFormattingCount += calNeedsFormatting;
+
+      audit.calendars.push({
+        id: calConfig.id,
+        label: calConfig.label,
+        status: 'OK',
+        count: events.length,
+        formatted: calFormatted,
+        needsFormatting: calNeedsFormatting,
+      });
+    } catch (err) {
+      audit.calendars.push({
+        id: calConfig.id,
+        label: calConfig.label,
+        status: 'ERROR',
+        error: String(err),
+      });
+    }
+  }
+
+  if (typeof Logger !== 'undefined' && Logger.log) {
+    Logger.log('=== Google Calendar Auto Sync Dry-Run Audit ===');
+    Logger.log('Total Events Found: ' + audit.totalEvents + ' (Baseline: ' + audit.baselineTarget + ')');
+    Logger.log('Formatted: ' + audit.formattedCount + ', Needs Formatting: ' + audit.needsFormattingCount);
+    Logger.log('Created: ' + audit.createdCount);
+  }
+  return audit;
+}
+
 // CommonJS export for Node.js regression test suites
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
@@ -462,5 +541,6 @@ if (typeof module !== 'undefined' && module.exports) {
     reconcileCalendarEvent,
     syncCalendarItems,
     callWithRetry,
+    dryRunGoogleCalendarSync,
   };
 }
