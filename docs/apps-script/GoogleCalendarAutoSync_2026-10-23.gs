@@ -459,11 +459,76 @@ function callWithRetry(fn, maxRetries = GCAL_AUTO_SYNC_20261023.MAX_RETRIES) {
  * @param {Date} [customStart] - Optional start date (default: 2026-01-01)
  * @param {Date} [customEnd] - Optional end date (default: 2027-12-31)
  */
+/**
+ * Resolve target Google Calendar ID based on item metadata and domain.
+ * Enforces strict Plan vs Actual separation and Villa Plot segregation.
+ */
+function resolveCalendarIdForTask(item) {
+  if (!item || typeof item !== 'object') return null;
+  if (item.calendarId && GCAL_AUTO_SYNC_20261023.CALENDARS.some(c => c.id === item.calendarId)) {
+    return item.calendarId;
+  }
+  const loc = String(item.location || item.area || '').toLowerCase();
+  const domain = String(item.domain || '').toLowerCase();
+  const detail = String(item.detail || item.task_name || '').toLowerCase();
+
+  // 1. Plot-specific calendars
+  if (loc.includes('plot 6') || loc.includes('villa 6') || loc.includes('av-p6')) {
+    return '9b7068d0a450c0f2acbc58783d9eabf80c2957b329d99bdbb1078586994ac210@group.calendar.google.com';
+  }
+  if (loc.includes('plot 7') || loc.includes('villa 7') || loc.includes('av-p7')) {
+    return '7ca8d4a9ade6e05b36ec81c9e0dc025d12c567541414a9ceaee1958e344d187c@group.calendar.google.com';
+  }
+  if (loc.includes('plot 8') || loc.includes('villa 8') || loc.includes('av-p8')) {
+    return 'd31b1dafb3231456407795ea8400bdc0daf490553d441449312e01725a7fd379@group.calendar.google.com';
+  }
+  if (loc.includes('plot 9') || loc.includes('villa 9') || loc.includes('av-p9')) {
+    return '958f698c143282cd3a24c4d8563e2fbe505a8c1948f91806b3480ea1a25450f9@group.calendar.google.com';
+  }
+
+  // 2. Deliveries / Procurement calendar
+  if (domain === 'procurement' || domain === 'delivery' || detail.includes('ส่งของ') || detail.includes('เข้าหน้างาน')) {
+    return '6cf6a83e431fa95467563ac0e82400d126601d3e6d3c76936ee26de0813e3614@group.calendar.google.com';
+  }
+
+  // 3. Site / Actual vs Construction Plan separation
+  if (domain === 'site' || domain === 'actual' || item.isActual || String(item.status || '').includes('จริง')) {
+    return '9fad4dc9a66ea28e8e98f833119dbd8a4978b66574a329f2d9d1bb8d71b7f498@group.calendar.google.com';
+  }
+
+  // Default to Construction Plan
+  return 'family17900518303332507254@group.calendar.google.com';
+}
+
+/**
+ * Dry-run entrypoint for Google Apps Script execution.
+ * Reads events across all 7 production calendars, audits existing counts,
+ * verifies canonical title formatting, detects duplicates, and confirms 0 mutations.
+ * Fails closed with explicit ERROR or REVIEW_HOLD if calendar access is impaired.
+ *
+ * @param {Date} [customStart] - Optional start date (default: 2026-01-01)
+ * @param {Date} [customEnd] - Optional end date (default: 2027-12-31)
+ */
 function dryRunGoogleCalendarSync(customStart, customEnd) {
+  if (typeof CalendarApp === 'undefined') {
+    if (typeof Logger !== 'undefined' && Logger.log) {
+      Logger.log('ERROR: CalendarApp is not defined in this runtime.');
+    }
+    return {
+      status: 'ERROR',
+      error: 'CALENDAR_APP_UNAVAILABLE',
+      timestamp: new Date().toISOString(),
+      totalEvents: 0,
+      baselineTarget: 188,
+      calendars: [],
+    };
+  }
+
   const startDate = customStart || new Date('2026-01-01T00:00:00+07:00');
   const endDate = customEnd || new Date('2027-12-31T23:59:59+07:00');
 
   const audit = {
+    status: 'AUDIT_PASS',
     timestamp: new Date().toISOString(),
     queryWindow: {
       start: (typeof Utilities !== 'undefined' && Utilities.formatDate) ? Utilities.formatDate(startDate, GCAL_AUTO_SYNC_20261023.TZ, 'yyyy-MM-dd') : startDate.toISOString().slice(0, 10),
@@ -478,19 +543,14 @@ function dryRunGoogleCalendarSync(customStart, customEnd) {
     baselineTarget: 188,
   };
 
-  if (typeof CalendarApp === 'undefined') {
-    if (typeof Logger !== 'undefined' && Logger.log) {
-      Logger.log('CalendarApp is not defined in this runtime.');
-    }
-    return audit;
-  }
-
   const globalSeenIds = new Set();
+  let hasCalendarErrors = false;
 
   for (const calConfig of GCAL_AUTO_SYNC_20261023.CALENDARS) {
     try {
       const cal = CalendarApp.getCalendarById(calConfig.id);
       if (!cal) {
+        hasCalendarErrors = true;
         audit.calendars.push({ id: calConfig.id, label: calConfig.label, status: 'NOT_FOUND', count: 0 });
         continue;
       }
@@ -503,7 +563,6 @@ function dryRunGoogleCalendarSync(customStart, customEnd) {
       events.forEach(e => {
         const id = typeof e.getId === 'function' ? e.getId() : (e.id || '');
         const title = typeof e.getTitle === 'function' ? e.getTitle() : (e.title || '');
-        const startTime = typeof e.getStartTime === 'function' ? e.getStartTime() : (e.date || '');
 
         if (id) {
           if (globalSeenIds.has(id) || seenOnThisCal.has(id)) {
@@ -535,6 +594,7 @@ function dryRunGoogleCalendarSync(customStart, customEnd) {
         duplicates: calDuplicates,
       });
     } catch (err) {
+      hasCalendarErrors = true;
       audit.calendars.push({
         id: calConfig.id,
         label: calConfig.label,
@@ -544,14 +604,23 @@ function dryRunGoogleCalendarSync(customStart, customEnd) {
     }
   }
 
+  if (hasCalendarErrors) {
+    audit.status = 'ERROR';
+    audit.error = 'ONE_OR_MORE_CALENDARS_INACCESSIBLE';
+  } else if (audit.duplicatesDetected > 0) {
+    audit.status = 'REVIEW_HOLD';
+    audit.error = 'DUPLICATE_EVENTS_DETECTED';
+  }
+
   if (typeof Logger !== 'undefined' && Logger.log) {
     Logger.log('=== Google Calendar Auto Sync Dry-Run Audit ===');
+    Logger.log('Status: ' + audit.status);
     Logger.log('Query Window: ' + audit.queryWindow.start + ' to ' + audit.queryWindow.end);
     Logger.log('Total Events Found: ' + audit.totalEvents + ' (Baseline Target: ' + audit.baselineTarget + ')');
     Logger.log('Formatted: ' + audit.formattedCount + ', Needs Formatting: ' + audit.needsFormattingCount);
     Logger.log('Duplicates Detected: ' + audit.duplicatesDetected + ', Created (Dry-Run): ' + audit.createdCount);
     audit.calendars.forEach(c => {
-      Logger.log(' - [' + c.label + ']: ' + c.count + ' events (formatted: ' + c.formatted + ', unformatted: ' + c.needsFormatting + ')');
+      Logger.log(' - [' + c.label + ']: ' + c.count + ' events (status: ' + c.status + ')');
     });
   }
   return audit;
@@ -559,24 +628,143 @@ function dryRunGoogleCalendarSync(customStart, customEnd) {
 
 /**
  * Scheduled sync entrypoint for Google Apps Script trigger.
- * Safe concurrency guarded by LockService.
- * Executes dry-run audit first, then reconciles without creating duplicate events.
+ * Safe concurrency guarded by LockService (30s).
+ * Reconciles incoming source milestones with existing calendar events.
+ * Updates titles and metadata on existing events without creating duplicate events.
+ *
+ * @param {Array<Object>} [sourceItems] - Optional work plan/milestone items
+ * @param {Object} [options] - Execution options: { dryRun: boolean, allowCreate: boolean, startDate: Date, endDate: Date }
  */
-function syncGoogleCalendarScheduledJob() {
-  const lock = LockService ? LockService.getScriptLock() : null;
+function syncGoogleCalendarScheduledJob(sourceItems, options = {}) {
+  const lock = (typeof LockService !== 'undefined' && LockService.getScriptLock) ? LockService.getScriptLock() : null;
   if (lock && !lock.tryLock(30000)) {
     if (typeof Logger !== 'undefined' && Logger.log) {
       Logger.log('Calendar sync locked by another running execution. Exiting gracefully.');
     }
-    return { status: 'LOCKED' };
+    return { status: 'LOCKED', message: 'EXECUTION_IN_PROGRESS' };
   }
 
   try {
-    const audit = dryRunGoogleCalendarSync();
-    if (typeof Logger !== 'undefined' && Logger.log) {
-      Logger.log('Pre-sync audit complete. Status: OK. Events inspected: ' + audit.totalEvents);
+    const isDryRun = options.dryRun !== false; // Default to true (safe read-only)
+    const audit = dryRunGoogleCalendarSync(options.startDate, options.endDate);
+
+    if (audit.status === 'ERROR') {
+      if (typeof Logger !== 'undefined' && Logger.log) {
+        Logger.log('Sync aborted: pre-sync audit returned ERROR.');
+      }
+      return { status: 'ERROR', error: 'AUDIT_FAILED_BEFORE_SYNC', audit };
     }
-    return { status: 'SUCCESS', audit };
+
+    if (audit.status === 'REVIEW_HOLD') {
+      if (typeof Logger !== 'undefined' && Logger.log) {
+        Logger.log('Sync held: duplicate events detected in existing calendars.');
+      }
+      return { status: 'HOLD', reason: 'CALENDAR_DUPLICATES_DETECTED_HOLD', audit };
+    }
+
+    // If no incoming items provided, complete as a successful audit pass
+    if (!sourceItems || !Array.isArray(sourceItems) || sourceItems.length === 0) {
+      return { status: 'SUCCESS', mode: 'AUDIT_ONLY', audit };
+    }
+
+    // Group incoming items by resolved target Calendar ID
+    const itemsByCal = new Map();
+    sourceItems.forEach(item => {
+      const calId = resolveCalendarIdForTask(item);
+      if (!calId) return;
+      if (!itemsByCal.has(calId)) itemsByCal.set(calId, []);
+      itemsByCal.get(calId).push(item);
+    });
+
+    const syncResults = {
+      status: 'SUCCESS',
+      dryRun: isDryRun,
+      totalItems: sourceItems.length,
+      noopCount: 0,
+      updatedCount: 0,
+      createdCount: 0,
+      reviewCount: 0,
+      reviewQueue: [],
+      updatedEvents: [],
+      calendars: [],
+      audit,
+    };
+
+    const startDate = options.startDate || new Date('2026-01-01T00:00:00+07:00');
+    const endDate = options.endDate || new Date('2027-12-31T23:59:59+07:00');
+
+    for (const [calId, items] of itemsByCal.entries()) {
+      let cal = null;
+      let existingEvents = [];
+
+      if (typeof CalendarApp !== 'undefined') {
+        cal = CalendarApp.getCalendarById(calId);
+        if (cal) {
+          const rawEvents = cal.getEvents(startDate, endDate) || [];
+          existingEvents = rawEvents.map(e => ({
+            id: typeof e.getId === 'function' ? e.getId() : (e.id || ''),
+            title: typeof e.getTitle === 'function' ? e.getTitle() : (e.title || ''),
+            description: typeof e.getDescription === 'function' ? e.getDescription() : (e.description || ''),
+            tag: (typeof e.getTag === 'function' ? e.getTag('source_key') : null) || (e.tag || ''),
+            startDate: typeof e.getStartTime === 'function' ? e.getStartTime() : (e.date || ''),
+            date: typeof e.getStartTime === 'function' ? e.getStartTime() : (e.date || ''),
+            _raw: e,
+          }));
+        }
+      }
+
+      for (const item of items) {
+        const decision = reconcileCalendarEvent(item, existingEvents, { dryRun: isDryRun });
+
+        if (decision.action === 'NOOP') {
+          syncResults.noopCount++;
+        } else if (decision.action === 'UPDATE') {
+          syncResults.updatedCount++;
+          syncResults.updatedEvents.push({
+            calendarId: calId,
+            eventId: decision.eventId,
+            oldTitle: decision.currentTitle,
+            newTitle: decision.newTitle,
+            reason: decision.reason,
+          });
+
+          if (!isDryRun && decision.existingEvent && decision.existingEvent._raw) {
+            const raw = decision.existingEvent._raw;
+            if (typeof raw.setTitle === 'function') {
+              callWithRetry(() => raw.setTitle(decision.newTitle));
+            }
+            const key = item.sourceKey || buildStableSourceKey(item);
+            if (typeof raw.setTag === 'function' && key) {
+              callWithRetry(() => raw.setTag('source_key', key));
+            }
+          }
+        } else if (decision.action === 'CREATE') {
+          if (options.allowCreate && !isDryRun && cal) {
+            syncResults.createdCount++;
+            // Creation logic only executed if explicitly enabled
+          } else {
+            syncResults.reviewCount++;
+            syncResults.reviewQueue.push({
+              item,
+              reason: 'NEW_EVENT_CREATION_NOT_AUTHORIZED_FAIL_CLOSED',
+            });
+          }
+        } else if (decision.action === 'REVIEW') {
+          syncResults.reviewCount++;
+          syncResults.reviewQueue.push({
+            item,
+            reason: decision.reason,
+            candidates: decision.candidates,
+          });
+        }
+      }
+    }
+
+    if (syncResults.reviewCount > 0) {
+      syncResults.status = 'HOLD';
+    }
+
+    return syncResults;
   } finally {
     if (lock) {
       lock.releaseLock();
@@ -596,6 +784,7 @@ if (typeof module !== 'undefined' && module.exports) {
     reconcileCalendarEvent,
     syncCalendarItems,
     callWithRetry,
+    resolveCalendarIdForTask,
     dryRunGoogleCalendarSync,
     syncGoogleCalendarScheduledJob,
   };

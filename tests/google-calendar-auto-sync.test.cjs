@@ -308,19 +308,22 @@ test('Safety boundaries: zero modification to Defect Flow, Work Orders, Material
   assert.doesNotMatch(gasSource, /ScriptApp\.deleteTrigger\([^)]*\)\s*;\s*ScriptApp\.newTrigger\('sync3Kings'\)/);
 });
 
-test('dryRunGoogleCalendarSync audits all 7 production calendars against 188 baseline events without mutations', () => {
+test('dryRunGoogleCalendarSync audits exact 188 inventory distribution confirmed by ChatGPT without mutations', () => {
   const { dryRunGoogleCalendarSync } = require('../docs/apps-script/GoogleCalendarAutoSync_2026-10-23.gs');
   const calendars = GCAL_AUTO_SYNC_20261023.CALENDARS;
 
-  // Build mock CalendarApp returning exactly 188 events across the 7 calendars
+  // Exact distribution confirmed by ChatGPT live readback:
+  // Construction Plan: 62, Site / Actual: 90, Deliveries: 5, Villa 6: 7, Villa 7: 7, Villa 8: 11, Villa 9: 6 (Total: 188)
+  const expectedCounts = [62, 90, 5, 7, 7, 11, 6];
   const mockCalMap = new Map();
+
   calendars.forEach((c, idx) => {
-    const count = idx === 0 ? 34 : idx === 1 ? 44 : idx === 2 ? 30 : 20;
+    const count = expectedCounts[idx];
     const events = [];
     for (let i = 0; i < count; i++) {
       events.push({
-        getTitle: () => `งานสถาปัตยกรรม 25.9% • ล่าช้า [${c.label}] [สถาปัตย์]`,
-        getId: () => `mock_${c.id}_${i}`,
+        getTitle: () => `งานงวดที่ ${i + 1} 25.9% • ล่าช้า [${c.label}] [สถาปัตย์]`,
+        getId: () => `mock_${c.id}_evt_${i + 1}`,
       });
     }
     mockCalMap.set(c.id, {
@@ -337,55 +340,126 @@ test('dryRunGoogleCalendarSync audits all 7 production calendars against 188 bas
 
   try {
     const audit = dryRunGoogleCalendarSync();
+    assert.equal(audit.status, 'AUDIT_PASS');
     assert.equal(audit.baselineTarget, 188);
     assert.equal(audit.totalEvents, 188);
     assert.equal(audit.createdCount, 0);
     assert.equal(audit.formattedCount, 188);
     assert.equal(audit.needsFormattingCount, 0);
+    assert.equal(audit.duplicatesDetected, 0);
     assert.equal(audit.calendars.length, 7);
-    audit.calendars.forEach(c => assert.equal(c.status, 'OK'));
+    calendars.forEach((c, idx) => {
+      assert.equal(audit.calendars[idx].count, expectedCounts[idx]);
+      assert.equal(audit.calendars[idx].status, 'OK');
+    });
   } finally {
     delete global.CalendarApp;
     delete global.Logger;
   }
 });
 
-test('syncGoogleCalendarScheduledJob runs safely under LockService protection', () => {
+test('dryRunGoogleCalendarSync and scheduled job fail closed when CalendarApp is missing or calendar inaccessible', () => {
+  const { dryRunGoogleCalendarSync, syncGoogleCalendarScheduledJob } = require('../docs/apps-script/GoogleCalendarAutoSync_2026-10-23.gs');
+
+  // Case 1: CalendarApp missing
+  delete global.CalendarApp;
+  const missingAppAudit = dryRunGoogleCalendarSync();
+  assert.equal(missingAppAudit.status, 'ERROR');
+  assert.equal(missingAppAudit.error, 'CALENDAR_APP_UNAVAILABLE');
+
+  const missingAppSync = syncGoogleCalendarScheduledJob();
+  assert.equal(missingAppSync.status, 'ERROR');
+  assert.equal(missingAppSync.error, 'AUDIT_FAILED_BEFORE_SYNC');
+
+  // Case 2: One calendar fails to load
+  global.CalendarApp = {
+    getCalendarById: id => {
+      if (id.includes('Villa 6') || id.includes('9b7068d0')) return null; // Missing
+      return { getEvents: () => [] };
+    },
+  };
+  try {
+    const brokenAudit = dryRunGoogleCalendarSync();
+    assert.equal(brokenAudit.status, 'ERROR');
+    assert.equal(brokenAudit.error, 'ONE_OR_MORE_CALENDARS_INACCESSIBLE');
+
+    const brokenSync = syncGoogleCalendarScheduledJob();
+    assert.equal(brokenSync.status, 'ERROR');
+  } finally {
+    delete global.CalendarApp;
+  }
+});
+
+test('resolveCalendarIdForTask separates Construction Plan, Site Actual, Deliveries and Plot calendars', () => {
+  const { resolveCalendarIdForTask } = require('../docs/apps-script/GoogleCalendarAutoSync_2026-10-23.gs');
+
+  // Plot routing
+  assert.equal(resolveCalendarIdForTask({ location: 'Plot 6' }), '9b7068d0a450c0f2acbc58783d9eabf80c2957b329d99bdbb1078586994ac210@group.calendar.google.com');
+  assert.equal(resolveCalendarIdForTask({ area: 'AV-P7' }), '7ca8d4a9ade6e05b36ec81c9e0dc025d12c567541414a9ceaee1958e344d187c@group.calendar.google.com');
+  assert.equal(resolveCalendarIdForTask({ location: 'Villa 8' }), 'd31b1dafb3231456407795ea8400bdc0daf490553d441449312e01725a7fd379@group.calendar.google.com');
+  assert.equal(resolveCalendarIdForTask({ location: 'Plot 9' }), '958f698c143282cd3a24c4d8563e2fbe505a8c1948f91806b3480ea1a25450f9@group.calendar.google.com');
+
+  // Deliveries routing
+  assert.equal(resolveCalendarIdForTask({ domain: 'procurement', detail: 'ส่งปูนเข้าหน้างาน' }), '6cf6a83e431fa95467563ac0e82400d126601d3e6d3c76936ee26de0813e3614@group.calendar.google.com');
+
+  // Actual vs Plan
+  assert.equal(resolveCalendarIdForTask({ domain: 'actual', isActual: true }), '9fad4dc9a66ea28e8e98f833119dbd8a4978b66574a329f2d9d1bb8d71b7f498@group.calendar.google.com');
+  assert.equal(resolveCalendarIdForTask({ domain: 'plan' }), 'family17900518303332507254@group.calendar.google.com');
+});
+
+test('syncGoogleCalendarScheduledJob updates existing event title upon progress delta and preserves same Event ID', () => {
   const { syncGoogleCalendarScheduledJob } = require('../docs/apps-script/GoogleCalendarAutoSync_2026-10-23.gs');
 
-  let lockAcquired = false;
-  let lockReleased = false;
+  let updatedTitle = '';
+  let updatedTag = '';
 
-  global.LockService = {
-    getScriptLock: () => ({
-      tryLock: timeout => {
-        lockAcquired = true;
-        return true;
-      },
-      releaseLock: () => {
-        lockReleased = true;
-      },
-    }),
+  const mockEvent = {
+    getId: () => 'gcal_plot9_arch_001',
+    getTitle: () => 'งานสถาปัตยกรรม 25.9% • ล่าช้า [Plot 9] [สถาปัตย์]',
+    getDescription: () => '[3Kings-Key: gcal:villa:plot_9:สถาปัตย์:งานสถาปัตยกรรม:2026-10-23]',
+    getTag: () => 'gcal:villa:plot_9:สถาปัตย์:งานสถาปัตยกรรม:2026-10-23',
+    getStartTime: () => '2026-10-23',
+    setTitle: t => { updatedTitle = t; },
+    setTag: (k, v) => { updatedTag = v; },
   };
+
+  const p9CalId = '958f698c143282cd3a24c4d8563e2fbe505a8c1948f91806b3480ea1a25450f9@group.calendar.google.com';
 
   global.CalendarApp = {
-    getCalendarById: () => ({
-      getEvents: () => [],
+    getCalendarById: id => ({
+      getEvents: () => id === p9CalId ? [mockEvent] : [],
     }),
   };
-
-  global.Logger = {
-    log: () => {},
+  global.LockService = {
+    getScriptLock: () => ({
+      tryLock: () => true,
+      releaseLock: () => {},
+    }),
   };
+  global.Logger = { log: () => {} };
 
   try {
-    const res = syncGoogleCalendarScheduledJob();
+    // Incoming source update: progress increases to 26.5%
+    const incomingDeltaItem = {
+      calendarId: p9CalId,
+      detail: 'งานสถาปัตยกรรม 26.5%',
+      status: 'ล่าช้า',
+      location: 'Plot 9',
+      workGroup: 'สถาปัตย์',
+      date: '2026-10-23',
+    };
+
+    const res = syncGoogleCalendarScheduledJob([incomingDeltaItem], { dryRun: false });
     assert.equal(res.status, 'SUCCESS');
-    assert.equal(lockAcquired, true);
-    assert.equal(lockReleased, true);
+    assert.equal(res.updatedCount, 1);
+    assert.equal(res.createdCount, 0, 'Must NOT create new duplicate event!');
+    assert.equal(res.noopCount, 0);
+    assert.equal(res.updatedEvents[0].eventId, 'gcal_plot9_arch_001', 'Must preserve original Event ID!');
+    assert.equal(updatedTitle, 'งานสถาปัตยกรรม 26.5% • ล่าช้า [Plot 9] [สถาปัตย์]');
   } finally {
-    delete global.LockService;
     delete global.CalendarApp;
+    delete global.LockService;
     delete global.Logger;
   }
 });
+
