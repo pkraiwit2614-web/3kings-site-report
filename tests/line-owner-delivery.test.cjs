@@ -62,6 +62,26 @@ test('one approved owner gets exactly one LINE push: form text first, 4 original
  assert.equal(f.ack.length,1);
  assert.equal(f.ack[0].p_status,'delivered');
 });
+test('late QA report can be sent once at 14:05 Bangkok without enabling other AutoPilot collectors',async()=>{
+ const f=fixture();
+ const out=await run(f,new Date('2026-10-21T07:05:00Z')); // 14:05 Bangkok
+ assert.equal(out.mode,'OWNER_BUNDLE_ACCEPTED');
+ assert.equal(f.calls.filter(x=>x.url.includes('/message/push')).length,1);
+ assert.equal(f.ack[0].p_status,'delivered');
+ const sameDate=fixture({claimStatus:'already_sent'});
+ assert.equal((await run(sameDate,new Date('2026-10-21T08:05:00Z'))).mode,'OWNER_ALREADY_SENT');
+ assert.equal(sameDate.calls.filter(x=>x.url.includes('/message/push')).length,0);
+});
+test('owner-only catch-up closes after 18:00 Bangkok and never reopens on Sunday',async()=>{
+ const atEnd=fixture();
+ assert.equal((await run(atEnd,new Date('2026-10-21T11:00:00Z'))).mode,'OWNER_BUNDLE_ACCEPTED');
+ const afterEnd=fixture();
+ assert.equal((await run(afterEnd,new Date('2026-10-21T11:01:00Z'))).mode,'OWNER_OFF');
+ assert.equal(afterEnd.calls.length,0);
+ const sunday=fixture();
+ assert.equal((await run(sunday,new Date('2026-10-25T08:05:00Z'))).mode,'OWNER_OFF');
+ assert.equal(sunday.calls.length,0);
+});
 test('never schedule old LINE group delivery or separate owner summary',()=>{
  const scheduled=source.slice(source.lastIndexOf('  async scheduled('));
  assert.ok(scheduled.includes('dailyOwnerSummaryTick('));
