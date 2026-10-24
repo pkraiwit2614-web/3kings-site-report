@@ -209,6 +209,27 @@ function buildStableSourceKey(item) {
 }
 
 /**
+ * Determine if a calendar event is an independent site event (Meeting, Test, Inspection).
+ * Such events must be preserved and never overwritten or matched to schedule milestones.
+ */
+function isIndependentSiteEvent_(e) {
+  if (!e) return false;
+  const title = String(e.title || '').toLowerCase();
+  const desc = String(e.description || '').toLowerCase();
+
+  if (desc.includes('type: meeting') || desc.includes('type: test') ||
+      desc.includes('type:meeting') || desc.includes('type:test')) {
+    return true;
+  }
+  if (title.includes('meeting') || title.includes('ประชุม') ||
+      title.includes('นัดหมาย') || title.includes('ทดสอบ') ||
+      title.includes('[test]') || title.includes('(test)')) {
+    return true;
+  }
+  return false;
+}
+
+/**
  * Reconcile an incoming work item against existing events in a calendar.
  *
  * Returns decision:
@@ -302,6 +323,10 @@ function reconcileCalendarEvent(item, existingEvents, opts) {
   // 3. Tier 3: Retroactive Semantic Matching for existing 188 events
   // Match by Date + Location + WorkGroup + Base Detail / Rooms
   const sameDateEvents = existingEvents.filter(e => {
+    // Preserve independent site events (meetings, tests, non-task events)
+    if (isIndependentSiteEvent_(e)) {
+      return false;
+    }
     const eDate = formatIsoDate_(e.startDate || e.date);
     return eDate === targetDate;
   });
@@ -854,7 +879,7 @@ function mapScheduleTaskToCalendarItem_(t) {
     }
   }
 
-  const rawStatus = String(t.site_status || '').trim();
+  const rawStatus = String(t.site_status || t.plan_status || '').trim();
   const taskName = String(t.task_name || '').trim();
   const loc = String(t.area || '').trim();
   const workGroup = String(t.category || '').trim();
@@ -900,7 +925,9 @@ function mapScheduleTaskToCalendarItem_(t) {
     isActual: isActual,
     status: status,
     siteStatus: t.site_status || null,
+    planStatus: t.plan_status || null,
     progress: progressPct,
+    importedPlanProgress: t.imported_plan_progress !== undefined ? t.imported_plan_progress : null,
   };
 }
 
@@ -962,10 +989,138 @@ function fetchAuthorizedCalendarSourceItems_(options = {}) {
 }
 
 /**
+ * Read-only deterministic Source-to-Calendar Match Ledger.
+ * Cross-references source items against calendar events using:
+ * Calendar ID + Event ID + Source Identity.
+ * Strictly preserves independent site events (meetings, tests) and holds unmatched items.
+ */
+function buildSourceToCalendarMatchLedger(sourceItemsOrOptions, options = {}) {
+  let resolvedItems = null;
+  let resolvedOptions = {};
+  if (Array.isArray(sourceItemsOrOptions)) {
+    resolvedItems = sourceItemsOrOptions;
+    resolvedOptions = options || {};
+  } else if (sourceItemsOrOptions && typeof sourceItemsOrOptions === 'object') {
+    resolvedOptions = sourceItemsOrOptions;
+    resolvedItems = fetchAuthorizedCalendarSourceItems_(resolvedOptions);
+  } else {
+    resolvedOptions = options || {};
+    resolvedItems = fetchAuthorizedCalendarSourceItems_(resolvedOptions);
+  }
+
+  const startDate = resolvedOptions.startDate || new Date('2025-01-01T00:00:00+07:00');
+  const endDate = resolvedOptions.endDate || new Date('2027-12-31T23:59:59+07:00');
+
+  const eventsByCal = new Map();
+  const independentEvents = [];
+
+  for (const calConfig of GCAL_AUTO_SYNC_20261023.CALENDARS) {
+    let events = [];
+    if (resolvedOptions.eventsByCalendar && resolvedOptions.eventsByCalendar[calConfig.id]) {
+      events = resolvedOptions.eventsByCalendar[calConfig.id];
+    } else if (typeof CalendarApp !== 'undefined') {
+      try {
+        const cal = CalendarApp.getCalendarById(calConfig.id);
+        if (cal) {
+          const rawEvents = cal.getEvents(startDate, endDate) || [];
+          events = rawEvents.map(e => ({
+            id: typeof e.getId === 'function' ? e.getId() : (e.id || ''),
+            title: typeof e.getTitle === 'function' ? e.getTitle() : (e.title || ''),
+            description: typeof e.getDescription === 'function' ? e.getDescription() : (e.description || ''),
+            tag: (typeof e.getTag === 'function' ? e.getTag('source_key') : null) || (e.tag || ''),
+            startDate: typeof e.getStartTime === 'function' ? e.getStartTime() : (e.date || ''),
+            date: typeof e.getStartTime === 'function' ? e.getStartTime() : (e.date || ''),
+            _raw: e,
+          }));
+        }
+      } catch (err) {
+        // Handled in audit
+      }
+    }
+
+    events.forEach(e => {
+      if (isIndependentSiteEvent_(e)) {
+        independentEvents.push({
+          calendarId: calConfig.id,
+          calendarLabel: calConfig.label,
+          eventId: e.id,
+          title: e.title,
+          description: e.description,
+          classification: 'INDEPENDENT_SITE_EVENT',
+          preserved: true,
+        });
+      }
+    });
+
+    eventsByCal.set(calConfig.id, events);
+  }
+
+  const ledger = [];
+  let matchedCount = 0;
+  let unmatchedCount = 0;
+  let reviewCount = 0;
+  let noopCount = 0;
+  let updateCount = 0;
+
+  (resolvedItems || []).forEach(item => {
+    const targetCalendarId = resolveCalendarIdForTask(item);
+    const existingEvents = targetCalendarId ? (eventsByCal.get(targetCalendarId) || []) : [];
+    const decision = reconcileCalendarEvent(item, existingEvents, { dryRun: true });
+
+    let status = 'MATCHED';
+    if (decision.action === 'REVIEW') {
+      status = 'HOLD_REVIEW';
+      reviewCount++;
+    } else if (decision.action === 'CREATE') {
+      status = 'HOLD_UNMATCHED';
+      unmatchedCount++;
+    } else if (decision.action === 'NOOP') {
+      matchedCount++;
+      noopCount++;
+    } else if (decision.action === 'UPDATE') {
+      matchedCount++;
+      updateCount++;
+    }
+
+    ledger.push({
+      sourceIdentity: item.sourceIdentity || item.sourceKey,
+      taskId: item.taskId || null,
+      taskName: item.task_name || item.detail,
+      area: item.area || item.location,
+      domain: item.domain || 'plan',
+      isActual: Boolean(item.isActual),
+      targetCalendarId: targetCalendarId,
+      matchedEventId: decision.eventId || null,
+      matchedEventTitle: decision.currentTitle || null,
+      proposedTitle: decision.newTitle,
+      action: decision.action,
+      reason: decision.reason,
+      status: status,
+      candidates: decision.candidates || null,
+    });
+  });
+
+  return {
+    timestamp: new Date().toISOString(),
+    totalSourceItems: (resolvedItems || []).length,
+    matchedCount,
+    noopCount,
+    updateCount,
+    unmatchedCount,
+    reviewCount,
+    preservedIndependentCount: independentEvents.length,
+    independentEvents,
+    ledger,
+    status: reviewCount > 0 ? 'HOLD' : (unmatchedCount > 0 ? 'HOLD' : 'READY'),
+  };
+}
+
+/**
  * Scheduled sync entrypoint for Google Apps Script trigger.
  * Safe concurrency guarded by LockService (30s) unless skipLock is specified.
- * Reconciles incoming source milestones with existing calendar events.
- * Updates titles and metadata on existing events without creating duplicate events.
+ * Two-phase execution pattern: Phase 1 evaluates all reconciliations and match ledger.
+ * If any review or hold condition occurs, execution exits with ZERO mutations.
+ * Phase 2 performs verified mutations with destination readback only when Phase 1 is 100% clean.
  *
  * @param {Array<Object>|Object} [sourceItemsOrOptions] - Optional work items or trigger event object
  * @param {Object} [options] - Execution options: { dryRun: boolean, allowCreate: boolean, startDate: Date, endDate: Date, skipLock: boolean, verifyBaseline: boolean }
@@ -1095,121 +1250,94 @@ function syncGoogleCalendarScheduledJob(sourceItemsOrOptions, options = {}) {
       updatedCount: 0,
       createdCount: 0,
       reviewCount: 0,
+      unmatchedCount: 0,
       reviewQueue: [],
       updatedEvents: [],
+      createdEvents: [],
       calendars: [],
+      matchLedger: [],
       audit,
     };
 
     const startDate = resolvedOptions.startDate || new Date('2026-01-01T00:00:00+07:00');
     const endDate = resolvedOptions.endDate || new Date('2027-12-31T23:59:59+07:00');
 
-    for (const [calId, items] of itemsByCal.entries()) {
-      let cal = null;
-      let existingEvents = [];
+    // Load existing events per calendar
+    const existingEventsByCal = new Map();
+    const liveCals = new Map();
 
+    for (const calConfig of GCAL_AUTO_SYNC_20261023.CALENDARS) {
+      const calId = calConfig.id;
+      let existingEvents = [];
       if (typeof CalendarApp !== 'undefined') {
-        cal = CalendarApp.getCalendarById(calId);
-        if (cal) {
-          const rawEvents = cal.getEvents(startDate, endDate) || [];
-          existingEvents = rawEvents.map(e => ({
-            id: typeof e.getId === 'function' ? e.getId() : (e.id || ''),
-            title: typeof e.getTitle === 'function' ? e.getTitle() : (e.title || ''),
-            description: typeof e.getDescription === 'function' ? e.getDescription() : (e.description || ''),
-            tag: (typeof e.getTag === 'function' ? e.getTag('source_key') : null) || (e.tag || ''),
-            startDate: typeof e.getStartTime === 'function' ? e.getStartTime() : (e.date || ''),
-            date: typeof e.getStartTime === 'function' ? e.getStartTime() : (e.date || ''),
-            _raw: e,
-          }));
+        try {
+          const cal = CalendarApp.getCalendarById(calId);
+          if (cal) {
+            liveCals.set(calId, cal);
+            const rawEvents = cal.getEvents(startDate, endDate) || [];
+            existingEvents = rawEvents.map(e => ({
+              id: typeof e.getId === 'function' ? e.getId() : (e.id || ''),
+              title: typeof e.getTitle === 'function' ? e.getTitle() : (e.title || ''),
+              description: typeof e.getDescription === 'function' ? e.getDescription() : (e.description || ''),
+              tag: (typeof e.getTag === 'function' ? e.getTag('source_key') : null) || (e.tag || ''),
+              startDate: typeof e.getStartTime === 'function' ? e.getStartTime() : (e.date || ''),
+              date: typeof e.getStartTime === 'function' ? e.getStartTime() : (e.date || ''),
+              _raw: e,
+            }));
+          }
+        } catch (err) {
+          // Handled
         }
       }
+      existingEventsByCal.set(calId, existingEvents);
+    }
+
+    // PHASE 1: Reconciliation & Match Ledger (Zero mutations)
+    const pendingMutations = [];
+
+    for (const [calId, items] of itemsByCal.entries()) {
+      const existingEvents = existingEventsByCal.get(calId) || [];
+      const cal = liveCals.get(calId) || null;
 
       for (const item of items) {
-        const decision = reconcileCalendarEvent(item, existingEvents, { dryRun: isDryRun });
+        const decision = reconcileCalendarEvent(item, existingEvents, { dryRun: true });
+
+        // Ledger entry for transparency and read-only audit
+        const ledgerEntry = {
+          calendarId: calId,
+          sourceIdentity: item.sourceIdentity || item.sourceKey,
+          taskId: item.taskId || null,
+          taskName: item.task_name || item.detail,
+          area: item.area || item.location,
+          domain: item.domain,
+          action: decision.action,
+          reason: decision.reason,
+          matchedEventId: decision.eventId || null,
+          currentTitle: decision.currentTitle || null,
+          newTitle: decision.newTitle,
+        };
+        syncResults.matchLedger.push(ledgerEntry);
 
         if (decision.action === 'NOOP') {
           syncResults.noopCount++;
         } else if (decision.action === 'UPDATE') {
-          if (isDryRun) {
-            syncResults.updatedEvents.push({
-              calendarId: calId,
-              eventId: decision.eventId,
-              oldTitle: decision.currentTitle,
-              newTitle: decision.newTitle,
-              reason: decision.reason,
-              verified: false,
-              dryRun: true,
-            });
-          } else {
-            let writeVerified = false;
-            if (decision.existingEvent && decision.existingEvent._raw) {
-              const raw = decision.existingEvent._raw;
-              if (typeof raw.setTitle === 'function') {
-                callWithRetry(() => raw.setTitle(decision.newTitle));
-                // Destination Readback Verification: assert title was changed on event
-                const readbackTitle = typeof raw.getTitle === 'function' ? raw.getTitle() : null;
-                if (readbackTitle === decision.newTitle) {
-                  writeVerified = true;
-                } else {
-                  throw new Error('DESTINATION_READBACK_MISMATCH: expected ' + decision.newTitle + ', got ' + readbackTitle);
-                }
-              }
-              const key = item.sourceKey || buildStableSourceKey(item);
-              if (typeof raw.setTag === 'function' && key) {
-                callWithRetry(() => raw.setTag('source_key', key));
-              }
-            }
-
-            if (writeVerified) {
-              syncResults.updatedCount++;
-              syncResults.updatedEvents.push({
-                calendarId: calId,
-                eventId: decision.eventId,
-                oldTitle: decision.currentTitle,
-                newTitle: decision.newTitle,
-                reason: decision.reason,
-                verified: true,
-                dryRun: false,
-              });
-            } else {
-              syncResults.reviewCount++;
-              syncResults.reviewQueue.push({
-                item,
-                reason: 'WRITE_VERIFICATION_FAILED_NO_READBACK',
-              });
-            }
-          }
+          pendingMutations.push({
+            type: 'UPDATE',
+            calId,
+            item,
+            decision,
+          });
         } else if (decision.action === 'CREATE') {
           if (resolvedOptions.allowCreate && !isDryRun && cal) {
-            if (typeof cal.createEvent === 'function') {
-              const newTitle = decision.newTitle;
-              const start = new Date(item.startDate || item.date || Date.now());
-              const end = new Date(item.endDate || item.date || (start.getTime() + 3600000));
-              const createdEvent = callWithRetry(() => cal.createEvent(newTitle, start, end));
-              const readbackId = (createdEvent && typeof createdEvent.getId === 'function') ? createdEvent.getId() : null;
-              const readbackTitle = (createdEvent && typeof createdEvent.getTitle === 'function') ? createdEvent.getTitle() : null;
-              if (readbackId && readbackTitle === newTitle) {
-                syncResults.createdCount++;
-                syncResults.createdEvents = syncResults.createdEvents || [];
-                syncResults.createdEvents.push({
-                  calendarId: calId,
-                  eventId: readbackId,
-                  title: readbackTitle,
-                  verified: true,
-                });
-              } else {
-                throw new Error('CREATE_DESTINATION_READBACK_FAILED');
-              }
-            } else {
-              syncResults.reviewCount++;
-              syncResults.reviewQueue.push({
-                item,
-                reason: 'CALENDAR_CREATE_EVENT_UNAVAILABLE',
-              });
-            }
+            pendingMutations.push({
+              type: 'CREATE',
+              calId,
+              item,
+              decision,
+            });
           } else {
             // Unmatched item fail-closed: do not write or mutate calendar
-            syncResults.unmatchedCount = (syncResults.unmatchedCount || 0) + 1;
+            syncResults.unmatchedCount++;
             syncResults.reviewQueue.push({
               item,
               reason: 'NEW_EVENT_CREATION_NOT_AUTHORIZED_FAIL_CLOSED',
@@ -1225,6 +1353,111 @@ function syncGoogleCalendarScheduledJob(sourceItemsOrOptions, options = {}) {
             reason: decision.reason,
             candidates: decision.candidates,
           });
+        }
+      }
+    }
+
+    // Guard against Partial Writes: If reviewQueue has reviews or failOnUnmatched holds, ABORT before ANY mutation
+    if (syncResults.reviewCount > 0) {
+      syncResults.status = 'HOLD';
+      // Record planned updates in updatedEvents for visibility without executing
+      pendingMutations.forEach(m => {
+        if (m.type === 'UPDATE') {
+          syncResults.updatedEvents.push({
+            calendarId: m.calId,
+            eventId: m.decision.eventId,
+            oldTitle: m.decision.currentTitle,
+            newTitle: m.decision.newTitle,
+            reason: m.decision.reason,
+            verified: false,
+            dryRun: true,
+          });
+        }
+      });
+      return syncResults;
+    }
+
+    // If dryRun, do not execute mutations
+    if (isDryRun) {
+      pendingMutations.forEach(m => {
+        if (m.type === 'UPDATE') {
+          syncResults.updatedEvents.push({
+            calendarId: m.calId,
+            eventId: m.decision.eventId,
+            oldTitle: m.decision.currentTitle,
+            newTitle: m.decision.newTitle,
+            reason: m.decision.reason,
+            verified: false,
+            dryRun: true,
+          });
+        }
+      });
+      return syncResults;
+    }
+
+    // PHASE 2: Execution with Destination Readback (Only when Phase 1 is 100% clean)
+    for (const mutation of pendingMutations) {
+      if (mutation.type === 'UPDATE') {
+        const { calId, item, decision } = mutation;
+        let writeVerified = false;
+        if (decision.existingEvent && decision.existingEvent._raw) {
+          const raw = decision.existingEvent._raw;
+          if (typeof raw.setTitle === 'function') {
+            callWithRetry(() => raw.setTitle(decision.newTitle));
+            // Destination Readback Verification: assert title was changed on event
+            const readbackTitle = typeof raw.getTitle === 'function' ? raw.getTitle() : null;
+            if (readbackTitle === decision.newTitle) {
+              writeVerified = true;
+            } else {
+              throw new Error('DESTINATION_READBACK_MISMATCH: expected ' + decision.newTitle + ', got ' + readbackTitle);
+            }
+          }
+          const key = item.sourceKey || buildStableSourceKey(item);
+          if (typeof raw.setTag === 'function' && key) {
+            callWithRetry(() => raw.setTag('source_key', key));
+          }
+        }
+
+        if (writeVerified) {
+          syncResults.updatedCount++;
+          syncResults.updatedEvents.push({
+            calendarId: calId,
+            eventId: decision.eventId,
+            oldTitle: decision.currentTitle,
+            newTitle: decision.newTitle,
+            reason: decision.reason,
+            verified: true,
+            dryRun: false,
+          });
+        } else {
+          syncResults.reviewCount++;
+          syncResults.reviewQueue.push({
+            item,
+            reason: 'WRITE_VERIFICATION_FAILED_NO_READBACK',
+          });
+        }
+      } else if (mutation.type === 'CREATE') {
+        const { calId, item, decision } = mutation;
+        const cal = liveCals.get(calId);
+        if (cal && typeof cal.createEvent === 'function') {
+          const newTitle = decision.newTitle;
+          const start = new Date(item.startDate || item.date || Date.now());
+          const end = new Date(item.endDate || item.date || (start.getTime() + 3600000));
+          const createdEvent = callWithRetry(() => cal.createEvent(newTitle, start, end));
+          const readbackId = (createdEvent && typeof createdEvent.getId === 'function') ? createdEvent.getId() : null;
+          const readbackTitle = (createdEvent && typeof createdEvent.getTitle === 'function') ? createdEvent.getTitle() : null;
+          if (readbackId && readbackTitle === newTitle) {
+            syncResults.createdCount++;
+            syncResults.createdEvents = syncResults.createdEvents || [];
+            syncResults.createdEvents.push({
+              calendarId: calId,
+              eventId: readbackId,
+              title: readbackTitle,
+              verified: true,
+            });
+          } else {
+            throw new Error('CREATE_DESTINATION_READBACK_FAILED');
+          }
         }
       }
     }
@@ -1262,5 +1495,7 @@ if (typeof module !== 'undefined' && module.exports) {
     getGlobalCalendarSourceProvider_,
     auditCalendarScriptProperties20261024,
     mapScheduleTaskToCalendarItem_,
+    isIndependentSiteEvent_,
+    buildSourceToCalendarMatchLedger,
   };
 }

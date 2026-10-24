@@ -22,6 +22,8 @@ const {
   reconcileCalendarEvent,
   syncCalendarItems,
   callWithRetry,
+  isIndependentSiteEvent_,
+  buildSourceToCalendarMatchLedger,
 } = require('../docs/apps-script/GoogleCalendarAutoSync_2026-10-23.gs');
 
 test('enforces exact canonical title format: รายละเอียดงานเหมือนเดิม • สถานะ [สถานที่] [กลุ่มงาน]', () => {
@@ -1172,4 +1174,264 @@ test('auditCalendarScriptProperties20261024 safely inspects properties without e
     delete global.PropertiesService;
   }
 });
+
+test('isIndependentSiteEvent_ preserves meetings and test events without matching schedule tasks', () => {
+  // Test detection of meeting / test indicators
+  assert.equal(isIndependentSiteEvent_({ title: 'ประชุมประจำสัปดาห์', description: '' }), true);
+  assert.equal(isIndependentSiteEvent_({ title: 'Morning Meeting', description: '' }), true);
+  assert.equal(isIndependentSiteEvent_({ title: 'Weekly Sync', description: 'TYPE: MEETING' }), true);
+  assert.equal(isIndependentSiteEvent_({ title: 'Water Pressure Test', description: 'TYPE: TEST\nTested by QC' }), true);
+  assert.equal(isIndependentSiteEvent_({ title: '[TEST] Smoke Detector Test', description: '' }), true);
+  assert.equal(isIndependentSiteEvent_({ title: 'ทดสอบระบบไฟฟ้า', description: '' }), true);
+
+  // Normal tasks must NOT be classified as independent site events
+  assert.equal(isIndependentSiteEvent_({ title: 'งานสถาปัตยกรรม 25.9% • ล่าช้า [Plot 9] [สถาปัตย์]', description: '' }), false);
+  assert.equal(isIndependentSiteEvent_({ title: 'งานโครงสร้าง 100% • เสร็จสิ้น [Villa 8] [โครงสร้าง]', description: '' }), false);
+
+  // Semantic reconciliation MUST NOT match a meeting event to a schedule task
+  const existingEvents = [
+    {
+      id: 'event-meeting-site-1',
+      title: 'ประชุมประสานงานหน้างาน [Site] [Meeting]',
+      description: 'TYPE: MEETING\nDaily morning briefing',
+      date: '2026-04-10',
+      startDate: '2026-04-10',
+    },
+  ];
+
+  const incomingTask = {
+    detail: 'งานเทปูนฐานราก',
+    status: 'แผนงาน',
+    location: 'Site',
+    workGroup: 'Meeting',
+    date: '2026-04-10',
+    startDate: '2026-04-10',
+  };
+
+  const decision = reconcileCalendarEvent(incomingTask, existingEvents, { dryRun: true });
+  // Must NOT match the meeting event! Should return CREATE (unmatched)
+  assert.notEqual(decision.action, 'UPDATE');
+  assert.notEqual(decision.eventId, 'event-meeting-site-1');
+  assert.equal(decision.action, 'CREATE');
+});
+
+test('syncGoogleCalendarScheduledJob prevents partial writes via two-phase execution (zero mutations on hold)', () => {
+  const { syncGoogleCalendarScheduledJob } = require('../docs/apps-script/GoogleCalendarAutoSync_2026-10-23.gs');
+
+  let titleSetCount = 0;
+  const mockExistingEvent = {
+    id: 'evt-update-1',
+    title: 'งานโครงสร้าง 50% • กำลังทำ [Villa 8] [โครงสร้าง]',
+    description: '',
+    startDate: new Date('2026-05-01T09:00:00+07:00'),
+    _raw: {
+      getId: () => 'evt-update-1',
+      getTitle: () => 'งานโครงสร้าง 50% • กำลังทำ [Villa 8] [โครงสร้าง]',
+      setTitle: () => { titleSetCount++; },
+      setTag: () => {},
+    },
+  };
+
+  // Distinct titles on same date and trade that both match "งานสถาปัตย์"
+  const mockAmbiguousEventA = {
+    id: 'evt-amb-a',
+    title: 'งานสถาปัตย์ ส่วนที่ 1 • แผนงาน [Villa 8] [สถาปัตย์]',
+    description: '',
+    startDate: new Date('2026-05-01T09:00:00+07:00'),
+  };
+  const mockAmbiguousEventB = {
+    id: 'evt-amb-b',
+    title: 'งานสถาปัตย์ ส่วนที่ 2 • แผนงาน [Villa 8] [สถาปัตย์]',
+    description: '',
+    startDate: new Date('2026-05-01T09:00:00+07:00'),
+  };
+
+  const villa8CalId = 'd31b1dafb3231456407795ea8400bdc0daf490553d441449312e01725a7fd379@group.calendar.google.com';
+
+  global.CalendarApp = {
+    getCalendarById: (id) => {
+      if (id === villa8CalId) {
+        return {
+          getId: () => id,
+          getName: () => '3K - Above Villa 8',
+          getEvents: () => [
+            {
+              getId: () => mockExistingEvent.id,
+              getTitle: () => mockExistingEvent.title,
+              getDescription: () => '',
+              getStartTime: () => mockExistingEvent.startDate,
+              setTitle: mockExistingEvent._raw.setTitle,
+              setTag: mockExistingEvent._raw.setTag,
+            },
+            {
+              getId: () => mockAmbiguousEventA.id,
+              getTitle: () => mockAmbiguousEventA.title,
+              getDescription: () => '',
+              getStartTime: () => mockAmbiguousEventA.startDate,
+            },
+            {
+              getId: () => mockAmbiguousEventB.id,
+              getTitle: () => mockAmbiguousEventB.title,
+              getDescription: () => '',
+              getStartTime: () => mockAmbiguousEventB.startDate,
+            },
+          ],
+        };
+      }
+      return {
+        getId: () => id,
+        getName: () => 'Calendar ' + id,
+        getEvents: () => [],
+      };
+    },
+  };
+
+  // 2 items: 1 would match and update (50% -> 60%), but the 2nd is ambiguous and triggers REVIEW
+  const incomingItems = [
+    {
+      sourceKey: 'task-1',
+      taskId: 'uuid-1',
+      detail: 'งานโครงสร้าง 60%',
+      task_name: 'งานโครงสร้าง',
+      status: 'กำลังทำ',
+      location: 'Villa 8',
+      area: 'Villa 8',
+      workGroup: 'โครงสร้าง',
+      startDate: '2026-05-01',
+      domain: 'plan',
+      isActual: false,
+    },
+    {
+      sourceKey: 'task-2',
+      taskId: 'uuid-2',
+      detail: 'งานสถาปัตย์',
+      task_name: 'งานสถาปัตย์',
+      status: 'แผนงาน',
+      location: 'Villa 8',
+      area: 'Villa 8',
+      workGroup: 'สถาปัตย์',
+      startDate: '2026-05-01',
+      domain: 'plan',
+      isActual: false,
+    },
+  ];
+
+  try {
+    const result = syncGoogleCalendarScheduledJob(incomingItems, {
+      dryRun: false, // Live run requested
+      skipLock: true,
+      allowCountMismatch: true,
+    });
+
+    // Batch must be held due to ambiguous task 2
+    assert.equal(result.status, 'HOLD');
+    assert.equal(result.reviewCount, 1);
+    // CRITICAL PARTIAL-WRITE PROTECTION ASSERTION:
+    // Zero mutations must have occurred! Task 1 must NOT have been updated.
+    assert.equal(titleSetCount, 0, 'Zero setTitle mutations must be executed when any item in batch holds!');
+  } finally {
+    delete global.CalendarApp;
+  }
+});
+
+test('buildSourceToCalendarMatchLedger produces deterministic match ledger and preserves meetings/tests', () => {
+  const villa9CalId = '958f698c143282cd3a24c4d8563e2fbe505a8c1948f91806b3480ea1a25450f9@group.calendar.google.com';
+
+  const mockEvents = [
+    {
+      id: 'evt-villa-9-plan',
+      title: 'งานทาสี 10% • แผนงาน [Villa 9] [สี]',
+      description: '',
+      startDate: '2026-06-01',
+      date: '2026-06-01',
+    },
+    {
+      id: 'evt-villa-9-meeting',
+      title: 'ประชุมตรวจรับงาน [Villa 9] [Meeting]',
+      description: 'TYPE: MEETING\nConsultant on site',
+      startDate: '2026-06-01',
+      date: '2026-06-01',
+    },
+  ];
+
+  const incomingItems = [
+    {
+      sourceIdentity: 'v9-paint-01',
+      taskId: 'uuid-paint-01',
+      task_name: 'งานทาสี',
+      detail: 'งานทาสี 10%',
+      status: 'แผนงาน',
+      location: 'Villa 9',
+      area: 'Villa 9',
+      workGroup: 'สี',
+      startDate: '2026-06-01',
+      domain: 'plan',
+      isActual: false,
+    },
+    {
+      sourceIdentity: 'v9-new-task-unmatched',
+      taskId: 'uuid-unmatched-02',
+      task_name: 'งานติดตั้งสุขภัณฑ์',
+      detail: 'งานติดตั้งสุขภัณฑ์',
+      status: 'แผนงาน',
+      location: 'Villa 9',
+      area: 'Villa 9',
+      workGroup: 'สุขาภิบาล',
+      startDate: '2026-06-15',
+      domain: 'plan',
+      isActual: false,
+    },
+  ];
+
+  const result = buildSourceToCalendarMatchLedger(incomingItems, {
+    eventsByCalendar: {
+      [villa9CalId]: mockEvents,
+    },
+  });
+
+  assert.equal(result.totalSourceItems, 2);
+  assert.equal(result.preservedIndependentCount, 1);
+  assert.equal(result.independentEvents[0].eventId, 'evt-villa-9-meeting');
+  assert.equal(result.independentEvents[0].preserved, true);
+
+  // Match ledger entries
+  assert.equal(result.ledger.length, 2);
+  const matched = result.ledger[0];
+  assert.equal(matched.sourceIdentity, 'v9-paint-01');
+  assert.equal(matched.matchedEventId, 'evt-villa-9-plan');
+  assert.equal(matched.action, 'NOOP');
+  assert.equal(matched.status, 'MATCHED');
+
+  const unmatched = result.ledger[1];
+  assert.equal(unmatched.sourceIdentity, 'v9-new-task-unmatched');
+  assert.equal(unmatched.action, 'CREATE');
+  assert.equal(unmatched.status, 'HOLD_UNMATCHED');
+});
+
+test('mapScheduleTaskToCalendarItem_ strictly forbids inferring Actual from actual_progress > 0 alone', () => {
+  const { mapScheduleTaskToCalendarItem_ } = require('../docs/apps-script/GoogleCalendarAutoSync_2026-10-23.gs');
+
+  // Task with actual_progress = 0.55 (55%), site_status = 'กำลังดำเนินการ', but no explicit actual markers
+  const task = {
+    id: 'task-prog-plan-1',
+    source_identity: 'task-sched-101',
+    task_name: 'งานโครงสร้างชั้น 2',
+    area: 'Villa 8',
+    category: 'โครงสร้าง',
+    planned_start: '2026-07-01',
+    planned_end: '2026-07-15',
+    actual_progress: 0.55,
+    site_status: 'กำลังดำเนินการ',
+  };
+
+  const mapped = mapScheduleTaskToCalendarItem_(task);
+
+  // CRITICAL RULE VERIFICATION:
+  // actual_progress > 0 alone MUST NOT cause domain to become 'actual' or isActual to become true!
+  assert.equal(mapped.progress, 55);
+  assert.equal(mapped.domain, 'plan', 'Must remain domain: "plan" without explicit actual markers');
+  assert.equal(mapped.isActual, false, 'isActual must be false without explicit actual markers');
+  assert.equal(mapped.detail, 'งานโครงสร้างชั้น 2 55%');
+});
+
 
