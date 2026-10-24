@@ -30,7 +30,7 @@ test('all 7 Git snapshots compared through GET only; no token or Script IDs in r
  assert.ok(!JSON.stringify(result).includes('fake-script-project'));
 });
 test('detects changed source and CRLF-only differences without leaking source',async()=>{
- const {fetchFn}=mock(i=>i===0?originals[i]+'\n//CHANGED_PRIVATE':i===1?originals[i].replace(/\n/g,'\r\n'):originals[i]);
+ const {fetchFn}=mock(i=>i===0?originals[i]+'\n//CHANGED_PRIVATE':i===1?(originals[i].includes('\r\n')?originals[i].replace(/\r\n/g,'\n'):originals[i].replace(/\n/g,'\r\n')):originals[i]);
  const result=await compare({root,mapping,token:'TEST_ONLY_DO_NOT_USE',fetchFn});
  assert.equal(result.results[0].status,'CONTENT_DIFF');
  assert.equal(result.results[1].status,'LINE_ENDINGS_ONLY');
