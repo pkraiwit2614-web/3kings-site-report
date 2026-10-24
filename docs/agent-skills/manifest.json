@@ -211,8 +211,17 @@
   "supporting_sops": [
     {
       "code": "EX",
+      "command_a": "ทำ Daily Site Report ตามเดิม",
+      "command_b": "ทำ Daily Site Report ตามเดิม แล้วส่งไลน์ให้ด้วย",
+      "aliases": [
+        "ทำ Daily Site Report",
+        "อัปเดต Daily Site Report ตามเดิม",
+        "อัปเดต Daily Report ตามเดิม"
+      ],
       "sop_title": "SOP_Daily_Site_Report_GSheets_Only_v2.0_Consolidated_2026-10-20",
-      "mode": "authorized_write"
+      "mode": "authorized_write",
+      "command_a_scope": "Google Form -> Sheets Delta -> PDF 4 Pages -> PNG 4 Images (2947px) -> Drive Readback (No LINE send)",
+      "command_b_scope": "Command A + Gateway Stage (4 assets) + Finalize + ready=true + Cloudflare Worker Owner DM + Delivery Ledger confirmation"
     },
     {
       "code": "SUP-PR",
@@ -227,7 +236,11 @@
     {
       "code": "SUP-PUBLISH",
       "sop_title": "SOP_SUP_Daily_Report_PDF_PNG_Publish_v2.0_Consolidated_2026-10-20",
-      "mode": "document_only"
+      "mode": "document_only",
+      "outputs": [
+        "PDF A4 Landscape 4 pages",
+        "PNG 4 images (Above Villa, Above Condo, Mirage, Henessy) width 2947px"
+      ]
     }
   ],
   "technical_mapping_reference": "docs/agent-skills/sop-technical-mapping.json"

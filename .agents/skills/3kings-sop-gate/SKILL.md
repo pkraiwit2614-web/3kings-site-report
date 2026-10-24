@@ -76,3 +76,17 @@ Use Google Drive INDEX + linked full ACTIVE SOP once per invocation, share snaps
 - Live Drive INDEX rows 08 and 11 intentionally reference one ACTIVE full SOP. Choose branch and permission by matched trigger, never by a broadened document-level mode: row 08 DAILY_PROGRESS, row 11 WEEKLY_RECAP.
 - Both have document_only output permissions and SOURCE_READ_ONLY inputs; creating a requested report is not permission to edit Schedule, Daily Report, Defect, Materials, Photo, Calendar, Payroll, RBAC/RLS or trigger Sync/Deploy.
 - Repo Skill/Manifest titles are hints only; resolve canonical file ID from live Drive INDEX each invocation. Archived v2.0 documents are historical, not live fallback.
+
+## Canonical routing — SOP EX (Daily Site Report) & SUP-PUBLISH: Command A vs Command B (24/10/2026)
+- **Command A (`ทำ Daily Site Report ตามเดิม`)**:
+  - Scope: Google Form responses -> Native Google Sheets delta append -> PDF 4 pages (A4 landscape) -> PNG 4 images (width 2947px, Above Villa, Above Condo, Mirage, Henessy) -> Target Drive folder readback & QA.
+  - Strict Boundary: NO Supabase Gateway staging, NO finalize, and NO LINE delivery. Command A alone MUST NEVER send LINE messages.
+- **Command B (`ทำ Daily Site Report ตามเดิม แล้วส่งไลน์ให้ด้วย`)**:
+  - Scope: Executes all steps of Command A, then invokes the authorized Google Apps Script Gateway Executor (`DailyLineGatewayExecutor_20261024` / live WebApp) to:
+    1. Verify Drive assets and Master Google Sheets tab headcount (e.g. 11 teams, 9 supervisors, 76 total).
+    2. Idempotently stage 4 PNG assets into `public.daily_line_stage_asset()` using effective `service_role`.
+    3. Finalize the report into `public.daily_line_finalize()` with verified QA tokens (`sopIndexRead`, `sopSheetsV2Read`, `sopPublishV2Read`, `sheetReadbackVerified`, etc.).
+    4. Verify `public.daily_line_ready(report_date)` returns `ready=true`.
+    5. Hand off to Cloudflare Worker `3kings-line-autopilot` morning cron for single Owner LINE DM push (Form text + 4 PNGs) with atomic `line_autopilot_claim`/`line_autopilot_ack` and Delivery Ledger verification.
+  - Strict Constraints: Owner DM ONLY (no group sends), single push, no duplicate sends on existing report date, Sunday skip, Monday uses Saturday report. If report date is outside the 08:00-13:00 Bangkok morning window, record as past-window pending and do not force wrong-date cron dispatch.
+
