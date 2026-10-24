@@ -88,6 +88,8 @@ test('never schedule old LINE group delivery or separate owner summary',()=>{
  assert.ok(!scheduled.includes('dailySiteSendTick('));
  assert.ok(!scheduled.includes('daily_owner_summary_tick'));
  assert.ok(scheduled.includes('daily_owner_report_tick'));
+ assert.ok(scheduled.includes("controller?.cron==='30 12 * * 1-6'"));
+ assert.ok(scheduled.includes('eveningOwnerCommandsTick('));
 });
 test('QA mismatch refuses to send without claiming',async()=>{
  const b=envelope();b.pdf_sha256='invalid';const f=fixture({manifest:b});
