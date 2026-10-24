@@ -437,7 +437,7 @@ export async function dailySiteSendTick(env,{db,hash,transport=fetch,now=new Dat
 }
 
 
-// Daily owner DM, one report per Bangkok morning. Reads only service-role
+// Daily owner DM, one report per Bangkok workday; allow bounded catch-up for QA finalized after 13:00. Reads only service-role
 // Delivery Log summary; never reads group IDs or changes site-group delivery.
 const OWNER_SUMMARY_ROUTES=Object.freeze([
   ['above_villa','Above Villa'],
@@ -492,7 +492,7 @@ export async function dailyOwnerSummaryTick(env,{db,hash,transport=fetch,now=new
      !env.SUPABASE_URL||!env.LINE_CHANNEL_ACCESS_TOKEN||
      !/^U[0-9a-f]{32}$/i.test(env.LINE_OWNER_USER_ID||''))return base;
   if(when.dayOfWeek===0||when.day<'2026-10-21'||when.localTime<'08:00'||
-     when.localTime>'13:00')return base;
+     when.localTime>'18:00')return base;
   if(typeof db!=='function'||typeof hash!=='function')throw Error('OWNER_DEPENDENCY_MISSING');
   const gateway=env.SUPABASE_URL.replace(/\/$/,'')+'/functions/v1/kings_daily_line_images/';
   let ready;
