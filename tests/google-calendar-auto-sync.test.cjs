@@ -1498,3 +1498,34 @@ test('scheduled calendar auto sync defaults to HOLD with zero writes if source i
     delete global.Logger;
   }
 });
+
+test('Owner Calendar scope checkpoint requests interactive consent without touching CalendarApp', () => {
+  const { authorizeCalendarScope20261024 } = require('../docs/apps-script/GoogleCalendarAutoSync_2026-10-23.gs');
+  let callCount = 0;
+  const fullMode = Symbol('FULL');
+  global.ScriptApp = {
+    AuthMode: { FULL: fullMode },
+    requireScopes: (mode, scopes) => {
+      callCount++;
+      assert.equal(mode, fullMode);
+      assert.deepEqual(scopes, ['https://www.googleapis.com/auth/calendar']);
+    },
+  };
+  global.CalendarApp = {
+    getCalendarById: () => { throw new Error('MUST_NOT_ACCESS_CALENDAR'); },
+  };
+  global.Logger = { log: () => {} };
+  try {
+    const result = authorizeCalendarScope20261024();
+    assert.equal(callCount, 1);
+    assert.equal(result.status, 'CALENDAR_SCOPE_CHECK_COMPLETED');
+    assert.equal(result.mutationCount, 0);
+    global.ScriptApp.requireScopes = () => { throw new Error('CONSENT_REQUIRED'); };
+    assert.throws(() => authorizeCalendarScope20261024(), /CONSENT_REQUIRED/,
+      'Permission prompt / authorization error must not be swallowed');
+  } finally {
+    delete global.ScriptApp;
+    delete global.CalendarApp;
+    delete global.Logger;
+  }
+});
