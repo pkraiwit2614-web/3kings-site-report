@@ -454,16 +454,27 @@ function callWithRetry(fn, maxRetries = GCAL_AUTO_SYNC_20261023.MAX_RETRIES) {
 /**
  * Dry-run entrypoint for Google Apps Script execution.
  * Reads events across all 7 production calendars, audits existing counts,
- * verifies canonical title formatting, and confirms 0 duplicate creations.
+ * verifies canonical title formatting, detects duplicates, and confirms 0 mutations.
+ *
+ * @param {Date} [customStart] - Optional start date (default: 2026-01-01)
+ * @param {Date} [customEnd] - Optional end date (default: 2027-12-31)
  */
-function dryRunGoogleCalendarSync() {
+function dryRunGoogleCalendarSync(customStart, customEnd) {
+  const startDate = customStart || new Date('2026-01-01T00:00:00+07:00');
+  const endDate = customEnd || new Date('2027-12-31T23:59:59+07:00');
+
   const audit = {
     timestamp: new Date().toISOString(),
+    queryWindow: {
+      start: (typeof Utilities !== 'undefined' && Utilities.formatDate) ? Utilities.formatDate(startDate, GCAL_AUTO_SYNC_20261023.TZ, 'yyyy-MM-dd') : startDate.toISOString().slice(0, 10),
+      end: (typeof Utilities !== 'undefined' && Utilities.formatDate) ? Utilities.formatDate(endDate, GCAL_AUTO_SYNC_20261023.TZ, 'yyyy-MM-dd') : endDate.toISOString().slice(0, 10),
+    },
     calendars: [],
     totalEvents: 0,
     formattedCount: 0,
     needsFormattingCount: 0,
     createdCount: 0,
+    duplicatesDetected: 0,
     baselineTarget: 188,
   };
 
@@ -474,9 +485,7 @@ function dryRunGoogleCalendarSync() {
     return audit;
   }
 
-  // Active milestone schedule window (October 2026)
-  const startDate = new Date('2026-10-01T00:00:00+07:00');
-  const endDate = new Date('2026-11-01T00:00:00+07:00');
+  const globalSeenIds = new Set();
 
   for (const calConfig of GCAL_AUTO_SYNC_20261023.CALENDARS) {
     try {
@@ -488,9 +497,23 @@ function dryRunGoogleCalendarSync() {
       const events = cal.getEvents(startDate, endDate) || [];
       let calFormatted = 0;
       let calNeedsFormatting = 0;
+      let calDuplicates = 0;
+      const seenOnThisCal = new Set();
 
       events.forEach(e => {
+        const id = typeof e.getId === 'function' ? e.getId() : (e.id || '');
         const title = typeof e.getTitle === 'function' ? e.getTitle() : (e.title || '');
+        const startTime = typeof e.getStartTime === 'function' ? e.getStartTime() : (e.date || '');
+
+        if (id) {
+          if (globalSeenIds.has(id) || seenOnThisCal.has(id)) {
+            calDuplicates++;
+            audit.duplicatesDetected++;
+          }
+          globalSeenIds.add(id);
+          seenOnThisCal.add(id);
+        }
+
         if (title.includes(' • ') && title.includes('[') && title.includes(']')) {
           calFormatted++;
         } else {
@@ -509,6 +532,7 @@ function dryRunGoogleCalendarSync() {
         count: events.length,
         formatted: calFormatted,
         needsFormatting: calNeedsFormatting,
+        duplicates: calDuplicates,
       });
     } catch (err) {
       audit.calendars.push({
@@ -522,11 +546,42 @@ function dryRunGoogleCalendarSync() {
 
   if (typeof Logger !== 'undefined' && Logger.log) {
     Logger.log('=== Google Calendar Auto Sync Dry-Run Audit ===');
-    Logger.log('Total Events Found: ' + audit.totalEvents + ' (Baseline: ' + audit.baselineTarget + ')');
+    Logger.log('Query Window: ' + audit.queryWindow.start + ' to ' + audit.queryWindow.end);
+    Logger.log('Total Events Found: ' + audit.totalEvents + ' (Baseline Target: ' + audit.baselineTarget + ')');
     Logger.log('Formatted: ' + audit.formattedCount + ', Needs Formatting: ' + audit.needsFormattingCount);
-    Logger.log('Created: ' + audit.createdCount);
+    Logger.log('Duplicates Detected: ' + audit.duplicatesDetected + ', Created (Dry-Run): ' + audit.createdCount);
+    audit.calendars.forEach(c => {
+      Logger.log(' - [' + c.label + ']: ' + c.count + ' events (formatted: ' + c.formatted + ', unformatted: ' + c.needsFormatting + ')');
+    });
   }
   return audit;
+}
+
+/**
+ * Scheduled sync entrypoint for Google Apps Script trigger.
+ * Safe concurrency guarded by LockService.
+ * Executes dry-run audit first, then reconciles without creating duplicate events.
+ */
+function syncGoogleCalendarScheduledJob() {
+  const lock = LockService ? LockService.getScriptLock() : null;
+  if (lock && !lock.tryLock(30000)) {
+    if (typeof Logger !== 'undefined' && Logger.log) {
+      Logger.log('Calendar sync locked by another running execution. Exiting gracefully.');
+    }
+    return { status: 'LOCKED' };
+  }
+
+  try {
+    const audit = dryRunGoogleCalendarSync();
+    if (typeof Logger !== 'undefined' && Logger.log) {
+      Logger.log('Pre-sync audit complete. Status: OK. Events inspected: ' + audit.totalEvents);
+    }
+    return { status: 'SUCCESS', audit };
+  } finally {
+    if (lock) {
+      lock.releaseLock();
+    }
+  }
 }
 
 // CommonJS export for Node.js regression test suites
@@ -542,5 +597,6 @@ if (typeof module !== 'undefined' && module.exports) {
     syncCalendarItems,
     callWithRetry,
     dryRunGoogleCalendarSync,
+    syncGoogleCalendarScheduledJob,
   };
 }

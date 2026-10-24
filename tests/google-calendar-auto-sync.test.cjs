@@ -350,3 +350,42 @@ test('dryRunGoogleCalendarSync audits all 7 production calendars against 188 bas
   }
 });
 
+test('syncGoogleCalendarScheduledJob runs safely under LockService protection', () => {
+  const { syncGoogleCalendarScheduledJob } = require('../docs/apps-script/GoogleCalendarAutoSync_2026-10-23.gs');
+
+  let lockAcquired = false;
+  let lockReleased = false;
+
+  global.LockService = {
+    getScriptLock: () => ({
+      tryLock: timeout => {
+        lockAcquired = true;
+        return true;
+      },
+      releaseLock: () => {
+        lockReleased = true;
+      },
+    }),
+  };
+
+  global.CalendarApp = {
+    getCalendarById: () => ({
+      getEvents: () => [],
+    }),
+  };
+
+  global.Logger = {
+    log: () => {},
+  };
+
+  try {
+    const res = syncGoogleCalendarScheduledJob();
+    assert.equal(res.status, 'SUCCESS');
+    assert.equal(lockAcquired, true);
+    assert.equal(lockReleased, true);
+  } finally {
+    delete global.LockService;
+    delete global.CalendarApp;
+    delete global.Logger;
+  }
+});
