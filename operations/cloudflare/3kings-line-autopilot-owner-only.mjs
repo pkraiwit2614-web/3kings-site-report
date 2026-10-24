@@ -437,7 +437,7 @@ export async function dailySiteSendTick(env,{db,hash,transport=fetch,now=new Dat
 }
 
 
-// Daily owner DM, one report per Bangkok morning. Reads only service-role
+// Daily owner DM, one report per Bangkok workday, including QA-finalized late arrivals through 18:00. Reads only service-role
 // Delivery Log summary; never reads group IDs or changes site-group delivery.
 const OWNER_SUMMARY_ROUTES=Object.freeze([
   ['above_villa','Above Villa'],
