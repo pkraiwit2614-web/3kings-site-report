@@ -1,0 +1,21 @@
+name: Scoped XLSX original-ID writeback safety
+
+on:
+  pull_request:
+    paths:
+      - docs/apps-script/MaterialsPRScopedXlsxWriteback_2026-10-21.gs
+      - tests/materials-pr-scoped-xlsx-writeback.test.cjs
+      - .github/workflows/scoped-xlsx-writeback-safety.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify bounded cell patch and no runtime side effects
+        run: node --test tests/materials-pr-scoped-xlsx-writeback.test.cjs
