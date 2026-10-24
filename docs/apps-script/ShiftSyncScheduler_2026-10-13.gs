@@ -92,31 +92,32 @@ function syncShiftHourly20261013() {
   }
 
   // Calendar Auto Sync (SOP 12): Guarded integration outside shiftOnce lock
-  // Defect v1.3 pattern: claim slot first, run job outside lock, delete slot on error/hold
-  output.calendar = shiftOnce20261013_('calendar-sync', slot, () => ({ status: 'ok' }));
-  if (output.calendar.status === 'success') {
-    try {
-      if (typeof syncGoogleCalendarScheduledJob === 'function') {
-        const props = PropertiesService.getScriptProperties();
-        const enabled = props ? (props.getProperty('CALENDAR_SYNC_ENABLED') === 'true') : false;
-        if (!enabled) {
-          // Fail-closed gate: calendar write path remains dormant until explicitly enabled
-          output.calendar = { status: 'skipped', reason: 'CALENDAR_SYNC_NOT_ENABLED_FAIL_CLOSED' };
-        } else {
-          const run = syncGoogleCalendarScheduledJob(null, { skipLock: true, dryRun: false });
-          const st = String(run && run.status || '').toLowerCase();
-          if (run && (st === 'error' || st === 'locked' || st === 'hold' || st === 'count_mismatch_review')) {
-            throw new Error(JSON.stringify(run));
-          }
-          output.calendar = { status: 'success', result: run };
+  // Defect v1.3 pattern: gate check BEFORE claiming slot, delete slot on error/hold/skip
+  const calProps = (typeof PropertiesService !== 'undefined' && PropertiesService.getScriptProperties) ? PropertiesService.getScriptProperties() : null;
+  const calSyncEnabled = calProps ? (calProps.getProperty('CALENDAR_SYNC_ENABLED') === 'true') : false;
+
+  if (!calSyncEnabled) {
+    // Fail-closed gate: calendar write path remains dormant; slot is NEVER claimed or persisted
+    output.calendar = { status: 'skipped', reason: 'CALENDAR_SYNC_NOT_ENABLED_FAIL_CLOSED' };
+  } else if (typeof syncGoogleCalendarScheduledJob !== 'function') {
+    output.calendar = { status: 'skipped', reason: 'CALENDAR_SYNC_HANDLER_NOT_AVAILABLE' };
+  } else {
+    output.calendar = shiftOnce20261013_('calendar-sync', slot, () => ({ status: 'ok' }));
+    if (output.calendar.status === 'success') {
+      try {
+        const run = syncGoogleCalendarScheduledJob(null, { skipLock: true, dryRun: false });
+        const st = String(run && run.status || '').toLowerCase();
+        if (run && (st === 'error' || st === 'locked' || st === 'hold' || st === 'count_mismatch_review' || st === 'skipped')) {
+          throw new Error(JSON.stringify(run));
         }
-      } else {
-        output.calendar = { status: 'skipped', reason: 'CALENDAR_SYNC_HANDLER_NOT_AVAILABLE' };
+        output.calendar = { status: 'success', result: run };
+      } catch (err) {
+        if (calProps) {
+          calProps.deleteProperty(
+            SHIFT_SYNC_20261013.PROPERTY_PREFIX + 'calendar-sync_' + slot);
+        }
+        output.calendar = { status: 'error', error: String(err) };
       }
-    } catch (err) {
-      PropertiesService.getScriptProperties().deleteProperty(
-        SHIFT_SYNC_20261013.PROPERTY_PREFIX + 'calendar-sync_' + slot);
-      output.calendar = { status: 'error', error: String(err) };
     }
   }
 

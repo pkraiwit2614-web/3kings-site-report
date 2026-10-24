@@ -774,8 +774,11 @@ test('diagnoseCalendarAccess20261024 inspects all 7 calendars and Supabase conne
   }
 });
 
-test('fetchAuthorizedCalendarSourceItems_ maps real actual_progress and site_status without fabricated values', () => {
-  const { fetchAuthorizedCalendarSourceItems_ } = require('../docs/apps-script/GoogleCalendarAutoSync_2026-10-23.gs');
+test('fetchAuthorizedCalendarSourceItems_ maps real actual_progress and site_status without fabricated values or guessing Actual from site_status', () => {
+  const { fetchAuthorizedCalendarSourceItems_, resolveCalendarIdForTask } = require('../docs/apps-script/GoogleCalendarAutoSync_2026-10-23.gs');
+
+  const p9CalId = '958f698c143282cd3a24c4d8563e2fbe505a8c1948f91806b3480ea1a25450f9@group.calendar.google.com';
+  const siteActualCalId = '9fad4dc9a66ea28e8e98f833119dbd8a4978b66574a329f2d9d1bb8d71b7f498@group.calendar.google.com';
 
   const mockTasks = [
     {
@@ -788,7 +791,6 @@ test('fetchAuthorizedCalendarSourceItems_ maps real actual_progress and site_sta
       planned_end: '2026-10-30',
       actual_progress: 0.259, // 25.9% -> 26%
       site_status: 'ล่าช้า',
-      plan_status: 'ตามแผน',
     },
     {
       id: 'task_002',
@@ -798,37 +800,63 @@ test('fetchAuthorizedCalendarSourceItems_ maps real actual_progress and site_sta
       category: 'Cleaning',
       planned_start: '2026-10-22',
       planned_end: '2026-10-25',
-      actual_progress: null, // No fabricated 0!
-      site_status: null,
-      plan_status: 'แผนช่วงบ่าย',
+      actual_progress: 0,
+      site_status: 'ยังไม่เริ่ม', // One of 71 production tasks with 'ยังไม่เริ่ม'
+    },
+    {
+      id: 'task_003',
+      source_identity: 'actual:site_001',
+      task_name: 'งานเทปูนพื้นถนนจริง',
+      area: 'Site',
+      category: 'โครงสร้าง',
+      planned_start: '2026-10-23',
+      planned_end: '2026-10-23',
+      actual_progress: 1.0,
+      site_status: 'ผ่าน/เสร็จ',
     },
   ];
 
   global.buildContext_ = () => ({});
   global.sbGetAll_ = (ctx, query) => {
+    // Assert query uses ONLY verified Production columns
     assert(query.includes('actual_progress'));
     assert(query.includes('site_status'));
-    assert(query.includes('plan_status'));
+    assert(query.includes('area'));
+    assert(query.includes('task_name'));
+    // Assert query DOES NOT query non-existent columns
+    assert(!query.includes('current_plan_progress'), 'MUST NOT query current_plan_progress (non-existent in schedule_tasks)');
+    assert(!query.includes('imported_plan_progress'), 'MUST NOT query imported_plan_progress (non-existent in schedule_tasks)');
+    assert(!query.includes('plan_status'), 'MUST NOT query plan_status');
     return mockTasks;
   };
 
   try {
     const items = fetchAuthorizedCalendarSourceItems_();
-    assert.equal(items.length, 2);
+    assert.equal(items.length, 3);
 
-    // Task 1: has actual progress 25.9% -> 26%, site_status 'ล่าช้า'
+    // Task 1: Plot 9 task with progress 26% and status 'ล่าช้า'
+    // Plan milestone with progress; routes to Plot 9 Villa calendar, NOT Site / Actual!
     assert.equal(items[0].progress, 26);
     assert.equal(items[0].status, 'ล่าช้า');
     assert.equal(items[0].detail, 'งานสถาปัตยกรรม 26%');
-    assert.equal(items[0].isActual, true);
-    assert.equal(items[0].domain, 'actual');
+    assert.equal(items[0].isActual, false, 'Plot task must NOT be marked Actual solely because of site_status');
+    assert.equal(items[0].domain, 'plan');
+    assert.equal(resolveCalendarIdForTask(items[0]), p9CalId, 'Plot 9 task must route to Villa 9 calendar');
 
-    // Task 2: null progress preserved as null (never fabricated 0), plan_status used
-    assert.equal(items[1].progress, null);
-    assert.equal(items[1].status, 'แผนช่วงบ่าย');
+    // Task 2: 71 tasks with 'ยังไม่เริ่ม' and actual_progress 0 must remain plan
+    assert.equal(items[1].progress, 0);
+    assert.equal(items[1].status, 'ยังไม่เริ่ม');
     assert.equal(items[1].detail, 'Cleaning A221/A222');
     assert.equal(items[1].isActual, false);
     assert.equal(items[1].domain, 'plan');
+
+    // Task 3: Real actual task with explicit evidence ('Site', 'จริง', 'actual')
+    assert.equal(items[2].progress, 100);
+    assert.equal(items[2].status, 'ผ่าน/เสร็จ');
+    assert.equal(items[2].detail, 'งานเทปูนพื้นถนนจริง 100%');
+    assert.equal(items[2].isActual, true);
+    assert.equal(items[2].domain, 'actual');
+    assert.equal(resolveCalendarIdForTask(items[2]), siteActualCalId, 'Actual task must route to Site / Actual');
   } finally {
     delete global.buildContext_;
     delete global.sbGetAll_;
@@ -935,6 +963,213 @@ test('301 active tasks reconciliation: unmatched tasks fail closed without creat
   } finally {
     delete global.CalendarApp;
     delete global.LockService;
+  }
+});
+
+test('71 tasks with site_status = "ยังไม่เริ่ม" and actual_progress = 0 remain domain: "plan" and do not misroute to Site / Actual', () => {
+  const { mapScheduleTaskToCalendarItem_, resolveCalendarIdForTask } = require('../docs/apps-script/GoogleCalendarAutoSync_2026-10-23.gs');
+
+  const v6CalId = '9b7068d0a450c0f2acbc58783d9eabf80c2957b329d99bdbb1078586994ac210@group.calendar.google.com';
+  const v7CalId = '7ca8d4a9ade6e05b36ec81c9e0dc025d12c567541414a9ceaee1958e344d187c@group.calendar.google.com';
+  const v8CalId = 'd31b1dafb3231456407795ea8400bdc0daf490553d441449312e01725a7fd379@group.calendar.google.com';
+  const v9CalId = '958f698c143282cd3a24c4d8563e2fbe505a8c1948f91806b3480ea1a25450f9@group.calendar.google.com';
+  const planCalId = 'family17900518303332507254@group.calendar.google.com';
+  const siteActualCalId = '9fad4dc9a66ea28e8e98f833119dbd8a4978b66574a329f2d9d1bb8d71b7f498@group.calendar.google.com';
+
+  // Generate 71 tasks with site_status = 'ยังไม่เริ่ม', actual_progress = 0 across Plots and Plan
+  const areas = ['Plot 6', 'Plot 7', 'Plot 8', 'Plot 9', 'Condo A', 'Condo B'];
+  for (let i = 1; i <= 71; i++) {
+    const area = areas[i % areas.length];
+    const task = {
+      id: `task_not_started_${i}`,
+      source_identity: `sched:${i}`,
+      source_task_no: `${i}`,
+      task_name: `งานเตรียมการ ${i}`,
+      area: area,
+      category: 'เตรียมงาน',
+      planned_start: '2026-11-01',
+      planned_end: '2026-11-15',
+      actual_start: null,
+      actual_end: null,
+      actual_progress: 0,
+      site_status: 'ยังไม่เริ่ม',
+      project_id: 'p1',
+      is_active: true,
+    };
+
+    const item = mapScheduleTaskToCalendarItem_(task);
+    assert.equal(item.isActual, false, `Task ${i} must NOT be marked Actual solely because site_status exists`);
+    assert.equal(item.domain, 'plan', `Task ${i} domain must be plan`);
+    assert.equal(item.status, 'ยังไม่เริ่ม');
+    assert.equal(item.detail, `งานเตรียมการ ${i}`);
+
+    const targetCalId = resolveCalendarIdForTask(item);
+    assert.notEqual(targetCalId, siteActualCalId, `Task ${i} in ${area} with 'ยังไม่เริ่ม' must NEVER route to Site / Actual`);
+
+    if (area === 'Plot 6') assert.equal(targetCalId, v6CalId);
+    else if (area === 'Plot 7') assert.equal(targetCalId, v7CalId);
+    else if (area === 'Plot 8') assert.equal(targetCalId, v8CalId);
+    else if (area === 'Plot 9') assert.equal(targetCalId, v9CalId);
+    else assert.equal(targetCalId, planCalId);
+  }
+});
+
+test('fetchAuthorizedCalendarSourceItems_ and syncGoogleCalendarScheduledJob fail closed on HTTP/SQL query error and empty source', () => {
+  const { fetchAuthorizedCalendarSourceItems_, syncGoogleCalendarScheduledJob } = require('../docs/apps-script/GoogleCalendarAutoSync_2026-10-23.gs');
+
+  // Case 1: Query throws error (e.g. column current_plan_progress does not exist)
+  global.buildContext_ = () => ({});
+  global.sbGetAll_ = () => {
+    throw new Error('column schedule_tasks.current_plan_progress does not exist');
+  };
+
+  try {
+    assert.throws(
+      () => fetchAuthorizedCalendarSourceItems_(),
+      /column schedule_tasks\.current_plan_progress does not exist/,
+      'fetchAuthorizedCalendarSourceItems_ must rethrow DB/REST errors'
+    );
+
+    // Case 2: syncGoogleCalendarScheduledJob called with no args when DB error occurs
+    // CalendarApp must exist to pass pre-audit check
+    global.CalendarApp = {
+      getCalendarById: () => ({
+        getEvents: () => [],
+      }),
+    };
+    global.LockService = {
+      getScriptLock: () => ({
+        tryLock: () => true,
+        releaseLock: () => {},
+      }),
+    };
+
+    const resError = syncGoogleCalendarScheduledJob(null, { skipLock: true, allowCountMismatch: true });
+    assert.equal(resError.status, 'ERROR');
+    assert.equal(resError.error, 'SOURCE_FETCH_FAILED');
+    assert(resError.details.includes('current_plan_progress'));
+
+    // Case 3: Empty source items returned from DB (no items found)
+    global.sbGetAll_ = () => [];
+    const resEmpty = syncGoogleCalendarScheduledJob(null, { skipLock: true, allowCountMismatch: true });
+    assert.equal(resEmpty.status, 'HOLD');
+    assert.equal(resEmpty.reason, 'NO_SOURCE_ITEMS_FOUND_FAIL_CLOSED');
+  } finally {
+    delete global.buildContext_;
+    delete global.sbGetAll_;
+    delete global.CalendarApp;
+    delete global.LockService;
+  }
+});
+
+test('syncShiftHourly20261013 never claims slot or persists success marker when CALENDAR_SYNC_ENABLED is false or not set', () => {
+  const fs = require('fs');
+  const schedulerCode = fs.readFileSync('docs/apps-script/ShiftSyncScheduler_2026-10-13.gs', 'utf8');
+
+  // Load scheduler in isolated mock sandbox
+  const setProperties = {};
+  const deletedProperties = [];
+  const mockScriptProperties = {
+    getProperty: (k) => setProperties[k] || null,
+    setProperty: (k, v) => { setProperties[k] = v; },
+    deleteProperty: (k) => {
+      deletedProperties.push(k);
+      delete setProperties[k];
+    },
+    getProperties: () => ({ ...setProperties }),
+  };
+
+  const sandbox = {
+    PropertiesService: {
+      getScriptProperties: () => mockScriptProperties,
+    },
+    LockService: {
+      getScriptLock: () => ({
+        tryLock: () => true,
+        releaseLock: () => {},
+      }),
+    },
+    Utilities: {
+      formatDate: (d, tz, fmt) => {
+        if (fmt === 'yyyy-MM-dd') return '2026-10-24';
+        if (fmt === 'H') return '10'; // 10:00 (inside 08..18 shift)
+        if (fmt === 'm') return '15';
+        return '2026-10-24';
+      },
+    },
+    console: { log: () => {}, error: () => {} },
+    buildContext_: () => ({ rootFolder: {} }),
+    getUniqueChildFolderByName_: () => ({}),
+    loadProjectMap_: () => ({}),
+    requireProjects_: () => {},
+    syncProgressPlot_: () => ({ status: 'ok' }),
+    syncMaterialsWorkbook_: () => ({ status: 'ok' }),
+    smartSyncDefectsV13_15m: () => ({ status: 'ok' }),
+    syncGoogleCalendarScheduledJob: () => ({ status: 'success' }),
+    CFG: { ABOVE_FOLDER_NAME: 'Above', VILLA_FOLDER_NAME: 'Villa', MATERIALS_FOLDER_NAME: 'Materials' },
+  };
+
+  const vm = require('vm');
+  vm.createContext(sandbox);
+  vm.runInContext(schedulerCode, sandbox);
+
+  // Subcase A: CALENDAR_SYNC_ENABLED is NOT set (default)
+  const out1 = sandbox.syncShiftHourly20261013();
+  assert.equal(out1.calendar.status, 'skipped');
+  assert.equal(out1.calendar.reason, 'CALENDAR_SYNC_NOT_ENABLED_FAIL_CLOSED');
+  // Verify NO calendar-sync slot property was ever set in PropertiesService!
+  const calendarKeys1 = Object.keys(setProperties).filter(k => k.includes('calendar-sync'));
+  assert.equal(calendarKeys1.length, 0, 'No calendar-sync slot key must be set when gate is closed');
+
+  // Subcase B: CALENDAR_SYNC_ENABLED is explicitly 'false'
+  setProperties['CALENDAR_SYNC_ENABLED'] = 'false';
+  const out2 = sandbox.syncShiftHourly20261013();
+  assert.equal(out2.calendar.status, 'skipped');
+  assert.equal(out2.calendar.reason, 'CALENDAR_SYNC_NOT_ENABLED_FAIL_CLOSED');
+  const calendarKeys2 = Object.keys(setProperties).filter(k => k.includes('calendar-sync'));
+  assert.equal(calendarKeys2.length, 0, 'No calendar-sync slot key must be set when disabled');
+
+  // Subcase C: CALENDAR_SYNC_ENABLED is 'true' but job returns HOLD or ERROR
+  setProperties['CALENDAR_SYNC_ENABLED'] = 'true';
+  sandbox.syncGoogleCalendarScheduledJob = () => ({ status: 'HOLD', reason: 'CALENDAR_BASELINE_COUNT_MISMATCH_HOLD' });
+  const out3 = sandbox.syncShiftHourly20261013();
+  assert.equal(out3.calendar.status, 'error');
+  // Slot key must have been deleted so it does not persist success
+  const calendarKeys3 = Object.keys(setProperties).filter(k => k.includes('calendar-sync') && setProperties[k] === 'ok');
+  assert.equal(calendarKeys3.length, 0, 'Slot key must be deleted on job HOLD/ERROR');
+});
+
+test('auditCalendarScriptProperties20261024 safely inspects properties without exposing secrets', () => {
+  const { auditCalendarScriptProperties20261024 } = require('../docs/apps-script/GoogleCalendarAutoSync_2026-10-23.gs');
+
+  const mockProps = {
+    CALENDAR_SYNC_ENABLED: 'false',
+    CALENDAR_SYNC_DRY_RUN: 'true',
+    SUPABASE_URL: 'https://wtqubwdduzedmcvyhbgs.supabase.co',
+    SUPABASE_SERVICE_ROLE_KEY: 'secret_service_role_key_value_do_not_expose',
+    SUPABASE_ANON_KEY: 'secret_anon_key_value_do_not_expose',
+  };
+
+  global.PropertiesService = {
+    getScriptProperties: () => ({
+      getProperty: (k) => mockProps[k] || null,
+    }),
+  };
+
+  try {
+    const audit = auditCalendarScriptProperties20261024();
+    assert.equal(audit.calendarSyncEnabled, 'false');
+    assert.equal(audit.calendarSyncDryRun, 'true');
+    assert.equal(audit.supabaseUrlConfigured, true);
+    assert.equal(audit.supabaseKeyConfigured, true);
+    assert.equal(audit.isWritePathLocked, true, 'Write path must be locked when enabled is false');
+
+    // Security assertion: audit object MUST NOT contain the secret keys!
+    const jsonStr = JSON.stringify(audit);
+    assert(!jsonStr.includes('secret_service_role_key_value_do_not_expose'), 'Secrets MUST NOT be leaked in audit report');
+    assert(!jsonStr.includes('secret_anon_key_value_do_not_expose'), 'Secrets MUST NOT be leaked in audit report');
+  } finally {
+    delete global.PropertiesService;
   }
 });
 

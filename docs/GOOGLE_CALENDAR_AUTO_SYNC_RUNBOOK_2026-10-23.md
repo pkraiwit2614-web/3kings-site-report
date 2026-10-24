@@ -110,11 +110,15 @@ The regression suite [`tests/google-calendar-auto-sync.test.cjs`](file:///c:/Use
 ✔ syncGoogleCalendarScheduledJob fails closed to reviewQueue when destination readback fails
 ✔ dryRunGoogleCalendarSync safely handles null/empty titles and timezone date formatting
 ✔ diagnoseCalendarAccess20261024 inspects all 7 calendars and Supabase connectivity
-✔ fetchAuthorizedCalendarSourceItems_ maps real actual_progress and site_status without fabricated values
+✔ fetchAuthorizedCalendarSourceItems_ maps real actual_progress and site_status without fabricated values or guessing Actual from site_status
 ✔ syncGoogleCalendarScheduledJob supports skipLock to prevent nested LockService deadlock
 ✔ 301 active tasks reconciliation: unmatched tasks fail closed without creating unwanted events
+✔ 71 tasks with site_status = "ยังไม่เริ่ม" and actual_progress = 0 remain domain: "plan" and do not misroute to Site / Actual
+✔ fetchAuthorizedCalendarSourceItems_ and syncGoogleCalendarScheduledJob fail closed on HTTP/SQL query error and empty source
+✔ syncShiftHourly20261013 never claims slot or persists success marker when CALENDAR_SYNC_ENABLED is false or not set
+✔ auditCalendarScriptProperties20261024 safely inspects properties without exposing secrets
 
-PASS: 23 / 23 tests passed (0 failures)
+PASS: 27 / 27 tests passed (0 failures)
 ```
 
 ---
@@ -136,8 +140,9 @@ A dedicated, 100% read-only diagnostic function is now deployed to Live GAS:
 3. Click **"Run"**.
    - If prompted for authorization: click "Review permissions" -> choose Owner Google account -> "Advanced" -> "Go to 3Kings-App (unsafe)" -> "Allow".
 4. Review the Execution Log:
-   - Each of the 7 calendars is tested individually:
+   - Each of the 7 calendars and Script Properties are tested individually:
      ```text
+     [PROPERTIES] CALENDAR_SYNC_ENABLED: not_set, CALENDAR_SYNC_DRY_RUN: not_set (Write Path Locked: true)
      [OK] 3 Kings – Construction Plan ("3 Kings – Construction Plan"): 62 events (TZ: Asia/Bangkok)
      [OK] 3 Kings – Site / Actual ("3 Kings – Site / Actual"): 90 events (TZ: Asia/Bangkok)
      ...

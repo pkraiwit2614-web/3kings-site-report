@@ -758,6 +758,15 @@ function diagnoseCalendarAccess20261024() {
     }
   }
 
+  // Script properties audit (safe, non-leaking)
+  try {
+    const propAudit = auditCalendarScriptProperties20261024();
+    report.scriptProperties = propAudit;
+    report.diagnostics.push('[PROPERTIES] CALENDAR_SYNC_ENABLED: ' + propAudit.calendarSyncEnabled + ', CALENDAR_SYNC_DRY_RUN: ' + propAudit.calendarSyncDryRun + ' (Write Path Locked: ' + propAudit.isWritePathLocked + ')');
+  } catch (pErr) {
+    report.diagnostics.push('[PROPERTIES] Error reading script properties: ' + String(pErr));
+  }
+
   // Supabase read check
   try {
     const tasks = fetchAuthorizedCalendarSourceItems_({ dryRun: true });
@@ -779,6 +788,48 @@ function diagnoseCalendarAccess20261024() {
   return report;
 }
 
+/**
+ * Safe, read-only audit of script properties governing Calendar sync.
+ * Never exposes passwords, secret tokens, or full service keys.
+ */
+function auditCalendarScriptProperties20261024() {
+  const audit = {
+    timestamp: new Date().toISOString(),
+    calendarSyncEnabled: 'not_set',
+    calendarSyncDryRun: 'not_set',
+    supabaseUrlConfigured: false,
+    supabaseKeyConfigured: false,
+    isWritePathLocked: true,
+  };
+
+  if (typeof PropertiesService !== 'undefined' && PropertiesService.getScriptProperties) {
+    const props = PropertiesService.getScriptProperties();
+    const enabled = props.getProperty('CALENDAR_SYNC_ENABLED');
+    const dryRun = props.getProperty('CALENDAR_SYNC_DRY_RUN');
+    const url = props.getProperty('SUPABASE_URL');
+    const sKey = props.getProperty('SUPABASE_SERVICE_ROLE_KEY');
+    const aKey = props.getProperty('SUPABASE_ANON_KEY');
+
+    audit.calendarSyncEnabled = enabled === null ? 'not_set' : enabled;
+    audit.calendarSyncDryRun = dryRun === null ? 'not_set' : dryRun;
+    audit.supabaseUrlConfigured = Boolean(url && url.trim());
+    audit.supabaseKeyConfigured = Boolean((sKey && sKey.trim()) || (aKey && aKey.trim()));
+    audit.isWritePathLocked = (enabled !== 'true');
+  }
+
+  if (typeof Logger !== 'undefined' && Logger.log) {
+    Logger.log('=== CALENDAR SCRIPT PROPERTIES AUDIT ===');
+    Logger.log('CALENDAR_SYNC_ENABLED: ' + audit.calendarSyncEnabled);
+    Logger.log('CALENDAR_SYNC_DRY_RUN: ' + audit.calendarSyncDryRun);
+    Logger.log('Supabase URL Configured: ' + audit.supabaseUrlConfigured);
+    Logger.log('Supabase Key Configured: ' + audit.supabaseKeyConfigured);
+    Logger.log('Write Path Fail-Closed Status: ' + (audit.isWritePathLocked ? 'LOCKED (SAFE)' : 'ARMED (ACTIVE)'));
+    Logger.log('========================================');
+  }
+
+  return audit;
+}
+
 // In-memory pluggable provider for test suites and custom workflows
 let globalCalendarSourceProvider_ = null;
 function setGlobalCalendarSourceProvider_(provider) {
@@ -789,9 +840,75 @@ function getGlobalCalendarSourceProvider_() {
 }
 
 /**
+ * Map Supabase schedule_tasks record to canonical calendar sync item.
+ * Strictly separates Plan vs Actual based on explicit event evidence.
+ * CRITICAL RULE: Never infer Actual from Boolean(site_status)!
+ * In Production, all 301 active tasks have site_status (including 71 with 'ยังไม่เริ่ม').
+ */
+function mapScheduleTaskToCalendarItem_(t) {
+  let progressPct = null;
+  if (t.actual_progress !== null && t.actual_progress !== undefined && t.actual_progress !== '') {
+    const num = Number(t.actual_progress);
+    if (!isNaN(num)) {
+      progressPct = Math.round(num * 100);
+    }
+  }
+
+  const rawStatus = String(t.site_status || '').trim();
+  const taskName = String(t.task_name || '').trim();
+  const loc = String(t.area || '').trim();
+  const workGroup = String(t.category || '').trim();
+  const sourceIdentity = String(t.source_identity || '').toLowerCase();
+  const areaLower = loc.toLowerCase();
+  const taskNameLower = taskName.toLowerCase();
+
+  // True event type separation:
+  // Explicit actual evidence: explicit domain/flag, 'actual' in identity or area, area 'site', or 'จริง' in task name.
+  // Tasks with site_status = 'ยังไม่เริ่ม' or progress = 0 are strictly Plan events.
+  const isExplicitActual = Boolean(t.isActual) ||
+                           String(t.domain || '').toLowerCase() === 'actual' ||
+                           sourceIdentity.includes('actual') ||
+                           areaLower.includes('actual') ||
+                           areaLower === 'site' ||
+                           taskNameLower.includes('จริง');
+
+  const isActual = isExplicitActual;
+  const domain = isActual ? 'actual' : (t.domain || 'plan');
+  const status = rawStatus || (isActual ? 'ดำเนินการ' : 'แผนงาน');
+
+  let detail = taskName;
+  if (progressPct !== null && progressPct > 0 && !taskName.includes('%')) {
+    detail = taskName + ' ' + progressPct + '%';
+  }
+
+  return {
+    sourceKey: t.source_identity || ('task:' + t.id),
+    sourceIdentity: t.source_identity || null,
+    taskId: t.id,
+    detail: detail,
+    task_name: taskName,
+    location: loc,
+    area: loc,
+    category: workGroup,
+    workGroup: workGroup,
+    startDate: t.planned_start,
+    endDate: t.planned_end,
+    date: t.planned_start,
+    actualStart: t.actual_start || null,
+    actualEnd: t.actual_end || null,
+    domain: domain,
+    isActual: isActual,
+    status: status,
+    siteStatus: t.site_status || null,
+    progress: progressPct,
+  };
+}
+
+/**
  * Authorized Source-of-Truth Provider for Work Plan, Progress, and Actual milestones.
  * In live runtime, queries Supabase schedule_tasks or invokes registered provider.
- * In QA / test environment, uses mock provider or fallback items.
+ * Uses only verified columns from Production schema.
+ * Propagates query errors fail-closed without suppressing into false success.
  */
 function fetchAuthorizedCalendarSourceItems_(options = {}) {
   if (options && Array.isArray(options.sourceItems)) {
@@ -805,138 +922,39 @@ function fetchAuthorizedCalendarSourceItems_(options = {}) {
     return globalProvided;
   }
 
+  // Use only verified columns that exist in public.schedule_tasks
+  const queryPath = '/rest/v1/schedule_tasks?select=id,source_identity,source_task_no,task_name,area,category,planned_start,planned_end,actual_start,actual_end,actual_progress,site_status,project_id,is_active&is_active=eq.true&order=planned_start.asc';
+
   // Live Google Apps Script runtime: Supabase schedule_tasks via buildContext_
   if (typeof buildContext_ === 'function' && typeof sbGetAll_ === 'function') {
-    try {
-      const ctx = buildContext_();
-      const tasks = sbGetAll_(ctx, '/rest/v1/schedule_tasks?select=id,source_identity,source_task_no,task_name,area,category,planned_start,planned_end,actual_start,actual_end,imported_plan_progress,current_plan_progress,actual_progress,plan_status,site_status,project_id,is_active&is_active=eq.true&order=planned_start.asc');
-      if (Array.isArray(tasks) && tasks.length > 0) {
-        return tasks.map(t => {
-          let progressPct = null;
-          if (t.actual_progress !== null && t.actual_progress !== undefined && t.actual_progress !== '') {
-            const num = Number(t.actual_progress);
-            if (!isNaN(num)) {
-              progressPct = Math.round(num * 100);
-            }
-          }
-
-          const isActual = (progressPct !== null && progressPct > 0) ||
-                           Boolean(t.actual_start) ||
-                           Boolean(t.site_status) ||
-                           String(t.task_name || '').toLowerCase().includes('จริง') ||
-                           String(t.area || '').toLowerCase().includes('actual') ||
-                           String(t.source_identity || '').toLowerCase().includes('actual');
-
-          const rawStatus = String(t.site_status || t.plan_status || '').trim();
-          const status = rawStatus || (isActual ? 'ดำเนินการ' : 'แผนงาน');
-
-          const taskName = String(t.task_name || '').trim();
-          let detail = taskName;
-          if (progressPct !== null && progressPct > 0 && !taskName.includes('%')) {
-            detail = taskName + ' ' + progressPct + '%';
-          }
-
-          const loc = String(t.area || '').trim();
-          const workGroup = String(t.category || '').trim();
-
-          return {
-            sourceKey: t.source_identity || ('task:' + t.id),
-            sourceIdentity: t.source_identity || null,
-            taskId: t.id,
-            detail: detail,
-            task_name: taskName,
-            location: loc,
-            area: loc,
-            category: workGroup,
-            workGroup: workGroup,
-            startDate: t.planned_start,
-            endDate: t.planned_end,
-            date: t.planned_start,
-            actualStart: t.actual_start || null,
-            actualEnd: t.actual_end || null,
-            domain: isActual ? 'actual' : 'plan',
-            isActual: isActual,
-            status: status,
-            siteStatus: t.site_status || null,
-            planStatus: t.plan_status || null,
-            progress: progressPct,
-          };
-        });
-      }
-    } catch (err) {
-      if (typeof Logger !== 'undefined' && Logger.log) {
-        Logger.log('fetchAuthorizedCalendarSourceItems_ Supabase query error: ' + String(err));
-      }
+    const ctx = buildContext_();
+    const tasks = sbGetAll_(ctx, queryPath);
+    if (!Array.isArray(tasks)) {
+      throw new Error('SUPABASE_QUERY_NON_ARRAY_RESULT: ' + JSON.stringify(tasks));
     }
+    return tasks.map(mapScheduleTaskToCalendarItem_);
   }
 
   // Standalone GAS fallback via Script Properties and UrlFetchApp
   if (typeof PropertiesService !== 'undefined' && PropertiesService.getScriptProperties && typeof UrlFetchApp !== 'undefined') {
-    try {
-      const props = PropertiesService.getScriptProperties();
-      const url = props.getProperty('SUPABASE_URL') || 'https://wtqubwdduzedmcvyhbgs.supabase.co';
-      const key = props.getProperty('SUPABASE_SERVICE_ROLE_KEY') || props.getProperty('SUPABASE_ANON_KEY');
-      if (key) {
-        const res = UrlFetchApp.fetch(url + '/rest/v1/schedule_tasks?select=id,source_identity,source_task_no,task_name,area,category,planned_start,planned_end,actual_start,actual_end,actual_progress,plan_status,site_status&is_active=eq.true&order=planned_start.asc', {
-          method: 'get',
-          headers: { apikey: key, Authorization: 'Bearer ' + key },
-          muteHttpExceptions: true,
-        });
-        if (res.getResponseCode() === 200) {
-          const tasks = JSON.parse(res.getContentText());
-          if (Array.isArray(tasks) && tasks.length > 0) {
-            return tasks.map(t => {
-              let progressPct = null;
-              if (t.actual_progress !== null && t.actual_progress !== undefined && t.actual_progress !== '') {
-                const num = Number(t.actual_progress);
-                if (!isNaN(num)) {
-                  progressPct = Math.round(num * 100);
-                }
-              }
-
-              const isActual = (progressPct !== null && progressPct > 0) ||
-                               Boolean(t.actual_start) ||
-                               Boolean(t.site_status) ||
-                               String(t.task_name || '').toLowerCase().includes('จริง') ||
-                               String(t.area || '').toLowerCase().includes('actual');
-
-              const rawStatus = String(t.site_status || t.plan_status || '').trim();
-              const status = rawStatus || (isActual ? 'ดำเนินการ' : 'แผนงาน');
-
-              const taskName = String(t.task_name || '').trim();
-              let detail = taskName;
-              if (progressPct !== null && progressPct > 0 && !taskName.includes('%')) {
-                detail = taskName + ' ' + progressPct + '%';
-              }
-
-              return {
-                sourceKey: t.source_identity || ('task:' + t.id),
-                sourceIdentity: t.source_identity || null,
-                taskId: t.id,
-                detail: detail,
-                task_name: taskName,
-                location: t.area || '',
-                area: t.area || '',
-                category: t.category || '',
-                workGroup: t.category || '',
-                startDate: t.planned_start,
-                endDate: t.planned_end,
-                date: t.planned_start,
-                actualStart: t.actual_start || null,
-                actualEnd: t.actual_end || null,
-                domain: isActual ? 'actual' : 'plan',
-                isActual: isActual,
-                status: status,
-                siteStatus: t.site_status || null,
-                planStatus: t.plan_status || null,
-                progress: progressPct,
-              };
-            });
-          }
-        }
+    const props = PropertiesService.getScriptProperties();
+    const url = props.getProperty('SUPABASE_URL') || 'https://wtqubwdduzedmcvyhbgs.supabase.co';
+    const key = props.getProperty('SUPABASE_SERVICE_ROLE_KEY') || props.getProperty('SUPABASE_ANON_KEY');
+    if (key) {
+      const res = UrlFetchApp.fetch(url + queryPath, {
+        method: 'get',
+        headers: { apikey: key, Authorization: 'Bearer ' + key },
+        muteHttpExceptions: true,
+      });
+      const code = res.getResponseCode();
+      if (code !== 200) {
+        throw new Error('SUPABASE_REST_HTTP_' + code + ': ' + res.getContentText());
       }
-    } catch (e) {
-      // Ignore fallback error
+      const tasks = JSON.parse(res.getContentText());
+      if (!Array.isArray(tasks)) {
+        throw new Error('SUPABASE_REST_NON_ARRAY_RESULT');
+      }
+      return tasks.map(mapScheduleTaskToCalendarItem_);
     }
   }
 
@@ -957,6 +975,7 @@ function syncGoogleCalendarScheduledJob(sourceItemsOrOptions, options = {}) {
   let resolvedOptions = {};
   let resolvedItems = null;
 
+  let sourceFetchError = null;
   if (Array.isArray(sourceItemsOrOptions)) {
     resolvedItems = sourceItemsOrOptions;
     resolvedOptions = options || {};
@@ -967,10 +986,18 @@ function syncGoogleCalendarScheduledJob(sourceItemsOrOptions, options = {}) {
       // Apps Script time-based trigger event object: { year: 2026, ... }
       resolvedOptions = options || {};
     }
-    resolvedItems = fetchAuthorizedCalendarSourceItems_(resolvedOptions);
+    try {
+      resolvedItems = fetchAuthorizedCalendarSourceItems_(resolvedOptions);
+    } catch (err) {
+      sourceFetchError = String(err);
+    }
   } else {
     resolvedOptions = options || {};
-    resolvedItems = fetchAuthorizedCalendarSourceItems_(resolvedOptions);
+    try {
+      resolvedItems = fetchAuthorizedCalendarSourceItems_(resolvedOptions);
+    } catch (err) {
+      sourceFetchError = String(err);
+    }
   }
 
   const skipLock = Boolean(resolvedOptions.skipLock);
@@ -1025,9 +1052,17 @@ function syncGoogleCalendarScheduledJob(sourceItemsOrOptions, options = {}) {
       }
     }
 
+    // Fail closed immediately if source fetch threw an error
+    if (sourceFetchError) {
+      if (typeof Logger !== 'undefined' && Logger.log) {
+        Logger.log('Sync aborted: source fetch error: ' + sourceFetchError);
+      }
+      return { status: 'ERROR', error: 'SOURCE_FETCH_FAILED', details: sourceFetchError, audit };
+    }
+
     // If no incoming items provided and none could be fetched
     if (!resolvedItems || resolvedItems.length === 0) {
-      if (resolvedOptions.requireSource) {
+      if (resolvedOptions.requireSource !== false) {
         return { status: 'HOLD', reason: 'NO_SOURCE_ITEMS_FOUND_FAIL_CLOSED', audit };
       }
       return {
@@ -1225,5 +1260,7 @@ if (typeof module !== 'undefined' && module.exports) {
     fetchAuthorizedCalendarSourceItems_,
     setGlobalCalendarSourceProvider_,
     getGlobalCalendarSourceProvider_,
+    auditCalendarScriptProperties20261024,
+    mapScheduleTaskToCalendarItem_,
   };
 }
