@@ -89,6 +89,16 @@ function syncShiftHourly20261013() {
       output.defect={status:'error',error:String(err)};
     }
   }
+
+  // Calendar Auto Sync (SOP 12): Guarded integration into existing hourly schedule
+  // Reconciles Work Plan, Progress, and Actual milestones without creating duplicate triggers
+  output.calendar = shiftOnce20261013_('calendar-sync', slot, () => {
+    if (typeof syncGoogleCalendarScheduledJob === 'function') {
+      return syncGoogleCalendarScheduledJob();
+    }
+    return { status: 'skipped', reason: 'CALENDAR_SYNC_HANDLER_NOT_AVAILABLE' };
+  });
+
   console.log(JSON.stringify(output));
   return output;
 }

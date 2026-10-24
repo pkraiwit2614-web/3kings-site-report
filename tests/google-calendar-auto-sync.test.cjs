@@ -390,36 +390,124 @@ test('dryRunGoogleCalendarSync and scheduled job fail closed when CalendarApp is
   }
 });
 
-test('resolveCalendarIdForTask separates Construction Plan, Site Actual, Deliveries and Plot calendars', () => {
+test('resolveCalendarIdForTask separates Construction Plan, Site Actual, Deliveries and Plot calendars with Actual priority', () => {
   const { resolveCalendarIdForTask } = require('../docs/apps-script/GoogleCalendarAutoSync_2026-10-23.gs');
 
-  // Plot routing
-  assert.equal(resolveCalendarIdForTask({ location: 'Plot 6' }), '9b7068d0a450c0f2acbc58783d9eabf80c2957b329d99bdbb1078586994ac210@group.calendar.google.com');
-  assert.equal(resolveCalendarIdForTask({ area: 'AV-P7' }), '7ca8d4a9ade6e05b36ec81c9e0dc025d12c567541414a9ceaee1958e344d187c@group.calendar.google.com');
-  assert.equal(resolveCalendarIdForTask({ location: 'Villa 8' }), 'd31b1dafb3231456407795ea8400bdc0daf490553d441449312e01725a7fd379@group.calendar.google.com');
-  assert.equal(resolveCalendarIdForTask({ location: 'Plot 9' }), '958f698c143282cd3a24c4d8563e2fbe505a8c1948f91806b3480ea1a25450f9@group.calendar.google.com');
+  const siteActualCalId = '9fad4dc9a66ea28e8e98f833119dbd8a4978b66574a329f2d9d1bb8d71b7f498@group.calendar.google.com';
+  const v6CalId = '9b7068d0a450c0f2acbc58783d9eabf80c2957b329d99bdbb1078586994ac210@group.calendar.google.com';
+  const v7CalId = '7ca8d4a9ade6e05b36ec81c9e0dc025d12c567541414a9ceaee1958e344d187c@group.calendar.google.com';
+  const v8CalId = 'd31b1dafb3231456407795ea8400bdc0daf490553d441449312e01725a7fd379@group.calendar.google.com';
+  const v9CalId = '958f698c143282cd3a24c4d8563e2fbe505a8c1948f91806b3480ea1a25450f9@group.calendar.google.com';
+  const planCalId = 'family17900518303332507254@group.calendar.google.com';
+  const deliveryCalId = '6cf6a83e431fa95467563ac0e82400d126601d3e6d3c76936ee26de0813e3614@group.calendar.google.com';
+
+  // CRITICAL SAFETY CHECK: Actual site progress items for Plot 6, 7, 8, 9 MUST route to Site / Actual, NOT Villa Plan
+  assert.equal(resolveCalendarIdForTask({ location: 'Plot 6', domain: 'actual' }), siteActualCalId, 'Plot 6 Actual must route to Site/Actual');
+  assert.equal(resolveCalendarIdForTask({ area: 'AV-P7', isActual: true }), siteActualCalId, 'Plot 7 Actual must route to Site/Actual');
+  assert.equal(resolveCalendarIdForTask({ location: 'Villa 8', status: 'ส่งมอบงานจริง' }), siteActualCalId, 'Plot 8 Actual must route to Site/Actual');
+  assert.equal(resolveCalendarIdForTask({ location: 'Plot 9', domain: 'actual' }), siteActualCalId, 'Plot 9 Actual must route to Site/Actual');
+
+  // Plan items for Plots route to their respective Villa Plan calendars
+  assert.equal(resolveCalendarIdForTask({ location: 'Plot 6', domain: 'plan' }), v6CalId);
+  assert.equal(resolveCalendarIdForTask({ area: 'AV-P7', domain: 'plan' }), v7CalId);
+  assert.equal(resolveCalendarIdForTask({ location: 'Villa 8', domain: 'plan' }), v8CalId);
+  assert.equal(resolveCalendarIdForTask({ location: 'Plot 9', domain: 'plan' }), v9CalId);
 
   // Deliveries routing
-  assert.equal(resolveCalendarIdForTask({ domain: 'procurement', detail: 'ส่งปูนเข้าหน้างาน' }), '6cf6a83e431fa95467563ac0e82400d126601d3e6d3c76936ee26de0813e3614@group.calendar.google.com');
+  assert.equal(resolveCalendarIdForTask({ domain: 'procurement', detail: 'ส่งปูนเข้าหน้างาน' }), deliveryCalId);
+  assert.equal(resolveCalendarIdForTask({ domain: 'delivery' }), deliveryCalId);
 
-  // Actual vs Plan
-  assert.equal(resolveCalendarIdForTask({ domain: 'actual', isActual: true }), '9fad4dc9a66ea28e8e98f833119dbd8a4978b66574a329f2d9d1bb8d71b7f498@group.calendar.google.com');
-  assert.equal(resolveCalendarIdForTask({ domain: 'plan' }), 'family17900518303332507254@group.calendar.google.com');
+  // Default Construction Plan
+  assert.equal(resolveCalendarIdForTask({ domain: 'plan', location: 'Common Area' }), planCalId);
+});
+
+test('dryRunGoogleCalendarSync detects intra-calendar duplicates, unformatted titles and count mismatches', () => {
+  const { dryRunGoogleCalendarSync, GCAL_AUTO_SYNC_20261023 } = require('../docs/apps-script/GoogleCalendarAutoSync_2026-10-23.gs');
+
+  // Subcase A: Intra-calendar duplicate (exact title + start date)
+  const dupEvent1 = {
+    getId: () => 'event_dup_1',
+    getTitle: () => 'งานสถาปัตยกรรม • ล่าช้า [Plot 6] [สถาปัตย์]',
+    getStartTime: () => new Date('2026-10-23T08:00:00+07:00'),
+  };
+  const dupEvent2 = {
+    getId: () => 'event_dup_2',
+    getTitle: () => 'งานสถาปัตยกรรม • ล่าช้า [Plot 6] [สถาปัตย์]',
+    getStartTime: () => new Date('2026-10-23T08:00:00+07:00'),
+  };
+
+  global.CalendarApp = {
+    getCalendarById: () => ({
+      getEvents: () => [dupEvent1, dupEvent2],
+    }),
+  };
+
+  try {
+    const dupAudit = dryRunGoogleCalendarSync();
+    assert.equal(dupAudit.status, 'REVIEW_HOLD');
+    assert.equal(dupAudit.error, 'DUPLICATE_EVENTS_DETECTED');
+    assert(dupAudit.duplicatesDetected > 0);
+  } finally {
+    delete global.CalendarApp;
+  }
+
+  // Subcase B: Unformatted title detected
+  const unformattedEvent = {
+    getId: () => 'event_unformatted_1',
+    getTitle: () => 'เทพื้นปูนหน้างาน แบบไม่มีวงเล็บและจุดไข่ปลา',
+    getStartTime: () => new Date('2026-10-23T08:00:00+07:00'),
+  };
+
+  global.CalendarApp = {
+    getCalendarById: () => ({
+      getEvents: () => [unformattedEvent],
+    }),
+  };
+
+  try {
+    const unformattedAudit = dryRunGoogleCalendarSync();
+    assert.equal(unformattedAudit.status, 'REVIEW_HOLD');
+    assert.equal(unformattedAudit.error, 'UNFORMATTED_EVENTS_DETECTED');
+    assert(unformattedAudit.needsFormattingCount > 0);
+  } finally {
+    delete global.CalendarApp;
+  }
+
+  // Subcase C: Count mismatch against baseline 188
+  const singleValidEvent = {
+    getId: () => 'event_valid_1',
+    getTitle: () => 'งานเทพื้น • ตามแผน [Plot 6] [โครงสร้าง]',
+    getStartTime: () => new Date('2026-10-23T08:00:00+07:00'),
+  };
+
+  global.CalendarApp = {
+    getCalendarById: () => ({
+      getEvents: () => [singleValidEvent],
+    }),
+  };
+
+  try {
+    const mismatchAudit = dryRunGoogleCalendarSync();
+    assert.equal(mismatchAudit.status, 'COUNT_MISMATCH_REVIEW');
+    assert(mismatchAudit.error.includes('COUNT_MISMATCH'));
+  } finally {
+    delete global.CalendarApp;
+  }
 });
 
 test('syncGoogleCalendarScheduledJob updates existing event title upon progress delta and preserves same Event ID', () => {
   const { syncGoogleCalendarScheduledJob } = require('../docs/apps-script/GoogleCalendarAutoSync_2026-10-23.gs');
 
-  let updatedTitle = '';
+  let currentTitle = 'งานสถาปัตยกรรม 25.9% • ล่าช้า [Plot 9] [สถาปัตย์]';
   let updatedTag = '';
 
   const mockEvent = {
     getId: () => 'gcal_plot9_arch_001',
-    getTitle: () => 'งานสถาปัตยกรรม 25.9% • ล่าช้า [Plot 9] [สถาปัตย์]',
+    getTitle: () => currentTitle,
     getDescription: () => '[3Kings-Key: gcal:villa:plot_9:สถาปัตย์:งานสถาปัตยกรรม:2026-10-23]',
     getTag: () => 'gcal:villa:plot_9:สถาปัตย์:งานสถาปัตยกรรม:2026-10-23',
-    getStartTime: () => '2026-10-23',
-    setTitle: t => { updatedTitle = t; },
+    getStartTime: () => new Date('2026-10-23T08:00:00+07:00'),
+    setTitle: t => { currentTitle = t; },
     setTag: (k, v) => { updatedTag = v; },
   };
 
@@ -449,13 +537,175 @@ test('syncGoogleCalendarScheduledJob updates existing event title upon progress 
       date: '2026-10-23',
     };
 
-    const res = syncGoogleCalendarScheduledJob([incomingDeltaItem], { dryRun: false });
+    const res = syncGoogleCalendarScheduledJob([incomingDeltaItem], { dryRun: false, allowCountMismatch: true });
     assert.equal(res.status, 'SUCCESS');
     assert.equal(res.updatedCount, 1);
     assert.equal(res.createdCount, 0, 'Must NOT create new duplicate event!');
     assert.equal(res.noopCount, 0);
     assert.equal(res.updatedEvents[0].eventId, 'gcal_plot9_arch_001', 'Must preserve original Event ID!');
-    assert.equal(updatedTitle, 'งานสถาปัตยกรรม 26.5% • ล่าช้า [Plot 9] [สถาปัตย์]');
+    assert.equal(res.updatedEvents[0].verified, true, 'Destination readback must be verified!');
+    assert.equal(currentTitle, 'งานสถาปัตยกรรม 26.5% • ล่าช้า [Plot 9] [สถาปัตย์]');
+  } finally {
+    delete global.CalendarApp;
+    delete global.LockService;
+    delete global.Logger;
+  }
+});
+
+test('syncGoogleCalendarScheduledJob called with NO ARGUMENTS fetches source from provider and verifies destination readback', () => {
+  const {
+    syncGoogleCalendarScheduledJob,
+    setGlobalCalendarSourceProvider_,
+    GCAL_AUTO_SYNC_20261023
+  } = require('../docs/apps-script/GoogleCalendarAutoSync_2026-10-23.gs');
+
+  const v6CalId = '9b7068d0a450c0f2acbc58783d9eabf80c2957b329d99bdbb1078586994ac210@group.calendar.google.com';
+  const expectedCounts = [62, 90, 5, 7, 7, 11, 6];
+  const calendars = GCAL_AUTO_SYNC_20261023.CALENDARS;
+  const mockCalMap = new Map();
+
+  let eventTitle = 'งานเทพื้นคอนกรีต 30% • ดำเนินการ [Villa 6] [โครงสร้าง]';
+  const initialEventId = 'gcal_v6_concrete_007';
+
+  const mockV6Event = {
+    getId: () => initialEventId,
+    getTitle: () => eventTitle,
+    getDescription: () => '[3Kings-Key: gcal:villa:plot_6:โครงสร้าง:งานเทพื้นคอนกรีต:2026-10-24]',
+    getTag: () => 'gcal:villa:plot_6:โครงสร้าง:งานเทพื้นคอนกรีต:2026-10-24',
+    getStartTime: () => new Date('2026-10-24T08:00:00+07:00'),
+    setTitle: newT => { eventTitle = newT; },
+    setTag: () => {},
+  };
+
+  calendars.forEach((c, idx) => {
+    const count = expectedCounts[idx];
+    const events = [];
+    if (c.id === v6CalId) {
+      events.push(mockV6Event);
+      for (let i = 1; i < count; i++) {
+        events.push({
+          getId: () => `mock_${c.id}_evt_${i + 1}`,
+          getTitle: () => `งานงวดที่ ${i + 1} • ตามแผน [${c.label}] [สถาปัตย์]`,
+          getStartTime: () => new Date(`2026-10-0${i + 1}T08:00:00+07:00`),
+          setTitle: () => {},
+          setTag: () => {},
+        });
+      }
+    } else {
+      for (let i = 0; i < count; i++) {
+        events.push({
+          getId: () => `mock_${c.id}_evt_${i + 1}`,
+          getTitle: () => `งานงวดที่ ${i + 1} • ตามแผน [${c.label}] [สถาปัตย์]`,
+          getStartTime: () => new Date(`2026-10-${String((i % 25) + 1).padStart(2, '0')}T08:00:00+07:00`),
+          setTitle: () => {},
+          setTag: () => {},
+        });
+      }
+    }
+    mockCalMap.set(c.id, {
+      getEvents: () => events,
+    });
+  });
+
+  global.CalendarApp = {
+    getCalendarById: id => mockCalMap.get(id) || null,
+  };
+  global.LockService = {
+    getScriptLock: () => ({
+      tryLock: () => true,
+      releaseLock: () => {},
+    }),
+  };
+  global.PropertiesService = {
+    getScriptProperties: () => ({
+      getProperty: key => key === 'CALENDAR_SYNC_DRY_RUN' ? 'false' : null,
+    }),
+  };
+  global.Logger = { log: () => {} };
+
+  // Register authorized source provider returning delta progress for Villa 6 (30% -> 60%)
+  setGlobalCalendarSourceProvider_(() => [
+    {
+      sourceKey: 'gcal:villa:plot_6:โครงสร้าง:งานเทพื้นคอนกรีต:2026-10-24',
+      detail: 'งานเทพื้นคอนกรีต 60%',
+      task_name: 'งานเทพื้นคอนกรีต 60%',
+      status: 'ดำเนินการ',
+      location: 'Villa 6',
+      workGroup: 'โครงสร้าง',
+      date: '2026-10-24',
+      domain: 'plan',
+      isActual: false,
+    }
+  ]);
+
+  try {
+    // INVOKE WITH NO ARGUMENTS (as Apps Script trigger would)
+    const result = syncGoogleCalendarScheduledJob();
+
+    assert.equal(result.status, 'SUCCESS');
+    assert.equal(result.dryRun, false);
+    assert.equal(result.totalItems, 1);
+    assert.equal(result.updatedCount, 1);
+    assert.equal(result.createdCount, 0, 'No new event created');
+    assert.equal(result.noopCount, 0);
+
+    // Assert exact Event ID is preserved Before & After
+    assert.equal(result.updatedEvents[0].eventId, initialEventId, 'Event ID must match before/after');
+    assert.equal(result.updatedEvents[0].oldTitle, 'งานเทพื้นคอนกรีต 30% • ดำเนินการ [Villa 6] [โครงสร้าง]');
+    assert.equal(result.updatedEvents[0].newTitle, 'งานเทพื้นคอนกรีต 60% • ดำเนินการ [Villa 6] [โครงสร้าง]');
+    assert.equal(result.updatedEvents[0].verified, true, 'Destination readback must be true');
+
+    // Confirm destination event title actually changed
+    assert.equal(eventTitle, 'งานเทพื้นคอนกรีต 60% • ดำเนินการ [Villa 6] [โครงสร้าง]');
+  } finally {
+    setGlobalCalendarSourceProvider_(null);
+    delete global.CalendarApp;
+    delete global.LockService;
+    delete global.PropertiesService;
+    delete global.Logger;
+  }
+});
+
+test('syncGoogleCalendarScheduledJob fails closed to reviewQueue when destination readback fails', () => {
+  const { syncGoogleCalendarScheduledJob } = require('../docs/apps-script/GoogleCalendarAutoSync_2026-10-23.gs');
+
+  const p9CalId = '958f698c143282cd3a24c4d8563e2fbe505a8c1948f91806b3480ea1a25450f9@group.calendar.google.com';
+
+  // Broken event where setTitle does not update getTitle
+  const faultyEvent = {
+    getId: () => 'gcal_faulty_001',
+    getTitle: () => 'งานติดตั้งหน้าต่าง 10% • ตามแผน [Plot 9] [สถาปัตย์]',
+    getStartTime: () => new Date('2026-10-24T08:00:00+07:00'),
+    setTitle: () => { /* fails silently, does not update */ },
+    setTag: () => {},
+  };
+
+  global.CalendarApp = {
+    getCalendarById: id => ({
+      getEvents: () => id === p9CalId ? [faultyEvent] : [],
+    }),
+  };
+  global.LockService = {
+    getScriptLock: () => ({
+      tryLock: () => true,
+      releaseLock: () => {},
+    }),
+  };
+  global.Logger = { log: () => {} };
+
+  try {
+    const incomingItem = {
+      calendarId: p9CalId,
+      detail: 'งานติดตั้งหน้าต่าง 40%',
+      status: 'ตามแผน',
+      location: 'Plot 9',
+      workGroup: 'สถาปัตย์',
+      date: '2026-10-24',
+    };
+
+    assert.throws(() => {
+      syncGoogleCalendarScheduledJob([incomingItem], { dryRun: false, allowCountMismatch: true });
+    }, /DESTINATION_READBACK_MISMATCH/, 'Must throw on destination readback mismatch');
   } finally {
     delete global.CalendarApp;
     delete global.LockService;

@@ -71,25 +71,23 @@ Previous sync risks were traced to four core failure modes:
 
 To install or update the code in Google Apps Script:
 
-1. Open the existing **3 Kings Apps Script Project** in the Google Apps Script Editor (`https://script.google.com`).
-2. Add a new script file: `GoogleCalendarAutoSync_2026-10-23.gs`.
-3. Copy and paste the complete content of:
-   [`docs/apps-script/GoogleCalendarAutoSync_2026-10-23.gs`](file:///c:/Users/Acer/Projects/3kings-site-report/docs/apps-script/GoogleCalendarAutoSync_2026-10-23.gs).
-4. Save the project.
-5. In the function dropdown, run `dryRunGoogleCalendarSync()`:
-   - Verifies all 7 calendars.
-   - Verifies all 188 existing events are recognized.
-   - Confirms `createdCount === 0`.
-6. **Safety Rules:**
-   - **Do NOT** create a new independent Apps Script project.
-   - **Do NOT** delete or edit existing triggers (`syncShiftHourly20261013`, `smartSyncDefectsV13_15m`, `dailySiteSyncHourly20261019`, `syncWorkOrderHourly20261015`, `hotelOOOExecuteWriteback`).
+1. Open the existing **3 Kings Apps Script Project** in the Google Apps Script Editor (`https://script.google.com/home/projects/1sKddwvs-DOav0ltdrcxyqPXYinXE3uCgFKmDzGu_XEb4VvMvYVwDUDeT/edit`).
+2. Verify or update files:
+   - `GoogleCalendarAutoSync_2026-10-23.gs`: Complete content from [`docs/apps-script/GoogleCalendarAutoSync_2026-10-23.gs`](file:///c:/Users/Acer/Projects/3kings-site-report/docs/apps-script/GoogleCalendarAutoSync_2026-10-23.gs).
+   - `ShiftSyncScheduler_2026-10-13.gs`: Complete content from [`docs/apps-script/ShiftSyncScheduler_2026-10-13.gs`](file:///c:/Users/Acer/Projects/3kings-site-report/docs/apps-script/ShiftSyncScheduler_2026-10-13.gs).
+3. **Trigger Architecture**:
+   - Calendar sync is integrated directly into the existing hourly trigger `syncShiftHourly20261013` via `shiftOnce20261013_('calendar-sync', slot, ...)`.
+   - **Zero duplicate triggers**: All 5 existing triggers remain intact (`syncShiftHourly20261013`, `smartSyncDefectsV13_15m`, `dailySiteSyncHourly20261019`, `syncWorkOrderHourly20261015`, `hotelOOOExecuteWriteback`).
+4. **Safety Rules:**
+   - **Do NOT** create a new independent Apps Script project or duplicate trigger.
+   - **Do NOT** delete or edit existing 5 triggers.
    - **Do NOT** insert dummy or test events into the 7 Production calendars.
 
 ---
 
 ## 6. Verification and Regression Test Evidence
 
-The regression suite [`tests/google-calendar-auto-sync.test.cjs`](file:///c:/Users/Acer/Projects/3kings-site-report/tests/google-calendar-auto-sync.test.cjs) was executed with 11 test assertions:
+The regression suite [`tests/google-calendar-auto-sync.test.cjs`](file:///c:/Users/Acer/Projects/3kings-site-report/tests/google-calendar-auto-sync.test.cjs) was executed with 18 comprehensive test assertions:
 
 ```text
 ✔ GoogleCalendarAutoSync script compiles cleanly without syntax errors
@@ -103,6 +101,31 @@ The regression suite [`tests/google-calendar-auto-sync.test.cjs`](file:///c:/Use
 ✔ Two-pass sync idempotency on 188 simulated production events across 7 calendars
 ✔ Retry logic performs exponential backoff on transient errors and succeeds upon recovery
 ✔ Safety boundaries: zero modification to Defect Flow, Work Orders, Materials or unrelated triggers
+✔ dryRunGoogleCalendarSync audits exact 188 inventory distribution confirmed by ChatGPT without mutations
+✔ dryRunGoogleCalendarSync and scheduled job fail closed when CalendarApp is missing or calendar inaccessible
+✔ resolveCalendarIdForTask separates Construction Plan, Site Actual, Deliveries and Plot calendars with Actual priority
+✔ dryRunGoogleCalendarSync detects intra-calendar duplicates, unformatted titles and count mismatches
+✔ syncGoogleCalendarScheduledJob updates existing event title upon progress delta and preserves same Event ID
+✔ syncGoogleCalendarScheduledJob called with NO ARGUMENTS fetches source from provider and verifies destination readback
+✔ syncGoogleCalendarScheduledJob fails closed to reviewQueue when destination readback fails
 
-PASS: 11 / 11 tests passed (0 failures)
+PASS: 18 / 18 tests passed (0 failures)
 ```
+
+---
+
+## 7. Owner Action Required: One-Time Google Apps Script OAuth Authorization
+
+Because Google Apps Script requires interactive user consent for scripts accessing `CalendarApp` under the owner account:
+
+1. **Owner (`p.kraiwit2614@gmail.com`) logs into Google Apps Script**:
+   - URL: `https://script.google.com/home/projects/1sKddwvs-DOav0ltdrcxyqPXYinXE3uCgFKmDzGu_XEb4VvMvYVwDUDeT/edit`
+2. **Select Function**:
+   - In the toolbar dropdown, select `dryRunGoogleCalendarSync`.
+3. **Click "Run"**:
+   - A modal dialog "Authorization Required" will appear asking for Google Calendar permissions.
+   - Click "Review permissions" -> select `p.kraiwit2614@gmail.com` -> click "Advanced" -> "Go to 3Kings-App (unsafe)" -> "Allow".
+4. **Readback Execution**:
+   - The execution log will display `=== Google Calendar Auto Sync Dry-Run Audit ===` with `Status: AUDIT_PASS` and `Total Events Found: 188`.
+5. **Scheduled Auto Sync Activation**:
+   - Once authorized, the hourly runner `syncShiftHourly20261013` will automatically execute `syncGoogleCalendarScheduledJob()` without further prompts.
