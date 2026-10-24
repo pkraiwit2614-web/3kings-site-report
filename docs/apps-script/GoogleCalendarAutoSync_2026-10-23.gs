@@ -1342,7 +1342,9 @@ function syncGoogleCalendarScheduledJob(sourceItemsOrOptions, options = {}) {
               item,
               reason: 'NEW_EVENT_CREATION_NOT_AUTHORIZED_FAIL_CLOSED',
             });
-            if (resolvedOptions.failOnUnmatched === true) {
+            // Scheduled invocations must fail closed on unmatched source tasks by default.
+            // Explicit false is reserved for a separately authorized partial-sync QA mode.
+            if (resolvedOptions.failOnUnmatched !== false) {
               syncResults.reviewCount++;
             }
           }
