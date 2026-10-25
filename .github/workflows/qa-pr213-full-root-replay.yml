@@ -1,11 +1,13 @@
 name: PR 213 Full-Root Migration Replay (isolated QA only)
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - qa/pr213-full-migration-replay-20261022
     paths:
       - .github/workflows/qa-pr213-full-root-replay.yml
+      - tests/fixtures/ci_isolated_migration_baseline.sql
 
 permissions:
   contents: read
@@ -55,6 +57,11 @@ jobs:
           assert '[db.seed]\nenabled = false' in p.read_text()
           PY
           echo 'QA_ONLY_LOCAL: no cloud project ref, no secrets, no hosted credentials'
+      - name: Install isolated QA baseline schema fixture
+        run: |
+          set -euo pipefail
+          cp tests/fixtures/ci_isolated_migration_baseline.sql supabase/migrations/20260920000000_ci_isolated_baseline.sql
+          echo 'Installed isolated QA pre-migration baseline fixture'
       - name: Full-root Supabase migration replay on disposable database
         run: |
           set -euo pipefail
