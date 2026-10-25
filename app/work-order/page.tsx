@@ -63,7 +63,7 @@ const ids=(group:string):string[]=>[...new Set((group.toUpperCase().match(/[AB]\
 const isCombine=(group:string)=>ids(group).some(room=>hotelRoomMembers(room).length>1)
 const finished=(v:string|null)=>/เสร็จแล้ว|งดแจก|ยกเลิก/.test(v||'')
 // Label-only change: the Excel/source work_status is preserved.
-const displayWorkStatus=(v:string|null)=>v?.trim()==='ยังไม่เริ่ม'?'กำลังดำเนินงาน':v||'รอตรวจ'
+const displayWorkStatus=(v:string|null)=>v||'รอตรวจ'
 function roomSearchText(group:string){
  return ids(group).map(room=>{
   const number=Number(room.slice(1))
@@ -126,24 +126,16 @@ export default function WorkOrderViewer(){
  const todayISO=todayInBangkok()
  const noticeForRow=(r:WorkOrder):string|null=>ids(r.room_group).map(room=>noticeMap.get(room)||null).filter((v):v is string=>Boolean(v)).sort()[0]||null
  const daysForRow=(r:WorkOrder)=>elapsedCalendarDays(noticeForRow(r),todayISO)
- const eligible=useMemo(()=>rows.filter(r=>{
-  if(finished(r.work_status))return false
-  const members=ids(r.room_group)
-  return members.length>0&&(members.every(room=>roomMap.get(room)==='Hotel - Incomplete') ||
-   (members.length===1&&members.every(room=>roomMap.get(room)?.startsWith('Non-Hotel -'))))
- }),[rows,roomMap])
- const reviewLostFromDispatch=useMemo(()=>inactiveRows.filter(r=>{
-  if(finished(r.work_status))return false
-  const members=ids(r.room_group)
-  return members.length>0&&(members.every(room=>roomMap.get(room)==='Hotel - Incomplete') ||
-   (members.length===1&&members.every(room=>roomMap.get(room)?.startsWith('Non-Hotel -'))))
- }),[inactiveRows,roomMap])
- const reviewBlockedByRoomStatus=useMemo(()=>rows.filter(r=>{
-  if(finished(r.work_status))return false
-  const members=ids(r.room_group)
-  return !members.length||!(members.every(room=>roomMap.get(room)==='Hotel - Incomplete') ||
-   (members.length===1&&members.every(room=>roomMap.get(room)?.startsWith('Non-Hotel -'))))
- }),[rows,roomMap])
+ // Dispatch is defined by an active, unfinished Work ID, not by room handover state.
+ // The read query already restricts this collection to source_active=true.
+ const eligible=useMemo(()=>rows.filter(r=>!finished(r.work_status)&&ids(r.room_group).length>0),[rows])
+ const reviewLostFromDispatch=useMemo(()=>inactiveRows.filter(r=>!finished(r.work_status)&&ids(r.room_group).length>0),[inactiveRows])
+ // A newly reported Defect may be open after room acceptance. Flag it for
+ // access checks but keep it in the screen and printable follow-up list.
+ const reviewNeedsRoomRecheck=useMemo(()=>eligible.filter(r=>ids(r.room_group).some(room=>{
+  const group=roomMap.get(room)
+  return !group||group==='Hotel - Checked Complete'||group==='Non-Hotel - Handover Complete'
+ })),[eligible,roomMap])
  const teams=useMemo(()=>[...new Set(eligible.map(r=>r.contractor))].sort((a,b)=>a.localeCompare(b,'th')),[eligible])
  // Search and contractor limit the context for every KPI; the selected KPI
  // then selects the rows that appear in the table and on the printed report.
@@ -186,13 +178,13 @@ export default function WorkOrderViewer(){
     </button>)}
    </section>
    <details className="panel wo-reconciliation">
-    <summary>ตรวจความต่าง Excel ↔ Defect: {reviewLostFromDispatch.length} งานค้างไม่อยู่ในชุดแจกงาน · {reviewBlockedByRoomStatus.length} งานในชุดแจกงานแต่สถานะห้องไม่อนุญาต</summary>
-    <p>ข้อมูลนี้ใช้ตรวจสอบเท่านั้น ไม่เปิดงานหรือปิดงานจากเว็บโดยอัตโนมัติ และไม่รวมในยอดงานค้างที่แจกได้</p>
+    <summary>ตรวจความต่าง Excel ↔ Defect: {reviewLostFromDispatch.length} งานค้างไม่อยู่ในชุดแจกงาน · {reviewNeedsRoomRecheck.length} งานค้างในห้องตรวจรับแล้ว/รอตรวจสถานะ</summary>
+    <p>งานที่ยังไม่ปิดในทะเบียน Active จะแสดงในรายการและใบพิมพ์เสมอ แม้ห้องส่งมอบแล้ว ข้อมูลส่วนนี้ใช้ตรวจสอบเท่านั้น ไม่เปิดงานหรือปิดงานจากเว็บโดยอัตโนมัติ</p>
     {reviewLostFromDispatch.length>0&&<div><b>ค้างในทะเบียนเดิม แต่ถูกถอดจากรายการ Active ใน Excel</b>
       <ul>{reviewLostFromDispatch.map(r=><li key={r.work_id}><b>{groupLabel(r.room_group)}</b> · {r.work_id} · {r.defect_item} · ตรวจชีตใบแจกงานต้นฉบับก่อนเปิดกลับ</li>)}</ul>
     </div>}
-    {reviewBlockedByRoomStatus.length>0&&<div><b>ยังอยู่ในรายการ Active แต่สถานะห้องไม่ใช่ Defect ค้าง</b>
-      <ul>{reviewBlockedByRoomStatus.map(r=><li key={r.work_id}><b>{groupLabel(r.room_group)}</b> · {r.work_id} · {r.defect_item} · ตรวจสถานะก่อนแจกงาน</li>)}</ul>
+    {reviewNeedsRoomRecheck.length>0&&<div><b>งานค้างในห้องที่ตรวจรับแล้ว หรือยังตรวจสถานะไม่ได้ (ยังแสดงในใบติดตามงาน)</b>
+      <ul>{reviewNeedsRoomRecheck.map(r=><li key={r.work_id}><b>{groupLabel(r.room_group)}</b> · {r.work_id} · {r.defect_item} · ยืนยันสิทธิ์เข้าห้องและตรวจรายการก่อนเข้าทำ</li>)}</ul>
     </div>}
    </details>
    <section className="panel wo-filters">
@@ -216,7 +208,7 @@ export default function WorkOrderViewer(){
       <td><div className="wo-room-label"><b>{groupLabel(r.room_group)}</b>{isCombine(r.room_group)&&<span className="wo-combine-code" title="ห้อง Combine">c</span>}</div>{isCombine(r.room_group)&&<span className="wo-combine-badge" title="ห้อง Combine ใช้งานชุดเดียวกัน">Combine: {ids(r.room_group).join(' + ')}</span>}<small>{r.work_id}</small></td>
       <td><small>วันที่แจ้ง : {noticeDateTH(notice)}</small><small>เหลือเวลา : {elapsed===null?'-':elapsed+' วัน'}</small>{elapsed!==null&&elapsed>7?<small className="wo-overdue">เกินกำหนด</small>:elapsed!==null&&elapsed>4?<small className="wo-warning">{warningText(elapsed)}</small>:null}</td>
       <td>{r.defect_item}</td>
-      <td>{r.next_action||'รอระบุรายละเอียด'}{r.conflict_note&&<small className="wo-conflict">ตรวจข้อขัดแย้ง: {r.conflict_note}</small>}</td>
+      <td>{r.next_action||'รอระบุรายละเอียด'}</td>
       <td><b>{r.contractor}</b></td>
       <td><b>{displayWorkStatus(r.work_status)}</b><small>{r.qa_status||'รอตรวจรายการ'}</small></td>
       <td className="wo-evidence-col">{r.evidence_url?.startsWith('https://drive.google.com/')?<a target="_blank" rel="noreferrer" href={r.evidence_url}>เปิดภาพ / PDF</a>:<small>รอหลักฐาน</small>}</td>

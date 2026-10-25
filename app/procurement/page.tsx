@@ -6,10 +6,13 @@ import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
 import StatusBadge from '@/components/StatusBadge'
 import ReadableDetail from '@/components/ReadableDetail'
+import ProcurementEvidenceLinks from '@/components/ProcurementEvidenceLinks'
+import type {ProcurementEvidenceRow} from '@/lib/procurementEvidence'
 import { getSupabase } from '@/lib/supabase'
 import { createLiveLoader, requireSuccessfulReads } from '@/lib/liveLoader'
 import { dateTH } from '@/lib/format'
 import type { Project } from '@/lib/types'
+import { needsProcurementFollowUp } from '@/lib/procurementFollowUp'
 
 function dateTimeTH(value:string|null|undefined){
   if(!value)return '-'
@@ -21,14 +24,6 @@ function dateTimeTH(value:string|null|undefined){
 const thaiMonths:Record<string,number>={
   'ม.ค.':0,'ก.พ.':1,'มี.ค.':2,'เม.ย.':3,'พ.ค.':4,'มิ.ย.':5,
   'ก.ค.':6,'ส.ค.':7,'ก.ย.':8,'ต.ค.':9,'พ.ย.':10,'ธ.ค.':11
-}
-
-const completedStatusPattern=/(ส่งมอบเรียบร้อย|รับสินค้าเรียบร้อย|รับสินค้าแล้ว|ติดตั้งเรียบร้อย|ส่งครบ|ปิดงาน|ปิดติดตาม|งานเสร็จ|เสร็จสมบูรณ์|completed|done|closed)/i
-
-function needsFollowUp(row:any){
-  const current=String(row.current_status||'').trim()
-  if(current&&completedStatusPattern.test(current)) return false
-  return true
 }
 
 function parseDeliveryDate(row:any){
@@ -62,6 +57,7 @@ export default function ProcurementPage(){
   const [loadError,setLoadError]=useState(false)
   const [rows,setRows]=useState<any[]>([])
   const [procurementLinks,setProcurementLinks]=useState<any[]>([])
+  const [evidenceRows,setEvidenceRows]=useState<ProcurementEvidenceRow[]>([])
   const [projects,setProjects]=useState<Project[]>([])
   const [siteFilter,setSiteFilter]=useState('')
   const [statusFilter,setStatusFilter]=useState('')
@@ -75,6 +71,7 @@ export default function ProcurementPage(){
     const params=new URLSearchParams(window.location.search)
     const qParam=params.get('q')||''
     if(qParam) setQ(qParam)
+    if(params.get('followup')==='1') setFollowUpOnly(true)
   },[])
 
   useEffect(()=>{
@@ -83,18 +80,21 @@ export default function ProcurementPage(){
     const s=getSupabase()
     const loader=createLiveLoader({
       load:async(signal)=>{
-        const [r,links,p,checked,imported]=await Promise.all([
+        const [r,links,p,checked,imported,evidence]=await Promise.all([
           s.from('procurement_items').select('*').abortSignal(signal),
           s.from('procurement_item_projects').select('procurement_item_id,project_id').abortSignal(signal),
           s.from('projects').select('*').abortSignal(signal),
           s.from('drive_sync_runs').select('created_at').eq('sync_type','materials').order('created_at',{ascending:false}).limit(1).abortSignal(signal).maybeSingle(),
-          s.from('drive_sync_runs').select('created_at').eq('status','success').eq('sync_type','materials').gt('rows_written',0).order('created_at',{ascending:false}).limit(1).abortSignal(signal).maybeSingle()
+          s.from('drive_sync_runs').select('created_at').eq('status','success').eq('sync_type','materials').gt('rows_written',0).order('created_at',{ascending:false}).limit(1).abortSignal(signal).maybeSingle(),
+          s.from('procurement_evidence_links').select('document_type,document_no,drive_file_id,file_name,file_format,evidence_scope').abortSignal(signal)
         ])
         requireSuccessfulReads([r,links,p,checked,imported])
         if(!alive||signal.aborted)return
         setLoadError(false)
         setRows(r.data||[])
         setProcurementLinks(links.data||[])
+        // Optional read: missing migration/permission must never hide existing purchasing rows.
+        setEvidenceRows(evidence.error?[]:(evidence.data||[]) as ProcurementEvidenceRow[])
         setProjects((p.data||[]) as Project[])
         setLatestCheckAt(checked.data?.created_at||null)
         setLatestImportAt(imported.data?.created_at||null)
@@ -171,7 +171,7 @@ export default function ProcurementPage(){
       if(siteFilter&&!relatedIds.includes(siteFilter)) return false
       if(statusFilter&&String(x.current_status||'')!==statusFilter) return false
       if(updateFilter&&String(x.source_updated_at||'')!==updateFilter) return false
-      if(followUpOnly&&!needsFollowUp(x)) return false
+      if(followUpOnly&&!needsProcurementFollowUp(x)) return false
       if(!searchable([
         ...related.flatMap(p=>[p.code,p.name]),x.vendor,x.item_name,x.procurement_status,x.payment_status,x.current_status,
         x.pr_no,x.po_no,x.expected_delivery_text,x.condition_note,x.source_updated_at
@@ -246,7 +246,7 @@ export default function ProcurementPage(){
           <thead style={{position:'sticky',top:0,zIndex:12,background:'var(--surface)'}}><tr><th>Site / Plot</th><th>PO / PR</th><th>ผู้ขาย / ผู้รับเหมา</th><th>รายการ</th><th>สถานะ PO / ชำระ</th><th style={{width:180,minWidth:180,maxWidth:180}}>ขั้นตอนปัจจุบัน</th><th>กำหนดส่ง / เข้าหน้างาน</th><th>รายละเอียด / สิ่งที่ต้องตาม</th><th>อัปเดตข้อมูล</th></tr></thead>
           <tbody>{filteredRows.map(x=>{const linkedProjects=procurementProjectsFor(x);return <tr key={x.id}>
             <td><b>{linkedProjects.map(p=>p.code).join(' / ')||'ไม่ระบุ Plot'}</b><small>{linkedProjects.map(p=>p.name).filter(Boolean).join(' / ')}</small></td>
-            <td><b>{[x.po_no,x.pr_no].filter(Boolean).join(' / ')||'-'}</b></td>
+            <td><ProcurementEvidenceLinks prNo={x.pr_no} poNo={x.po_no} evidenceRows={evidenceRows}/></td>
             <td>{x.vendor||'ยังไม่ระบุ'}</td>
             <td><b>{x.item_name}</b></td>
             <td>{x.po_no&&<small><b>สั่งแล้ว (มีเลขใบสั่ง)</b></small>}{x.payment_status||x.procurement_status||'-'}</td>

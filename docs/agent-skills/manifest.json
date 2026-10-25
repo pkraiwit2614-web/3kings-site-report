@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "project": "3 Kings Construction",
-  "updated_on": "2026-10-21",
+  "updated_on": "2026-10-22",
   "sop_index_name": "00-SOP_INDEX - 3Kings Construction",
   "sop_folder": "3Kings Construction/0-SOP & AI Commands",
   "source_authority": "Live Google Drive SOP INDEX and current linked full SOP per invocation",
@@ -11,17 +11,22 @@
       "number": 1,
       "name": "3kings-01-defect-flow",
       "shortcut": "อัปเดต Defect ตามเดิม",
-      "sop_title": "SOP_01_Defect_Flow_v2.0_Consolidated_2026-10-20",
+      "sop_title": "SOP_DEFECT_01_02_04_Single_Flow_v3.0_2026-10-22",
       "mode": "authorized_write",
       "sop_index": "00-SOP_INDEX - 3Kings Construction",
       "sop_location": "3Kings Construction/0-SOP & AI Commands",
-      "requires_live_drive_read": true
+      "requires_live_drive_read": true,
+      "aliases": [
+        "อัปเดต Defect Flow ตามเดิม",
+        "อัปเดตตามกฎ 7 วัน",
+        "อัปเดต Defect ตามเดิมโดยใช้กฎ 7 วัน"
+      ]
     },
     {
       "number": 2,
       "name": "3kings-02-defect-reconciliation",
       "shortcut": "ตรวจยอด Defect",
-      "sop_title": "SOP_02_Defect_Count_Reconciliation_v2.0_Consolidated_2026-10-20",
+      "sop_title": "SOP_DEFECT_01_02_04_Single_Flow_v3.0_2026-10-22",
       "mode": "read_only",
       "sop_index": "00-SOP_INDEX - 3Kings Construction",
       "sop_location": "3Kings Construction/0-SOP & AI Commands",
@@ -41,7 +46,7 @@
       "number": 4,
       "name": "3kings-04-defect-7-days",
       "shortcut": "ตรวจ Defect 7 วัน",
-      "sop_title": "SOP_04_Defect_7_Days_v2.0_Consolidated_2026-10-20",
+      "sop_title": "SOP_DEFECT_01_02_04_Single_Flow_v3.0_2026-10-22",
       "mode": "read_only",
       "sop_index": "00-SOP_INDEX - 3Kings Construction",
       "sop_location": "3Kings Construction/0-SOP & AI Commands",
@@ -61,7 +66,8 @@
       "number": 6,
       "name": "3kings-06-materials-update",
       "shortcut": "อัปเดตวัสดุตามเดิม",
-      "sop_title": "SOP_06_Materials_Status_v2.0_Consolidated_2026-10-20",
+      "aliases": ["อัปเดตวัสดุ", "อัปเดต Materials"],
+      "sop_title": "SOP_06_Materials_PO_Check_Single_Flow_v3.0_2026-10-22",
       "mode": "authorized_write",
       "sop_index": "00-SOP_INDEX - 3Kings Construction",
       "sop_location": "3Kings Construction/0-SOP & AI Commands",
@@ -71,7 +77,8 @@
       "number": 7,
       "name": "3kings-07-po-inspection",
       "shortcut": "เช็ก PO",
-      "sop_title": "SOP_07_Purchase_Order_Check_v2.0_Consolidated_2026-10-20",
+      "aliases": ["เช็ค PO", "ตรวจ PO"],
+      "sop_title": "SOP_06_Materials_PO_Check_Single_Flow_v3.0_2026-10-22",
       "mode": "read_only",
       "sop_index": "00-SOP_INDEX - 3Kings Construction",
       "sop_location": "3Kings Construction/0-SOP & AI Commands",
@@ -81,11 +88,15 @@
       "number": 8,
       "name": "3kings-08-progress-summary",
       "shortcut": "สรุป Progress",
-      "sop_title": "SOP_08_Construction_Progress_v2.0_Consolidated_2026-10-20",
+      "sop_title": "SOP_08_11_Progress_Weekly_Recap_Single_Flow_v3.0_2026-10-22",
       "mode": "document_only",
       "sop_index": "00-SOP_INDEX - 3Kings Construction",
       "sop_location": "3Kings Construction/0-SOP & AI Commands",
-      "requires_live_drive_read": true
+      "requires_live_drive_read": true,
+      "aliases": [
+        "สรุป Progress รายวัน",
+        "สรุป Progress ราย Plot"
+      ]
     },
     {
       "number": 9,
@@ -111,11 +122,15 @@
       "number": 11,
       "name": "3kings-11-weekly-recap",
       "shortcut": "สรุป Weekly Recap",
-      "sop_title": "SOP_11_Weekly_Recap_v2.0_Consolidated_2026-10-20",
+      "sop_title": "SOP_08_11_Progress_Weekly_Recap_Single_Flow_v3.0_2026-10-22",
       "mode": "document_only",
       "sop_index": "00-SOP_INDEX - 3Kings Construction",
       "sop_location": "3Kings Construction/0-SOP & AI Commands",
-      "requires_live_drive_read": true
+      "requires_live_drive_read": true,
+      "aliases": [
+        "Weekly Recap",
+        "สรุปงานรายสัปดาห์"
+      ]
     },
     {
       "number": 12,
@@ -187,7 +202,7 @@
     "qa": "reuse same-revision snapshots and valid same-SHA/config artifacts; verify actual destination",
     "observer": "advisory and may propose changes; no self-authorize security/critical edits",
     "enforcement": "agent_guidance_only_not_server_gate",
-    "activation": "only_after_live_drive_index_links_all_21_active_v2",
+    "activation": "only_after_live_drive_index_links_all_21_active_current_revisions",
     "preview": "Github Actions affected QA by default; Hosted Preview only for proof not covered locally",
     "build_budget": "no redundant builds, reuse artifact only when SHA/config/deps/schema/environment/role match",
     "approvals": "one explicit scoped authorization plus actual permission; no substep approvals",
@@ -196,8 +211,17 @@
   "supporting_sops": [
     {
       "code": "EX",
+      "command_a": "ทำ Daily Site Report ตามเดิม",
+      "command_b": "ทำ Daily Site Report ตามเดิม แล้วส่งไลน์ให้ด้วย",
+      "aliases": [
+        "ทำ Daily Site Report",
+        "อัปเดต Daily Site Report ตามเดิม",
+        "อัปเดต Daily Report ตามเดิม"
+      ],
       "sop_title": "SOP_Daily_Site_Report_GSheets_Only_v2.0_Consolidated_2026-10-20",
-      "mode": "authorized_write"
+      "mode": "authorized_write",
+      "command_a_scope": "Google Form -> Sheets Delta -> PDF 4 Pages -> PNG 4 Images (2947px) -> Drive Readback (No LINE send)",
+      "command_b_scope": "Command A + Gateway Stage (4 assets) + Finalize + ready=true + Cloudflare Worker Owner DM + Delivery Ledger confirmation"
     },
     {
       "code": "SUP-PR",
@@ -212,7 +236,11 @@
     {
       "code": "SUP-PUBLISH",
       "sop_title": "SOP_SUP_Daily_Report_PDF_PNG_Publish_v2.0_Consolidated_2026-10-20",
-      "mode": "document_only"
+      "mode": "document_only",
+      "outputs": [
+        "PDF A4 Landscape 4 pages",
+        "PNG 4 images (Above Villa, Above Condo, Mirage, Henessy) width 2947px"
+      ]
     }
   ],
   "technical_mapping_reference": "docs/agent-skills/sop-technical-mapping.json"

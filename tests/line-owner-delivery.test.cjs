@@ -4,7 +4,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const {pathToFileURL}=require('node:url');
-const {createHash}=require('node:crypto');
+const {createHash,createHmac}=require('node:crypto');
 const filename=path.resolve(__dirname,'../operations/cloudflare/3kings-line-autopilot-owner-only.mjs');
 const source=fs.readFileSync(filename,'utf8');
 const modulePromise=import(pathToFileURL(filename).href);
@@ -62,12 +62,34 @@ test('one approved owner gets exactly one LINE push: form text first, 4 original
  assert.equal(f.ack.length,1);
  assert.equal(f.ack[0].p_status,'delivered');
 });
+test('late QA report can be sent once at 14:05 Bangkok without enabling other AutoPilot collectors',async()=>{
+ const f=fixture();
+ const out=await run(f,new Date('2026-10-21T07:05:00Z')); // 14:05 Bangkok
+ assert.equal(out.mode,'OWNER_BUNDLE_ACCEPTED');
+ assert.equal(f.calls.filter(x=>x.url.includes('/message/push')).length,1);
+ assert.equal(f.ack[0].p_status,'delivered');
+ const sameDate=fixture({claimStatus:'already_sent'});
+ assert.equal((await run(sameDate,new Date('2026-10-21T08:05:00Z'))).mode,'OWNER_ALREADY_SENT');
+ assert.equal(sameDate.calls.filter(x=>x.url.includes('/message/push')).length,0);
+});
+test('owner-only catch-up closes after 18:00 Bangkok and never reopens on Sunday',async()=>{
+ const atEnd=fixture();
+ assert.equal((await run(atEnd,new Date('2026-10-21T11:00:00Z'))).mode,'OWNER_BUNDLE_ACCEPTED');
+ const afterEnd=fixture();
+ assert.equal((await run(afterEnd,new Date('2026-10-21T11:01:00Z'))).mode,'OWNER_OFF');
+ assert.equal(afterEnd.calls.length,0);
+ const sunday=fixture();
+ assert.equal((await run(sunday,new Date('2026-10-25T08:05:00Z'))).mode,'OWNER_OFF');
+ assert.equal(sunday.calls.length,0);
+});
 test('never schedule old LINE group delivery or separate owner summary',()=>{
  const scheduled=source.slice(source.lastIndexOf('  async scheduled('));
  assert.ok(scheduled.includes('dailyOwnerSummaryTick('));
  assert.ok(!scheduled.includes('dailySiteSendTick('));
  assert.ok(!scheduled.includes('daily_owner_summary_tick'));
  assert.ok(scheduled.includes('daily_owner_report_tick'));
+ assert.ok(scheduled.includes("controller?.cron==='30 12 * * 1-6'"));
+ assert.ok(scheduled.includes('eveningOwnerCommandsTick('));
 });
 test('QA mismatch refuses to send without claiming',async()=>{
  const b=envelope();b.pdf_sha256='invalid';const f=fixture({manifest:b});
@@ -113,4 +135,26 @@ test('owner endpoint disabled keeps zero outbound requests',async()=>{
  const f=fixture();const m=await modulePromise;
  const r=await m.dailyOwnerSummaryTick({...env,DAILY_SITE_LINE_ENABLED:'false'},{...f,now});
  assert.equal(r.mode,'OWNER_OFF');assert.equal(f.calls.length,0);
+});
+
+test('LINE webhook HMAC rejects invalid or tampered input; valid signed empty event stays receiver-only (no sends)',async()=>{
+ const worker=(await modulePromise).default;
+ const cfg={LINE_CHANNEL_SECRET:'synthetic-hmac-key-only',AUTOPILOT_ENABLED:'false',
+  DAILY_SITE_LINE_ENABLED:'false',LINE_GROUP_DISCOVERY_ENABLED:'false'};
+ const raw=JSON.stringify({destination:'U'+'f'.repeat(32),events:[]});
+ const signature=createHmac('sha256',cfg.LINE_CHANNEL_SECRET).update(raw).digest('base64');
+ const makeRequest=(sig,body=raw)=>new Request('https://example.test/line/webhook',{
+  method:'POST',headers:{'x-line-signature':sig},body
+ });
+ const originalFetch=global.fetch;
+ let outbound=0;
+ global.fetch=async()=>{outbound++;throw Error('unexpected external request');};
+ try{
+  assert.equal((await worker.fetch(makeRequest('invalid'),cfg)).status,401);
+  assert.equal((await worker.fetch(makeRequest(signature,raw+' '),cfg)).status,401);
+  const valid=await worker.fetch(makeRequest(signature),cfg);
+  assert.equal(valid.status,200);
+  assert.deepEqual(await valid.json(),{ok:true,processed:0,mode:'receiver_only'});
+  assert.equal(outbound,0,'receiver-only webhook must never dispatch LINE or make DB requests');
+ }finally{global.fetch=originalFetch;}
 });

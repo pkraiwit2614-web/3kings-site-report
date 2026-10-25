@@ -1,0 +1,46 @@
+name: Contact Book SQL QA (isolated)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/api/contact-book/**'
+      - 'app/contact-book/**'
+      - 'lib/contactBook.ts'
+      - 'tests/contact-book*'
+      - 'supabase/migrations/*contact_book_directory.sql'
+      - '.github/workflows/contact-book-sql-qa.yml'
+permissions:
+  contents: read
+jobs:
+  contact-book-sql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: contact_book_qa
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d contact_book_qa"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Run Contact Book migration, RLS, duplicate and audit QA on disposable database
+        env:
+          PGHOST: localhost
+          PGPORT: '5432'
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: contact_book_qa
+        run: |
+          set -euo pipefail
+          if ! command -v psql >/dev/null; then sudo apt-get update -qq && sudo apt-get install -y postgresql-client; fi
+          psql -X -v ON_ERROR_STOP=1 -f tests/contact-book-sql-qa.sql
