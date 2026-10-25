@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 
 CREATE TABLE IF NOT EXISTS public.projects (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  code text,
+  code text UNIQUE,
   name text,
   site_group text,
   target_handover date,
@@ -54,15 +54,43 @@ CREATE TABLE IF NOT EXISTS public.projects (
   created_at timestamptz DEFAULT now()
 );
 
+INSERT INTO public.projects (code, name, active) VALUES
+  ('AV-P6', 'Above Villa Plot 6', true),
+  ('AV-P7', 'Above Villa Plot 7', true),
+  ('AV-P8', 'Above Villa Plot 8', true),
+  ('AV-P9', 'Above Villa Plot 9', true),
+  ('MIRAGE', 'Mirage', true),
+  ('CONDO-A', 'Above Condo', true),
+  ('HENESSY', 'Henessy', true)
+ON CONFLICT (code) DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS public.schedule_tasks (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id uuid REFERENCES public.projects(id) ON DELETE CASCADE,
+  source_task_no text,
   task_name text,
-  start_date date,
-  end_date date,
-  status text,
-  created_at timestamptz DEFAULT now()
+  category text,
+  area text,
+  planned_start date,
+  planned_end date,
+  actual_start date,
+  actual_end date,
+  current_plan_progress numeric DEFAULT 0,
+  actual_progress numeric DEFAULT 0,
+  current_variance numeric DEFAULT 0,
+  delay_days integer DEFAULT 0,
+  site_status text,
+  blocker text,
+  next_action text,
+  target_close date,
+  contractor text,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
 );
+
+CREATE OR REPLACE VIEW public.v_schedule_tasks AS
+  SELECT * FROM public.schedule_tasks;
 
 CREATE TABLE IF NOT EXISTS public.daily_reports (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
