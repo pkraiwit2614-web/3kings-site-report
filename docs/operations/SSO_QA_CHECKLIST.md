@@ -42,3 +42,9 @@ No SSO disablement; no permanent protection bypass; no Owner password or tokens 
 - **E2E_PASS:** browser actually rendered expected rooms/data after authenticated login, with evidence and no writes.
 
 The Vercel connector path is the default for HTTP checks now; authenticated browser E2E remains PENDING until separately implemented and approved.
+
+## Implemented in PR #225
+- `scripts/production-sso-preflight.mjs`: exact-origin, GET-only, redirect-manual, no-credential SSO classifier for /login, /defects and /reports.
+- `tests/production-sso-preflight.test.mjs`: verifies protected HTTP status, client-loading shell, no arbitrary host, no token/cookie, and failure handling.
+- `.github/workflows/production-sso-boundary.yml`: PR contract test; after reviewed merge, optional manual main-only HTTP diagnostic. Never deploys, uses no secrets, and cannot claim UI E2E PASS.
+- GitHub PR CI must pass before review. Do not merge automatically while Production identity and authorization E2E remain incomplete.
