@@ -64,8 +64,13 @@ BEGIN
        AND new.source_file_name = 'Handover_Defect_Summary_Updated_28-09-2026.xlsx'
        AND new.current_status = 'Defect ยังไม่เสร็จ / ต้องปิดงาน'
        AND new.status_group = 'Hotel - Incomplete'
-       AND (NOT FOUND OR v.source_sync_state = 'synced'
-            OR (v.updated_at IS NOT NULL AND new.source_modified_at > v.updated_at))
+       -- Never override pending/unacknowledged Web->Excel writes, even if the Excel modified time is later.
+       AND (NOT FOUND OR (
+            v.source_sync_state = 'synced'
+            AND v.source_synced_at IS NOT NULL
+            AND v.source_synced_at >= v.updated_at
+            AND new.source_modified_at > v.source_synced_at
+       ))
        AND (new.source_modified_at >= '2026-10-26 00:00:00+00'::timestamptz)
     THEN
       new.current_status := 'Defect ยังไม่เสร็จ / ต้องปิดงาน';
@@ -434,36 +439,10 @@ EXCEPTION WHEN others THEN
     EXCEPTION WHEN others THEN
       null;
     END;
-  END IF;
-
-  RETURN jsonb_build_object(
-    'ok', false,
-    'error', sqlerrm,
-    'rooms', coalesce(v_total, 0),
-    'building_a', coalesce(v_a, 0),
-    'building_b', coalesce(v_b, 0)
-  );
-END;
-$function$;
-
--- 3. Atomically reconcile B515 if it is currently held at checked status while Excel Master is newer
-DO $reconcile_b515$
-DECLARE
-  v_room public.condo_room_status%rowtype;
-BEGIN
-  SELECT * INTO v_room FROM public.condo_room_status WHERE room_no = 'B515';
-  IF FOUND AND v_room.current_status <> 'Defect ยังไม่เสร็จ / ต้องปิดงาน' THEN
-    -- Hand off through the updated trigger WITHOUT app.defect_manual_update bypass
-    UPDATE public.condo_room_status
-    SET current_status = 'Defect ยังไม่เสร็จ / ต้องปิดงาน',
-        status_group = 'Hotel - Incomplete',
-        next_action = 'Defect เพิ่งได้รับแจ้ง 26/10/2026 (Customer Defect 9 รายการ); รอตรวจหน้างานและเทียบรายการที่เคยปิดก่อนแจกงาน/นัดแก้ไข',
-        latest_source = 'Customer Defect B515.pdf — Art House Group Doc. ID 255; ผู้ใช้นำแจ้ง 26/10/2026',
-        source_file_id = '1MEeB1E7D_35MTndRPi1aBTlVfI2aR0Wj',
-        source_file_name = 'Handover_Defect_Summary_Updated_28-09-2026.xlsx',
-        source_modified_at = '2026-10-26 09:46:01.771+00'::timestamptz,
-        synced_at = now()
-    WHERE room_no = 'B515';
-  END IF;
-END
-$reconcile_b515$;
+  -- 3. Reconciliation is intentionally delegated to the existing approved Defect
+-- Excel -> GAS/API -> drive_sync_apply_condo_defects pipeline.
+-- Do not run a hard-coded room UPDATE in a schema migration. The approved
+-- original Excel File ID/revision, current override queue, and 263-room payload
+-- must be verified at execution time. The trigger above will accept the scoped
+-- B515 change only if no pending Web writeback takes precedence.
+-- Production closure requires Sync Log + DB row + authenticated UI readback.

@@ -35,6 +35,17 @@ test('B515 scoped migration contains preflight guards, trigger update, and recon
   assert.doesNotMatch(migration, /DROP TABLE|DELETE FROM public\.condo_room_status/i)
 })
 
+test('B515 approved import is blocked by any pending Web writeback and has no direct SQL reconciliation', () => {
+  const scoped = migration.split('-- B515 Scoped Exception:')[1]?.split('-- Keep the other previously approved')[0] || ''
+  assert.ok(scoped.length > 0)
+  assert.match(scoped, /v\.source_sync_state = 'synced'/)
+  assert.match(scoped, /v\.source_synced_at IS NOT NULL/)
+  assert.match(scoped, /v\.source_synced_at >= v\.updated_at/)
+  assert.match(scoped, /new\.source_modified_at > v\.source_synced_at/)
+  assert.doesNotMatch(scoped, /OR \(v\.updated_at IS NOT NULL AND new\.source_modified_at > v\.updated_at\)/)
+  assert.doesNotMatch(migration, /DO \$reconcile_b515\$/)
+})
+
 test('app/api/sync/drive/route.ts extracts B515 Customer Defect detail without dropping chat detail', () => {
   assert.match(route, /detail\?\.includes\('รายการ Defect แจ้งผ่านแชต:'\)/)
   assert.match(route, /roomNo === 'B515' && detail\?\.includes\('Customer Defect B515'\)/)
