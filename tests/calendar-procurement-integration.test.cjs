@@ -41,3 +41,6 @@ assert.doesNotMatch(procurementPage,/<ProcurementEditPanel\s*\/>/)
 assert.match(procurementPage,/\.from\('procurement_items'\)\.select\('\*'\)/)
 
 console.log('Calendar CRUD, procurement due-date narrow overlay and role guards: PASS')
+
+// Same normalized follow-up semantics must be used by Dashboard and Procurement.
+require('./procurement-follow-up.test.cjs')

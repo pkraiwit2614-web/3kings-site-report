@@ -1,0 +1,204 @@
+{
+  "schema_version": 2,
+  "updated_on": "2026-10-22",
+  "project": "3 Kings Construction",
+  "status": "ADVISORY_ONLY",
+  "origin": "Curated candidate technical object names from unmerged PR #172; never treated as live verification.",
+  "source_authority": "At each invocation resolve live ACTIVE Google Drive 00-SOP_INDEX and linked full SOP (Defect 01/02/04 share canonical v3.0); repository mapping is advisory and never overrides active Drive SOP.",
+  "manifest_reference": "docs/agent-skills/manifest.json",
+  "usage_rules": [
+    "The manifest owns all 17 shortcut IDs and permission modes; this file adds no write, SQL execution, RPC or deployment permission.",
+    "Candidates are historical observations, NOT a current inventory. Recheck object existence, role access, current Source of Truth and SOP revision before any use.",
+    "No automatic SQL/RPC invocation or source mutation is permitted solely because a candidate name appears here.",
+    "Preserve Defect/Combine, hotel OOO/OOS isolation, Express PO versus receipt, Daily Report publisher and LINE separation, Calendar, Payroll, RBAC/RLS and Sync boundaries.",
+    "No private SOP document IDs, credentials, customer data, trigger changes, migrations, CI overrides or Production actions are stored or performed.",
+    "Supporting EX, SUP-PR, SUP-VO and SUP-PUBLISH resolve only from the live 21-entry Drive index, not obsolete static SOP titles."
+  ],
+  "coverage": {
+    "manifest_skills": 17,
+    "candidate_skill_entries": 13,
+    "omitted_without_technical_candidates": [
+      10,
+      14,
+      15,
+      16
+    ]
+  },
+  "technical_entries": [
+    {
+      "sop_number": 1,
+      "skill_name": "3kings-01-defect-flow",
+      "domain": "Defect",
+      "candidate_tables": [
+        "condo_room_status",
+        "defect_work_order_snapshot",
+        "defect_web_overrides"
+      ],
+      "candidate_sql_functions": [
+        "drive_sync_apply_condo_defects",
+        "defect_work_order_sync_import",
+        "defect_writeback_status"
+      ],
+      "review_at_use": "UNVERIFIED_CURRENT_RUNTIME",
+      "boundary": "Authorized scoped Excel-first write with Web override/queue conflict hold, Combine atomicity, E2E Sync receipt, 7-day evidence gate, idempotent Work ID retry; never change OOO/OOS or Work Plan."
+    },
+    {
+      "sop_number": 2,
+      "skill_name": "3kings-02-defect-reconciliation",
+      "domain": "Defect",
+      "candidate_tables": [
+        "condo_room_status",
+        "defect_work_order_snapshot"
+      ],
+      "candidate_sql_functions": [],
+      "review_at_use": "UNVERIFIED_CURRENT_RUNTIME",
+      "boundary": "Read-only count reconciliation: source-vs-Flow/Report/Work Order by actual rooms, Combine=1 and Work ID; never write or sync."
+    },
+    {
+      "sop_number": 3,
+      "skill_name": "3kings-03-work-dispatch",
+      "domain": "Defect",
+      "candidate_tables": [
+        "defect_work_order_snapshot",
+        "condo_room_status"
+      ],
+      "candidate_sql_functions": [],
+      "review_at_use": "UNVERIFIED_CURRENT_RUNTIME",
+      "boundary": "Document only: include verified outstanding Work Orders; no status closure or duplicated Combine."
+    },
+    {
+      "sop_number": 4,
+      "skill_name": "3kings-04-defect-7-days",
+      "domain": "Defect",
+      "candidate_tables": [
+        "condo_room_status",
+        "defect_manual_updates"
+      ],
+      "candidate_sql_functions": [],
+      "review_at_use": "UNVERIFIED_CURRENT_RUNTIME",
+      "boundary": "Read-only 7-day inspection: eligibility not Hotel acceptance; status writes require separate explicit authorized_write route 01."
+    },
+    {
+      "sop_number": 5,
+      "skill_name": "3kings-05-hotel-defect-check",
+      "domain": "Hotel/Defect",
+      "candidate_tables": [
+        "hotel_room_availability",
+        "hotel_room_source_map",
+        "hotel_room_group_members",
+        "condo_room_status"
+      ],
+      "candidate_sql_functions": [],
+      "review_at_use": "UNVERIFIED_CURRENT_RUNTIME",
+      "boundary": "Read only: compare Hotel OOO/OOS separately from 3 Kings Defect, preserving Combine."
+    },
+    {
+      "sop_number": 6,
+      "skill_name": "3kings-06-materials-update",
+      "domain": "Materials",
+      "candidate_tables": [
+        "materials",
+        "procurement_items",
+        "procurement_item_projects"
+      ],
+      "candidate_sql_functions": [
+        "drive_sync_replace_materials",
+        "drive_sync_replace_materials_tools"
+      ],
+      "review_at_use": "UNVERIFIED_CURRENT_RUNTIME",
+      "boundary": "Trigger 06 WRITE_SCOPED: first verify Express PO/PL/PR; then delta upsert into Drive PR/Plan and scoped Materials; receipt required for Received; preserve unmatched PR/Plan and verify existing sync readback."
+    },
+    {
+      "sop_number": 7,
+      "skill_name": "3kings-07-po-inspection",
+      "domain": "Materials",
+      "candidate_tables": [],
+      "candidate_sql_functions": [],
+      "review_at_use": "UNVERIFIED_CURRENT_RUNTIME",
+      "boundary": "Trigger 07 READ_ONLY: Express-only PO/PL/PR snapshot and report; no Drive PR/Plan or Web reads, imports, writes, sync or deploy; missing PO is not Cancelled."
+    },
+    {
+      "sop_number": 8,
+      "skill_name": "3kings-08-progress-summary",
+      "domain": "Progress",
+      "candidate_tables": [
+        "schedule_tasks",
+        "schedule_task_daily_snapshots",
+        "drive_photo_index"
+      ],
+      "candidate_sql_functions": [],
+      "review_at_use": "UNVERIFIED_CURRENT_RUNTIME",
+      "boundary": "Trigger 08 DAILY_PROGRESS — shared canonical SOP 08+11 v3.0 via live Drive Index; read Schedule Plan/Target, verified dated Actual and QA photos per Plot; preserve Actual/Schedule/Target/Unknown, evidence and source read-only."
+    },
+    {
+      "sop_number": 9,
+      "skill_name": "3kings-09-progress-photos",
+      "domain": "Progress Photos",
+      "candidate_tables": [
+        "drive_photo_index"
+      ],
+      "candidate_sql_functions": [
+        "drive_photo_index_upsert",
+        "drive_photo_index_reconcile_full_scan"
+      ],
+      "review_at_use": "UNVERIFIED_CURRENT_RUNTIME",
+      "boundary": "Verify photo angles and existing names before renaming; never infer mapping or alter validated history."
+    },
+    {
+      "sop_number": 11,
+      "skill_name": "3kings-11-weekly-recap",
+      "domain": "Weekly Recap",
+      "candidate_tables": [
+        "weekly_snapshots",
+        "schedule_tasks",
+        "materials",
+        "condo_room_status"
+      ],
+      "candidate_sql_functions": [],
+      "review_at_use": "UNVERIFIED_CURRENT_RUNTIME",
+      "boundary": "Trigger 11 WEEKLY_RECAP — same canonical SOP 08+11 v3.0 via live Drive Index; Mon–Fri Bangkok, QA Daily/Progress/Defect/Materials snapshots, dedupe counts; evidence, Actual/Schedule/Target/Unknown and source read-only."
+    },
+    {
+      "sop_number": 12,
+      "skill_name": "3kings-12-work-calendar",
+      "domain": "Calendar",
+      "candidate_tables": [
+        "work_calendars",
+        "work_calendar_events"
+      ],
+      "candidate_sql_functions": [
+        "work_calendar_save_event",
+        "work_calendar_create",
+        "work_calendar_update"
+      ],
+      "review_at_use": "UNVERIFIED_CURRENT_RUNTIME",
+      "boundary": "Verify correct Calendar/source event IDs, date, timezone and dedupe; do not change Defect status."
+    },
+    {
+      "sop_number": 13,
+      "skill_name": "3kings-13-sync-check",
+      "domain": "Sync",
+      "candidate_tables": [
+        "drive_sync_runs",
+        "daily_site_report_sync_audit"
+      ],
+      "candidate_sql_functions": [],
+      "review_at_use": "UNVERIFIED_CURRENT_RUNTIME",
+      "boundary": "Read only: compare source→sync log→DB→UI; a successful trigger alone is not successful sync."
+    },
+    {
+      "sop_number": 17,
+      "skill_name": "3kings-17-access-check",
+      "domain": "RBAC/RLS",
+      "candidate_tables": [
+        "profiles"
+      ],
+      "candidate_sql_functions": [
+        "role_permission_matrix_read",
+        "role_permission_matrix_history"
+      ],
+      "review_at_use": "UNVERIFIED_CURRENT_RUNTIME",
+      "boundary": "Read only: validate UI, route, API and RLS against role matrix; no permission changes."
+    }
+  ]
+}

@@ -9,15 +9,19 @@ function EB_amount_(s){if(!/^[0-9,]+\.[0-9]{2}$/.test(s))throw Error('MONEY_PARS
 function EB_parseFile_(text, source){
 if(!/รายงานใบสั่งซื้อ|รายงานใบขอซื้อ/.test(text))throw Error('UNSUPPORTED_REPORT_'+source.name);
 const kind=/รายงานใบสั่งซื้อ/.test(text)?'PO_PL':'PR_PC';
+const byDate=/เรียงตามวันที่/.test(text);
+if(!byDate&&!/(?:เรียง|แยก)ตามผู้จำหน่าย/.test(text))throw Error('UNSUPPORTED_REPORT_LAYOUT_'+source.name);
 const docs=[],issues=[],cancel=new Set(),seen=new Set();let active=null,supplier='',docLines=0;
 for(const [lineIdx,raw] of text.replace(/\r\n?/g,'\n').split('\n').entries()){
  const line=EB_cleanLine_(raw),t=line.trim();if(!t)continue;
  const supplierMatch=/^\s{2,}(.+?)\s*\/AP-?(\d{3,4})\s*$/.exec(line);
  if(supplierMatch&&!/^รวม/.test(supplierMatch[1].trim())){supplier=supplierMatch[1].trim()+' /AP-'+supplierMatch[2];active=null;continue;}
- const starred=/^\s*\*\s*(?:(PO|PL|PR|PC)(\d{6,9}[A-Z]?))?\b/.exec(line);
+ const starred=/^\s*(?:\d{2}\/\d{2}\/\d{2}\s+)?\*\s*(?:(PO|PL|PR|PC)(\d{6,9}[A-Z]?))?\b/.exec(line);
  if(starred){if(starred[1])cancel.add(starred[1]+starred[2]);active=null;continue;}
  if(/^\s*(?:PRTEST|POTEST|PCTEST|PLTEST)\b/i.test(line)){issues.push({source:source.name,line:lineIdx+1,reason:'SKIP_TEST_DOCUMENT'});active=null;continue;}
- const hdr=/^\s*(PO\d{9}|PL\d{7}[A-Z]?|PC\d{8,9}|PR\d{7,9})\s+(\d{2}\/\d{2}\/\d{2})\s+(\d{2}\/\d{2}\/\d{2})\s+(.+)$/.exec(line);
+ const dated=byDate?/^\s*(\d{2}\/\d{2}\/\d{2})\s+(PO\d{9}|PL\d{7}[A-Z]?|PC\d{8,9}|PR\d{7,9})\s+(AP-?\d{3,4})\s+(\d{2}\/\d{2}\/\d{2})\s+(.+)$/.exec(line):null;
+ if(dated)supplier=dated[3];
+ const hdr=dated?[dated[0],dated[2],dated[1],dated[4],dated[5]]:/^\s*(PO\d{9}|PL\d{7}[A-Z]?|PC\d{8,9}|PR\d{7,9})\s+(\d{2}\/\d{2}\/\d{2})\s+(\d{2}\/\d{2}\/\d{2})\s+(.+)$/.exec(line);
  if(hdr){
    const docNo=hdr[1];if((kind==='PO_PL'&&!/^(PO|PL)/.test(docNo))||(kind==='PR_PC'&&!/^(PR|PC)/.test(docNo))){issues.push({source:source.name,line:lineIdx+1,doc:docNo,reason:'TYPE'});active=null;continue;}
    if(seen.has(docNo)){issues.push({source:source.name,line:lineIdx+1,doc:docNo,reason:'REPEATED_DOC'});active=null;continue;}
@@ -27,6 +31,7 @@ for(const [lineIdx,raw] of text.replace(/\r\n?/g,'\n').split('\n').entries()){
    const data={group:kind,docNo:docNo,date:hdr[2],receiptPlan:hdr[3],supplier:supplier,subtotal:EB_amount_(tail[1]),vat:EB_amount_(tail[2]),total:EB_amount_(tail[3]),source:source.name,sourceId:source.id,sourceLine:lineIdx+1,reference:tail[5]||'',notes:[],lines:[],lastSeen:source.modifiedAt||'',qa:[]};
    if(data.subtotal+data.vat!==data.total)data.qa.push('HEADER_TOTAL_MISMATCH');
    if(!supplier)data.qa.push('SUPPLIER_MISSING');
+   if(dated)data.qa.push('SUPPLIER_NAME_NOT_IN_EXPORT');
    docs.push(data);active=data;continue;
  }
  // Avoid seeing spurious item rows outside a known document.
@@ -74,7 +79,7 @@ const EB_FULL_QA = Object.freeze({
  qaCopyId:'1GeZZHQdrLPv83xtPx1pgA4HipFSEvtWF',
  originalMasterId:'1Yr9iNVo54g4PrB2ntFb6E_ouI_ohHqSn',
  originalSha:'3ab818826c1a4da6dd4848ec94c5b857d5af7aadbd71085b95928e1e692b7394',
- allowedSource:/^(?:PO|PR)20\d{2}-\d{12}\.csv$/i,
+ allowedSource:/\.csv$/i,
  // only sources checked in by owner; new files are accepted with strict QA and revision.
  sourceMinimum:2, maxSources:90, maxBytesPerSource:8000000,
  expectedSheetPaths:['xl/worksheets/sheet12.xml','xl/worksheets/sheet13.xml'],
@@ -138,9 +143,13 @@ function EB_qaReadFolder_(){
  return files;
 }
 function EB_qaVerifyFolderUnchanged_(files){
- for(const f of files){const latest=DriveApp.getFileById(f.id);if(latest.getName()!==f.name||latest.getLastUpdated().toISOString()!==f.modifiedAt||latest.getSize()!==f.size)
-  throw Error('SOURCE_FILE_CHANGED_DURING_IMPORT: '+f.name)}
+ // Re-enumerate: a newly added/deleted CSV invalidates the snapshot too.
+ const current=EB_qaReadFolder_();
+ const signature=list=>JSON.stringify(list.map(f=>[f.id,f.name,f.modifiedAt,f.size,f.hash])
+  .sort((a,b)=>a[0].localeCompare(b[0])));
+ if(signature(current)!==signature(files))throw Error('SOURCE_FOLDER_CHANGED_DURING_IMPORT');
 }
+
 function EB_qaUnchangedOriginal_(orig, target){
  const om=orig.map,tm=target.map;const exempt=new Set(['xl/workbook.xml','xl/_rels/workbook.xml.rels','[Content_Types].xml']);
  for(const n of Object.keys(om)){

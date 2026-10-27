@@ -9,6 +9,7 @@ import {canAccessPath} from '@/lib/accessControl'
 import PrintButton from '@/components/PrintButton'
 import StatusBadge from '@/components/StatusBadge'
 import DashboardMaterialsStatus from '@/components/DashboardMaterialsStatus'
+import { procurementFollowUpStage, procurementStageLabels, sortedProcurementFollowUps } from '@/lib/procurementFollowUp'
 import { getSupabase } from '@/lib/supabase'
 import { createLiveLoader, requireSuccessfulReads } from '@/lib/liveLoader'
 import { pct, dateTH } from '@/lib/format'
@@ -101,6 +102,7 @@ export default function DashboardPage() {
   const [siteOperations,setSiteOperations]=useState<DashboardSiteOperation[]>([])
   const [siteOperationProjects,setSiteOperationProjects]=useState<DashboardSiteOperationProject[]>([])
   const [proc,setProc]=useState<any[]>([])
+  const [procurementLinks,setProcurementLinks]=useState<{procurement_item_id:string;project_id:string}[]>([])
   const [syncRuns,setSyncRuns]=useState<any[]>([])
   const [snapshotDays,setSnapshotDays]=useState<any[]>([])
   const [snapshotRows,setSnapshotRows]=useState<any[]>([])
@@ -121,16 +123,17 @@ export default function DashboardPage() {
     const s=getSupabase()
     const loader=createLiveLoader({
       load:async(signal)=>{
-        const [p,t,so,sop,pr,sr,sd]=await Promise.all([
+        const [p,t,so,sop,pr,pl,sr,sd]=await Promise.all([
           s.from('projects').select('id,code,name,target_handover,active,sort_order').eq('active',true).order('sort_order').abortSignal(signal),
           s.from('v_schedule_tasks').select('id,project_id,task_name,category,actual_progress,current_plan_progress,current_variance,delay_days,site_status,blocker,next_action,target_close,planned_start,planned_end,actual_start,actual_end,area,source_task_no,contractor').abortSignal(signal),
           s.from('site_operations_entries').select('id,work_date,project_name_raw,area_raw,total_manpower,work_detail,status_text,next_plan,mapping_status,synced_at,work_date_validation_status').lte('work_date',bangkokToday()).or('work_date_validation_status.is.null,work_date_validation_status.eq.valid').order('work_date',{ascending:false}).order('source_row',{ascending:false}).limit(300).abortSignal(signal),
           s.from('site_operations_entry_projects').select('entry_id,project_id').limit(1200).abortSignal(signal),
-          s.from('procurement_items').select('id,project_id,vendor,item_name,current_status,expected_delivery_text,expected_delivery').order('created_at',{ascending:false}).abortSignal(signal),
+          s.from('procurement_items').select('id,project_id,vendor,item_name,current_status,procurement_status,payment_status,po_no,pr_no,expected_delivery_text,expected_delivery,source_updated_at,updated_at').order('created_at',{ascending:false}).abortSignal(signal),
+          s.from('procurement_item_projects').select('procurement_item_id,project_id').abortSignal(signal),
           s.from('drive_sync_runs').select('sync_type,project_code,created_at').eq('status','success').order('created_at',{ascending:false}).limit(30).abortSignal(signal),
           s.from('v_schedule_snapshot_days').select('snapshot_date').order('snapshot_date',{ascending:false}).limit(60).abortSignal(signal)
         ])
-        requireSuccessfulReads([p,t,so,sop,pr,sr,sd])
+        requireSuccessfulReads([p,t,so,sop,pr,pl,sr,sd])
         if(!alive||signal.aborted)return
         setLoadError(false)
         setProjects((p.data||[]) as Project[])
@@ -138,6 +141,7 @@ export default function DashboardPage() {
         setSiteOperations((so.data||[]) as DashboardSiteOperation[])
         setSiteOperationProjects((sop.data||[]) as DashboardSiteOperationProject[])
         setProc(pr.data||[])
+        setProcurementLinks(pl.data||[])
         setSyncRuns(sr.data||[])
         setSnapshotDays(sd.data||[])
       },
@@ -156,6 +160,7 @@ export default function DashboardPage() {
       .on('postgres_changes',{event:'*',schema:'public',table:'site_operations_entries'},queueLoad)
       .on('postgres_changes',{event:'*',schema:'public',table:'site_operations_entry_projects'},queueLoad)
       .on('postgres_changes',{event:'*',schema:'public',table:'procurement_items'},queueLoad)
+      .on('postgres_changes',{event:'*',schema:'public',table:'procurement_item_projects'},queueLoad)
       .on('postgres_changes',{event:'*',schema:'public',table:'drive_sync_runs'},queueLoad)
       .subscribe()
     const refresh=()=>queueLoad()
@@ -259,7 +264,31 @@ export default function DashboardPage() {
     if(stat){acc.delayed+=stat.delayed;acc.blockers+=stat.blockers}
     return acc
   },{delayed:0,blockers:0}),[latestSiteOpsProjectIds,projectStats])
-  const openProc=useMemo(()=>proc.filter(x=>!/(ส่งครบ|delivered|closed|complete|completed|เสร็จ|รับของแล้ว)/i.test(`${x.current_status||''}`)),[proc])
+  const procurementProjectIdsByItem=useMemo(()=>{
+    const map=new Map<string,string[]>()
+    for(const link of procurementLinks){
+      const ids=map.get(link.procurement_item_id)||[]
+      if(!ids.includes(link.project_id))ids.push(link.project_id)
+      map.set(link.procurement_item_id,ids)
+    }
+    for(const item of proc){
+      if(!item.project_id)continue
+      const ids=map.get(item.id)||[]
+      if(!ids.includes(item.project_id))ids.push(item.project_id)
+      map.set(item.id,ids)
+    }
+    return map
+  },[procurementLinks,proc])
+  const openProc=useMemo(()=>sortedProcurementFollowUps(proc,bangkokToday()),[proc])
+  const procurementStages=useMemo(()=>openProc.reduce((acc,item)=>{
+    const stage=procurementFollowUpStage(item)
+    acc[stage]=(acc[stage]||0)+1
+    return acc
+  },{} as Record<string,number>),[openProc])
+  const latestProcurementUpdatedAt=useMemo(()=>proc.reduce<string|null>((latest,item)=>{
+    const updated=item.updated_at||null
+    return updated&&(!latest||updated>latest)?updated:latest
+  },null),[proc])
 
   const followupTasks=useMemo(()=>{
     const base=followupView==='delayed'?delayedTasks:followupView==='blockers'?blockerTasks:criticalTasks
@@ -332,7 +361,19 @@ export default function DashboardPage() {
 
       <div className="dashboard-grid two-main">
         <section id="dashboard-site-operations" className="panel dashboard-module"><div className="module-title"><span>6</span><div><b>SITE OPERATIONS — EXECUTIVE DAILY</b><small>Daily Site Report ที่ไขว้กับ Schedule เพื่อให้เห็นงานหน้างาน กำลังคน ความเสี่ยง และ Next plan ในภาพเดียว</small></div><Link href="/reports">เปิด Site Operations →</Link></div><div className="resource-kpis"><div><span>ข้อมูลหน้างานล่าสุด</span><b>{latestSiteOperations.length}</b><small>{latestSiteOperationsDate?dateTH(latestSiteOperationsDate):'ยังไม่มีข้อมูล'} • {latestSiteOpsProjectIds.length} Site / Plot</small></div><div><span>กำลังคนล่าสุด</span><b>{latestManpower}</b><small>คน ตามข้อมูล Site Operations ที่ใช้เป็น Actual ได้</small></div><div><span>Schedule Risk ของ Site ที่รายงาน</span><b>{latestSiteOpsRisk.delayed}</b><small>Delayed • {latestSiteOpsRisk.blockers} Blocker • ต้องทบทวน mapping {latestSiteOpsNeedsReview}</small></div></div><div className="resource-list">{latestSiteOperations.slice(0,8).map(row=>{const pids=siteOpsProjectIdsByEntry.get(row.id)||[];const codes=pids.map(id=>projects.find(p=>p.id===id)?.code).filter(Boolean);const risk=pids.reduce((acc,id)=>{const stat=projectStats.find(x=>x.p.id===id);if(stat){acc.delayed+=stat.delayed;acc.blockers+=stat.blockers}return acc},{delayed:0,blockers:0});return <div key={row.id}><div><b>{codes.length?codes.join(' / '):(row.area_raw||row.project_name_raw||'ยังไม่ map Site')}</b><small>{row.work_detail||'ไม่ระบุรายละเอียดงาน'} • {dateTH(row.work_date)}</small><small>Schedule: {risk.delayed} Delayed • {risk.blockers} Blocker{row.next_plan?` • Next: ${row.next_plan}`:''}</small></div><span>{Number(row.total_manpower)||0} คน • <Link href="/reports">เปิด →</Link></span></div>})}{!latestSiteOperations.length&&<p className="muted">ยังไม่มี Site Operations ที่ผ่าน Work Date validation สำหรับใช้เป็น Actual</p>}</div></section>
-        <section className="panel dashboard-module"><div className="module-title"><span style={{fontSize:10}}>7A</span><div><b>PURCHASING FOLLOW-UP</b><small>สถานะรายการจัดซื้อ/จัดจ้าง</small></div><Link href="/procurement">เปิดจัดซื้อ →</Link></div><div style={{padding:'9px 14px',borderBottom:'1px solid var(--line)',fontSize:11,color:'var(--muted)'}}><b style={{color:'var(--text)'}}>อัปเดตข้อมูลล่าสุด:</b> {dateTimeTH(latestMaterialsSyncAt)}</div><div className="resource-kpis" style={{gridTemplateColumns:'repeat(2,1fr)'}}><div><span>รายการต้องติดตาม</span><b>{openProc.length}</b><small>รายการที่ยังไม่ปิด</small></div><div><span>มีข้อมูลทั้งหมด</span><b>{proc.length}</b><small>รายการใน Procurement</small></div></div><div className="resource-list">{openProc.slice(0,8).map(x=><div key={x.id}><div><b>{x.item_name}</b><small>{projects.find(p=>p.id===x.project_id)?.code||'-'} • {x.vendor||'ยังไม่ระบุผู้ขาย'}</small></div><span>{x.expected_delivery_text||'ยังไม่ระบุกำหนด'}</span></div>)}{!openProc.length&&<p className="muted">ไม่มีรายการจัดซื้อค้างในข้อมูลปัจจุบัน</p>}</div></section>
+        <section className="panel dashboard-module" id="dashboard-purchasing"><div className="module-title"><span style={{fontSize:10}}>7A</span><div><b>PURCHASING FOLLOW-UP</b><small>งานค้างตามแถวข้อมูล Procurement ที่นำเข้าแล้ว • ยังไม่รวม PR Follow-up แยกไฟล์</small></div><Link href="/procurement?followup=1">เปิดรายการต้องตาม →</Link></div>
+          <div style={{padding:'9px 14px',borderBottom:'1px solid var(--line)',fontSize:11,color:'var(--muted)'}}>
+            <b style={{color:'var(--text)'}}>Materials Sync ล่าสุด:</b> {dateTimeTH(latestMaterialsSyncAt)} <span style={{marginLeft:10}}><b style={{color:'var(--text)'}}>แก้ไขข้อมูลจัดซื้อล่าสุด:</b> {dateTimeTH(latestProcurementUpdatedAt)}</span>
+          </div>
+          <div className="resource-kpis" style={{gridTemplateColumns:'repeat(2,1fr)'}}><div><span>รายการต้องติดตาม</span><b>{openProc.length}</b><small>แยกงานค้างจริงจากการปิดติดตาม</small></div><div><span>มีข้อมูลทั้งหมด</span><b>{proc.length}</b><small>รายการใน Procurement (ไม่ใช่จำนวน PR Follow-up)</small></div></div>
+          <div style={{padding:'0 14px 9px',fontSize:11,color:'var(--muted)'}}>รอ PO/PL {procurementStages.pr||0} • มีเลข PO/PL และยังติดตาม {procurementStages.ordered||0} • ตรวจรับ/เอกสาร/ชำระ {procurementStages.verify||0} • ต้องตรวจสอบ {procurementStages.other||0}</div>
+          <div style={{padding:'0 14px 9px',fontSize:11,color:'var(--muted)'}}>เอกสาร PR ติดตามแยก: <a href="https://docs.google.com/spreadsheets/d/1I8EdnL43kI-qBQfvgYxPyvJIETxrtYKj/edit" target="_blank" rel="noopener noreferrer">เปิด PR Follow-up Excel ↗</a> (ไม่รวมในยอด Supabase ข้างต้นจนกว่าจะจับคู่และนำเข้าผ่านระบบเดิม)</div>
+          <div className="resource-list">{openProc.slice(0,8).map(x=>{
+            const ids=procurementProjectIdsByItem.get(x.id)||[]
+            const codes=ids.map(id=>projects.find(p=>p.id===id)?.code).filter(Boolean)
+            return <div key={x.id}><div><b>{x.item_name}</b><small>{codes.join(' / ')||'ยังไม่ผูก Plot'} • {x.vendor||'ยังไม่ระบุผู้ขาย'}</small><small>{procurementStageLabels[procurementFollowUpStage(x)]} • {x.current_status||'ยังไม่ยืนยันสถานะ'}</small></div><span>{x.expected_delivery_text||'ยังไม่ยืนยันกำหนดส่ง'}</span></div>
+          })}{!openProc.length&&<p className="muted">ไม่มีรายการจัดซื้อค้างในข้อมูลปัจจุบัน</p>}</div>
+        </section>
       </div>
 
       <DashboardMaterialsStatus/>

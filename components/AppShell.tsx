@@ -23,7 +23,8 @@ const standardNav: NavItem[] = [
   ['/reports', 'Site Operations'],
   ['/site-photos', 'รูปภาพหน้างาน'],
   ['/weekly', 'รายงานการทำงานประจำสัปดาห์'],
-  ['/calendar', 'Work Calendar']
+  ['/calendar', 'Work Calendar'],
+  ['/contact-book', 'Contact Book']
 ]
 
 const defectContributorNav: NavItem[] = [
@@ -38,6 +39,7 @@ const mobileLabel: Record<string,string> = {
   '/schedule': 'แผนงาน',
   '/calendar': 'Calendar',
   '/materials': 'วัสดุ',
+  '/contact-book': 'Contacts',
   '/defect-flow': 'Defect',
   '/site-photos': 'รูปหน้างาน',
   '/reports': 'Site Ops',

@@ -40,6 +40,18 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Contact Book Supabase, duplicate phone and permission regression
+        run: node --test tests/contact-book.test.cjs tests/contact-book-db.test.cjs
+
+      - name: Apps Script P1 source comparator offline tests (no network or credentials)
+        run: node --test tests/ai-operations-gas-source.test.cjs tests/ai-operations-gas-live.test.cjs
+
+      - name: Issue 201 SmartSync projection candidate offline QA (no live writes)
+        run: node --test tests/ai-operations-smart-sync-projection.test.cjs
+
+      - name: Plot 3 sync safety and P6 compatibility regression
+        run: node tests/plot3-sync-regression.test.cjs
+
       - name: Preview gate and Hosted authorization regression
         run: node --test tests/vercel-preview-gate.test.cjs tests/hosted-preview-authorization.test.mjs
 
@@ -51,6 +63,9 @@ jobs:
 
       - name: Hotel Work Plan save confirmation and before-after review
         run: node --test tests/hotel-work-plan-save-dialog.test.cjs
+
+      - name: Auto Work Plan Defect calendar projection safety
+        run: node --test tests/defect-work-plan-calendar.test.cjs
 
       - name: Hotel Work Plan schedule and scoped editor safety
         run: node --test tests/hotel-work-plan.test.cjs
@@ -153,6 +168,9 @@ jobs:
       # Validate live Materials print table columns, repeating headers and page-width allocation.
       - name: Materials print pagination regression
         run: node tests/materials-print-layout.test.cjs
+
+      - name: Procurement evidence exact-match, read-only and RLS regression
+        run: node tests/procurement-evidence-links.test.cjs
 
 
       - name: Editable permission defaults and confirmed save workflow
@@ -270,7 +288,7 @@ jobs:
           supabase stop --no-backup || true
 
   qa_status:
-    name: QA / Local evidence (release remains blocked without Preview)
+    name: QA / Local evidence (SOP16 release gate separately)
     if: always() && github.event_name == 'pull_request'
     needs: [build, qa_contract, qa_local_viewer]
     runs-on: ubuntu-latest

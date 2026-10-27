@@ -6,7 +6,7 @@ description: "3 Kings Construction shortcut 'สรุป Progress'. Create only
 # 08 — สรุป Progress
 
 **Shortcut:** `สรุป Progress`  
-**SOP title (resolve via live Drive index):** `SOP_08_Construction_Progress_v2.0_Consolidated_2026-10-20`  
+**SOP title (resolve via live Drive index):** `SOP_08_11_Progress_Weekly_Recap_Single_Flow_v3.0_2026-10-22`  
 **Mode:** `document_only`
 
 ## Before any action
@@ -52,3 +52,9 @@ These skills are agent guidance, **not** a server-side authorization, authentica
 - Progress reporting does not require running Rename/Photo mapping first.
 - No Git branch/CI/Preview/Production Deploy for read-only reports, documents or routine Drive/Sheet updates. Use existing QA snapshot/Checkpoint when revision/freshness verified; pause only conflicting records; prove success with destination readback.
 - Superpowers/Task Observer are conditional, advisory, non-blocking and must not reload identical SOP or trigger extra network/build operations.
+
+## Canonical SOP 08+11 v3.0 — Trigger 08 (22/10/2026)
+- Resolve current ACTIVE Drive index row 08 and read the shared full SOP once; execute only DAILY_PROGRESS (date/Plot), never WEEKLY_RECAP by substring or SOP title alone.
+- Source read-only. Schedule Progress Update supplies Plan/Target; verified Daily Site Report/Site Updates supply dated Actual; QA photos are supporting evidence only. Output can be created only when requested.
+- Separate Actual/Schedule/Target/Unknown, verify Task/Trade/Plot/date, guard % denominators and avoid duplicate work. No source writes, photo rename, Sync, or Production effects.
+- The shared canonical title is a discovery hint only; Drive Index is authoritative, no private Drive File ID is stored in GitHub.

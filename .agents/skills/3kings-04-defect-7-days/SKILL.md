@@ -6,7 +6,7 @@ description: "3 Kings Construction shortcut 'ตรวจ Defect 7 วัน'. R
 # 04 — ตรวจ Defect 7 วัน
 
 **Shortcut:** `ตรวจ Defect 7 วัน`  
-**SOP title (resolve via live Drive index):** `SOP_04_Defect_7_Days_v2.0_Consolidated_2026-10-20`  
+**SOP title (resolve via live Drive index):** `SOP_DEFECT_01_02_04_Single_Flow_v3.0_2026-10-22`  
 **Mode:** `read_only`
 
 ## Before any action

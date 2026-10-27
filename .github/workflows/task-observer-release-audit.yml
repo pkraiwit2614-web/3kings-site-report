@@ -1,0 +1,35 @@
+name: Task Observer - Release Evidence Audit (Read Only)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+  checks: read
+  statuses: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Checkout (no persisted credentials)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Unit tests - evidence safety
+        run: node --test tests/task-observer-release-gate.test.mjs
+      - name: Read public GitHub PR and CI evidence only
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          node scripts/task-observer-release-gate.mjs > "$RUNNER_TEMP/task-observer-release-evidence.json"
+      - name: Preserve sanitized report (not a release approval)
+        uses: actions/upload-artifact@v4
+        with:
+          name: task-observer-release-evidence
+          path: ${{ runner.temp }}/task-observer-release-evidence.json
+          retention-days: 7
+          if-no-files-found: error

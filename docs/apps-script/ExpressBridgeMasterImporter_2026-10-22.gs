@@ -13,10 +13,11 @@ const EB_MASTER_WRITE = Object.freeze({
  firstOriginalSha:'3ab818826c1a4da6dd4848ec94c5b857d5af7aadbd71085b95928e1e692b7394',
  expectedName:'ABOVE_MATERIALS_STATUS_Stock_Updated_2026-09-20.xlsx',
  prop:'EXPRESS_BRIDGE_MASTER_REGISTER_LAST_XML_SHA_V1',
+ preparedProp:'EXPRESS_BRIDGE_PREPARED_QA_V2',
  maxBytes:20000000,
  paths:['xl/worksheets/sheet12.xml','xl/worksheets/sheet13.xml'],
 });
-function EB_masterMakePayload_(isWrite) {
+function EB_masterMakePayload_(isWrite, prepareQA) {
  const file=DriveApp.getFileById(EB_MASTER_WRITE.original);
  if(file.getId()!==EB_MASTER_WRITE.original||file.getName()!==EB_MASTER_WRITE.expectedName||
     file.getMimeType()!=='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
@@ -36,16 +37,27 @@ function EB_masterMakePayload_(isWrite) {
  const first=!has[0];let zip=null;
  const prop=PropertiesService.getScriptProperties();
  if(first){
-  if(srcHash!==EB_MASTER_WRITE.firstOriginalSha)throw Error('MASTER_BASE_REVISION_HOLD');
-  const qa=DriveApp.getFileById(EB_MASTER_WRITE.qaCopy);
-  if(qa.getName()!=='QA_Express_Append_OriginalWorkbook_SameID_2026-10-22.xlsx')throw Error('QA_REFERENCE_IDENTITY_HOLD');
-  const candidate=qa.getBlob();zip=candidate;
-  const parts=expressBridgeAppendQAParts_(candidate);
-  EB_qaUnchangedOriginal_(before,parts);
-  EB_qaProveSheetNames_(parts);
-  EB_MASTER_WRITE.paths.forEach((path,i)=>{
-   if(parts.map[path].getDataAsString('UTF-8')!==xml[i])throw Error('QA_REGISTRY_SOURCE_MISMATCH_HOLD');
-  });
+  const expected=EB_masterAppendCandidate_(before,xml);
+  if(prepareQA){zip=expected;}else{
+   let receipt=null;
+   try{receipt=JSON.parse(prop.getProperty(EB_MASTER_WRITE.preparedProp)||'null')}catch(_){}
+   const legacy=srcHash===EB_MASTER_WRITE.firstOriginalSha;
+   if(!legacy&&(!receipt||receipt.masterSha!==srcHash))throw Error('MASTER_BASE_REVISION_HOLD');
+   const qaId=legacy?EB_MASTER_WRITE.qaCopy:receipt.qaId;
+   if(!qaId||qaId===EB_MASTER_WRITE.original)throw Error('QA_REFERENCE_IDENTITY_HOLD');
+   const qa=DriveApp.getFileById(qaId);
+   if(qa.getMimeType()!==file.getMimeType()||
+      (!legacy&&EB_qaHash_(qa.getBlob().getBytes())!==receipt.candidateHash))
+     throw Error('QA_REFERENCE_IDENTITY_HOLD');
+   const candidate=qa.getBlob(),parts=expressBridgeAppendQAParts_(candidate);
+   const generated=expressBridgeAppendQAParts_(expected);
+   // Compare EVERY part, including workbook relationships/content types.
+   EB_masterSameParts_(generated,parts);
+   EB_MASTER_WRITE.paths.forEach((path,i)=>{
+    if(parts.map[path].getDataAsString('UTF-8')!==xml[i])throw Error('QA_REGISTRY_SOURCE_MISMATCH_HOLD');
+   });
+   zip=candidate;
+  }
  }else{
   EB_qaProveSheetNames_(before);
   const current=EB_MASTER_WRITE.paths.map(x=>EB_qaHashText_(p[x].getDataAsString('UTF-8'))).join('|');
@@ -61,6 +73,53 @@ function EB_masterMakePayload_(isWrite) {
  return {status:'DELTA_READY',first:first,file:file,sourceBlob:srcBlob,originalHash:srcHash,
   candidate:zip,sources:sources,wanted:wanted,xml:xml,documents:map.documents,lines:map.lines,
   sourceReview:merged.counts.held,unassigned:merged.docs.filter(x=>!x.plot.length).length,skippedCanceled:merged.skippedCanceled};
+}
+// Build on the CURRENT original package; never restore sheets from a stale QA copy.
+function EB_masterAppendCandidate_(before,xml){
+ const cfg=EXPRESS_BRIDGE_APPEND_QA_20261022;
+ const original=expressBridgeAppendQAValidateSource_(before),updated={};
+ if(cfg.rIds.some(id=>original.rel.includes('Id="'+id+'"')))
+  throw Error('MASTER_REGISTER_RELATION_COLLISION');
+ updated['xl/workbook.xml']=expressBridgeAppendQAOnlyOnce_(original.book,'</x:sheets>',
+  cfg.sheetNames.map((name,i)=>'<x:sheet name="'+name+'" sheetId="'+(12+i)+'" r:id="'+cfg.rIds[i]+'" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" />').join(''),'workbook');
+ updated['xl/_rels/workbook.xml.rels']=expressBridgeAppendQAOnlyOnce_(original.rel,'</Relationships>',
+  cfg.sheetPaths.map((path,i)=>'<Relationship Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="/'+path+'" Id="'+cfg.rIds[i]+'" />').join(''),'relationships');
+ updated['[Content_Types].xml']=expressBridgeAppendQAOnlyOnce_(original.types,'</Types>',
+  cfg.sheetPaths.map(path=>'<Override PartName="/'+path+'" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml" />').join(''),'contenttypes');
+ const out=before.list.map(part=>Object.prototype.hasOwnProperty.call(updated,part.getName())?
+  Utilities.newBlob(updated[part.getName()],'text/xml',part.getName()):part);
+ cfg.sheetPaths.forEach((path,i)=>out.push(Utilities.newBlob(xml[i],'text/xml',path)));
+ const candidate=Utilities.zip(out,'Express_Current_Master_QA.xlsx');
+ candidate.setContentType('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+ EB_qaUnchangedOriginal_(before,expressBridgeAppendQAParts_(candidate));
+ return candidate;
+}
+function EB_masterSameParts_(expected,actual){
+ const names=Object.keys(expected.map).sort();
+ if(JSON.stringify(names)!==JSON.stringify(Object.keys(actual.map).sort()))throw Error('QA_REGISTRY_PACKAGE_MISMATCH');
+ for(const name of names)if(EB_qaHash_(expected.map[name].getBytes())!==EB_qaHash_(actual.map[name].getBytes()))
+  throw Error('QA_REGISTRY_SOURCE_MISMATCH_HOLD: '+name);
+}
+// Scoped QA-only refresh. Does not enable either production write flag.
+function expressBridgeMasterPrepareQA20261027(){
+ const lock=LockService.getScriptLock();if(!lock.tryLock(30000))throw Error('MASTER_IMPORT_LOCK_BUSY');
+ try{
+  const state=EB_masterMakePayload_(false,true);
+  if(!state.first)throw Error('MASTER_ALREADY_HAS_REGISTER_USE_EXISTING_UPDATE_PATH');
+  EB_qaVerifyFolderUnchanged_(state.sources);
+  if(EB_qaHash_(state.file.getBlob().getBytes())!==state.originalHash)throw Error('MASTER_CHANGED_PRE_COMMIT');
+  const qa=DriveApp.getFolderById(EB_MASTER_WRITE.qaFolder).createFile(state.candidate);
+  if(qa.getId()===EB_MASTER_WRITE.original)throw Error('QA_REFERENCE_IDENTITY_HOLD');
+  const readback=qa.getBlob();
+  EB_masterSameParts_(expressBridgeAppendQAParts_(state.candidate),expressBridgeAppendQAParts_(readback));
+  EB_qaVerifyFolderUnchanged_(state.sources);
+  if(EB_qaHash_(state.file.getBlob().getBytes())!==state.originalHash)throw Error('MASTER_CHANGED_DURING_QA');
+  const receipt={masterSha:state.originalHash,qaId:qa.getId(),candidateHash:EB_qaHash_(readback.getBytes())};
+  PropertiesService.getScriptProperties().setProperty(EB_MASTER_WRITE.preparedProp,JSON.stringify(receipt));
+  const result={status:'CURRENT_MASTER_QA_READBACK_PASS',qaFileId:receipt.qaId,
+   documents:state.documents,lines:state.lines,mutationOriginal:0,mutationSupabase:0};
+  console.log('EXPRESS_BRIDGE_MASTER_QA '+JSON.stringify(result));return result;
+ }finally{lock.releaseLock()}
 }
 function expressBridgeMasterImportDryRun20261022(){
  const state=EB_masterMakePayload_(false);

@@ -9,6 +9,10 @@ import {logActivity} from '@/lib/activityLog'
 import {useI18n} from '@/components/I18nProvider'
 import type {AppLanguage} from '@/lib/i18n'
 import {WORK_CALENDARS,getWorkCalendar} from '@/lib/workCalendars'
+import {canAccessPath} from '@/lib/accessControl'
+import {DEFECT_WORK_PLAN_CALENDAR,buildDefectPlanCalendarEvents} from '@/lib/defectWorkPlanCalendar'
+import type {DefectPlanDay,DefectPlanRoom} from '@/lib/defectWorkPlanCalendar'
+import Link from 'next/link'
 
 type CalendarMode='MONTH'|'WEEK'|'AGENDA'
 type ConnectionState='checking'|'shared'|'unconfigured'
@@ -21,7 +25,7 @@ type GoogleEventApi={
   start:{date?:string;dateTime?:string}
   end:{date?:string;dateTime?:string}
 }
-type WorkEvent=GoogleEventApi&{calendarId:string;calendarLabel:string;calendarColor:string}
+type WorkEvent=GoogleEventApi&{calendarId:string;calendarLabel:string;calendarColor:string;managedWorkPlan?:boolean;firstRoom?:string;dayNo?:number}
 type LocalCalendar={id:string;name:string;color:string;active:boolean}
 type LocalEvent={id:string;calendar_id:string;event_date:string;title:string;detail:string|null}
 type ProcurementOption={id:string;vendor:string|null;item_name:string;po_no:string|null;actual_delivery:string|null}
@@ -42,6 +46,7 @@ type EventDraft={
 
 const STORAGE_SELECTION='3kings:google-calendar:selected'
 const STORAGE_MODE='3kings:google-calendar:mode'
+const STORAGE_DEFECT_PLAN_INTRO='3kings:work-plan-defect-calendar:v1'
 const MAX_MONTH_EVENTS=3
 
 function todayBangkok(){
@@ -123,10 +128,11 @@ export function GoogleCalendarManager(){
   const {role,userId,ready}=useAccessRole()
   const editable=canEditCalendar(role)
   const canLinkProcurement=canEditProcurement(role)
+  const canViewDefectPlan=role!==null&&canAccessPath(role,'/hotel-work-plan')
   const [connection,setConnection]=useState<ConnectionState>('checking')
   const [ownerSetupRequired,setOwnerSetupRequired]=useState(false)
   const [appToken,setAppToken]=useState('')
-  const [selected,setSelected]=useState<string[]>(()=>WORK_CALENDARS.map(row=>row.id))
+  const [selected,setSelected]=useState<string[]>(()=>[...WORK_CALENDARS.map(row=>row.id),DEFECT_WORK_PLAN_CALENDAR.id])
   const [mode,setMode]=useState<CalendarMode>('MONTH')
   const [focusDate,setFocusDate]=useState(todayBangkok())
   const [events,setEvents]=useState<WorkEvent[]>([])
@@ -135,6 +141,7 @@ export function GoogleCalendarManager(){
   const [setupBusy,setSetupBusy]=useState(false)
   const [message,setMessage]=useState('')
   const [draft,setDraft]=useState<EventDraft|null>(null)
+  const [managedPlanRoom,setManagedPlanRoom]=useState('')
   const [localCalendars,setLocalCalendars]=useState<LocalCalendar[]>([])
   const [procurementOptions,setProcurementOptions]=useState<ProcurementOption[]>([])
   const [deliveryLinks,setDeliveryLinks]=useState<DeliveryLink[]>([])
@@ -148,8 +155,11 @@ export function GoogleCalendarManager(){
   const allCalendars=useMemo(()=>[
     ...WORK_CALENDARS.map(row=>({...row,source:'google' as const})),
     ...localCalendars.filter(row=>row.active).map(row=>({id:row.id,label:row.name,color:row.color,source:'web' as const})),
-  ],[localCalendars])
+    ...(canViewDefectPlan?[{...DEFECT_WORK_PLAN_CALENDAR,source:'managed' as const}]:[]),
+  ],[localCalendars,canViewDefectPlan])
   const localCalendarIds=useMemo(()=>new Set(localCalendars.map(row=>row.id)),[localCalendars])
+  const managedPlanSelected=canViewDefectPlan&&selected.includes(DEFECT_WORK_PLAN_CALENDAR.id)
+  const managedPlanDraft=draft?.calendarId===DEFECT_WORK_PLAN_CALENDAR.id
 
   async function refreshLocalCalendars(){
     const {data,error}=await getSupabase().from('work_calendars')
@@ -209,9 +219,22 @@ export function GoogleCalendarManager(){
       const savedSelection=window.localStorage.getItem(STORAGE_SELECTION)
       if(savedSelection){
         const parsed=JSON.parse(savedSelection)
-        if(Array.isArray(parsed))setSelected(parsed.filter((value):value is string=>typeof value==='string'&&value.length<=250))
+        if(Array.isArray(parsed)){
+          const allowed=parsed.filter((value):value is string=>typeof value==='string'&&value.length<=250)
+          setSelected(!window.localStorage.getItem(STORAGE_DEFECT_PLAN_INTRO)
+            ?[...new Set([...allowed,DEFECT_WORK_PLAN_CALENDAR.id])]:allowed)
+        }
       }
-      const savedMode=window.localStorage.getItem(STORAGE_MODE)
+      window.localStorage.setItem(STORAGE_DEFECT_PLAN_INTRO,'1')
+       const params=new URLSearchParams(window.location.search)
+       if(params.get('view')==='work-plan-defect'){
+         setSelected([DEFECT_WORK_PLAN_CALENDAR.id])
+         const chosen=params.get('date')
+         if(chosen&&/^\d{4}-\d{2}-\d{2}$/.test(chosen))setFocusDate(chosen)
+         setMode('MONTH')
+         return
+       }
+       const savedMode=window.localStorage.getItem(STORAGE_MODE)
       if(savedMode==='MONTH'||savedMode==='WEEK'||savedMode==='AGENDA')setMode(savedMode)
     }catch{}
   },[])
@@ -318,6 +341,23 @@ export function GoogleCalendarManager(){
   },[events])
   const agendaEvents=useMemo(()=>events.slice().sort((a,b)=>(a.start.dateTime||a.start.date||'').localeCompare(b.start.dateTime||b.start.date||'')),[events])
 
+  async function loadDefectPlanEvents(){
+    const client=getSupabase()
+    const [days,rooms]=await Promise.all([
+      client.from('hotel_work_plan_days').select('day_no,planned_date,note').order('day_no'),
+      client.from('hotel_work_plan_rooms').select('seq_no,day_no,room_no,source_room,planned_date_override').order('seq_no'),
+    ])
+    if(days.error)throw days.error
+    if(rooms.error)throw rooms.error
+    if((days.data||[]).length!==9||(rooms.data||[]).length!==267)
+      throw Error('Work Plan ไม่ครบ 9 วัน / 267 รายการ — ปฏิทินไม่ถูกแทนที่')
+    return buildDefectPlanCalendarEvents(
+      (days.data||[]) as DefectPlanDay[],
+      (rooms.data||[]) as DefectPlanRoom[],
+      fetchWindow.start,fetchWindow.end,
+    )
+  }
+
   async function loadEvents(){
     if(connection==='checking'||!appToken)return
     if(!selected.length){setEvents([]);return}
@@ -350,11 +390,32 @@ export function GoogleCalendarManager(){
         .select('event_key,last_item_id').limit(1000)
       if(linksError)throw linksError
       setDeliveryLinks((links||[]) as DeliveryLink[])
-      setEvents([...googleResults.flat(),...localEvents])
+      const defectPlanEvents=managedPlanSelected?await loadDefectPlanEvents():[]
+      setEvents([...googleResults.flat(),...localEvents,...defectPlanEvents])
     }catch(error){setMessage('โหลดปฏิทินไม่สำเร็จ: '+errorMessage(error))}
     finally{setLoading(false)}
   }
-  useEffect(()=>{if(connection!=='checking'&&appToken)void loadEvents()},[connection,appToken,selected.join('|'),fetchWindow.start,fetchWindow.end,localCalendars])
+  useEffect(()=>{if(connection!=='checking'&&appToken)void loadEvents()},[connection,appToken,selected.join('|'),fetchWindow.start,fetchWindow.end,localCalendars,canViewDefectPlan])
+
+  // Excel imports arrive via Supabase without touching Google Calendar.
+  // Refresh only the generated layer every minute / when refocusing; Google events stay untouched.
+  useEffect(()=>{
+    if(!ready||connection==='checking'||!appToken||!managedPlanSelected)return
+    let alive=true
+    const refreshPlan=async()=>{
+      try{
+        const rows=await loadDefectPlanEvents()
+        if(alive)setEvents(current=>[
+          ...current.filter(event=>event.calendarId!==DEFECT_WORK_PLAN_CALENDAR.id),
+          ...rows,
+        ])
+      }catch(error){if(alive)setMessage('โหลด Work Plan Defect ไม่สำเร็จ: '+errorMessage(error))}
+    }
+    const onFocus=()=>{void refreshPlan()}
+    window.addEventListener('focus',onFocus)
+    const interval=window.setInterval(()=>{void refreshPlan()},60_000)
+    return()=>{alive=false;window.clearInterval(interval);window.removeEventListener('focus',onFocus)}
+  },[ready,connection,appToken,managedPlanSelected,fetchWindow.start,fetchWindow.end])
 
   async function beginOwnerSetup(){
     if(role!=='owner'||!appToken)return
@@ -373,11 +434,13 @@ export function GoogleCalendarManager(){
   }
   function openCreate(dateKey:string){
     if(!editable||(connection!=='shared'&&!localCalendars.length))return
-    const first=selected.find(id=>allCalendars.some(c=>c.id===id))||allCalendars[0]?.id
+    const first=selected.find(id=>id!==DEFECT_WORK_PLAN_CALENDAR.id&&allCalendars.some(c=>c.id===id))
+      ||allCalendars.find(c=>c.id!==DEFECT_WORK_PLAN_CALENDAR.id)?.id
     if(!first)return
     setDraft(emptyDraft(first,dateKey));setMessage('')
   }
   function openEdit(event:WorkEvent){
+    setManagedPlanRoom(event.managedWorkPlan?event.firstRoom||'':'')
     const matched=deliveryLinks.find(row=>row.event_key==='g:'+event.calendarId+':'+event.id)
     setDraft({...draftFromEvent(event),procurementItemId:matched?.last_item_id||''});setMessage('')
   }
@@ -393,7 +456,7 @@ export function GoogleCalendarManager(){
   }
 
   async function saveEvent(){
-    if(!draft||!editable||!draft.title.trim())return
+    if(!draft||!editable||draft.calendarId===DEFECT_WORK_PLAN_CALENDAR.id||!draft.title.trim())return
     if(draft.procurementItemId&&!canLinkProcurement){setMessage('การแก้ไขวันส่งวัสดุต้องใช้สิทธิ์ Purchase/Owner');return}
     if(draft.procurementItemId&&localCalendarIds.has(draft.calendarId)){
       setMessage('รายการผูกวันจัดซื้อให้เลือกปฏิทิน Google เดิม (เช่น กำหนดส่ง-ของเข้าหน้างาน)')
@@ -439,7 +502,7 @@ export function GoogleCalendarManager(){
   }
 
   async function deleteEvent(){
-    if(!draft?.eventId||!editable)return
+    if(!draft?.eventId||!editable||draft.calendarId===DEFECT_WORK_PLAN_CALENDAR.id)return
     if(draft.procurementItemId&&!canLinkProcurement)return
     if(!localCalendarIds.has(draft.calendarId)&&connection!=='shared')return
     if(!window.confirm('ลบ “'+(draft.title||'รายการนี้')+'” ออกจากปฏิทินจริงใช่หรือไม่?'+(draft.procurementItemId?' ระบบจะยกเลิกวันที่กำหนดส่งที่เชื่อมโยงด้วย':'')))return
@@ -536,13 +599,13 @@ export function GoogleCalendarManager(){
             </div>
           </div>}
         </>}
-        <p>Source: Google Calendar / Web App</p>
+        <p>Source: Google Calendar / Web App / Work Plan Defect (อ่านอย่างเดียว)</p>
       </aside>
 
       <main className="panel gcal-stage">
         {message&&<div className="notice gcal-message">{message}</div>}
         {loading&&<div className="gcal-loading">กำลังโหลดปฏิทิน…</div>}
-        {connection==='checking'?<div className="gcal-empty">กำลังตรวจสอบการเชื่อมต่อ…</div>:connection!=='shared'&&!selected.some(id=>localCalendarIds.has(id))?<>
+        {connection==='checking'?<div className="gcal-empty">กำลังตรวจสอบการเชื่อมต่อ…</div>:connection!=='shared'&&!selected.some(id=>localCalendarIds.has(id))&&!managedPlanSelected?<>
           {readOnlyEmbedUrl?<iframe key={readOnlyEmbedUrl} className="gcal-frame" src={readOnlyEmbedUrl} title="3 Kings Google Calendar" loading="eager" referrerPolicy="strict-origin-when-cross-origin"/>:<div className="gcal-empty">เลือกอย่างน้อย 1 ปฏิทิน</div>}
         </>:<>
           {mode==='MONTH'&&<>
@@ -568,12 +631,12 @@ export function GoogleCalendarManager(){
 
     {draft&&<div className="gcal-modal-backdrop" role="presentation" onMouseDown={event=>{if(event.currentTarget===event.target&&!saving)setDraft(null)}}>
       <section className="gcal-modal" role="dialog" aria-modal="true">
-        <div className="gcal-modal-head"><div><b>{!editable?'รายละเอียดรายการ':draft.eventId?'แก้ไขรายการ':'เพิ่มรายการ'}</b><small>{draft.recurring?'รายการซ้ำ • แก้ไข/ลบเฉพาะครั้งที่เลือก':localCalendarIds.has(draft.calendarId)?'ปฏิทิน Web App • 1 วันต่อรายการ':'บันทึกลง Google Calendar ส่วนกลาง'}</small></div><button type="button" className="button" disabled={saving} onClick={()=>setDraft(null)}>ปิด</button></div>
+        <div className="gcal-modal-head"><div><b>{managedPlanDraft?'แผนเข้าเก็บ Defect (อ่านอย่างเดียว)':!editable?'รายละเอียดรายการ':draft.eventId?'แก้ไขรายการ':'เพิ่มรายการ'}</b><small>{managedPlanDraft?'ซิงก์จาก Work Plan Defect โดยตรง • แก้ไขแผนจาก Work Plan':draft.recurring?'รายการซ้ำ • แก้ไข/ลบเฉพาะครั้งที่เลือก':localCalendarIds.has(draft.calendarId)?'ปฏิทิน Web App • 1 วันต่อรายการ':'บันทึกลง Google Calendar ส่วนกลาง'}</small></div><button type="button" className="button" disabled={saving} onClick={()=>setDraft(null)}>ปิด</button></div>
         <div className="gcal-form">
-          <label>ปฏิทิน<select value={draft.calendarId} disabled={!!draft.eventId||!editable} onChange={event=>setDraft(current=>current?{...current,calendarId:event.target.value,allDay:localCalendarIds.has(event.target.value)?true:current.allDay,endDate:localCalendarIds.has(event.target.value)?current.startDate:current.endDate}:current)}>{allCalendars.map(calendar=><option key={calendar.id} value={calendar.id}>{calendar.label}</option>)}</select></label>
-          <label>รายการ<input disabled={!editable} value={draft.title} onChange={event=>setDraft(current=>current?{...current,title:event.target.value}:current)} placeholder="ชื่องาน / นัดหมาย"/></label>
-          <label className="gcal-wide">รายละเอียด<textarea disabled={!editable} value={draft.detail} onChange={event=>setDraft(current=>current?{...current,detail:event.target.value}:current)} placeholder="รายละเอียดเพิ่มเติม"/></label>
-          {canLinkProcurement&&!localCalendarIds.has(draft.calendarId)&&<div className="gcal-wide gcal-procurement-link">
+          <label>ปฏิทิน<select value={draft.calendarId} disabled={!!draft.eventId||!editable||managedPlanDraft} onChange={event=>setDraft(current=>current?{...current,calendarId:event.target.value,allDay:localCalendarIds.has(event.target.value)?true:current.allDay,endDate:localCalendarIds.has(event.target.value)?current.startDate:current.endDate}:current)}>{allCalendars.filter(calendar=>calendar.id!==DEFECT_WORK_PLAN_CALENDAR.id||managedPlanDraft).map(calendar=><option key={calendar.id} value={calendar.id}>{calendar.label}</option>)}</select></label>
+          <label>รายการ<input disabled={!editable||managedPlanDraft} value={draft.title} onChange={event=>setDraft(current=>current?{...current,title:event.target.value}:current)} placeholder="ชื่องาน / นัดหมาย"/></label>
+          <label className="gcal-wide">รายละเอียด<textarea disabled={!editable||managedPlanDraft} value={draft.detail} onChange={event=>setDraft(current=>current?{...current,detail:event.target.value}:current)} placeholder="รายละเอียดเพิ่มเติม"/></label>
+          {canLinkProcurement&&!managedPlanDraft&&!localCalendarIds.has(draft.calendarId)&&<div className="gcal-wide gcal-procurement-link">
             <label>เชื่อมกับวันกำหนดส่งวัสดุ/จัดซื้อ (เฉพาะรายการที่ยังไม่รับของ)
               <input value={procurementQuery} onChange={event=>setProcurementQuery(event.target.value)} placeholder="ค้นหาชื่อวัสดุ / PO / ผู้ขาย"/>
               <select value={draft.procurementItemId} disabled={!editable} onChange={event=>setDraft(current=>current?{...current,procurementItemId:event.target.value}:current)}>
@@ -584,15 +647,17 @@ export function GoogleCalendarManager(){
             </label>
             <small>เลือกใบสั่งซื้อที่ตรงกันและบันทึก: วันกำหนดส่งในหน้า Materials/Procurement จะอัปเดตผ่านชั้นข้อมูล Web App โดยไม่เขียนทับ PR/PO ต้นฉบับ</small>
           </div>}
-          {draft.procurementItemId&&!canLinkProcurement&&<small className="gcal-wide">กิจกรรมนี้เชื่อมวันส่งวัสดุ ผู้มีสิทธิ์ Purchase/Owner เท่านั้นที่แก้ไขได้</small>}
-          <label className="gcal-checkbox"><input type="checkbox" disabled={!editable||localCalendarIds.has(draft.calendarId)} checked={draft.allDay} onChange={event=>setDraft(current=>current?{...current,allDay:event.target.checked}:current)}/><span>ทั้งวัน</span></label>
-          {draft.allDay?<><label>วันที่เริ่ม<input type="date" disabled={!editable} value={draft.startDate} onChange={event=>setDraft(current=>current?{...current,startDate:event.target.value,endDate:localCalendarIds.has(current.calendarId)?event.target.value:current.endDate}:current)}/></label><label>วันที่สิ้นสุด<input type="date" disabled={!editable||localCalendarIds.has(draft.calendarId)} value={draft.endDate} onChange={event=>setDraft(current=>current?{...current,endDate:event.target.value}:current)}/></label></>:<><label>เริ่ม<input type="datetime-local" disabled={!editable} value={draft.startDateTime} onChange={event=>setDraft(current=>current?{...current,startDateTime:event.target.value}:current)}/></label><label>สิ้นสุด<input type="datetime-local" disabled={!editable} value={draft.endDateTime} onChange={event=>setDraft(current=>current?{...current,endDateTime:event.target.value}:current)}/></label></>}
+          {draft.procurementItemId&&!canLinkProcurement&&!managedPlanDraft&&<small className="gcal-wide">กิจกรรมนี้เชื่อมวันส่งวัสดุ ผู้มีสิทธิ์ Purchase/Owner เท่านั้นที่แก้ไขได้</small>}
+          <label className="gcal-checkbox"><input type="checkbox" disabled={!editable||managedPlanDraft||localCalendarIds.has(draft.calendarId)} checked={draft.allDay} onChange={event=>setDraft(current=>current?{...current,allDay:event.target.checked}:current)}/><span>ทั้งวัน</span></label>
+          {draft.allDay?<><label>วันที่เริ่ม<input type="date" disabled={!editable||managedPlanDraft} value={draft.startDate} onChange={event=>setDraft(current=>current?{...current,startDate:event.target.value,endDate:localCalendarIds.has(current.calendarId)?event.target.value:current.endDate}:current)}/></label><label>วันที่สิ้นสุด<input type="date" disabled={!editable||managedPlanDraft||localCalendarIds.has(draft.calendarId)} value={draft.endDate} onChange={event=>setDraft(current=>current?{...current,endDate:event.target.value}:current)}/></label></>:<><label>เริ่ม<input type="datetime-local" disabled={!editable||managedPlanDraft} value={draft.startDateTime} onChange={event=>setDraft(current=>current?{...current,startDateTime:event.target.value}:current)}/></label><label>สิ้นสุด<input type="datetime-local" disabled={!editable||managedPlanDraft} value={draft.endDateTime} onChange={event=>setDraft(current=>current?{...current,endDateTime:event.target.value}:current)}/></label></>}
         </div>
-        <div className="gcal-modal-actions">{draft.eventId&&editable&&<button type="button" className="button danger" disabled={saving} onClick={deleteEvent}>ลบรายการ</button>}<div><button type="button" className="button" disabled={saving} onClick={()=>setDraft(null)}>ยกเลิก</button>{editable&&<button type="button" className="button primary" disabled={saving||!draft.title.trim()} onClick={saveEvent}>{saving?'กำลังบันทึก…':'บันทึก'}</button>}</div></div>
+        {managedPlanDraft&&managedPlanRoom&&<div className="gcal-managed-work-plan"><p>รายการนี้สร้างจาก Work Plan Defect อัตโนมัติ หากต้องการเลื่อนวันหรือย้ายรายการห้อง ให้แก้ที่หน้า Work Plan Defect</p><Link className="button" href={'/hotel-work-plan?room='+encodeURIComponent(managedPlanRoom)}>ไปแก้ไข Work Plan Defect</Link></div>}
+        <div className="gcal-modal-actions">{draft.eventId&&editable&&!managedPlanDraft&&<button type="button" className="button danger" disabled={saving} onClick={deleteEvent}>ลบรายการ</button>}<div><button type="button" className="button" disabled={saving} onClick={()=>setDraft(null)}>ยกเลิก</button>{editable&&!managedPlanDraft&&<button type="button" className="button primary" disabled={saving||!draft.title.trim()} onClick={saveEvent}>{saving?'กำลังบันทึก…':'บันทึก'}</button>}</div></div>
       </section>
     </div>}
 
     <style jsx>{`
+      .gcal-managed-work-plan{margin:10px 0;padding:10px;background:#f7f3f0;border:1px solid #ead4c8;border-radius:9px;font-size:11px}.gcal-managed-work-plan p{margin:0 0 9px}
       .gcal-shell{display:grid;gap:8px}.gcal-loading-card{padding:12px}
       .gcal-owner-setup{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-color:#ead59a;background:#fffaf0}.gcal-owner-setup>div{display:grid;gap:1px}.gcal-owner-setup b{font-size:10.5px;color:#5f4b12}.gcal-owner-setup small{font-size:8.5px;color:#837347}
       .gcal-controls{display:grid;grid-template-columns:auto auto minmax(130px,1fr) auto;gap:7px;align-items:center;padding:7px 8px}.gcal-view-tabs{display:flex;gap:3px;padding:2px;background:#eef2f6;border-radius:9px}.gcal-view-tabs button,.gcal-selection-actions button{border:0;background:transparent;cursor:pointer;font:inherit}.gcal-view-tabs button{min-height:28px;padding:4px 10px;border-radius:7px;color:#5f6f82;font-size:10px;font-weight:800}.gcal-view-tabs button.active{background:#172a43;color:#fff}.gcal-nav{display:flex;gap:4px}.gcal-nav .button{min-height:30px;padding:5px 9px;font-size:9.5px}.gcal-period{text-align:center;color:#172a43;font-size:11px}.gcal-selection-actions{display:flex;justify-content:flex-end;gap:3px}.gcal-selection-actions button{padding:5px 6px;border-radius:6px;color:#294968;font-size:9px;font-weight:700}

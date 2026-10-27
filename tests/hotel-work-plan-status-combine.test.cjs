@@ -8,6 +8,8 @@ const common=read('lib/defectStatusPresentation.ts')
 const sql=read('supabase/migrations/20261014154000_hotel_work_plan_combine_save.sql')
 const groups=read('lib/hotelRoomGroups.ts')
 const css=read('app/defects/print.css')
+// Run the consolidated All/day-card/print contracts in the existing required CI job.
+require('./hotel-work-plan-all-print.test.cjs')
 
 test('Work Plan and Defect Report use the exact same label, tone, and color system',()=>{
  assert.match(report,/import \{DEFECT_AWAITING_ACCEPTANCE_LABEL,statusLabel,statusTone\} from '@\/lib\/defectStatusPresentation'/)
@@ -51,4 +53,16 @@ test('Combine writes are atomic, revision checked, audited and keep other module
  const nextActionCell=report.indexOf("<td>{r.next_action||r.follow_up||'-'}")
  assert.ok(workPlanCell>=0&&nextActionCell>workPlanCell,'Work Plan/Hotel Status column precedes remaining work, including Combine member details')
  assert.match(css,/\.defect-table th:nth-child\(9\)/)
+})
+
+test('Consolidated PR120+PR126 keeps filter numbering and complete Combine labels while preserving save identity',()=>{
+ assert.ok(plan.includes('<th>ลำดับ</th>'))
+ assert.ok(plan.includes('{filtered.map((r,index)=>{'))
+ assert.ok(plan.includes('<tr key={r.seq_no}><td>{index+1}</td>'))
+ assert.ok(plan.includes("Combine: {hotelRoomMembers(r.room_no).map(hotelRoomLabel).join(' + ')}"))
+ assert.ok(plan.includes("Combine: {hotelRoomMembers(selected.room_no).map(hotelRoomLabel).join(' + ')}"))
+ assert.ok(plan.includes('className="work-combine-symbol"'))
+ assert.ok(plan.includes('className="work-combine-badge"'))
+ assert.ok(plan.includes('p_seq:selected.seq_no'))
+ assert.ok(plan.includes('setSelectedSeq(r.seq_no)'))
 })
