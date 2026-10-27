@@ -1,0 +1,34 @@
+# 3 Kings Daily AutoFlow — Independent Verification & Unfinished Acceptance Gates
+Checked: 2026-10-27 (Asia/Bangkok)
+Source: latest Google Drive 00-SOP_INDEX ACTIVE, SOP EX/SUP-PUBLISH v3.2, Supabase Production, Cloudflare settings, Drive metadata, GitHub branch, and Antigravity's 2026-10-27 handoff report.
+
+## Important correction to the preceding "PASS_AND_VERIFIED_CLOSURE" report
+
+**Overall outcome is PARTIAL / NOT E2E VERIFIED, not production-complete.** Antigravity's `inspect_only` test verifies that the repaired GAS can locate existing PDF/PNG files. It does **not** prove successful `daily_line_stage_asset`, `daily_line_finalize`, authorized `daily_line_ready(...).ready=true`, or the next day's automatic LINE dispatch.
+
+Evidence independently checked:
+- Daily report **2026-10-23**: Supabase `line_autopilot.daily_report_assets` has 4 rows; `daily_report_runs` has 1 row; Owner delivery ledger shows `delivered` and HTTP 200 on 2026-10-24.
+- Daily reports **2026-10-24 and 2026-10-26**: Drive contains PDF + 4 PNG files for each date, but neither date had Gateway assets nor a finalized run at time of this check. This historical gap must not be filled merely to test LINE sending.
+- Google Apps Script project file ID `1sKddwvs-DOav0ltdrcxyqPXYinXE3uCgFKmDzGu_XEb4VvMvYVwDUDeT` has Google Drive modifiedTime `2026-10-27T07:44:32.722Z`. This is evidence of a changed Drive file, NOT proof that the claimed Web App Version 11 and the scheduled trigger invoke identical code.
+- Git commit `e2e42aaa0a506c3d4733852a9519cf2a605faa1d` changes only the handoff Markdown; the repaired GAS source and manifest are **not contained in that Git commit**. Preserve the private/local GAS workspace and reconcile the real live source before making further edits.
+- On 2026-10-27 the Form response sheet held 10 rows with report_date `27/10/2026` (latest observed row 474); the monthly master metadata showed no `271026` tab at check time and the Drive search did not locate that day's published PDF. Because the working day had not necessarily ended, treat these as **pending preparation**, not a final failure. Confirm they are ready before the next morning's Publisher.
+- Monthly Native Master Google Sheet metadata shows `timeZone=America/Los_Angeles`, whereas the Form sheet is `Etc/GMT-7` and the job policy is Asia/Bangkok. Validate date parsing/formatting without changing the workbook's timezone casually.
+- Database `public.daily_line_finalize` still enforces `service_role`, nine core QA flags, and for report dates >=2026-10-20 the flags `sopSheetsV2Read`, `sopPublishV2Read`, and `sheetReadbackVerified`. Currently ACTIVE SOP is canonical v3.2. Do not claim that a v3.2 read is equivalent to having independently read archived v2 docs. Investigate exact live Publisher QA evidence; avoid fabricated true flags.
+- Antigravity reports that GAS `appsscript.json` Web App was changed to `access: ANYONE`, `executeAs: USER_DEPLOYING`, and that file discovery gained an unrestricted `DriveApp.getFilesByName` fallback. **Security and source-identity review is still necessary**: ensure unauthenticated `doGet` cannot disclose sensitive business data, `doPost` is authenticated with replay guard, and global name matching cannot silently select an identically named file from the wrong folder. Restrict access if feasible without breaking the documented invoking path; do not disable RLS or service-role requirements.
+
+## Work to complete using Antigravity at home (Windows user 501915)
+
+1. **SOP gate**: re-read current ACTIVE Index, EX + SUP-PUBLISH v3.2; use relevant SOP15/16 when changing/deploying code; check real authorization and production blast radius.
+2. **Live GAS readback**: use existing authorized Apps Script API/clasp credentials on the home computer to fetch live HEAD, Version 11, deployment manifest, trigger definition and run history. Compare actual source SHA and code paths. Check `dailyLineGatewayScheduled0730` performs *Stage + Finalize*, not just `inspect_only`; distinguish hourly reconciliation, 07:30 ChatGPT Automation and GAS trigger.
+3. **Producer readiness**: verify Form delta, Native Master, 4-page PDF and 4 PNGs for **the actual previous workday** will exist and be QA-verified before the publisher runs. Avoid a race if Form-to-PDF publishing starts at the same time as a once-daily Gateway trigger. Reuse an existing authorized run/reconciliation mechanism rather than adding a new scheduler, Worker, sender or blindly retrying.
+4. **Correct minimum code bugs**: ensure deterministic YYYY-MM-DD BKK target date (Mon→Sat, Sun SKIP); unique verified Drive **parent chain** and file IDs; stage PNG bytes/hash via existing service-role interface only; exact manifest/hash QA; no duplicate if rerun; supported SOP proof mapping; clear scoped error logging without leaking secrets. Keep ALL other script functions untouched.
+5. **Security regression**: assess Web App `ANYONE` exposure and `doGet` output, authenticated `doPost`, replay, wrong-date, wrong-folder, duplicate-name, missing-file, size/checksum and role-denied tests. Do not reduce application-wide permissions or alter RBAC/RLS.
+6. **No-send integration QA**: run relevant offline tests and use a separate isolated fixture/mocked Gateway for Stage/Finalize before real write. Do not manually Stage/Finalize old dates into Production and never push LINE for testing. Verify current `daily_line_finalize` requires actual non-fabricated SOP evidence; if it rejects current valid SOP evidence, document a minimal approved adjustment with test and rollback; do not force DB schema change without Release Gate.
+7. **First live proof**: on next legitimate naturally scheduled cycle, record GAS Execution ID, actual 4 assets + finalized run in Supabase, authorized signed Gateway ready response, Worker Cron logs, and Owner delivery event with HTTP provider and ledger. Only then declare E2E CLOSED. If data is not ready, HOLD with exact cause instead of sending stale files.
+8. **Source control and handoff**: commit the non-secret repaired GAS code + matching `appsscript.json` to the approved source-controlled path/branch (NOT a secret file), verify live vs source SHA, targeted CI and regression. Preserve existing worker Cron, queue, LINE Owner-only route, 19:30 reminders, site-group off, and unrelated Production modules.
+
+## Acceptance matrix
+
+Source/Sheets/PDF/PNG/Drive PASS is separate from Gateway VERIFIED and Owner DELIVERED. For 2026-10-24 and 2026-10-26, Gateway is currently **NOT_FINALIZED**, not READY. Future READY requires 4/4 exact assets plus finalized manifest and authorized readback. Future DELIVERED additionally requires Owner-only provider HTTP and ledger proof.
+
+**Do not repeat existing no-send unit tests or change unrelated Production simply to generate more reassuring PASS labels.** This note is evidence correction and handoff only; it is not a GAS, DB, Cloudflare, LINE, or Vercel code change.
