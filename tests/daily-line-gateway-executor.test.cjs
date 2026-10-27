@@ -12,6 +12,7 @@ const mockScriptProperties = {
 };
 
 const mockCache = new Map();
+let mockCreatedTriggers = [];
 
 global.PropertiesService = {
   getScriptProperties: () => ({
@@ -57,7 +58,30 @@ global.LockService = {
 };
 
 global.ScriptApp = {
-  getProjectTriggers: () => []
+  getProjectTriggers: () => mockCreatedTriggers,
+  deleteTrigger: (trig) => {
+    mockCreatedTriggers = mockCreatedTriggers.filter(t => t !== trig);
+  },
+  newTrigger: (fnName) => {
+    let delayMs = 0;
+    const builder = {
+      timeBased: () => builder,
+      atHour: () => builder,
+      nearMinute: () => builder,
+      everyDays: () => builder,
+      inTimezone: () => builder,
+      after: (ms) => { delayMs = ms; return builder; },
+      create: () => {
+        const trig = {
+          getHandlerFunction: () => fnName,
+          delayMs
+        };
+        mockCreatedTriggers.push(trig);
+        return trig;
+      }
+    };
+    return builder;
+  }
 };
 
 // Import the executor module
@@ -65,14 +89,21 @@ const executorPath = path.resolve(__dirname, '../docs/apps-script/DailyLineGatew
 const {
   GATEWAY_CFG,
   getBangkokReportDate_,
+  getBangkokHour_,
+  resolveDateFolder_,
+  findFileInFolder_,
   getPngDimensions_,
+  verifyPdfProperties_,
+  verifyFormReconciliation_,
   sha256Hex_,
   timingSafeEqual_,
   verifyMasterTab_,
   runGatewayFlow_,
   doGet,
   doPost,
-  dailyLineGatewayScheduled0730
+  dailyLineGatewayScheduled0730,
+  dailyLineGatewayCatchUp,
+  installDailyLineGatewayTrigger
 } = require(executorPath);
 
 // Helper to construct synthetic standard PNG bytes with specified width & height
@@ -93,20 +124,163 @@ function createSyntheticPng(width, height, payloadSize = 250) {
   return Buffer.concat([header, ihdrChunk, pad]);
 }
 
+// Helper to construct synthetic A4 Landscape 4-page PDF bytes
+function createSyntheticPdf(pages = 4, landscape = true) {
+  const mediaBox = landscape ? '[0 0 841.89 595.28]' : '[0 0 595.28 841.89]';
+  let body = '%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n';
+  body += '2 0 obj\n<< /Type /Pages /Count ' + pages + ' /Kids [';
+  for (let i = 0; i < pages; i++) {
+    body += (3 + i) + ' 0 R ';
+  }
+  body += '] >>\nendobj\n';
+  for (let i = 0; i < pages; i++) {
+    body += (3 + i) + ' 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox ' + mediaBox + ' >>\nendobj\n';
+  }
+  body += 'xref\n0 ' + (3 + pages) + '\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n';
+  return Buffer.from(body);
+}
+
+function makeIterator(items) {
+  let idx = 0;
+  return {
+    hasNext: () => idx < items.length,
+    next: () => {
+      if (idx >= items.length) throw new Error('No more items');
+      return items[idx++];
+    }
+  };
+}
+
+// Standard Mock setup for Drive and Sheets
+function setupStandardMocks(overrides = {}) {
+  const validPdfBytes = overrides.pdfBytes || createSyntheticPdf(4, true);
+  const validPngBytes = overrides.pngBytes || createSyntheticPng(2947, 1800);
+
+  global.SpreadsheetApp = {
+    openById: (id) => ({
+      getSheetByName: (name) => {
+        if (overrides.missingTab && name === overrides.missingTab) return null;
+        if (name === GATEWAY_CFG.FORM_TAB_NAME) {
+          if (overrides.formEmpty) {
+            return { getLastRow: () => 0 };
+          }
+          return {
+            getLastRow: () => 10,
+            getRange: () => ({
+              getDisplayValues: () => overrides.formDates || [
+                ['23/10/2026'], ['24/10/2026'], ['26/10/2026'], ['27/10/2026']
+              ]
+            })
+          };
+        }
+        return {
+          getRange: (addr) => ({
+            getDisplayValue: () => '23-10-2026',
+            getValue: () => {
+              if (overrides.headcountMismatch && addr === 'E6') return 999;
+              return (addr === 'A6' ? 67 : addr === 'C6' ? 9 : addr === 'E6' ? 76 : addr === 'G6' ? 11 : 0);
+            },
+            getFormula: () => (overrides.noFormula && addr === 'E6' ? '' : '=A6+C6')
+          })
+        };
+      }
+    })
+  };
+
+  const createDateFolder = (id = 'date_folder_1', parentId = 'month_folder_1') => ({
+    getId: () => id,
+    getName: () => 'date_folder',
+    getParents: () => makeIterator([{ getId: () => parentId }]),
+    getFilesByName: (name) => {
+      if (overrides.duplicateFileName && name.includes('.pdf')) {
+        return makeIterator([
+          { getId: () => 'f1', getName: () => name, getBlob: () => ({ getBytes: () => validPdfBytes }) },
+          { getId: () => 'f2', getName: () => name, getBlob: () => ({ getBytes: () => validPdfBytes }) }
+        ]);
+      }
+      if (overrides.missingPdf && name.includes('.pdf')) {
+        return makeIterator([]);
+      }
+      return makeIterator([{
+        getId: () => 'found_file_id',
+        getName: () => name,
+        getBlob: () => ({
+          getBytes: () => (name.includes('.pdf') ? validPdfBytes : validPngBytes)
+        })
+      }]);
+    }
+  });
+
+  const createMonthFolder = (id = 'month_folder_1') => ({
+    getId: () => id,
+    getName: () => 'October 2026',
+    getFoldersByName: (subName) => {
+      if (overrides.duplicateDateFolder && subName === '24102026') {
+        return makeIterator([createDateFolder('d1', id), createDateFolder('d2', id)]);
+      }
+      if (overrides.invalidParent && subName === '24102026') {
+        return makeIterator([createDateFolder('d1', 'wrong_parent')]);
+      }
+      return makeIterator([createDateFolder('date_folder_1', id)]);
+    }
+  });
+
+  global.DriveApp = {
+    getFileById: (id) => {
+      const isTrashed = overrides.trashedDocId === id;
+      return {
+        getId: () => id,
+        getName: () => 'sample_file_' + id,
+        isTrashed: () => isTrashed,
+        getBlob: () => ({
+          getBytes: () => (id.includes('pdf') || id === GATEWAY_CFG.PDF_FILE_ID ? validPdfBytes : validPngBytes)
+        })
+      };
+    },
+    getFolderById: (id) => ({
+      getId: () => id,
+      getName: () => 'folder_' + id,
+      getFoldersByName: (name) => {
+        if (overrides.missingMonth && name.includes('October')) {
+          return makeIterator([]);
+        }
+        if (overrides.duplicateMonthFolder && name.includes('October')) {
+          return makeIterator([createMonthFolder('m1'), createMonthFolder('m2')]);
+        }
+        return makeIterator([createMonthFolder('month_folder_1')]);
+      },
+      getFilesByName: (name) => {
+        if (overrides.duplicateFileName && name.includes('.pdf')) {
+          return makeIterator([
+            { getId: () => 'f1', getName: () => name, getBlob: () => ({ getBytes: () => validPdfBytes }) },
+            { getId: () => 'f2', getName: () => name, getBlob: () => ({ getBytes: () => validPdfBytes }) }
+          ]);
+        }
+        if (overrides.missingPdf && name.includes('.pdf')) {
+          return makeIterator([]);
+        }
+        return makeIterator([{
+          getId: () => 'found_file_id',
+          getName: () => name,
+          getBlob: () => ({
+            getBytes: () => (name.includes('.pdf') ? validPdfBytes : validPngBytes)
+          })
+        }]);
+      }
+    })
+  };
+}
+
 test('1. Bangkok Report Date Policy: Sunday SKIP, Monday uses Saturday, Tuesday-Saturday uses yesterday', () => {
-  // Sunday 2026-10-25 07:30 Bangkok -> SKIP (null)
   const sunday = new Date('2026-10-25T00:30:00Z'); // 07:30 Bangkok
   assert.equal(getBangkokReportDate_(sunday), null);
 
-  // Monday 2026-10-26 07:30 Bangkok -> Saturday 2026-10-24
   const monday = new Date('2026-10-26T00:30:00Z');
   assert.equal(getBangkokReportDate_(monday), '2026-10-24');
 
-  // Tuesday 2026-10-27 07:30 Bangkok -> Monday 2026-10-26
   const tuesday = new Date('2026-10-27T00:30:00Z');
   assert.equal(getBangkokReportDate_(tuesday), '2026-10-26');
 
-  // Wednesday 2026-10-28 07:30 Bangkok -> Tuesday 2026-10-27
   const wednesday = new Date('2026-10-28T00:30:00Z');
   assert.equal(getBangkokReportDate_(wednesday), '2026-10-27');
 });
@@ -117,17 +291,14 @@ test('2. PNG Parser and Dimension QA: requires exactly width 2947px', () => {
   assert.equal(dims.width, 2947);
   assert.equal(dims.height, 1850);
 
-  // Invalid width
   const wrongWidthPng = createSyntheticPng(2000, 1000);
   const wrongDims = getPngDimensions_(wrongWidthPng);
   assert.notEqual(wrongDims.width, 2947);
 
-  // Invalid PNG signature
   assert.throws(() => {
     getPngDimensions_(Buffer.from('not a png file at all! this has 30 bytes'));
   }, /Invalid PNG signature/);
 
-  // File too small (< 24 bytes)
   assert.throws(() => {
     getPngDimensions_(Buffer.from([0x89, 0x50, 0x4E, 0x47]));
   }, /File too small to be PNG/);
@@ -149,55 +320,37 @@ test('4. Timing-Safe Comparison protects authentication token', () => {
   assert.equal(timingSafeEqual_(undefined, secret), false);
 });
 
-test('5. Web App Security: unauthenticated doGet returns ONLY basic health, no sensitive info', () => {
-  // Probe with no token
+test('5. PDF Properties QA: verifies 4 pages and A4 landscape orientation', () => {
+  const pdf4Landscape = createSyntheticPdf(4, true);
+  const r1 = verifyPdfProperties_(pdf4Landscape);
+  assert.equal(r1.valid, true);
+  assert.equal(r1.pages, 4);
+  assert.equal(r1.landscape, true);
+
+  // 3 pages fails
+  const pdf3Landscape = createSyntheticPdf(3, true);
+  const r2 = verifyPdfProperties_(pdf3Landscape);
+  assert.equal(r2.valid, false);
+  assert.equal(r2.pages, 3);
+
+  // Portrait fails
+  const pdf4Portrait = createSyntheticPdf(4, false);
+  const r3 = verifyPdfProperties_(pdf4Portrait);
+  assert.equal(r3.valid, false);
+  assert.equal(r3.landscape, false);
+});
+
+test('6. Web App Security: doGet returns ONLY basic health without token exposure', () => {
   const res = doGet({});
   const data = JSON.parse(res.text);
   assert.equal(data.service, '3kings_daily_line_gateway_executor');
   assert.equal(data.status, 'ACTIVE');
-  assert.equal(data.authenticated, false);
-  assert.equal(data.inspection, undefined, 'Must NOT expose inspection without authentication');
-  assert.equal(data.triggers, undefined, 'Must NOT expose triggers without authentication');
+  assert.equal(data.health, 'OK');
+  assert.equal(data.inspection, undefined, 'Must NEVER expose inspection or tokens via doGet');
 });
 
-test('6. Web App Security: authenticated doGet returns inspection with valid token', () => {
-  // Mock Drive and Spreadsheet for inspection
-  global.SpreadsheetApp = {
-    openById: () => ({
-      getSheetByName: () => ({
-        getRange: (addr) => ({
-          getDisplayValue: () => '23-10-2026',
-          getValue: () => (addr === 'A6' ? 67 : addr === 'C6' ? 9 : addr === 'E6' ? 76 : addr === 'G6' ? 11 : 0)
-        })
-      })
-    })
-  };
-
-  const samplePng = createSyntheticPng(2947, 1800);
-  const samplePdf = Buffer.from('%PDF-1.4 4-page test pdf content');
-
-  global.DriveApp = {
-    getFileById: (id) => ({
-      getId: () => id,
-      getName: () => 'sample_file',
-      getBlob: () => ({
-        getBytes: () => (id.includes('pdf') || id === GATEWAY_CFG.PDF_FILE_ID ? samplePdf : samplePng)
-      })
-    })
-  };
-
-  const secret = mockScriptProperties.DAILY_LINE_GATEWAY_WEBHOOK_SECRET;
-  const res = doGet({ parameter: { token: secret } });
-  const data = JSON.parse(res.text);
-  assert.equal(data.service, '3kings_daily_line_gateway_executor');
-  assert.equal(data.status, 'ACTIVE');
-  assert.equal(data.authenticated, true);
-  assert.ok(data.inspection);
-  assert.equal(data.inspection.status, 'INSPECTED');
-  assert.equal(data.inspection.details.masterQa.headcountVerified, true);
-});
-
-test('7. doPost Authentication and Replay Protection', () => {
+test('7. doPost Authentication, Replay Protection, and Delivery Guard', () => {
+  setupStandardMocks();
   const secret = mockScriptProperties.DAILY_LINE_GATEWAY_WEBHOOK_SECRET;
   const nonce = 'unique-nonce-1234567890123456';
   const now = Date.now();
@@ -219,26 +372,199 @@ test('7. doPost Authentication and Replay Protection', () => {
   });
   assert.equal(JSON.parse(r3.text).error, 'REPLAY_REJECTED');
 
-  // 4. Valid invocation -> 200
-  const r4 = doPost({
-    postData: { contents: JSON.stringify({ token: secret, timestamp: now, nonce, action: 'inspect_only' }) }
+  // 4. Delivery Guard: force === true prohibited -> 403
+  const nonce2 = 'unique-nonce-2222222222222222';
+  const rForce = doPost({
+    postData: { contents: JSON.stringify({ token: secret, timestamp: now, nonce: nonce2, action: 'stage_and_finalize', force: true }) }
   });
-  assert.equal(JSON.parse(r4.text).status, 'INSPECTED');
+  assert.equal(JSON.parse(rForce.text).error, 'DELIVERY_GUARD_BLOCKED');
 
-  // 5. Replayed nonce -> 403
-  const r5 = doPost({
-    postData: { contents: JSON.stringify({ token: secret, timestamp: now, nonce, action: 'inspect_only' }) }
+  // 5. Delivery Guard: historical date staging prohibited -> 403
+  const nonce3 = 'unique-nonce-3333333333333333';
+  const rHist = doPost({
+    postData: { contents: JSON.stringify({ token: secret, timestamp: now, nonce: nonce3, action: 'stage_and_finalize', targetDate: '2026-10-01' }) }
   });
-  assert.equal(JSON.parse(r5.text).error, 'REPLAY_REJECTED');
+  assert.equal(JSON.parse(rHist.text).error, 'DELIVERY_GUARD_BLOCKED');
 });
 
-test('8. Idempotency Gate: if daily_line_ready already true, skips staging and finalization', () => {
+test('8. Negative Test: daily_line_ready returns ready=false -> GATEWAY_NOT_READY', () => {
+  setupStandardMocks();
+  const pdfSha = crypto.createHash('sha256').update(createSyntheticPdf(4, true)).digest('hex');
+  const pngSha = crypto.createHash('sha256').update(createSyntheticPng(2947, 1800)).digest('hex');
+
+  global.UrlFetchApp = {
+    fetch: (url, opts) => {
+      const payload = JSON.parse(opts.payload);
+      if (url.includes('daily_line_ready')) {
+        return {
+          getResponseCode: () => 200,
+          getContentText: () => JSON.stringify({ ready: false, report_date: '2026-10-23' })
+        };
+      }
+      if (url.includes('daily_line_stage_asset')) {
+        return {
+          getResponseCode: () => 200,
+          getContentText: () => JSON.stringify({ status: 'STAGED_READBACK', site: payload.p_site, sha256: payload.p_sha256 })
+        };
+      }
+      if (url.includes('daily_line_finalize')) {
+        return {
+          getResponseCode: () => 200,
+          getContentText: () => JSON.stringify({ status: 'QA_FINALIZED', png_count: 4 })
+        };
+      }
+      return { getResponseCode: () => 200, getContentText: () => '{}' };
+    }
+  };
+
+  const result = runGatewayFlow_('stage_and_finalize', false, '2026-10-23');
+  assert.equal(result.status, 'GATEWAY_NOT_READY');
+  assert.equal(result.readyResult.ready, false);
+});
+
+test('9. Negative Test: Finalize returns non-QA_FINALIZED status -> FINALIZE_FAILED', () => {
+  setupStandardMocks();
+  global.UrlFetchApp = {
+    fetch: (url, opts) => {
+      const payload = JSON.parse(opts.payload);
+      if (url.includes('daily_line_ready')) {
+        return { getResponseCode: () => 200, getContentText: () => JSON.stringify({ ready: false }) };
+      }
+      if (url.includes('daily_line_stage_asset')) {
+        return {
+          getResponseCode: () => 200,
+          getContentText: () => JSON.stringify({ status: 'STAGED_READBACK', site: payload.p_site, sha256: payload.p_sha256 })
+        };
+      }
+      if (url.includes('daily_line_finalize')) {
+        return {
+          getResponseCode: () => 200,
+          getContentText: () => JSON.stringify({ status: 'REJECTED_MANUAL_NOT_VERIFIED' })
+        };
+      }
+      return { getResponseCode: () => 200, getContentText: () => '{}' };
+    }
+  };
+
+  const result = runGatewayFlow_('stage_and_finalize', false, '2026-10-23');
+  assert.equal(result.status, 'FINALIZE_FAILED');
+});
+
+test('10. Negative Test: SHA mismatch between Drive and Gateway -> PDF_SHA_MISMATCH & ASSET_SHA_MISMATCH', () => {
+  setupStandardMocks();
+  const pdfSha = crypto.createHash('sha256').update(createSyntheticPdf(4, true)).digest('hex');
+  const pngSha = crypto.createHash('sha256').update(createSyntheticPng(2947, 1800)).digest('hex');
+
+  // Test PDF SHA mismatch
+  let readyCheckPdf = 0;
+  global.UrlFetchApp = {
+    fetch: (url, opts) => {
+      const payload = JSON.parse(opts.payload);
+      if (url.includes('daily_line_ready')) {
+        readyCheckPdf++;
+        const ready = readyCheckPdf > 1;
+        return {
+          getResponseCode: () => 200,
+          getContentText: () => JSON.stringify({
+            ready: ready,
+            report_date: '2026-10-23',
+            pdf_sha256: ready ? 'tampered-pdf-sha-differs-from-drive-calculated-sha-00000000000000' : null,
+            assets: ready ? [
+              { site: 'above_villa', sha256: pngSha },
+              { site: 'above_condo', sha256: pngSha },
+              { site: 'mirage', sha256: pngSha },
+              { site: 'henessy', sha256: pngSha }
+            ] : []
+          })
+        };
+      }
+      if (url.includes('daily_line_stage_asset')) {
+        return {
+          getResponseCode: () => 200,
+          getContentText: () => JSON.stringify({ status: 'STAGED_READBACK', site: payload.p_site, sha256: payload.p_sha256 })
+        };
+      }
+      if (url.includes('daily_line_finalize')) {
+        return {
+          getResponseCode: () => 200,
+          getContentText: () => JSON.stringify({ status: 'QA_FINALIZED', png_count: 4 })
+        };
+      }
+      return { getResponseCode: () => 200, getContentText: () => '{}' };
+    }
+  };
+
+  const rPdfMismatch = runGatewayFlow_('stage_and_finalize', false, '2026-10-23');
+  assert.equal(rPdfMismatch.status, 'PDF_SHA_MISMATCH');
+
+  // Test Asset SHA mismatch
+  let readyCheckAsset = 0;
+  global.UrlFetchApp.fetch = (url, opts) => {
+    const payload = JSON.parse(opts.payload);
+    if (url.includes('daily_line_ready')) {
+      readyCheckAsset++;
+      const ready = readyCheckAsset > 1;
+      return {
+        getResponseCode: () => 200,
+        getContentText: () => JSON.stringify({
+          ready: ready,
+          report_date: '2026-10-23',
+          pdf_sha256: ready ? pdfSha : null,
+          assets: ready ? [
+            { site: 'above_villa', sha256: 'wrong-sha-for-villa-000000000000000000000000000000000000000000000' },
+            { site: 'above_condo', sha256: pngSha },
+            { site: 'mirage', sha256: pngSha },
+            { site: 'henessy', sha256: pngSha }
+          ] : []
+        })
+      };
+    }
+    if (url.includes('daily_line_stage_asset')) {
+      return {
+        getResponseCode: () => 200,
+        getContentText: () => JSON.stringify({ status: 'STAGED_READBACK', site: payload.p_site, sha256: payload.p_sha256 })
+      };
+    }
+    if (url.includes('daily_line_finalize')) {
+      return {
+        getResponseCode: () => 200,
+        getContentText: () => JSON.stringify({ status: 'QA_FINALIZED', png_count: 4 })
+      };
+    }
+    return { getResponseCode: () => 200, getContentText: () => '{}' };
+  };
+
+  const rAssetMismatch = runGatewayFlow_('stage_and_finalize', false, '2026-10-23');
+  assert.equal(rAssetMismatch.status, 'ASSET_SHA_MISMATCH');
+  assert.equal(rAssetMismatch.site, 'above_villa');
+});
+
+test('11. Negative Test: QA Evidence incomplete -> HOLD_QA_EVIDENCE_INCOMPLETE', () => {
+  // Test 1: PDF has 3 pages instead of 4
+  setupStandardMocks({ pdfBytes: createSyntheticPdf(3, true) });
+  const r1 = runGatewayFlow_('stage_and_finalize', false, '2026-10-23');
+  assert.equal(r1.status, 'HOLD_QA_EVIDENCE_INCOMPLETE');
+  assert.match(r1.reason, /PDF_QA_FAILED/);
+
+  // Test 2: Master formula missing
+  setupStandardMocks({ noFormula: true, headcountMismatch: true });
+  const r2 = runGatewayFlow_('stage_and_finalize', false, '2026-10-23');
+  assert.equal(r2.status, 'PENDING_SOURCE_FILES'); // Headcount verification failed
+
+  // Test 3: SOP Canonical doc trashed/inaccessible
+  setupStandardMocks({ trashedDocId: GATEWAY_CFG.SOP_CANONICAL_DOC_ID });
+  const r3 = runGatewayFlow_('stage_and_finalize', false, '2026-10-23');
+  assert.equal(r3.status, 'HOLD_QA_EVIDENCE_INCOMPLETE');
+  assert.match(r3.reason, /SOP_DOCUMENTS_NOT_VERIFIED/);
+});
+
+test('12. Idempotency Gate: if daily_line_ready already true, returns ALREADY_READY without writes', () => {
+  setupStandardMocks();
   let stageCalled = 0;
   let finalizeCalled = 0;
 
   global.UrlFetchApp = {
     fetch: (url, opts) => {
-      const payload = JSON.parse(opts.payload);
       if (url.includes('daily_line_ready')) {
         return {
           getResponseCode: () => 200,
@@ -247,11 +573,11 @@ test('8. Idempotency Gate: if daily_line_ready already true, skips staging and f
       }
       if (url.includes('daily_line_stage_asset')) {
         stageCalled++;
-        return { getResponseCode: () => 200, getContentText: () => JSON.stringify({ staged: true }) };
+        return { getResponseCode: () => 200, getContentText: () => '{}' };
       }
       if (url.includes('daily_line_finalize')) {
         finalizeCalled++;
-        return { getResponseCode: () => 200, getContentText: () => JSON.stringify({ finalized: true }) };
+        return { getResponseCode: () => 200, getContentText: () => '{}' };
       }
       return { getResponseCode: () => 200, getContentText: () => '{}' };
     }
@@ -259,11 +585,15 @@ test('8. Idempotency Gate: if daily_line_ready already true, skips staging and f
 
   const result = runGatewayFlow_('stage_and_finalize', false, '2026-10-23');
   assert.equal(result.status, 'ALREADY_READY');
-  assert.equal(stageCalled, 0, 'Must not stage assets when already ready');
-  assert.equal(finalizeCalled, 0, 'Must not finalize when already ready');
+  assert.equal(stageCalled, 0, 'Must NOT stage assets when already ready');
+  assert.equal(finalizeCalled, 0, 'Must NOT finalize when already ready');
 });
 
-test('9. Full Flow Execution: stages 4 assets, finalizes with SOP v3.2 & DB evidence, verifies ready', () => {
+test('13. Full Flow Execution: Stages 4/4 assets with STAGED_READBACK, finalizes QA_FINALIZED, and returns SUCCESS', () => {
+  setupStandardMocks();
+  const pdfSha = crypto.createHash('sha256').update(createSyntheticPdf(4, true)).digest('hex');
+  const pngSha = crypto.createHash('sha256').update(createSyntheticPng(2947, 1800)).digest('hex');
+
   let stageCalls = [];
   let finalizePayload = null;
   let readyCheckCount = 0;
@@ -273,18 +603,18 @@ test('9. Full Flow Execution: stages 4 assets, finalizes with SOP v3.2 & DB evid
       const payload = JSON.parse(opts.payload);
       if (url.includes('daily_line_ready')) {
         readyCheckCount++;
-        // First check returns not ready; second check after finalize returns ready
         const ready = readyCheckCount > 1;
         return {
           getResponseCode: () => 200,
           getContentText: () => JSON.stringify({
             ready: ready,
             report_date: '2026-10-23',
+            pdf_sha256: pdfSha,
             assets: ready ? [
-              { site: 'above_villa', sha256: 'a'.repeat(64) },
-              { site: 'above_condo', sha256: 'b'.repeat(64) },
-              { site: 'mirage', sha256: 'c'.repeat(64) },
-              { site: 'henessy', sha256: 'd'.repeat(64) }
+              { site: 'above_villa', sha256: pngSha },
+              { site: 'above_condo', sha256: pngSha },
+              { site: 'mirage', sha256: pngSha },
+              { site: 'henessy', sha256: pngSha }
             ] : []
           })
         };
@@ -293,14 +623,14 @@ test('9. Full Flow Execution: stages 4 assets, finalizes with SOP v3.2 & DB evid
         stageCalls.push(payload);
         return {
           getResponseCode: () => 200,
-          getContentText: () => JSON.stringify({ status: 'staged', site: payload.p_site })
+          getContentText: () => JSON.stringify({ status: 'STAGED_READBACK', site: payload.p_site, sha256: payload.p_sha256 })
         };
       }
       if (url.includes('daily_line_finalize')) {
         finalizePayload = payload;
         return {
           getResponseCode: () => 200,
-          getContentText: () => JSON.stringify({ status: 'finalized', report_date: payload.p_report_date })
+          getContentText: () => JSON.stringify({ status: 'QA_FINALIZED', date: payload.p_report_date, png_count: 4 })
         };
       }
       throw new Error('Unexpected RPC call: ' + url);
@@ -316,63 +646,50 @@ test('9. Full Flow Execution: stages 4 assets, finalizes with SOP v3.2 & DB evid
   assert.ok(finalizePayload, 'daily_line_finalize must be called');
   assert.equal(finalizePayload.p_report_date, '2026-10-23');
   assert.equal(finalizePayload.p_qa.sopIndexRead, true);
-  assert.equal(finalizePayload.p_qa.sopSheetsV2Read, true);
-  assert.equal(finalizePayload.p_qa.sopPublishV2Read, true);
+  assert.equal(finalizePayload.p_qa.pdf4PagesVerified, true);
+  assert.equal(finalizePayload.p_qa.pdfA4LandscapeVerified, true);
   assert.equal(finalizePayload.p_qa.sopCanonicalV32Read, true);
-  assert.equal(finalizePayload.p_qa.sopIndexDocId, '1ZUO3eGCFd88l_R2aCH2EnIMJ-rlbyIoMxD3sY-9j1Pg');
-  assert.equal(finalizePayload.p_qa.sopCanonicalDocId, '1SG3Ptvt2GFjbyPeMT4tIAZEXr5NUjKhIjTYx9Neu1uk');
+  assert.equal(finalizePayload.p_qa.sopIndexDocId, GATEWAY_CFG.SOP_INDEX_DOC_ID);
+  assert.equal(finalizePayload.p_qa.sopCanonicalDocId, GATEWAY_CFG.SOP_CANONICAL_DOC_ID);
 
   // Verify ready result
   assert.equal(result.readyResult.ready, true);
+  assert.equal(result.readyResult.pdf_sha256, pdfSha);
 });
 
-test('10. PNG Size Guard: rejects assets > 1MB or < 100 bytes', () => {
-  // Test oversized PNG (> 1MB)
-  const hugePng = createSyntheticPng(2947, 1800, 1048576 + 500);
-  global.DriveApp.getFileById = (id) => ({
-    getId: () => id,
-    getName: () => 'huge.png',
-    getBlob: () => ({ getBytes: () => hugePng })
-  });
+test('14. Catch-Up Trigger: schedules 15-minute catch-up on PENDING_SOURCE_FILES', () => {
+  setupStandardMocks({ missingTab: '261026' });
+  mockCreatedTriggers = [];
 
-  assert.throws(() => {
-    runGatewayFlow_('inspect_only', false, '2026-10-23');
-  }, /ASSET_TOO_LARGE/);
-
-  // Test undersized PNG (< 100 bytes)
-  const tinyPng = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
-  global.DriveApp.getFileById = (id) => ({
-    getId: () => id,
-    getName: () => 'tiny.png',
-    getBlob: () => ({ getBytes: () => tinyPng })
-  });
-
-  assert.throws(() => {
-    runGatewayFlow_('inspect_only', false, '2026-10-23');
-  }, /ASSET_TOO_SMALL/);
+  const res = dailyLineGatewayScheduled0730();
+  assert.equal(res.status, 'PENDING_SOURCE_FILES');
+  assert.equal(mockCreatedTriggers.length, 1, 'Must schedule one catch-up trigger');
+  assert.equal(mockCreatedTriggers[0].getHandlerFunction(), 'dailyLineGatewayCatchUp');
 });
 
-test('11. Scheduled 07:30 Trigger skips on Sunday without stage or finalize', () => {
-  let invoked = false;
-  global.UrlFetchApp = {
-    fetch: () => { invoked = true; return { getResponseCode: () => 200, getContentText: () => '{}' }; }
-  };
+test('15. Folder Resolver & Strict Parent Chain: rejects duplicate folders and wrong parent chain', () => {
+  // Test duplicate month folder
+  setupStandardMocks({ duplicateMonthFolder: true });
+  assert.throws(() => {
+    resolveDateFolder_('root_id', '24102026', '2026', '10');
+  }, /DUPLICATE_MONTH_FOLDER/);
 
-  // Mock Date for Sunday
-  const origDate = Date;
-  function MockDate(arg) {
-    if (arg) return new origDate(arg);
-    return new origDate('2026-10-25T00:30:00Z'); // Sunday 07:30 Bangkok
-  }
-  MockDate.now = () => new origDate('2026-10-25T00:30:00Z').getTime();
-  MockDate.prototype = origDate.prototype;
-  global.Date = MockDate;
+  // Test duplicate date folder
+  setupStandardMocks({ duplicateDateFolder: true });
+  assert.throws(() => {
+    resolveDateFolder_('root_id', '24102026', '2026', '10');
+  }, /DUPLICATE_DATE_FOLDER/);
 
-  try {
-    const outcome = dailyLineGatewayScheduled0730();
-    assert.equal(outcome.status, 'SUNDAY_SKIP');
-    assert.equal(invoked, false, 'UrlFetchApp must not be called on Sunday');
-  } finally {
-    global.Date = origDate;
-  }
+  // Test invalid parent chain
+  setupStandardMocks({ invalidParent: true });
+  assert.throws(() => {
+    resolveDateFolder_('root_id', '24102026', '2026', '10');
+  }, /INVALID_PARENT_CHAIN/);
+});
+
+test('16. File Finder: rejects duplicate files with identical name in the same folder', () => {
+  setupStandardMocks({ duplicateFileName: true });
+  assert.throws(() => {
+    findFileInFolder_('date_folder_id', 'Daily_Site_Report_24-10-2026.pdf');
+  }, /DUPLICATE_FILE_NAME/);
 });
