@@ -284,7 +284,9 @@ async function parseDefects(buffer: Buffer) {
       // Chat-sourced detail only: never import other historical descriptions.
       defect_detail: (() => {
         const detail = text(valueByHeader(r, headers, 'Defect Detail (Web App)'))
-        return detail?.includes('รายการ Defect แจ้งผ่านแชต:') ? detail : null
+        if (detail?.includes('รายการ Defect แจ้งผ่านแชต:')) return detail
+        if (roomNo === 'B515' && detail?.includes('Customer Defect B515')) return detail
+        return null
       })(),
     })
   }

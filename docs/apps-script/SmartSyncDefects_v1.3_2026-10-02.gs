@@ -176,8 +176,10 @@ function runDefectSyncV13_(opts) {
         owner_source_file_name: old.owner_source_file_name || null,
         owner_source_modified_at: old.owner_source_modified_at || null,
 
-        defect_detail: src.defect_detail && src.defect_detail.includes('รายการ Defect แจ้งผ่านแชต:')
-          ? src.defect_detail : old.defect_detail || null,
+        defect_detail: (src.defect_detail && (
+          src.defect_detail.includes('รายการ Defect แจ้งผ่านแชต:') ||
+          (src.room_no === 'B515' && src.defect_detail.includes('Customer Defect B515'))
+        )) ? src.defect_detail : old.defect_detail || null,
         synced_at: nowIso,
       };
     });
