@@ -1,3 +1,6 @@
+> **INDEPENDENT PRODUCTION ACCEPTANCE NOTE — 27/10/2026**
+> This report preserves the original Antigravity execution claims, but its heading `CLOSED_AND_VERIFIED_E2E` is **not independently supported by Production**. At independent readback, Gateway assets/runs for 24/10 and 26/10 remained 0/0; the 27/10 Master tab/PDF folder was not yet present, and delivery was evidenced only for report 23/10. Mock tests 27/27 and Version 12 code deployment do not establish real Stage/Finalize, `ready=true`, or new Owner LINE delivery. The Executor currently hardcodes QA booleans and returns SUCCESS even if `daily_line_ready` returns `ready=false`. **Current release acceptance: PARTIAL / E2E_UNVERIFIED.** Read [the independent Version 12 audit](./2026-10-27_daily_autoflow_v12_independent_production_acceptance.md) before using this handoff. No Production write or historical replay was authorized by this note.
+
 # 3 Kings Construction — Daily AutoFlow Blockers Closed & End-to-End Verification Report
 
 **วันที่บันทึก**: 27 ตุลาคม 2026 เวลา 15:20:00 น. (Asia/Bangkok)  
