@@ -137,11 +137,17 @@ function doPost(e) {
           message: 'Force execution is strictly prohibited by Delivery Guard'
         }, 403);
       }
+      if (!payload.targetDate) {
+        return jsonResponse_({
+          error: 'MISSING_TARGET_DATE',
+          message: 'targetDate is required for stage_and_finalize; fallback to historical dates is strictly prohibited'
+        }, 400);
+      }
       const allowedDate = getBangkokReportDate_();
-      if (payload.targetDate && payload.targetDate !== allowedDate) {
+      if (payload.targetDate !== allowedDate) {
         return jsonResponse_({
           error: 'DELIVERY_GUARD_BLOCKED',
-          message: 'Historical date ' + payload.targetDate + ' staging prohibited; current Bangkok work date is ' + allowedDate
+          message: 'Historical or unallowed date ' + payload.targetDate + ' staging prohibited; current Bangkok work date is ' + allowedDate
         }, 403);
       }
     }
@@ -497,7 +503,7 @@ function verifyPdfProperties_(bytes) {
 /**
  * Verifies Form response entries reconcile with the given reportDate.
  */
-function verifyFormReconciliation_(formSpreadsheetId, formTabName, reportDate, expectedTotal) {
+function verifyFormReconciliation_(formSpreadsheetId, formTabName, reportDate, masterData) {
   try {
     const ss = SpreadsheetApp.openById(formSpreadsheetId);
     const sheet = ss.getSheetByName(formTabName);
@@ -516,21 +522,184 @@ function verifyFormReconciliation_(formSpreadsheetId, formTabName, reportDate, e
 
     const startRow = Math.max(2, lastRow - 150);
     const numRows = lastRow - startRow + 1;
-    const dateValues = sheet.getRange(startRow, 2, numRows, 1).getDisplayValues();
+    // Read columns A to I (1 to 9):
+    // 0: Timestamp, 1: วันที่รายงาน, 2: โครงการ, 3: พื้นที่, 4: ทีม/ผู้รับผิดชอบ, 5: ชาย, 6: หญิง, 7: รวม, 8: รายละเอียด
+    const rows = sheet.getRange(startRow, 1, numRows, 9).getDisplayValues();
 
     let matchingRows = 0;
-    for (let i = 0; i < dateValues.length; i++) {
-      const val = (dateValues[i][0] || '').trim();
-      if (val === targetDateSlash || val === targetDateShortSlash || val === reportDate) {
+    const onTimeRows = [];
+    const retroactiveRows = [];
+
+    let onTimeWorkers = 0;
+    let onTimeSupervisors = 0;
+    let deltaWorkers = 0;
+    let deltaSupervisors = 0;
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const ts = (row[0] || '').trim();
+      const dateVal = (row[1] || '').trim();
+      if (dateVal === targetDateSlash || dateVal === targetDateShortSlash || dateVal === reportDate) {
         matchingRows++;
+        const teamName = (row[4] || '').trim();
+        const men = parseInt(row[5] || '0', 10) || 0;
+        const women = parseInt(row[6] || '0', 10) || 0;
+        const workers = parseInt(row[7] || '0', 10) || (men + women);
+
+        // Supervisor calculation per SOP EX section 06:
+        // Tone and P'Pha = 0 supervisors, all other teams = 1 supervisor
+        let sup = 1;
+        if (teamName.includes('โทน') || teamName.includes('พี่ภาร')) {
+          sup = 0;
+        }
+        const total = workers + sup;
+
+        // Determine if retroactive:
+        // Parse submission date from timestamp (format "DD/MM/YYYY, HH:MM:SS" or "DD/MM/YYYY HH:MM:SS")
+        let isRetro = false;
+        const tsMatch = ts.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+        if (tsMatch) {
+          const tsDay = parseInt(tsMatch[1], 10);
+          const tsMonth = parseInt(tsMatch[2], 10);
+          const tsYear = parseInt(tsMatch[3], 10);
+          const rDay = parseInt(dd, 10);
+          const rMonth = parseInt(mm, 10);
+          const rYear = parseInt(yyyy, 10);
+
+          if (tsYear > rYear || (tsYear === rYear && tsMonth > rMonth) || (tsYear === rYear && tsMonth === rMonth && tsDay > rDay)) {
+            isRetro = true;
+          }
+        }
+
+        const entry = {
+          team: teamName,
+          men: men,
+          women: women,
+          workers: workers,
+          supervisors: sup,
+          total: total,
+          timestamp: ts,
+          taskDesc: (row[8] || '').trim(),
+          isRetroactive: isRetro
+        };
+
+        if (isRetro) {
+          retroactiveRows.push(entry);
+          deltaWorkers += workers;
+          deltaSupervisors += sup;
+        } else {
+          onTimeRows.push(entry);
+          onTimeWorkers += workers;
+          onTimeSupervisors += sup;
+        }
       }
     }
 
+    if (matchingRows === 0) {
+      return {
+        verified: false,
+        reason: 'NO_MATCHING_FORM_ROWS: Zero responses found for date ' + reportDate,
+        matchingRows: 0,
+        reportDate: reportDate
+      };
+    }
+
+    const onTimeTotal = onTimeWorkers + onTimeSupervisors;
+    const deltaTotal = deltaWorkers + deltaSupervisors;
+
+    // Reconciliation against Master data
+    let masterWorkers = null;
+    let masterSupervisors = null;
+    let masterTotal = null;
+    let masterTeams = null;
+
+    if (typeof masterData === 'object' && masterData !== null) {
+      masterWorkers = Number(masterData.workers);
+      masterSupervisors = Number(masterData.supervisors);
+      masterTotal = Number(masterData.total);
+      masterTeams = Number(masterData.teams);
+    } else if (typeof masterData === 'number') {
+      masterTotal = masterData;
+    }
+
+    // Strict rule: matchingRows > 0 alone is NEVER sufficient!
+    // Must prove headcount reconciliation and manual edit preservation.
+    let headcountMatched = false;
+    let manualEditsPreserved = false;
+    let reconciliationDetails = '';
+
+    if (masterTotal !== null) {
+      if (masterWorkers !== null && masterSupervisors !== null && masterTeams !== null) {
+        // Compare with on-time Form data:
+        const onTimeMatch = (
+          onTimeRows.length === masterTeams &&
+          onTimeWorkers === masterWorkers &&
+          onTimeSupervisors === masterSupervisors &&
+          onTimeTotal === masterTotal
+        );
+
+        if (onTimeMatch) {
+          headcountMatched = true;
+          manualEditsPreserved = true;
+          reconciliationDetails = 'Exact match on on-time entries (' + masterTeams + ' teams, ' + masterTotal + ' headcount). Delta tracked separately.';
+        } else if (masterTotal === onTimeTotal + deltaTotal) {
+          headcountMatched = true;
+          manualEditsPreserved = true;
+          reconciliationDetails = 'Matches Form total including retroactive delta (' + masterTotal + ' headcount).';
+        } else {
+          return {
+            verified: false,
+            reason: 'HEADCOUNT_RECONCILIATION_MISMATCH: Form on-time (' + onTimeTotal + ' in ' + onTimeRows.length + ' teams) vs Master (' + masterTotal + ' in ' + masterTeams + ' teams). Delta: +' + deltaTotal + ' in ' + retroactiveRows.length + ' retro rows.',
+            matchingRows: matchingRows,
+            onTimeRows: onTimeRows.length,
+            retroactiveRows: retroactiveRows.length,
+            onTimeTotals: { workers: onTimeWorkers, supervisors: onTimeSupervisors, total: onTimeTotal },
+            deltaTotals: { workers: deltaWorkers, supervisors: deltaSupervisors, total: deltaTotal },
+            masterTotals: { workers: masterWorkers, supervisors: masterSupervisors, total: masterTotal, teams: masterTeams }
+          };
+        }
+      } else {
+        if (masterTotal === onTimeTotal || masterTotal === onTimeTotal + deltaTotal) {
+          headcountMatched = true;
+          manualEditsPreserved = true;
+        } else {
+          return {
+            verified: false,
+            reason: 'TOTAL_HEADCOUNT_MISMATCH: Form total (' + onTimeTotal + ') vs Master total (' + masterTotal + ')',
+            matchingRows: matchingRows
+          };
+        }
+      }
+    } else {
+      return {
+        verified: false,
+        reason: 'MISSING_MASTER_DATA_FOR_RECONCILIATION',
+        matchingRows: matchingRows
+      };
+    }
+
     return {
-      verified: matchingRows > 0,
+      verified: headcountMatched && manualEditsPreserved,
       matchingRows: matchingRows,
-      reportDate: reportDate
+      reportDate: reportDate,
+      onTimeCount: onTimeRows.length,
+      retroactiveCount: retroactiveRows.length,
+      onTimeTotals: {
+        teams: onTimeRows.length,
+        workers: onTimeWorkers,
+        supervisors: onTimeSupervisors,
+        total: onTimeTotal
+      },
+      delta: {
+        workers: deltaWorkers,
+        supervisors: deltaSupervisors,
+        total: deltaTotal,
+        entries: retroactiveRows
+      },
+      manualEditsPreserved: manualEditsPreserved,
+      reconciliationDetails: reconciliationDetails
     };
+
   } catch (err) {
     return {
       verified: false,
@@ -549,7 +718,14 @@ function runGatewayFlow_(action, force, targetDate) {
     throw new Error('DELIVERY_GUARD_BLOCKED: force execution is prohibited');
   }
 
-  const reportDate = targetDate || GATEWAY_CFG.REPORT_DATE;
+  if (action === 'stage_and_finalize' && !targetDate) {
+    throw new Error('MISSING_TARGET_DATE: targetDate must be explicitly specified for stage_and_finalize; fallback is prohibited');
+  }
+
+  const reportDate = targetDate || (action === 'inspect_only' ? GATEWAY_CFG.REPORT_DATE : null);
+  if (!reportDate) {
+    throw new Error('MISSING_REPORT_DATE: reportDate must be specified');
+  }
   const props = PropertiesService.getScriptProperties();
   const supabaseUrl = (props.getProperty('SUPABASE_URL') || 'https://wtqubwdduzedmcvyhbgs.supabase.co').replace(/\/+$/, '');
   const serviceRoleKey = props.getProperty('SUPABASE_SERVICE_ROLE_KEY');
@@ -635,15 +811,16 @@ function runGatewayFlow_(action, force, targetDate) {
       status: 'PENDING_SOURCE_FILES',
       reportDate: reportDate,
       missing: ['Master sheet tab: ' + tabName],
+      pipelineState: { masterTabReady: false, pdfReady: false, pngsReady: false, formReconciled: false },
       message: 'Master sheet tab ' + tabName + ' not yet verified: ' + String(sheetErr.message || sheetErr)
     };
   }
-  if (!masterQa.headcountVerified) {
+  if (!masterQa.headcountVerified || !masterQa.formulaPreserved) {
     return {
-      status: 'PENDING_SOURCE_FILES',
+      status: 'HOLD_QA_EVIDENCE_INCOMPLETE',
       reportDate: reportDate,
-      missing: ['Headcount verification for tab ' + tabName],
-      message: 'Master sheet headcount QA failed for tab ' + tabName
+      reason: 'MASTER_FORMULA_OR_HEADCOUNT_FAILED: headcount=' + masterQa.headcountVerified + ', formula=' + masterQa.formulaPreserved,
+      message: 'Master sheet headcount or E6 formula QA failed for tab ' + tabName
     };
   }
 
@@ -705,16 +882,6 @@ function runGatewayFlow_(action, force, targetDate) {
     };
   });
 
-  // Verify Master Sheet formula preservation
-  if (!masterQa.formulaPreserved) {
-    return {
-      status: 'HOLD_QA_EVIDENCE_INCOMPLETE',
-      reportDate: reportDate,
-      reason: 'MASTER_FORMULA_NOT_PRESERVED',
-      message: 'Master tab formula not preserved in cell E6'
-    };
-  }
-
   // Verify SOP documents access
   let sopIndexVerified = false;
   let sopCanonicalVerified = false;
@@ -740,21 +907,20 @@ function runGatewayFlow_(action, force, targetDate) {
     };
   }
 
-  // Verify Form responses reconciliation
+  // Verify Form responses reconciliation against verified masterQa (Defect 1)
   let formQa;
   try {
-    formQa = verifyFormReconciliation_(GATEWAY_CFG.FORM_SPREADSHEET_ID, GATEWAY_CFG.FORM_TAB_NAME, reportDate, masterQa.total);
+    formQa = verifyFormReconciliation_(GATEWAY_CFG.FORM_SPREADSHEET_ID, GATEWAY_CFG.FORM_TAB_NAME, reportDate, masterQa);
   } catch (e) {
     formQa = { verified: false, reason: String(e.message || e) };
   }
 
-  // Allow historical fixture date to pass form check if sheet already matches
-  if (!formQa.verified && reportDate !== '2026-10-23') {
+  if (!formQa.verified) {
     return {
       status: 'HOLD_QA_EVIDENCE_INCOMPLETE',
       reportDate: reportDate,
-      reason: 'FORM_RECONCILIATION_FAILED: ' + (formQa.reason || 'No matching rows in Form sheet for ' + reportDate),
-      message: 'Form responses not yet reconciled for report date ' + reportDate
+      reason: 'FORM_RECONCILIATION_FAILED: ' + (formQa.reason || 'Form responses do not reconcile with Master'),
+      message: 'Form responses reconciliation failed for report date ' + reportDate
     };
   }
 
@@ -825,25 +991,38 @@ function runGatewayFlow_(action, force, targetDate) {
     stageResults.push(res);
   }
 
-  // 6. Build genuine QA Evidence payload and Finalize report
+  // 6. Genuine QA Evidence verification & payload (Defect 3)
+  const sourceFresh = Boolean(formQa.verified && formQa.matchingRows > 0);
+  const sheetReadbackVerified = Boolean(masterQa.headcountVerified && masterQa.formulaPreserved);
+  const sopsReadVerified = Boolean(sopIndexVerified && sopCanonicalVerified);
+
+  if (!sourceFresh || !sheetReadbackVerified || !sopsReadVerified) {
+    return {
+      status: 'HOLD_QA_EVIDENCE_INCOMPLETE',
+      reportDate: reportDate,
+      reason: 'EVIDENCE_INCOMPLETE: sourceFresh=' + sourceFresh + ', sheetReadback=' + sheetReadbackVerified + ', sopsRead=' + sopsReadVerified,
+      message: 'Missing verified evidence for source freshness, sheet readback, or SOP reading'
+    };
+  }
+
   const completedAt = new Date().toISOString();
   const qaPayload = {
     sopIndexRead: sopIndexVerified,
-    sourceFresh: true,
-    formRowsReconciled: true,
+    sourceFresh: sourceFresh,
+    formRowsReconciled: formQa.verified,
     monthlySheetVerified: masterQa.headcountVerified,
     sheetFormulaPreserved: masterQa.formulaPreserved,
-    sheetReadbackVerified: true,
+    sheetReadbackVerified: sheetReadbackVerified,
     pdf4PagesVerified: pdfQa.pages === 4,
     pdfA4LandscapeVerified: pdfQa.landscape === true,
     driveReadbackVerified: pdfBytes.length > 0 && assets.length === 4,
     png4Verified: assets.length === 4,
-    // Database schema backwards compatibility
-    sopSheetsV2Read: true,
-    sopPublishV2Read: true,
-    sopSheetsV14Read: true,
-    sopPublishV1Read: true,
-    sopV13Read: true,
+    // Database schema backwards compatibility backed by actual SOP verification
+    sopSheetsV2Read: sopsReadVerified,
+    sopPublishV2Read: sopsReadVerified,
+    sopSheetsV14Read: sopsReadVerified,
+    sopPublishV1Read: sopsReadVerified,
+    sopV13Read: sopsReadVerified,
     // Canonical SOP EX + SUP-PUBLISH v3.2 evidence
     sopCanonicalV32Read: sopCanonicalVerified,
     sopExSupPublishV32Read: sopCanonicalVerified,
@@ -950,13 +1129,28 @@ function verifyMasterTab_(masterId, tabName) {
 
   let totalFormula = '';
   try {
-    totalFormula = sheet.getRange('E6').getFormula();
+    totalFormula = (sheet.getRange('E6').getFormula() || '').trim();
   } catch (fErr) {
     totalFormula = '';
   }
 
-  const formulaPreserved = Boolean(totalFormula && totalFormula.startsWith('=')) || (total === workers + supervisors);
-  const headcountVerified = (total > 0 && total === workers + supervisors && teams > 0);
+  // Defect 2: Strictly verify E6 formula. Must start with '=' and reference A6/C6 or SUM.
+  // Never substitute equal numbers for formula proof.
+  const e6HasFormula = Boolean(
+    totalFormula &&
+    totalFormula.startsWith('=') &&
+    (totalFormula.includes('A6') || totalFormula.includes('C6') || /SUM/i.test(totalFormula))
+  );
+
+  let a6Formula = '';
+  try {
+    a6Formula = (sheet.getRange('A6').getFormula() || '').trim();
+  } catch (aErr) {
+    a6Formula = '';
+  }
+
+  const formulaPreserved = e6HasFormula;
+  const headcountVerified = (total > 0 && total === workers + supervisors && teams > 0 && e6HasFormula);
 
   return {
     tab: tabName,
@@ -966,6 +1160,7 @@ function verifyMasterTab_(masterId, tabName) {
     total: total,
     teams: teams,
     totalFormula: totalFormula,
+    a6Formula: a6Formula,
     formulaPreserved: formulaPreserved,
     headcountVerified: headcountVerified
   };

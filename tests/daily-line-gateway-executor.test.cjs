@@ -156,6 +156,25 @@ function setupStandardMocks(overrides = {}) {
   const validPdfBytes = overrides.pdfBytes || createSyntheticPdf(4, true);
   const validPngBytes = overrides.pngBytes || createSyntheticPng(2947, 1800);
 
+  // Helper to generate 11 valid Form response rows matching 2026-10-23
+  // 9 teams with 6 workers + 1 sup each = 54 workers, 9 sups
+  // 1 team (Tone) with 7 workers + 0 sup = 7 workers, 0 sup
+  // 1 team (Tone 2) with 6 workers + 0 sup = 6 workers, 0 sup
+  // Total: 67 workers, 9 sups, 76 total, 11 teams. Exact match for masterQa!
+  const defaultStandardFormRows = [
+    ['23/10/2026 08:00:00', '23/10/2026', 'Above Villa', 'Plot 1', 'Team 1', '4', '2', '6', 'Work 1'],
+    ['23/10/2026 08:05:00', '23/10/2026', 'Above Villa', 'Plot 2', 'Team 2', '4', '2', '6', 'Work 2'],
+    ['23/10/2026 08:10:00', '23/10/2026', 'Above Villa', 'Plot 3', 'Team 3', '4', '2', '6', 'Work 3'],
+    ['23/10/2026 08:15:00', '23/10/2026', 'Above Condo', 'Condo A', 'Team 4', '4', '2', '6', 'Work 4'],
+    ['23/10/2026 08:20:00', '23/10/2026', 'Above Condo', 'Condo B', 'Team 5', '4', '2', '6', 'Work 5'],
+    ['23/10/2026 08:25:00', '23/10/2026', 'Mirage', 'Area 1', 'Team 6', '4', '2', '6', 'Work 6'],
+    ['23/10/2026 08:30:00', '23/10/2026', 'Mirage', 'Area 2', 'Team 7', '4', '2', '6', 'Work 7'],
+    ['23/10/2026 08:35:00', '23/10/2026', 'Hennessy', 'Site H', 'Team 8', '4', '2', '6', 'Work 8'],
+    ['23/10/2026 08:40:00', '23/10/2026', 'Hennessy', 'Site H', 'Team 9', '4', '2', '6', 'Work 9'],
+    ['23/10/2026 08:45:00', '23/10/2026', 'Above Villa', 'Plot 8', 'ช่างโทน', '7', '0', '7', 'Work Tone (0 sup)'],
+    ['23/10/2026 08:50:00', '23/10/2026', 'Above Villa', 'Plot 8', 'ทีมโทน', '6', '0', '6', 'Work Tone 2 (0 sup)']
+  ];
+
   global.SpreadsheetApp = {
     openById: (id) => ({
       getSheetByName: (name) => {
@@ -164,12 +183,11 @@ function setupStandardMocks(overrides = {}) {
           if (overrides.formEmpty) {
             return { getLastRow: () => 0 };
           }
+          const formRows = overrides.formRows || defaultStandardFormRows;
           return {
-            getLastRow: () => 10,
+            getLastRow: () => formRows.length + 1,
             getRange: () => ({
-              getDisplayValues: () => overrides.formDates || [
-                ['23/10/2026'], ['24/10/2026'], ['26/10/2026'], ['27/10/2026']
-              ]
+              getDisplayValues: () => formRows
             })
           };
         }
@@ -385,6 +403,13 @@ test('7. doPost Authentication, Replay Protection, and Delivery Guard', () => {
     postData: { contents: JSON.stringify({ token: secret, timestamp: now, nonce: nonce3, action: 'stage_and_finalize', targetDate: '2026-10-01' }) }
   });
   assert.equal(JSON.parse(rHist.text).error, 'DELIVERY_GUARD_BLOCKED');
+
+  // 6. Defect 4: Missing targetDate in stage_and_finalize prohibited -> 400 MISSING_TARGET_DATE
+  const nonce4 = 'unique-nonce-4444444444444444';
+  const rMissingDate = doPost({
+    postData: { contents: JSON.stringify({ token: secret, timestamp: now, nonce: nonce4, action: 'stage_and_finalize' }) }
+  });
+  assert.equal(JSON.parse(rMissingDate.text).error, 'MISSING_TARGET_DATE');
 });
 
 test('8. Negative Test: daily_line_ready returns ready=false -> GATEWAY_NOT_READY', () => {
@@ -546,10 +571,11 @@ test('11. Negative Test: QA Evidence incomplete -> HOLD_QA_EVIDENCE_INCOMPLETE',
   assert.equal(r1.status, 'HOLD_QA_EVIDENCE_INCOMPLETE');
   assert.match(r1.reason, /PDF_QA_FAILED/);
 
-  // Test 2: Master formula missing
+  // Test 2: Master formula missing (Defect 2) -> HOLD_QA_EVIDENCE_INCOMPLETE
   setupStandardMocks({ noFormula: true, headcountMismatch: true });
   const r2 = runGatewayFlow_('stage_and_finalize', false, '2026-10-23');
-  assert.equal(r2.status, 'PENDING_SOURCE_FILES'); // Headcount verification failed
+  assert.equal(r2.status, 'HOLD_QA_EVIDENCE_INCOMPLETE');
+  assert.match(r2.reason, /MASTER_FORMULA_OR_HEADCOUNT_FAILED/);
 
   // Test 3: SOP Canonical doc trashed/inaccessible
   setupStandardMocks({ trashedDocId: GATEWAY_CFG.SOP_CANONICAL_DOC_ID });
@@ -692,4 +718,88 @@ test('16. File Finder: rejects duplicate files with identical name in the same f
   assert.throws(() => {
     findFileInFolder_('date_folder_id', 'Daily_Site_Report_24-10-2026.pdf');
   }, /DUPLICATE_FILE_NAME/);
+});
+
+test('17. Targeted Test: Form Reconciliation with Retroactive Delta & Tone/P\'Pha Sup=0', () => {
+  // Mock form sheet for 2026-10-26:
+  // 7 on-time entries matching tab 261026: workers 22, sups 6, total 28.
+  // Plus 1 retroactive entry submitted on 27/10: P'Pha (workers 1, sup 0).
+  const formRows2610 = [
+    ['26/10/2026 08:30:00', '26/10/2026', 'Above Villa', 'Plot 3', 'ช่างต้อย', '4', '1', '5', 'Work 1'],
+    ['26/10/2026 08:45:00', '26/10/2026', 'Above Condo', 'A521', 'พี่ปู', '3', '0', '3', 'Work 2'],
+    ['26/10/2026 09:00:00', '26/10/2026', 'Above', 'Office', 'ลุงทอง', '2', '0', '2', 'Work 3'],
+    ['26/10/2026 09:15:00', '26/10/2026', 'Above Villa', 'Plot 6', 'อ๊อด', '2', '2', '4', 'Work 4'],
+    ['26/10/2026 09:50:00', '26/10/2026', 'Above Condo', 'A421', 'บังรุน', '1', '0', '1', 'Work 5'],
+    ['26/10/2026 10:05:00', '26/10/2026', 'Above Condo', 'A', 'พี่ตา', '0', '6', '6', 'Work 6'],
+    ['26/10/2026 11:25:00', '26/10/2026', 'Above Villa', 'Plot 8', 'โทน', '1', '0', '1', 'Work 7 (sup=0)'],
+    // Retroactive row submitted on 27/10 at 15:22:53 for date 26/10/2026 (พี่ภาร)
+    ['27/10/2026 15:22:53', '26/10/2026', 'Above Villa', 'ส่วนกลาง', 'พี่ภาร', '0', '1', '1', 'กวาดถนน (sup=0)']
+  ];
+
+  setupStandardMocks({ formRows: formRows2610 });
+
+  const masterQa2610 = {
+    workers: 22,
+    supervisors: 6,
+    total: 28,
+    teams: 7,
+    formulaPreserved: true,
+    headcountVerified: true
+  };
+
+  const recon = verifyFormReconciliation_(
+    GATEWAY_CFG.FORM_SPREADSHEET_ID,
+    GATEWAY_CFG.FORM_TAB_NAME,
+    '2026-10-26',
+    masterQa2610
+  );
+
+  assert.equal(recon.verified, true);
+  assert.equal(recon.onTimeCount, 7);
+  assert.equal(recon.retroactiveCount, 1);
+  assert.equal(recon.onTimeTotals.workers, 22);
+  assert.equal(recon.onTimeTotals.supervisors, 6);
+  assert.equal(recon.onTimeTotals.total, 28);
+  assert.equal(recon.delta.workers, 1);
+  assert.equal(recon.delta.supervisors, 0); // P'Pha has 0 supervisors per SOP EX
+  assert.equal(recon.delta.total, 1);
+  assert.equal(recon.manualEditsPreserved, true);
+});
+
+test('18. Negative Test: matchingRows > 0 alone FAILS if headcount does not reconcile with Master', () => {
+  // Form has rows, but total headcount does not match masterQa
+  const mismatchedFormRows = [
+    ['23/10/2026 08:00:00', '23/10/2026', 'Above Villa', 'P1', 'Team A', '2', '0', '2', 'Work']
+  ];
+  setupStandardMocks({ formRows: mismatchedFormRows });
+
+  const masterQa = { workers: 67, supervisors: 9, total: 76, teams: 11, formulaPreserved: true, headcountVerified: true };
+  const recon = verifyFormReconciliation_(
+    GATEWAY_CFG.FORM_SPREADSHEET_ID,
+    GATEWAY_CFG.FORM_TAB_NAME,
+    '2026-10-23',
+    masterQa
+  );
+
+  assert.equal(recon.verified, false);
+  assert.match(recon.reason, /HEADCOUNT_RECONCILIATION_MISMATCH/);
+});
+
+test('19. Negative Test: verifyMasterTab_ rejects cell E6 without genuine formula even if numbers match', () => {
+  // Mock Master sheet tab where E6 has value 76 and workers=67, sups=9, but NO formula
+  global.SpreadsheetApp = {
+    openById: () => ({
+      getSheetByName: () => ({
+        getRange: (addr) => ({
+          getDisplayValue: () => '23-10-2026',
+          getValue: () => (addr === 'A6' ? 67 : addr === 'C6' ? 9 : addr === 'E6' ? 76 : addr === 'G6' ? 11 : 0),
+          getFormula: () => '' // Zero formula in E6!
+        })
+      })
+    })
+  };
+
+  const res = verifyMasterTab_('master_id', '231026');
+  assert.equal(res.formulaPreserved, false, 'Must NOT pass formula check without formula');
+  assert.equal(res.headcountVerified, false, 'headcountVerified must require formulaPreserved');
 });
