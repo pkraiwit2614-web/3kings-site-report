@@ -16,7 +16,7 @@ Date: 2026-10-29. Status: STAGING, not a live monitor or auto-repair system.
 ## Phase 2 — Central Error Log and patch proposals
 - Reuse P0-B `central-error-log.cjs` and `triage-cli.cjs` from the existing isolated branch. Seven metadata-only source categories; hashed fingerprints; grouped occurrences; no raw messages, tokens, stack traces or room identifiers.
 - `staging-control-plane.cjs` combines source comparison, current-user trigger snapshot and sanitized error metadata. Missing, stale, mismatched or invalid evidence must remain visible as UNKNOWN/BLOCKED.
-- PROPOSE_PATCH is only a proposed Git-branch change with a pinned expected SHA-256; it is blocked on source mismatch, missing failure evidence or critical security errors. No patch is generated or applied automatically.
+- PROPOSE_PATCH requires a recent, explicitly staging-scoped ACTIVE SOP index and SOP 15 evidence snapshot, and is only a proposed Git-branch change with a pinned expected SHA-256; it is blocked on source mismatch, missing failure evidence or critical security errors. No patch is generated or applied automatically.
 
 ## Phase 3 — ChatGPT command router and SOP gate
 - Allowed staging intents: AUDIT, TRIAGE, PROPOSE_PATCH, RUN_QA.

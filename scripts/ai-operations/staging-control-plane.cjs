@@ -35,6 +35,16 @@ function assessTriggers(snapshot,now){
  const result=inspectGasSnapshot(snapshot,now);
  return {status:result.status,scope:result.scope,lastExecution:result.lastExecution,otherOwners:result.otherOwners};
 }
+function assessSop(evidence,now){
+ if(evidence==null)return {status:'UNVERIFIED',writeAuthorized:false};
+ if(!evidence||typeof evidence!=='object'||Array.isArray(evidence))throw Error('INVALID_SOP_EVIDENCE');
+ if(evidence.indexStatus!=='ACTIVE'||evidence.sop15Status!=='ACTIVE'||evidence.scope!=='STAGING_BRANCH_ONLY')
+  return {status:'BLOCKED',writeAuthorized:false};
+ const checked=new Date(evidence.observedAt);
+ if(Number.isNaN(+checked)||+checked>+new Date(now)+300000)return {status:'INVALID_TIME',writeAuthorized:false};
+ if(+new Date(now)-+checked>86400000)return {status:'STALE',writeAuthorized:false};
+ return {status:'STAGING_REVIEW_ONLY',writeAuthorized:false,observedAt:checked.toISOString(),source:'SUPPLIED_SOP_SNAPSHOT_NOT_ATTESTED'};
+}
 function planOperations(input,{now=new Date(),root=ROOT}={}){
  if(!input||typeof input!=='object'||Array.isArray(input))throw Error('INVALID_REQUEST');
  const action=input.action||'TRIAGE';
@@ -42,6 +52,7 @@ function planOperations(input,{now=new Date(),root=ROOT}={}){
  const paths=getManifest(root);
  const source=assessSource(input.sourceComparison,paths);
  const triggers=assessTriggers(input.triggerSnapshot,now);
+ const sop=assessSop(input.sopEvidence,now);
  const report=buildReport(input.events||[],now);
  const blocked=report.events.some(e=>e.severity==='CRITICAL');
  const hasFailure=report.events.some(e=>e.state==='FAILED');
@@ -57,8 +68,8 @@ function planOperations(input,{now=new Date(),root=ROOT}={}){
   if(typeof target!=='string'||!paths.includes(target))throw Error('TARGET_NOT_ALLOWLISTED');
   if(!SHA.test(input.expectedGitSha256||''))throw Error('EXPECTED_SOURCE_HASH_REQUIRED');
   const record=input.sourceComparison?.results?.find(r=>r.gitFile===target);
-  if(source.status!=='HEAD_MATCH_REPORTED_DEPLOYMENT_UNVERIFIED'||record?.gitSha256!==input.expectedGitSha256||blocked||!hasFailure)
-   patch={status:'BLOCKED',reason:blocked?'CRITICAL_EVENT_REQUIRES_REVIEW':source.status!=='HEAD_MATCH_REPORTED_DEPLOYMENT_UNVERIFIED'?'SOURCE_NOT_MATCHED':record?.gitSha256!==input.expectedGitSha256?'SOURCE_HASH_CONFLICT':'NO_ACTIVE_FAILURE_EVIDENCE'};
+  if(source.status!=='HEAD_MATCH_REPORTED_DEPLOYMENT_UNVERIFIED'||record?.gitSha256!==input.expectedGitSha256||blocked||!hasFailure||sop.status!=='STAGING_REVIEW_ONLY')
+   patch={status:'BLOCKED',reason:blocked?'CRITICAL_EVENT_REQUIRES_REVIEW':source.status!=='HEAD_MATCH_REPORTED_DEPLOYMENT_UNVERIFIED'?'SOURCE_NOT_MATCHED':record?.gitSha256!==input.expectedGitSha256?'SOURCE_HASH_CONFLICT':!hasFailure?'NO_ACTIVE_FAILURE_EVIDENCE':'SOP_NOT_VERIFIED'};
   else patch={status:'PROPOSAL_ONLY',target:'docs/apps-script/'+target,expectedGitSha256:input.expectedGitSha256,sourceStatus:'HEAD_ONLY',approval:'REQUIRED_BEFORE_LIVE_WRITE',allowedChange:'ISOLATED_BRANCH_ONLY',tests:'AFFECTED_TESTS_AND_SECURITY_GATE',codeModificationPerformed:false};
  }
  return {
@@ -67,11 +78,11 @@ function planOperations(input,{now=new Date(),root=ROOT}={}){
    requestedAction:action,routeStatus:'SIMULATION_ONLY',executor:'CHATGPT_ANALYST_ONLY',
    proposals,autoRepairEnabled:false,dispatchAllowed:false,productionWriteAllowed:false,
    mergeAllowed:false,deployAllowed:false,liveGasWriteAllowed:false,
-   sopGate:'REVIEW_CURRENT_ACTIVE_SOP_AND_SOURCE_BEFORE_ANY_REAL_ACTION'
+   sopGate:sop
   },
   caveats:['No authenticated live Apps Script connection is established by supplying a snapshot.',
    'Current-user trigger inventory cannot prove other owners, enabled state, or last execution.',
    'No background monitoring or execution occurs in this staging evaluator.']
  };
 }
-module.exports={getManifest,assessSource,assessTriggers,planOperations};
+module.exports={getManifest,assessSource,assessTriggers,assessSop,planOperations};

@@ -5,6 +5,7 @@ const {getManifest,assessSource,planOperations}=require('../scripts/ai-operation
 const NOW=new Date('2026-10-29T01:30:00Z');
 const paths=getManifest();
 const a='a'.repeat(64),b='b'.repeat(64);
+const sopEvidence={indexStatus:'ACTIVE',sop15Status:'ACTIVE',scope:'STAGING_BRANCH_ONLY',observedAt:'2026-10-29T01:20:00Z'};
 const source=(status='EXACT_MATCH')=>({
  mode:'READ_ONLY_GET',codeOrigin:'GOOGLE_APPS_SCRIPT_API',
  verification:'HEAD_OR_EXPLICIT_VERSION_NOT_LIVE_DEPLOYMENT',checked:7,
@@ -30,12 +31,12 @@ test('reported seven matches are not proof of deployed version',()=>{
  assert.equal(r.phase1.source.source,'SUPPLIED_SNAPSHOT_NOT_ATTESTED');
 });
 test('source diff blocks patch proposal',()=>{
- const r=run({action:'PROPOSE_PATCH',sourceComparison:source('CONTENT_DIFF'),targetFile:paths[0],expectedGitSha256:a,events:[event()]});
+ const r=run({action:'PROPOSE_PATCH',sourceComparison:source('CONTENT_DIFF'),sopEvidence,targetFile:paths[0],expectedGitSha256:a,events:[event()]});
  assert.equal(r.phase2.patch.status,'BLOCKED');
  assert.equal(r.phase2.patch.reason,'SOURCE_NOT_MATCHED');
 });
 test('matching HEAD allows proposal only, never write',()=>{
- const r=run({action:'PROPOSE_PATCH',sourceComparison:source(),targetFile:paths[0],expectedGitSha256:a,events:[event()]});
+ const r=run({action:'PROPOSE_PATCH',sourceComparison:source(),sopEvidence,targetFile:paths[0],expectedGitSha256:a,events:[event()]});
  assert.equal(r.phase2.patch.status,'PROPOSAL_ONLY');
  assert.equal(r.phase2.patch.codeModificationPerformed,false);
  assert.equal(r.phase3.dispatchAllowed,false);
@@ -53,16 +54,16 @@ test('missing source entries and duplicate paths rejected',()=>{
  assert.throws(()=>run({sourceComparison:s}),/INVALID_SOURCE_RESULT/);
 });
 test('hash mismatch prevents proposal even if snapshot reports matching',()=>{
- const r=run({action:'PROPOSE_PATCH',sourceComparison:source(),targetFile:paths[0],expectedGitSha256:b,events:[event()]});
+ const r=run({action:'PROPOSE_PATCH',sourceComparison:source(),sopEvidence,targetFile:paths[0],expectedGitSha256:b,events:[event()]});
  assert.equal(r.phase2.patch.reason,'SOURCE_HASH_CONFLICT');
 });
 test('critical security event always blocks patch',()=>{
- const r=run({action:'PROPOSE_PATCH',sourceComparison:source(),targetFile:paths[0],expectedGitSha256:a,events:[event({code:'RLS_PERMISSION_DENIED'})]});
+ const r=run({action:'PROPOSE_PATCH',sourceComparison:source(),sopEvidence,targetFile:paths[0],expectedGitSha256:a,events:[event({code:'RLS_PERMISSION_DENIED'})]});
  assert.equal(r.phase2.patch.status,'BLOCKED');
  assert.equal(r.phase2.patch.reason,'CRITICAL_EVENT_REQUIRES_REVIEW');
 });
 test('recovered-only evidence cannot trigger a patch',()=>{
- const r=run({action:'PROPOSE_PATCH',sourceComparison:source(),targetFile:paths[0],expectedGitSha256:a,events:[event({status:'RECOVERED'})]});
+ const r=run({action:'PROPOSE_PATCH',sourceComparison:source(),sopEvidence,targetFile:paths[0],expectedGitSha256:a,events:[event({status:'RECOVERED'})]});
  assert.equal(r.phase2.patch.status,'BLOCKED');
 });
 test('no secret from raw event survives triage',()=>{
@@ -85,7 +86,7 @@ test('RUN_QA only simulates routing',()=>{
 });
 
 test('security failure remains blocked after a recovered observation',()=>{
- const r=run({action:'PROPOSE_PATCH',sourceComparison:source(),targetFile:paths[0],expectedGitSha256:a,
+ const r=run({action:'PROPOSE_PATCH',sourceComparison:source(),sopEvidence,targetFile:paths[0],expectedGitSha256:a,
   events:[event({code:'RLS_PERMISSION_DENIED'}),event({status:'RECOVERED',code:'SYNC_SUCCESS',occurredAt:'2026-10-29T01:10:00Z',eventId:'run-2'})]});
  assert.equal(r.phase2.patch.status,'BLOCKED');
  assert.equal(r.phase2.patch.reason,'CRITICAL_EVENT_REQUIRES_REVIEW');
@@ -102,4 +103,17 @@ test('offline CLI cannot overwrite output or source',()=>{
   assert.throws(()=>main(['--input',input,'--output',output]),/EEXIST/);
   assert.throws(()=>main(['--input',input,'--output',input]),/SOURCE_OVERWRITE_BLOCKED/);
  }finally{fs.rmSync(dir,{recursive:true,force:true})}
+});
+
+test('SOP evidence is required for any patch proposal',()=>{
+ const r=run({action:'PROPOSE_PATCH',sourceComparison:source(),targetFile:paths[0],expectedGitSha256:a,events:[event()]});
+ assert.equal(r.phase2.patch.reason,'SOP_NOT_VERIFIED');
+ assert.equal(r.phase3.sopGate.status,'UNVERIFIED');
+});
+test('stale or non-staging SOP evidence blocks proposal',()=>{
+ for(const evidence of [{...sopEvidence,observedAt:'2026-10-26T00:00:00Z'},{...sopEvidence,scope:'PRODUCTION'}]){
+  const r=run({action:'PROPOSE_PATCH',sourceComparison:source(),sopEvidence:evidence,targetFile:paths[0],expectedGitSha256:a,events:[event()]});
+  assert.equal(r.phase2.patch.status,'BLOCKED');
+  assert.notEqual(r.phase3.sopGate.status,'STAGING_REVIEW_ONLY');
+ }
 });
