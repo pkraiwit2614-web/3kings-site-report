@@ -95,6 +95,13 @@ UPDATE public.defect_web_overrides SET
   status_group = 'Hotel - Awaiting Check'
 WHERE room_no = 'B515';
 
+SET app.defect_manual_update = '1';
+UPDATE public.condo_room_status SET
+  current_status = 'Defect เสร็จแล้ว / รอ Hotel Engineer ตรวจ',
+  status_group = 'Hotel - Awaiting Check'
+WHERE room_no = 'B515';
+RESET app.defect_manual_update;
+
 UPDATE public.condo_room_status SET
   current_status = 'Defect ยังไม่เสร็จ / ต้องปิดงาน',
   status_group = 'Hotel - Incomplete',
@@ -384,10 +391,12 @@ END
 $function$;
 
 -- Post-Rollback Assertion: B515 Excel transition to Incomplete MUST BE REJECTED
+SET app.defect_manual_update = '1';
 UPDATE public.condo_room_status SET
   current_status = 'Defect เสร็จแล้ว / รอ Hotel Engineer ตรวจ',
   status_group = 'Hotel - Awaiting Check'
 WHERE room_no = 'B515';
+RESET app.defect_manual_update;
 
 UPDATE public.condo_room_status SET
   current_status = 'Defect ยังไม่เสร็จ / ต้องปิดงาน',
