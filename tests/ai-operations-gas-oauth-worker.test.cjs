@@ -97,7 +97,7 @@ test('OAuth owner flow: state cookie, verified Google JWT, encrypted token, sess
  assert.ok(!JSON.stringify(body).includes(scriptId));assert.ok(!JSON.stringify(body).includes(mockSource));
  assert.ok(f.calls.filter(c=>c.url.startsWith('https://script.googleapis.com')).every(c=>c.method==='GET'));
  const replay=await f.callback(flow);assert.equal(replay.status,400);
- const noCookie=await f.run(f.request('/api/source'));assert.equal(noCookie.status,502);
+ const noCookie=await f.run(f.request('/api/source'));assert.equal(noCookie.status,401);
 });
 test('wrong Google email cannot store tokens or create sessions',async()=>{
  const f=await fixture(),flow=await f.start();
@@ -121,6 +121,6 @@ test('rate limit, CSRF-safe logout, unauthenticated source and method guards',as
  const f=await fixture();
  for(let i=0;i<5;i++)assert.equal((await f.start()).url.origin,'https://accounts.google.com');
  const limit=await f.run(f.request('/auth/start','','GET',{'cf-connecting-ip':'203.0.113.1'}));assert.equal(limit.status,502);
- const unauthorized=await f.run(f.request('/api/source'));assert.equal(unauthorized.status,502);
+ const unauthorized=await f.run(f.request('/api/source'));assert.equal(unauthorized.status,401);
  const wrongMethod=await f.run(f.request('/api/source','','POST'));assert.equal(wrongMethod.status,405);
 });
