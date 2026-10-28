@@ -54,12 +54,15 @@ Evidence of verification before production deployment:
    - B515 transition blocked when Web writeback is pending.
    - Regression on B214, B314, B315, B403: approved transitions succeed, unapproved transitions are rejected and retain original values.
 
-3. Real PostgreSQL Container QA (`.github/workflows/b515-sql-isolated.yml`):
+3. Real PostgreSQL Container QA (`.github/workflows/defect-override-reconcile.yml` on Draft PR #233):
+   - CI Run: `https://github.com/pkraiwit2614-web/3kings-site-report/actions/runs/40630307867` (Commit `a5b9f6da6588c22756b94ef5b7b3a6ce3b93d2d6`)
+   - Job `postgres-regression (16)`: `https://github.com/pkraiwit2614-web/3kings-site-report/actions/runs/40630307867/job/122624888096` (PASS / success)
+   - Job `postgres-regression (17)`: `https://github.com/pkraiwit2614-web/3kings-site-report/actions/runs/40630307867/job/122624888320` (PASS / success)
    - Executes against real PostgreSQL 16 and 17 service containers.
    - Verifies preflight fail-closed when room B515 is absent (`ROOM_B515_NOT_FOUND_IN_CANONICAL_INVENTORY`).
    - Applies baseline schema, baseline reconciliation migration `20261019132800`, and `20261027233000_b515_defect_sync_reconcile.sql`.
    - Runs `tests/sql/b515-defect-sync-reconcile-assertions.sql` asserting B515 Excel acceptance, history preservation, pending write protection, and B214/B314/B315/B403 regression.
-   - Runs isolated negative scenarios verifying fail-closed behavior on stale Excel revisions, wrong source files, and arbitrary unapproved status transitions.
+   - Executes and verifies full rehearsed executable rollback in container (B515 transition to Incomplete rejected after rollback).
 
 ---
 
