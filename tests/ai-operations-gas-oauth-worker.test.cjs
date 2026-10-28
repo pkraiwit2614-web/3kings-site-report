@@ -12,7 +12,33 @@ async function fixture(){
  const now=1800000000,origin='https://staging.example.test';
  const env={BRIDGE_ENABLED:'true',PUBLIC_ORIGIN:origin,GOOGLE_CLIENT_ID:'example.apps.googleusercontent.com',GOOGLE_CLIENT_SECRET:'TEST_ONLY',TOKEN_ENCRYPTION_KEY:b64(crypto.getRandomValues(new Uint8Array(32))),CF_ACCESS_TEAM_DOMAIN:domain,CF_ACCESS_AUD:aud,ALLOWED_EMAIL:email,TARGETS_JSON:JSON.stringify([{scriptId:'fakeScriptId_123456789',files:['Remote']}])};
  const state=new Map(),tokens=new Map(),calls=[];
- env.DB={prepare(sql){return{bind(...args){return{async run(){if(sql.startsWith('INSERT INTO oauth_state'))state.set(args[0],{owner:args[1],verifier:args[2],expires:args[3]});else if(sql.startsWith('INSERT INTO oauth_token'))tokens.set(args[0],{iv:args[1],ciphertext:args[2]});else throw Error('unexpected SQL run');return {success:true};},async first(){if(sql.startsWith('DELETE FROM oauth_state')){const row=state.get(args[0]);if(!row||row.owner!==args[1])return null;state.delete(args[0]);return row;}if(sql.startsWith('SELECT owner FROM oauth_token'))return tokens.has(args[0])?{owner:args[0]}:null;if(sql.startsWith('SELECT iv,ciphertext FROM oauth_token'))return tokens.get(args[0])||null;throw Error('unexpected SQL first');}};}}};
+ env.DB={
+  prepare(sql){
+   return {
+    bind(...args){
+     return {
+      async run(){
+       if(sql.startsWith('INSERT INTO oauth_state'))state.set(args[0],{owner:args[1],verifier:args[2],expires:args[3]});
+       else if(sql.startsWith('INSERT INTO oauth_token'))tokens.set(args[0],{iv:args[1],ciphertext:args[2]});
+       else throw Error('unexpected SQL run');
+       return {success:true};
+      },
+      async first(){
+       if(sql.startsWith('DELETE FROM oauth_state')){
+        const row=state.get(args[0]);
+        if(!row||row.owner!==args[1])return null;
+        state.delete(args[0]);
+        return row;
+       }
+       if(sql.startsWith('SELECT owner FROM oauth_token'))return tokens.has(args[0])?{owner:args[0]}:null;
+       if(sql.startsWith('SELECT iv,ciphertext FROM oauth_token'))return tokens.get(args[0])||null;
+       throw Error('unexpected SQL first');
+      }
+     };
+    }
+   };
+  }
+ };
  async function jwt(claims={}){const header=b64(JSON.stringify({alg:'RS256',kid:'key1'}));const payload=b64(JSON.stringify({iss:'https://'+domain,aud:[aud],email,exp:now+3600,nbf:now-10,...claims}));const sig=await crypto.subtle.sign('RSASSA-PKCS1-v1_5',keypair.privateKey,encoder.encode(header+'.'+payload));return header+'.'+payload+'.'+b64(sig);}
  const fetchFn=async(url,opts)=>{calls.push({url,method:opts.method});if(url.includes('/cdn-cgi/access/certs'))return{ok:true,json:async()=>({keys:[jwk]})};if(url===bridge.TOKEN_URL){const params=new URLSearchParams(opts.body);if(params.get('grant_type')==='authorization_code')return{ok:true,json:async()=>({access_token:'test-access',refresh_token:'test-refresh',expires_in:3600,scope:bridge.SCOPE})};if(params.get('grant_type')==='refresh_token')return{ok:true,json:async()=>({access_token:'test-access-2',expires_in:3600,scope:bridge.SCOPE})};}if(url.startsWith('https://script.googleapis.com/v1/projects/'))return{ok:true,json:async()=>({files:[{name:'Remote',type:'SERVER_JS',source:'function safe() {}'}]})};throw Error('unexpected fetch');};
  const request=async(path,claims,method='GET')=>new Request(origin+path,{method,headers:{'cf-access-jwt-assertion':await jwt(claims)}});
