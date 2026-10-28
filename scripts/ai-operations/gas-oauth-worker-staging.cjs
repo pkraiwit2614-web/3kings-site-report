@@ -172,6 +172,6 @@ async function handle(request,env,{crypto=globalThis.crypto,fetchFn=globalThis.f
    }
   }
   return json({mode:'STAGING_ONLY',source:'GAS_API_HEAD_NOT_DEPLOYMENT',scope:READ_SCOPE,files:results});
- }catch{return fail('READ_ONLY_OPERATION_FAILED',502);}
+ }catch(error){const allow=new Set(['RATE_LIMIT','TOKEN_EXCHANGE','TOKEN_INVALID','SCOPE_MISMATCH','ID_TOKEN','ID_TOKEN_FORMAT','ID_TOKEN_PARSE','ID_TOKEN_ALG','ID_TOKEN_CLAIMS','GOOGLE_JWKS','GOOGLE_KEY','GOOGLE_SIGNATURE','NO_REFRESH_TOKEN','GAS_READ_FAILED','GAS_CONTENT_INVALID','AMBIGUOUS_REMOTE','INVALID_REMOTE_SOURCE']);const phase=url.pathname==='/auth/start'?'START':url.pathname==='/auth/callback'?'CALLBACK':'API';return fail('OAUTH_'+phase+'_'+(allow.has(error?.message)?error.message:'INTERNAL'),502);}
 }
 module.exports={READ_SCOPE,SCOPES,AUTH_URL,TOKEN_URL,JWKS_URL,STATE_COOKIE,SESSION_COOKIE,random,sha,shaHex,config,verifyGoogleIdToken,seal,unseal,assertScopes,exchange,authenticatedOwner,handle};
