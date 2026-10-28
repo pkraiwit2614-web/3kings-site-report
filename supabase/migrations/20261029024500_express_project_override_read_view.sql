@@ -6,7 +6,7 @@ create table if not exists public.express_project_overrides (
   plot_codes text[] not null check (cardinality(plot_codes) between 1 and 4),
   supplier_code text not null check (supplier_code ~ '^AP-[0-9]{4}$'),
   expected_total numeric(18,4) not null check (expected_total >= 0),
-  evidence_url text not null check (evidence_url ~ '^https://drive\\.google\\.com/file/d/'),
+  evidence_url text not null check (evidence_url like 'https://drive.google.com/file/d/%'),
   evidence_scope text not null,
   reviewed_by text not null,
   status text not null check (status in ('approved','revoked')) default 'approved',
