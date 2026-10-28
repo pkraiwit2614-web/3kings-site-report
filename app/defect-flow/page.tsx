@@ -523,7 +523,7 @@ export default function DefectFlowPage(){
 
           <text x={44} y={1000} fontSize={18} fontWeight={900} fill={coverage===flowRows.length?COLORS.navy:COLORS.danger}>Coverage Check — {coverage===flowRows.length?'ครบ':'ต้องตรวจสอบ'} {coverage} / {flowRows.length} {view==='combine'?'ชุดห้อง':'ห้อง'}</text>
           <text x={44} y={1028} fontSize={13} fontWeight={800} fill={COLORS.muted}>ตึก A {a.total} ห้อง + ตึก B {b.total} ห้อง = {flowRows.length} {view==='combine'?'ชุดห้อง':'ห้อง'}</text>
-          <text x={44} y={1051} fontSize={12} fontWeight={700} fill={view==='combine'&&combineHotelCount!==128?COLORS.danger:COLORS.muted}>{view==='combine'?`ยืนยันตามไฟล์ช่างโรงแรม: ร่วมโรงแรม ${combineHotelCount}/128 ชุด • ไม่ร่วมโรงแรม ${combineNonHotelCount} ชุด`:`A: ${a.customerHotel} + ${a.customerNon} + ${a.noHotel} + ${a.noNon} = ${a.total} • B: ${b.customerHotel} + ${b.customerNon} + ${b.noHotel} + ${b.noNon} = ${b.total}`}</text>
+          {view!=='combine'&&<text x={44} y={1051} fontSize={12} fontWeight={700} fill={COLORS.muted}>{`A: ${a.customerHotel} + ${a.customerNon} + ${a.noHotel} + ${a.noNon} = ${a.total} • B: ${b.customerHotel} + ${b.customerNon} + ${b.noHotel} + ${b.noNon} = ${b.total}`}</text>}
           <text x={706} y={999} fontSize={17} fontWeight={900} fill={COLORS.navy}>สถานะปลายทางรวมทั้งโครงการ</text>
           {footerItems.map((item,i)=>{
             const x=706+i*196.2,w=180,c=toneColor(item.tone),multiLine=item.lines.length>1
