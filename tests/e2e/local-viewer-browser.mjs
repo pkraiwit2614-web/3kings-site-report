@@ -125,9 +125,30 @@ try {
     await page.goto(APP+path,{waitUntil:'domcontentloaded'})
     await page.getByText(marker,{exact:false}).first().waitFor()
     assert.equal(new URL(page.url()).pathname,path)
+    const expectedTitles = {'/defects':'Defect Report - Condo','/materials':'Materials','/reports':'Site Operations'}
+    await page.waitForFunction(label => document.title === label + ' | 3 Kings Site Report', expectedTitles[path])
+    console.log('PASS_BROWSER_TAB_TITLE_'+path.slice(1).toUpperCase())
     console.log('PASS_VIEWER_UI_API_'+path.slice(1).toUpperCase())
     await page.screenshot({path:'tests/e2e/artifacts/'+path.slice(1)+'.png',fullPage:true})
   }
+  phase='NESTED_TAB_TITLE'
+  await page.goto(APP+'/defect-flow',{waitUntil:'domcontentloaded'})
+  await page.getByRole('button',{name:'Flow รวม',exact:true}).waitFor()
+  await page.waitForFunction(() => document.title === 'Defect Flow - Flow รวม | 3 Kings Site Report')
+  for (const [label,expected] of [
+    ['Flow โรงแรม','Flow โรงแรม'],
+    ['Flow Combine = 1','Flow Combine=1'],
+    ['Flow โรงแรม Combine = 1','Flow โรงแรม Combine=1'],
+  ]) {
+    await page.getByRole('button',{name:label,exact:true}).click()
+    await page.waitForFunction(title => document.title === title,
+      'Defect Flow - '+expected+' | 3 Kings Site Report')
+  }
+  console.log('PASS_BROWSER_TAB_NESTED_FLOW_ALL_VIEWS')
+  await page.goto(APP+'/defect-flow?view=hotel',{waitUntil:'domcontentloaded'})
+  await page.waitForFunction(() => document.title === 'Defect Flow - Flow โรงแรม | 3 Kings Site Report')
+  console.log('PASS_BROWSER_TAB_DIRECT_QUERY_VIEW')
+
   phase='RESTRICTED_ROUTES'
   for(const path of ['/users','/reports/labour']){
     const api=await context.request.get(APP+'/api/access-control?path='+encodeURIComponent(path),
