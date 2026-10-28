@@ -24,14 +24,14 @@ create policy express_project_overrides_reader on public.express_project_overrid
 
 -- Source proof: signed 26/10/2026 PL0000976 confirms Above Element Condo B room B603.
 -- Source proof: signed 04/08/2026 PL0000850 confirms Proud Residence Condo B rooftop stair.
--- PROUD-CONDO-B is intentionally distinct from Above Element's CONDO-B.
+-- PROUD-KARON is the existing projects.code; evidence_scope retains Building B.
 insert into public.express_project_overrides
  (document_group,document_no,plot_codes,supplier_code,expected_total,evidence_url,evidence_scope,reviewed_by,status)
 values
  ('PO_PL','PL0000976',array['CONDO-B'],'AP-0159',4387.0000,
   'https://drive.google.com/file/d/1UAcGqXrZo1ON4l5L3w5t6UhBIAMMlIzX/view',
   'Above Element Condo B, room B603, furniture headboard slat','owner-approved evidence review 2026-10-29','approved'),
- ('PO_PL','PL0000850',array['PROUD-CONDO-B'],'AP-0038',12091.0000,
+ ('PO_PL','PL0000850',array['PROUD-KARON'],'AP-0038',12091.0000,
   'https://drive.google.com/file/d/1Kc1PdbeGYCvvoteuB0BJx5TmDhUa_HeQ/view',
   'Proud Residence rooftop stair handrail, Building B','owner-approved evidence review 2026-10-29','approved')
 on conflict(document_group,document_no) do nothing;
