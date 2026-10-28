@@ -65,3 +65,33 @@ test('PostgREST service role guard uses the effective DB role rather than legacy
  assert.match(fix,/grant execute on function public\.daily_site_report_sync_v1\(jsonb,text,jsonb,integer,text\) to service_role/);
  assert.doesNotMatch(fix,/drop table|truncate table|delete from|alter table.*disable row level security/i);
 });
+
+
+test('Thai Buddhist calendar DATE normalization is confined to importer and validated',()=>{
+ const vm=require('node:vm');
+ const context={
+   Date,
+   Utilities:{formatDate(value){
+     return String(value.getUTCFullYear()).padStart(4,'0')+'-'
+       +String(value.getUTCMonth()+1).padStart(2,'0')+'-'
+       +String(value.getUTCDate()).padStart(2,'0');
+   }}
+ };
+ vm.createContext(context);
+ vm.runInContext(gas,context);
+ const convert=vm.runInContext('dailySiteSyncIsoDate20261019_',context);
+ const buddhistDate=new Date(Date.UTC(2569,9,26,12));
+ const millis=buddhistDate.getTime();
+ assert.equal(convert(buddhistDate),'2026-10-26'); // Sheets B456 (26/10/2569)
+ assert.equal(buddhistDate.getTime(),millis);      // never mutate original Form value
+ assert.equal(convert('26/10/2569'),'2026-10-26');
+ assert.equal(convert('2569-10-26'),'2026-10-26');
+ assert.equal(convert('26/10/2026'),'2026-10-26');
+ assert.equal(convert('2026-10-26'),'2026-10-26');
+ assert.equal(convert(new Date(Date.UTC(2026,9,26,12))),'2026-10-26');
+ assert.throws(()=>convert('31/02/2569'),/BLOCK_INVALID_WORK_DATE/);
+ assert.throws(()=>convert('2600-10-26'),/BLOCK_INVALID_WORK_DATE/);
+ assert.throws(()=>convert(''),/BLOCK_INVALID_WORK_DATE/);
+ assert.match(gas,/BLOCK_SOURCE_HEADER_MISMATCH_AT_/);
+ assert.doesNotMatch(gas,/getRange\(456,\s*2\)/); // no source cell patch
+});
