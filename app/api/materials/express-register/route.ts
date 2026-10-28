@@ -7,7 +7,7 @@ export const runtime='nodejs'
 export const dynamic='force-dynamic'
 const HEADERS={'cache-control':'private, no-store'}
 const respond=(data:unknown,status:number)=>NextResponse.json(data,{status,headers:HEADERS})
-const SELECT='document_group,document_no,document_date,supplier,plot_codes,qa_status,grand_total,source_file'
+const SELECT='document_group,document_no,document_date,supplier,plot_codes,qa_status,grand_total,source_file,has_verified_project_override,project_evidence_url'
 
 /** Read-only, user-JWT/RLS-bound Express historical register; never a procurement write route. */
 export async function GET(request:NextRequest){
@@ -55,7 +55,9 @@ export async function GET(request:NextRequest){
    .eq('state','complete').order('completed_at',{ascending:false}).limit(1).maybeSingle()
   if(runError)return respond({error:'REGISTER_NOT_READY'},503)
   if(!latest)return respond({status:'no_import',documents:[],total:0,page,hasMore:false,latest:null},200)
-  let query=client.from('express_register_rows').select(SELECT,{count:'exact'})
+  // Security-invoker view resolves approved evidence mappings without changing raw Express batch rows.
+  // If migration is absent, fail closed instead of silently displaying stale source mapping.
+  let query=client.from('express_register_effective_rows').select(SELECT,{count:'exact'})
    .eq('batch_id',latest.id).eq('line_seq',0)
   if(group)query=query.eq('document_group',group)
   if(plot)query=query.contains('plot_codes',[plot])
