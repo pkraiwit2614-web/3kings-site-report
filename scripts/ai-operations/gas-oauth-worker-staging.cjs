@@ -122,6 +122,7 @@ async function handle(request,env,{crypto=globalThis.crypto,fetchFn=globalThis.f
    for(const name of t.files){
     const matches=cache.get(t.scriptId).filter(f=>f.name===name&&f.type==='SERVER_JS');
     if(matches.length>1)throw Error('AMBIGUOUS_REMOTE');
+    if(matches.length&&typeof matches[0].source!=='string')throw Error('INVALID_REMOTE_SOURCE');
     results.push({remoteFile:name,status:matches.length?'FOUND':'NOT_FOUND',sha256:matches.length?await shaHex(matches[0].source,crypto):null});
    }
   }
