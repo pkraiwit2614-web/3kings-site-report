@@ -226,7 +226,12 @@ jobs:
         run: |
           set -euo pipefail
           cd tests/e2e/local-stack
-          supabase start
+          if ! supabase start; then
+            echo "::warning::Initial supabase start failed, retrying with ghcr.io / public.ecr.aws..."
+            SUPABASE_INTERNAL_IMAGE_REGISTRY=ghcr.io supabase start || \
+            SUPABASE_INTERNAL_IMAGE_REGISTRY=public.ecr.aws supabase start || \
+            (sleep 10 && supabase start)
+          fi
       - name: Export only local Supabase values to CI environment
         run: |
           set -euo pipefail
