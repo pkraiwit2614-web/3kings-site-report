@@ -103,7 +103,12 @@ async function handle(request,env,{crypto=globalThis.crypto,fetchFn=globalThis.f
  const url=new URL(request.url);
  if(url.pathname==='/health'&&request.method==='GET')return json({service:'3kings-gas-oauth-staging',mode:'STAGING_ONLY',connected:false});
  let targets;
- try{targets=config(env,url.origin);}catch{return fail('BRIDGE_DISABLED');}
+ try{targets=config(env,url.origin);}catch(error){
+  // Staging-only diagnostic: fixed error codes, never return secret values or stack traces.
+  const allowed=new Set(['DISABLED','ORIGIN','CLIENT_ID','CLIENT_SECRET','OWNER','DB','ENCRYPTION_KEY','TARGETS','TARGET','TARGET_FILE','TARGET_COUNT']);
+  const reason=allowed.has(error?.message)?error.message:'UNKNOWN';
+  return fail(reason==='DISABLED'?'BRIDGE_DISABLED':'CONFIG_'+reason);
+ }
  if(!['/auth/start','/auth/callback','/auth/logout','/api/status','/api/source'].includes(url.pathname))return fail('NOT_FOUND',404);
  if(request.method!=='GET'&&!(request.method==='POST'&&url.pathname==='/auth/logout'))return fail('METHOD_NOT_ALLOWED',405);
  try{
