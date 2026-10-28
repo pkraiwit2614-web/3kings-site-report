@@ -125,6 +125,13 @@ try {
     await page.goto(APP+path,{waitUntil:'domcontentloaded'})
     await page.getByText(marker,{exact:false}).first().waitFor()
     assert.equal(new URL(page.url()).pathname,path)
+    const labels={'/defects':'Defect Report','/materials':'Materials','/reports':'Site Operations'}
+    const title='3 Kings Site Report - '+labels[path]
+    await page.waitForFunction(t=>document.title===t,title)
+    await page.evaluate(()=>{document.title='3 Kings Site Report'})
+    await page.waitForFunction(t=>document.title===t,title)
+    assert.equal(await page.title(),title)
+    console.log('PASS_BROWSER_TAB_TITLE_'+path.slice(1).toUpperCase())
     console.log('PASS_VIEWER_UI_API_'+path.slice(1).toUpperCase())
     await page.screenshot({path:'tests/e2e/artifacts/'+path.slice(1)+'.png',fullPage:true})
   }
