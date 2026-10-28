@@ -13,14 +13,31 @@ const DAILY_SITE_20261019=Object.freeze({
  TRIGGER:'dailySiteSyncHourly20261019'
 });
 function dailySiteSyncIsoDate20261019_(value) {
- if (value instanceof Date && !isNaN(value.getTime()))
-   return Utilities.formatDate(value,DAILY_SITE_20261019.TZ,'yyyy-MM-dd');
- const s=String(value||'').trim();
- if(/^20\d{2}-\d{2}-\d{2}$/.test(s))return s;
- if(/^\d{1,2}\/\d{1,2}\/20\d{2}$/.test(s)){
-   const a=s.split('/');return a[2]+'-'+a[1].padStart(2,'0')+'-'+a[0].padStart(2,'0');
+ // Preserve the Form response. Normalize only the parsed import date.
+ // Some Thai Form dates are stored as actual Sheets DATE year 2569, not just formatted "พ.ศ.".
+ let s;
+ if (value instanceof Date && !isNaN(value.getTime())) {
+   s=Utilities.formatDate(value,DAILY_SITE_20261019.TZ,'yyyy-MM-dd');
+ } else {
+   const raw=String(value||'').trim();
+   if(/^(?:20|25)\d{2}-\d{2}-\d{2}$/.test(raw))s=raw;
+   else if(/^\d{1,2}\/\d{1,2}\/(?:20|25)\d{2}$/.test(raw)){
+     const a=raw.split('/');
+     s=a[2]+'-'+a[1].padStart(2,'0')+'-'+a[0].padStart(2,'0');
+   } else throw Error('BLOCK_INVALID_WORK_DATE');
  }
- throw Error('BLOCK_INVALID_WORK_DATE');
+ const m=s.match(/^(20\d{2}|25\d{2})-(\d{2})-(\d{2})$/);
+ if(!m)throw Error('BLOCK_INVALID_WORK_DATE');
+ // Buddhist Era 2500–2599 maps to Gregorian 1957–2056.
+ // The downstream daily importer accepts report years 2000–2099 only.
+ let year=Number(m[1]);
+ if(year>=2500&&year<=2599)year-=543;
+ const month=Number(m[2]),day=Number(m[3]);
+ const check=new Date(Date.UTC(year,month-1,day));
+ if(year<2000||year>2099||check.getUTCFullYear()!==year
+   ||check.getUTCMonth()+1!==month||check.getUTCDate()!==day)
+   throw Error('BLOCK_INVALID_WORK_DATE');
+ return String(year).padStart(4,'0')+'-'+m[2]+'-'+m[3];
 }
 function dailySiteSyncTimestamp20261019_(value) {
  if(!(value instanceof Date)||isNaN(value.getTime()))throw Error('BLOCK_INVALID_FORM_TIMESTAMP');
