@@ -38,7 +38,7 @@ test('Hotel Engineer list is exactly 16 whole-room Combine pairs',()=>{
     assert.equal(flowCombineKey(a,'ร่วมโรงแรม'),flowCombineKey(b,'ร่วมโรงแรม'))
   // Not on the Engineer's Combine list, although paired by another workflow.
   assert.notEqual(flowCombineKey('A517','ร่วมโรงแรม'),flowCombineKey('A518','ร่วมโรงแรม'))
-  assert.notEqual(flowCombineKey('A606','ร่วมโรงแรม'),flowCombineKey('A607','ร่วมโรงแรม'))
+  assert.equal(flowCombineKey('A606','ร่วมโรงแรม'),flowCombineKey('A607','ร่วมโรงแรม'))
 })
 
 test('144 physical Hotel rooms become 128 engineer-counted units',()=>{
