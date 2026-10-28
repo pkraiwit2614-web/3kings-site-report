@@ -3,6 +3,9 @@
 SET client_min_messages = warning;
 
 -- 1. Setup synthetic test rooms in condo_room_status and defect_web_overrides
+-- Use app.defect_manual_update='1' to seed initial baseline state cleanly
+SET app.defect_manual_update = '1';
+
 INSERT INTO public.condo_room_status (
   room_no, building, floor, hotel_participation, customer_status,
   current_status, status_group, follow_up, priority, next_action,
@@ -10,7 +13,7 @@ INSERT INTO public.condo_room_status (
 ) VALUES
   ('B515', 'B', 5, 'ร่วมโรงแรม', 'มีลูกค้า',
    'Defect เสร็จแล้ว / รอ Hotel Engineer ตรวจ', 'Hotel - Awaiting Check', 'รอติดตาม', 'normal', 'รอตรวจยืนยัน',
-   'Customer Defect B515: ประตูระเบียงเปิดฝืด และกระเบื้องห้องน้ำบิ่น', 'Prior sync',
+   'Customer Defect B515: 9 customer defect items awaiting inspection [SYNTHETIC TEST]', 'Prior sync',
    '1MEeB1E7D_35MTndRPi1aBTlVfI2aR0Wj', 'Handover_Defect_Summary_Updated_28-09-2026.xlsx', '2026-10-25 08:00:00+00'),
   ('B214', 'B', 2, 'ร่วมโรงแรม', 'มีลูกค้า',
    'Defect ยังไม่เสร็จ / ต้องปิดงาน', 'Hotel - Incomplete', 'รอติดตาม', 'normal', 'แก้ไขบัวพื้น',
@@ -35,6 +38,8 @@ ON CONFLICT (room_no) DO UPDATE SET
   source_file_id = EXCLUDED.source_file_id,
   source_file_name = EXCLUDED.source_file_name,
   source_modified_at = EXCLUDED.source_modified_at;
+
+RESET app.defect_manual_update;
 
 INSERT INTO public.defect_web_overrides (
   room_no, current_status, status_group, next_action, detail_text,
