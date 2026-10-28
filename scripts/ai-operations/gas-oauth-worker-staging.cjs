@@ -133,7 +133,8 @@ async function handle(request,env,{crypto=globalThis.crypto,fetchFn=globalThis.f
    headers.append('set-cookie',cookie(SESSION_COOKIE,session,3600));
    return new Response(null,{status:303,headers});
   }
-  const owner=await authenticatedOwner(request,env,crypto,now);
+  let owner;
+  try{owner=await authenticatedOwner(request,env,crypto,now);}catch{return fail('UNAUTHORIZED',401);}
   if(url.pathname==='/auth/logout'){
    if(request.headers.get('origin')!==url.origin)return fail('ORIGIN_MISMATCH',403);
    const session=getCookie(request,SESSION_COOKIE);
