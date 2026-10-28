@@ -2,6 +2,7 @@
 -- Ephemeral PostgreSQL fixture; no Production credentials or writes.
 create role anon; create role authenticated; create role service_role;
 create schema private;
+grant usage on schema private to authenticated;
 create function private.is_active_user() returns boolean language sql as $$select true$$;
 create function private.matrix_allowed(text,text,boolean) returns boolean language sql as $$select true$$;
 create function private.drive_sync_key_valid(text) returns boolean language sql as $$select $1='isolated-only-test-key'$$;
@@ -95,4 +96,24 @@ begin
    'isolated-only-test-key','18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',now(),v,false) into r;
  if (r->>'changed')<>'0' then raise exception 'retry not idempotent %',r;end if;
  raise notice 'ALL ISOLATED WORK ORDER & EXPRESS QA CHECKS PASSED';
+end $$;
+
+-- Simulate authenticated procurement reader; verify security_invoker RLS wiring.
+set role authenticated;
+do $$ begin
+ if (select count(*) from public.express_register_effective_rows where has_verified_project_override)<>5
+ then raise exception 'authenticated RLS view overlay unavailable';end if;
+ if (select count(*) from public.express_register_effective_rows
+      where document_no in ('PL0000973','PO691027002') and qa_status='HOLD_UNASSIGNED_PLOT')<>2
+ then raise exception 'RLS view released unassigned project';end if;
+end $$;
+reset role;
+do $$ begin
+ if has_table_privilege('anon','public.express_project_overrides','SELECT') or
+    has_table_privilege('anon','public.express_register_effective_rows','SELECT') or
+    has_table_privilege('authenticated','public.defect_work_order_import_staging','SELECT') or
+    has_function_privilege('authenticated',
+       'public.defect_work_order_nonretiring_stage_import(text,text,timestamptz,jsonb,boolean)','EXECUTE')
+ then raise exception 'RBAC/RLS boundary regression';end if;
+ raise notice 'AUTHENTICATED/ANON/RPC AUTHORIZATION CHECKS PASSED';
 end $$;
