@@ -14,6 +14,7 @@ const encode=b=>btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,'-
 const decode=s=>Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-s.length%4)%4)),c=>c.charCodeAt(0));
 const random=(crypto,n=32)=>encode(crypto.getRandomValues(new Uint8Array(n)));
 const sha=async(value,crypto)=>encode(await crypto.subtle.digest('SHA-256',enc.encode(value)));
+const shaHex=async(value,crypto)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',enc.encode(value))),b=>b.toString(16).padStart(2,'0')).join('');
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer','content-security-policy':"default-src 'none'; frame-ancestors 'none'"}});
 const fail=(code,status=503)=>json({error:code},status);
 function config(env,origin){
@@ -121,10 +122,10 @@ async function handle(request,env,{crypto=globalThis.crypto,fetchFn=globalThis.f
    for(const name of t.files){
     const matches=cache.get(t.scriptId).filter(f=>f.name===name&&f.type==='SERVER_JS');
     if(matches.length>1)throw Error('AMBIGUOUS_REMOTE');
-    results.push({remoteFile:name,status:matches.length?'FOUND':'NOT_FOUND',sha256:matches.length?await sha(matches[0].source,crypto):null});
+    results.push({remoteFile:name,status:matches.length?'FOUND':'NOT_FOUND',sha256:matches.length?await shaHex(matches[0].source,crypto):null});
    }
   }
   return json({mode:'STAGING_ONLY',source:'GAS_API_HEAD_NOT_DEPLOYMENT',scope:SCOPE,files:results});
  }catch{return fail('READ_ONLY_OPERATION_FAILED',502);}
 }
-module.exports={SCOPE,AUTH_URL,TOKEN_URL,random,sha,config,accessOwner,seal,unseal,exchange,handle};
+module.exports={SCOPE,AUTH_URL,TOKEN_URL,random,sha,shaHex,config,accessOwner,seal,unseal,exchange,handle};
