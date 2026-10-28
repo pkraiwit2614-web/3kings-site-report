@@ -77,7 +77,7 @@ BEGIN
   IF v_rec.status_group <> 'Hotel - Incomplete' THEN
     RAISE EXCEPTION 'FAIL: B515 group was not reconciled to Hotel - Incomplete (got %)', v_rec.status_group;
   END IF;
-  IF v_rec.defect_detail <> 'Customer Defect B515: ประตูระเบียงเปิดฝืด และกระเบื้องห้องน้ำบิ่น' THEN
+  IF v_rec.defect_detail <> 'Customer Defect B515: 9 customer defect items awaiting inspection [SYNTHETIC TEST]' THEN
     RAISE EXCEPTION 'FAIL: B515 history defect_detail was not preserved (got %)', v_rec.defect_detail;
   END IF;
   IF (SELECT count(*) FROM private.defect_reconcile_field_audit WHERE room_no = 'B515' AND decision = 'accepted_excel') <> 3 THEN

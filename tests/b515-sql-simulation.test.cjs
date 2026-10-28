@@ -125,7 +125,7 @@ test('B515 transition: Canonical Excel 2026-10-26+ reopens B515 and preserves de
     current_status: 'Defect เสร็จแล้ว / รอ Hotel Engineer ตรวจ',
     status_group: 'Hotel - Awaiting Check',
     next_action: 'รอตรวจยืนยัน',
-    defect_detail: 'Customer Defect B515: ประตูระเบียงเปิดฝืด และกระเบื้องห้องน้ำบิ่น'
+    defect_detail: 'Customer Defect B515: 9 customer defect items awaiting inspection [SYNTHETIC TEST]'
   }
   const newRow = {
     room_no: 'B515',
@@ -149,7 +149,7 @@ test('B515 transition: Canonical Excel 2026-10-26+ reopens B515 and preserves de
   assert.equal(result.room.current_status, 'Defect ยังไม่เสร็จ / ต้องปิดงาน')
   assert.equal(result.room.status_group, 'Hotel - Incomplete')
   // CRITICAL: History preserved when incoming detail is blank
-  assert.equal(result.room.defect_detail, 'Customer Defect B515: ประตูระเบียงเปิดฝืด และกระเบื้องห้องน้ำบิ่น')
+  assert.equal(result.room.defect_detail, 'Customer Defect B515: 9 customer defect items awaiting inspection [SYNTHETIC TEST]')
 })
 
 test('B515 transition: Blocked when Web writeback is pending', () => {

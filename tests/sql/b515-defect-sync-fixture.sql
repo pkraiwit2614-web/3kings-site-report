@@ -128,6 +128,6 @@ INSERT INTO public.condo_room_status (
 ) VALUES
   ('B515', 'B', 5, 'ร่วมโรงแรม', 'มีลูกค้า',
    'Defect เสร็จแล้ว / รอ Hotel Engineer ตรวจ', 'Hotel - Awaiting Check', 'รอติดตาม', 'normal', 'รอตรวจยืนยัน',
-   'Customer Defect B515: ประตูระเบียงเปิดฝืด และกระเบื้องห้องน้ำบิ่น', 'Prior sync',
+   'Customer Defect B515: 9 customer defect items awaiting inspection [SYNTHETIC TEST]', 'Prior sync',
    '1MEeB1E7D_35MTndRPi1aBTlVfI2aR0Wj', 'Handover_Defect_Summary_Updated_28-09-2026.xlsx', '2026-10-25 08:00:00+00')
 ON CONFLICT (room_no) DO NOTHING;
