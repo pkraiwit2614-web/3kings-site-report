@@ -1,0 +1,26 @@
+name: AI Operations Staging QA
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/ai-operations/**'
+      - 'tests/ai-operations-*.test.cjs'
+      - 'docs/ai-operations/**'
+      - 'docs/AI_OPERATIONS_P0B_STAGING_2026-10-20.md'
+      - 'docs/apps-script/AI_Operations_Trigger_Inventory_ReadOnly_2026-10-20.gs'
+      - '.github/workflows/ai-operations-staging-qa.yml'
+permissions:
+  contents: read
+jobs:
+  offline-staging-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Pure offline P0-B, P0-C and command-gate tests
+        run: node --test tests/ai-operations-central-error-log.test.cjs tests/ai-operations-gas-source.test.cjs tests/ai-operations-gas-live.test.cjs tests/ai-operations-staging-control-plane.test.cjs
