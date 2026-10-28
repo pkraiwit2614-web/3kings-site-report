@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useLayoutEffect } from 'react'
 import { usePathname } from 'next/navigation'
 
 const BASE_TITLE = '3 Kings Site Report'
@@ -57,7 +57,7 @@ export function browserTabTitleForPath(pathname: string): string {
 export default function BrowserTabTitle20261028() {
   const pathname = usePathname()
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.title = browserTabTitleForPath(pathname || '/')
   }, [pathname])
 
