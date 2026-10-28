@@ -30,3 +30,17 @@ VALUES ('33333333-3333-4333-8333-333333333333',current_date,
 'CI-ONLY PROJECT','CI-ONLY',1,'CI-ONLY REPORT','In progress','mapped',now(),'valid',1,'CI-ONLY SUPERVISOR');
 INSERT INTO public.payroll_verification_records(id,note)
 VALUES ('44444444-4444-4444-8444-444444444444','CI-ONLY PAYROLL SYNTHETIC');
+
+
+-- Local Supabase Viewer fixture: mirror the new effective registry read contract.
+-- The real evidence-gated SQL view (with two overrides) is tested separately using
+-- tests/sql/workorder-express-overrides-isolated.sql on PostgreSQL 17.
+-- Keep the existing 60 synthetic register documents and their RLS untouched.
+CREATE OR REPLACE VIEW public.express_register_effective_rows
+WITH (security_invoker=true) AS
+SELECT r.*,
+       false::boolean AS has_verified_project_override,
+       null::text AS project_evidence_url
+FROM public.express_register_rows r;
+REVOKE ALL ON public.express_register_effective_rows FROM PUBLIC, anon;
+GRANT SELECT ON public.express_register_effective_rows TO authenticated,service_role;
