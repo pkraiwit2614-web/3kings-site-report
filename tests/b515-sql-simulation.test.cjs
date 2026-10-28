@@ -237,3 +237,4 @@ test('Regression on B214, B314, B315, B403: Approved transitions succeed, unappr
     assert.equal(resUnapproved.room.status_group, c.initialGroup)
   }
 })
+

@@ -233,3 +233,4 @@ BEGIN
   END IF;
   RAISE NOTICE 'PASS: Unapproved status rejection on B214 verified';
 END $test_b214_unapproved$;
+

@@ -1,0 +1,133 @@
+name: B515 SQL Isolated PostgreSQL QA
+
+on:
+  push:
+    branches:
+      - resume_three_kings_issue_230
+      - sync_room_b515_defect
+    paths:
+      - 'supabase/migrations/20261027233000_b515_defect_sync_reconcile.sql'
+      - 'tests/sql/b515-defect-sync-*.sql'
+      - '.github/workflows/b515-sql-isolated.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  b515-postgres-isolated:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres_version: ['16', '17']
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres_version }}
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test_only
+          POSTGRES_DB: b515_positive
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d b515_positive"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: test_only
+      PGDATABASE: b515_positive
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client >/dev/null
+
+      - name: Assert preflight fails closed when room B515 is missing
+        run: |
+          set -euo pipefail
+          createdb -U postgres b515_preflight_fail
+          export PGDATABASE=b515_preflight_fail
+          psql -X -v ON_ERROR_STOP=1 -f tests/sql/b515-defect-sync-fixture.sql
+          # Remove room B515 to verify preflight gate
+          psql -X -v ON_ERROR_STOP=1 -c "DELETE FROM public.condo_room_status WHERE room_no = 'B515';"
+          # Set up base override protect function
+          psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/20261019132800_defect_override_field_reconcile_20261019.sql
+          if psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/20261027233000_b515_defect_sync_reconcile.sql >/tmp/preflight.log 2>&1; then
+            echo "FAIL: Migration should have been rejected when B515 is missing"
+            cat /tmp/preflight.log
+            exit 1
+          fi
+          grep -q "ROOM_B515_NOT_FOUND_IN_CANONICAL_INVENTORY" /tmp/preflight.log
+          echo "PASS: Preflight fail-closed on missing B515 verified"
+
+      - name: Positive flow: apply baseline, B515 migration and execute SQL assertions
+        run: |
+          set -euo pipefail
+          export PGDATABASE=b515_positive
+          psql -X -v ON_ERROR_STOP=1 -f tests/sql/b515-defect-sync-fixture.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/20261019132800_defect_override_field_reconcile_20261019.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/20261027233000_b515_defect_sync_reconcile.sql
+          psql -X -v ON_ERROR_STOP=1 -f tests/sql/b515-defect-sync-reconcile-assertions.sql
+          echo "PASS: B515 positive SQL assertions and regressions verified on PostgreSQL ${{ matrix.postgres_version }}"
+
+      - name: Assert fail-closed on negative scenarios in isolated database
+        run: |
+          set -euo pipefail
+          for scenario in stale_excel_revision wrong_source_file unapproved_status_rejection; do
+            db="b515_${scenario}"
+            createdb -U postgres "$db"
+            export PGDATABASE="$db"
+            psql -X -v ON_ERROR_STOP=1 -f tests/sql/b515-defect-sync-fixture.sql >/dev/null
+            psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/20261019132800_defect_override_field_reconcile_20261019.sql >/dev/null
+            psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/20261027233000_b515_defect_sync_reconcile.sql >/dev/null
+            case "$scenario" in
+              stale_excel_revision)
+                # Attempt to update B515 with an Excel timestamp before 2026-10-26 -> must be rejected
+                psql -X -v ON_ERROR_STOP=1 -c "
+                  UPDATE public.condo_room_status SET
+                    current_status = 'Defect ยังไม่เสร็จ / ต้องปิดงาน',
+                    status_group = 'Hotel - Incomplete',
+                    source_file_id = '1MEeB1E7D_35MTndRPi1aBTlVfI2aR0Wj',
+                    source_file_name = 'Handover_Defect_Summary_Updated_28-09-2026.xlsx',
+                    source_modified_at = '2026-10-24 12:00:00+00'
+                  WHERE room_no = 'B515';" >/dev/null
+                status=\$(psql -X -At -c "SELECT current_status FROM public.condo_room_status WHERE room_no = 'B515';")
+                test "\$status" = "Defect เสร็จแล้ว / รอ Hotel Engineer ตรวจ"
+                ;;
+              wrong_source_file)
+                # Attempt to update B515 with an unauthorized source file -> must be rejected
+                psql -X -v ON_ERROR_STOP=1 -c "
+                  UPDATE public.condo_room_status SET
+                    current_status = 'Defect ยังไม่เสร็จ / ต้องปิดงาน',
+                    status_group = 'Hotel - Incomplete',
+                    source_file_id = 'unauthorized_file_id',
+                    source_file_name = 'Some_Other_File.xlsx',
+                    source_modified_at = '2026-10-26 14:00:00+00'
+                  WHERE room_no = 'B515';" >/dev/null
+                status=\$(psql -X -At -c "SELECT current_status FROM public.condo_room_status WHERE room_no = 'B515';")
+                test "\$status" = "Defect เสร็จแล้ว / รอ Hotel Engineer ตรวจ"
+                ;;
+              unapproved_status_rejection)
+                # Attempt to update B515 to arbitrary non-approved status -> must be rejected
+                psql -X -v ON_ERROR_STOP=1 -c "
+                  UPDATE public.condo_room_status SET
+                    current_status = 'Custom Random Status',
+                    status_group = 'Random Group',
+                    source_file_id = '1MEeB1E7D_35MTndRPi1aBTlVfI2aR0Wj',
+                    source_file_name = 'Handover_Defect_Summary_Updated_28-09-2026.xlsx',
+                    source_modified_at = '2026-10-26 14:00:00+00'
+                  WHERE room_no = 'B515';" >/dev/null
+                status=\$(psql -X -At -c "SELECT current_status FROM public.condo_room_status WHERE room_no = 'B515';")
+                test "\$status" = "Defect เสร็จแล้ว / รอ Hotel Engineer ตรวจ"
+                ;;
+            esac
+            echo "PASS: Fail-closed verified for \${scenario}"
+          done

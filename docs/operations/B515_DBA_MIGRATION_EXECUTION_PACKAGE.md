@@ -37,8 +37,8 @@ PR #229 has been merged into `main` (commit `531860b`), providing the applicatio
 
 ## 2. Preflight & Isolated QA Validation Evidence
 
-### 2.1 Automated Test Execution
-Two comprehensive automated test suites have been executed against `20261027233000_b515_defect_sync_reconcile.sql`:
+### 2.1 Automated Test Execution & PostgreSQL Container QA
+Evidence of verification before production deployment:
 
 1. `tests/b515-defect-sync.test.cjs` (6/6 PASS):
    - Built-in preflight guards syntax and targets.
@@ -54,8 +54,12 @@ Two comprehensive automated test suites have been executed against `202610272330
    - B515 transition blocked when Web writeback is pending.
    - Regression on B214, B314, B315, B403: approved transitions succeed, unapproved transitions are rejected and retain original values.
 
-3. `tests/sql/b515-defect-sync-reconcile-assertions.sql`:
-   - Standalone SQL regression and assertion script ready for isolated PostgreSQL container replay.
+3. Real PostgreSQL Container QA (`.github/workflows/b515-sql-isolated.yml`):
+   - Executes against real PostgreSQL 16 and 17 service containers.
+   - Verifies preflight fail-closed when room B515 is absent (`ROOM_B515_NOT_FOUND_IN_CANONICAL_INVENTORY`).
+   - Applies baseline schema, baseline reconciliation migration `20261019132800`, and `20261027233000_b515_defect_sync_reconcile.sql`.
+   - Runs `tests/sql/b515-defect-sync-reconcile-assertions.sql` asserting B515 Excel acceptance, history preservation, pending write protection, and B214/B314/B315/B403 regression.
+   - Runs isolated negative scenarios verifying fail-closed behavior on stale Excel revisions, wrong source files, and arbitrary unapproved status transitions.
 
 ---
 
@@ -554,17 +558,15 @@ EXCEPTION WHEN others THEN
 END;
 $function$;
 
--- 4. Record migration in supabase_migrations.schema_migrations
-INSERT INTO supabase_migrations.schema_migrations (version, statements, name)
-VALUES (
-  '20261027233000',
-  ARRAY['20261027233000_b515_defect_sync_reconcile'],
-  '20261027233000_b515_defect_sync_reconcile'
-)
-ON CONFLICT (version) DO NOTHING;
-
 COMMIT;
 ```
+
+> [!CAUTION]
+> **CRITICAL POLICY ON MIGRATION HISTORY LEDGER:**  
+> **DO NOT** execute manual `INSERT INTO supabase_migrations.schema_migrations` or `DELETE FROM supabase_migrations.schema_migrations`.  
+> Manual ledger editing with synthetic text entries can misrepresent what actually ran or diverge from official migration tooling.  
+> Standard migration tooling logs its own ledger entries atomically. When executing DDL in SQL Editor, inspect history before and after using read-only `SELECT` queries (see Readback 1 below), leaving the internal ledger uncorrupted.  
+> **DO NOT** blanket `supabase db push` due to duplicate version `20261013220000` (PR #213) and risks to Payroll RLS policies.
 
 ---
 
@@ -572,11 +574,12 @@ COMMIT;
 Execute these queries right after Step 2:
 
 ```sql
--- READBACK 1: Verify Migration History record
+-- READBACK 1: Inspect Migration History record
 SELECT version, name, inserted_at
 FROM supabase_migrations.schema_migrations
-WHERE version = '20261027233000';
--- Expected: 1 row with version '20261027233000'
+ORDER BY version DESC
+LIMIT 5;
+-- Expected: Confirm no ledger corruption or duplicate version 20261013220000 replay
 
 -- READBACK 2: Verify defect_web_override_protect() contains B515 scoped exception
 SELECT
@@ -619,16 +622,14 @@ The status transition must be executed through the existing authorized pipeline:
 ---
 
 ### Step 5: Rollback Runbook (In case of any unexpected failure)
-If rollback is required, execute:
+If rollback is required, execute the baseline definition of `defect_web_override_protect()` to remove the B515 exception, without manual ledger tampering:
 
 ```sql
 BEGIN;
 
 -- 1. Remove B515 exception by re-applying the 20261021185000 baseline trigger
--- (or prior defect_web_override_protect definition)
--- 2. Remove migration history entry
-DELETE FROM supabase_migrations.schema_migrations
-WHERE version = '20261027233000';
+-- (Restores defect_web_override_protect to prior approved state)
+-- Do NOT manually delete from supabase_migrations.schema_migrations.
 
 COMMIT;
 ```
