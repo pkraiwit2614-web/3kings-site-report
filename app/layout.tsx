@@ -20,6 +20,7 @@ import DefectDashboardDeepLinkGuard20260927 from '@/components/DefectDashboardDe
 import RolePermissionGuard20260927 from '@/components/RolePermissionGuard20260927'
 import AccessBoundary from '@/components/AccessBoundary'
 import I18nProvider from '@/components/I18nProvider'
+import BrowserTabTitle20261028 from '@/components/BrowserTabTitle20261028'
 import CompactFilterStandard20260929 from '@/components/CompactFilterStandard20260929'
 import ProgressSourceAccuracy20260930 from '@/components/ProgressSourceAccuracy20260930'
 import { Noto_Sans_Thai } from 'next/font/google'
@@ -34,5 +35,5 @@ const notoSansThai = Noto_Sans_Thai({
 export const metadata: Metadata = { title: '3 Kings Site Report', description: 'Daily site reporting and management dashboard' }
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
-  return <html lang="th"><body className={notoSansThai.className}><I18nProvider><StableLegacyUiRuntime20261001 /><HeaderActionPattern20260927 /><DefectDashboardDeepLinkGuard20260927 /><RolePermissionGuard20260927 /><CompactFilterStandard20260929 /><ProgressSourceAccuracy20260930 /><AccessBoundary>{children}</AccessBoundary></I18nProvider></body></html>
+  return <html lang="th"><body className={notoSansThai.className}><I18nProvider><BrowserTabTitle20261028 /><StableLegacyUiRuntime20261001 /><HeaderActionPattern20260927 /><DefectDashboardDeepLinkGuard20260927 /><RolePermissionGuard20260927 /><CompactFilterStandard20260929 /><ProgressSourceAccuracy20260930 /><AccessBoundary>{children}</AccessBoundary></I18nProvider></body></html>
 }
