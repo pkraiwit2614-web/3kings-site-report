@@ -1,4 +1,4 @@
-/** Shared authoritative room grouping for Hotel OOO/OOS and Defect searches.\n * Hotel pairs follow Hotel Engineer 17 Oct 2026 list (16); non-hotel pairs unchanged (11). Must match DefectCombineRoomEnhancer and SQL membership migration. */
+/** Shared authoritative room grouping for Hotel OOO/OOS and Defect searches.\n * Hotel pairs follow Hotel Engineer 17 Oct 2026 list and 25 Oct 2026 Rental Pool inventory (A606/A607); other 27 groups unchanged. Must match DefectCombineRoomEnhancer and verified DB membership. */
 export const HOTEL_COMBINE_GROUPS: readonly (readonly string[])[] = [
   [
     "A213",
@@ -59,6 +59,10 @@ export const HOTEL_COMBINE_GROUPS: readonly (readonly string[])[] = [
   [
     "A604",
     "A605"
+  ],
+  [
+    "A606",
+    "A607"
   ],
   [
     "A608",
