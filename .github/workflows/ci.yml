@@ -226,7 +226,12 @@ jobs:
         run: |
           set -euo pipefail
           cd tests/e2e/local-stack
-          supabase start
+          if ! supabase start; then
+            echo "::warning::Initial supabase start failed, retrying with ghcr.io / public.ecr.aws..."
+            SUPABASE_INTERNAL_IMAGE_REGISTRY=ghcr.io supabase start || \
+            SUPABASE_INTERNAL_IMAGE_REGISTRY=public.ecr.aws supabase start || \
+            (sleep 10 && supabase start)
+          fi
       - name: Export only local Supabase values to CI environment
         run: |
           set -euo pipefail
@@ -245,6 +250,7 @@ jobs:
             echo "SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
             echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
             echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$ANON_KEY"
+            echo "EXPRESS_REGISTER_DISPLAY_ENABLED=true"
           } >> "$GITHUB_ENV"
           echo "LOCAL_SUPABASE_ONLY"
       - name: Bootstrap ephemeral real Auth users and profiles

@@ -13,6 +13,8 @@ import { createLiveLoader, requireSuccessfulReads } from '@/lib/liveLoader'
 import type { Project } from '@/lib/types'
 import useAccessRole from '@/components/useAccessRole'
 import MaterialToolEditPanel from '@/components/MaterialToolEditPanel'
+import ExpressPoSection from '@/components/ExpressPoSection'
+import ExpressRegisterSection from '@/components/ExpressRegisterSection'
 import styles from './materials-screen.module.css'
 import {canManageMaterialsTools} from '@/lib/accessControl'
 
@@ -314,6 +316,9 @@ export default function MaterialsPage(){
         {!filtered.length&&<p className="muted" style={{padding:16}}>ไม่พบวัสดุ/งานตามคำค้นหรือ Filter ที่เลือก</p>}
       </div>
     </section>
+
+    <ExpressPoSection projectCode={projectById.get(project)?.code||''} query={needle}/>
+    <ExpressRegisterSection projectCode={projectById.get(project)?.code||''} query={needle}/>
 
     {(needle||project)&&<section aria-labelledby="material-procurement-title" style={{marginTop:24}}>
       <div style={{display:'flex',justifyContent:'space-between',gap:12,alignItems:'end',flexWrap:'wrap',marginBottom:10}}>

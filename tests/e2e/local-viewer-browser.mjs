@@ -80,7 +80,34 @@ try {
   phase='DASHBOARD_MARKER'
   await page.getByText('CI-ONLY PROJECT',{exact:false}).first().waitFor()
   assert.ok(viewerBearer.startsWith('Bearer '),'expected real Supabase Auth token')
+
   console.log('PASS_VIEWER_REAL_AUTH_AND_DASHBOARD')
+  // The isolated Express registry must paginate only completed snapshots behind
+  // real login, existing Materials/Procurement grants and PostgreSQL RLS.
+  phase='EXPRESS_REGISTER_AUTH'
+  const registryAnon=await context.request.get(APP+'/api/materials/express-register')
+  assert.equal(registryAnon.status(),401,'anonymous Express history denied')
+  const registryUrl=APP+'/api/materials/express-register'
+  const registryHeaders={authorization:viewerBearer}
+  const first=await context.request.get(registryUrl+'?page=0',{headers:registryHeaders})
+  assert.equal(first.status(),200,'authorized Viewer Express registry')
+  const firstData=await first.json()
+  assert.equal(firstData.total,60)
+  assert.equal(firstData.documents.length,50)
+  assert.equal(firstData.hasMore,true)
+  assert.equal(firstData.latest.documentCount,60)
+  const second=await context.request.get(registryUrl+'?page=1',{headers:registryHeaders})
+  assert.equal(second.status(),200)
+  const secondData=await second.json()
+  assert.equal(secondData.documents.length,10)
+  assert.equal(secondData.hasMore,false)
+  assert.equal(new Set([...firstData.documents,...secondData.documents].map(x=>x.document_no)).size,60)
+  const invalid=await context.request.get(registryUrl+'?group=UNKNOWN',{headers:registryHeaders})
+  assert.equal(invalid.status(),400)
+  const hidden=await context.request.get(registryUrl+'?group=PR_PC',{headers:registryHeaders})
+  assert.equal(hidden.status(),200)
+  assert.equal((await hidden.json()).documents.length,0)
+  console.log('PASS_EXPRESS_REGISTER_60_DOC_PAGINATION_AUTH_AND_FILTERS')
   await page.screenshot({path:'tests/e2e/artifacts/dashboard.png',fullPage:true})
 
   phase='FEATURE_ROUTES'

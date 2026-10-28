@@ -439,7 +439,19 @@ EXCEPTION WHEN others THEN
     EXCEPTION WHEN others THEN
       null;
     END;
-  -- 3. Reconciliation is intentionally delegated to the existing approved Defect
+  END IF;
+
+  RETURN jsonb_build_object(
+    'ok', false,
+    'error', sqlerrm,
+    'rooms', coalesce(v_total, 0),
+    'building_a', coalesce(v_a, 0),
+    'building_b', coalesce(v_b, 0)
+  );
+END;
+$function$;
+
+-- 3. Reconciliation is intentionally delegated to the existing approved Defect
 -- Excel -> GAS/API -> drive_sync_apply_condo_defects pipeline.
 -- Do not run a hard-coded room UPDATE in a schema migration. The approved
 -- original Excel File ID/revision, current override queue, and 263-room payload
