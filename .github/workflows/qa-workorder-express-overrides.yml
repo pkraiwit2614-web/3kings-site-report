@@ -1,0 +1,39 @@
+name: Work Order and Express scoped SQL QA (isolated)
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/20261029024500_express_project_override_read_view.sql'
+      - 'supabase/migrations/20261029025000_nonretiring_work_order_stage.sql'
+      - 'tests/sql/workorder-express-overrides-isolated.sql'
+      - '.github/workflows/qa-workorder-express-overrides.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-postgres-17:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: isolated-only
+          POSTGRES_DB: isolated_qa
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d isolated_qa"
+          --health-interval 5s --health-timeout 5s --health-retries 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - name: Run source-integrity and non-retiring regression fixture
+        env:
+          PGPASSWORD: isolated-only
+        run: psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5432 -U postgres -d isolated_qa -f tests/sql/workorder-express-overrides-isolated.sql
+      - name: Record release limitation
+        run: |
+          echo "ISOLATED_SQL_QA only. Production migration, live GAS mapping,"
+          echo "authenticated UI, RBAC/RLS and full E2E still require SOP 15/16 gate."
