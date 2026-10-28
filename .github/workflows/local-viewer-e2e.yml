@@ -1,30 +1,17 @@
 name: Supabase Local Viewer E2E (no hosted DB)
 on:
   # Explicit manual Preview QA on a selected branch/SHA. CI build on PR stays unchanged.
+  # Manual full Viewer E2E remains available for extra standalone diagnostics.
+  # PR Viewer Auth + local RLS is already a required CI job; avoid two concurrent
+  # Supabase Local Docker pulls saturating the public registry quota.
   workflow_dispatch:
-  pull_request:
-    branches: [main]
-    paths:
-      - '.github/workflows/local-viewer-e2e.yml'
-      - 'tests/e2e/**'
-      - 'docs/local-viewer-ci.md'
-      - 'lib/accessControl.ts'
-      - 'lib/permissionServer.ts'
-      - 'app/api/access-control/route.ts'
-      - 'app/login/page.tsx'
-      - 'app/defects/**'
-      - 'app/materials/**'
-      - 'app/reports/**'
 
 permissions:
   contents: read
 
 jobs:
   viewer-local:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' &&
-       github.event.pull_request.head.repo.full_name == github.repository)
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 28
     steps:

@@ -194,6 +194,9 @@ jobs:
   qa_local_viewer:
     name: QA / Real Viewer Login + API + local RLS
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+      packages: read
     runs-on: ubuntu-latest
     timeout-minutes: 28
     steps:
@@ -222,15 +225,25 @@ jobs:
           test ! -e tests/e2e/local-stack/supabase/.branches
           test ! -e tests/e2e/local-stack/supabase/.temp/project-ref
           ! grep -R -E 'supabase (link|db push|db reset --linked)' .github/workflows/local-viewer-e2e.yml
+      - name: Authenticate GHCR for Supabase Local images
+        env:
+          GHCR_READ_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if printf '%s' "$GHCR_READ_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin >/dev/null; then
+            echo "GHCR_AUTHENTICATED_READ_ONLY"
+          else
+            echo "::warning::GHCR auth unavailable; public image fallback remains enabled"
+          fi
       - name: Start disposable Supabase Local with isolated synthetic schema
         run: |
           set -euo pipefail
           cd tests/e2e/local-stack
-          if ! supabase start; then
-            echo "::warning::Initial supabase start failed, retrying with ghcr.io / public.ecr.aws..."
-            SUPABASE_INTERNAL_IMAGE_REGISTRY=ghcr.io supabase start || \
-            SUPABASE_INTERNAL_IMAGE_REGISTRY=public.ecr.aws supabase start || \
-            (sleep 10 && supabase start)
+          # First try authenticated GHCR; only fall back to public ECR / Docker Hub if needed.
+          # Never skip the Viewer Auth / API / RLS checks when Docker image pulls fail.
+          if ! SUPABASE_INTERNAL_IMAGE_REGISTRY=ghcr.io supabase start; then
+            echo "::warning::GHCR unavailable; attempting independent public registries..."
+            SUPABASE_INTERNAL_IMAGE_REGISTRY=public.ecr.aws supabase start || supabase start
           fi
       - name: Export only local Supabase values to CI environment
         run: |

@@ -5,6 +5,7 @@ import {getSupabase} from '@/lib/supabase'
 type DocumentRow={
  document_group:'PO_PL'|'PR_PC';document_no:string;document_date:string|null;
  supplier:string|null;plot_codes:string[];qa_status:string;grand_total:number|null;
+ has_verified_project_override?:boolean;project_evidence_url?:string|null;
  source_file:string|null
 }
 type RegistryData={
@@ -19,6 +20,7 @@ function amount(value:number|null){
 const qaLabel:Record<string,string>={
  VERIFIED_SOURCE_ONLY:'อ่านต้นฉบับผ่าน — ยังไม่ยืนยัน Master',
  HOLD_UNASSIGNED_PLOT:'รอระบุ Plot',
+ VERIFIED_PROJECT_OVERRIDE:'ยืนยันโครงการจากเอกสารต้นฉบับ',
  HOLD_MULTI_PLOT:'รอตรวจการแบ่งหลาย Plot',
  SOURCE_LINE_REVIEW:'ตรวจรายละเอียดต้นฉบับ',
 }
@@ -85,7 +87,10 @@ export default function ExpressRegisterSection({projectCode='',query=''}:{projec
        <td>{row.supplier||'-'}</td>
        <td>{row.plot_codes?.join(', ')||'ยังไม่ระบุ'}</td>
        <td style={{textAlign:'right',whiteSpace:'nowrap'}}>{amount(row.grand_total)}</td>
-       <td>{qaLabel[row.qa_status]||row.qa_status}</td>
+       <td>{qaLabel[row.qa_status]||row.qa_status}
+        {row.has_verified_project_override&&row.project_evidence_url?.startsWith('https://drive.google.com/file/d/')&&
+         <small><a href={row.project_evidence_url} target="_blank" rel="noopener noreferrer">หลักฐานการระบุโครงการ</a></small>}
+       </td>
       </tr>)}</tbody>
      </table>
      {!result?.documents.length&&<p className="small muted" style={{padding:12}}>ไม่พบเอกสารที่ตรงกับตัวกรอง</p>}
