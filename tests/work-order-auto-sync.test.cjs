@@ -27,9 +27,9 @@ test('Combine mark and group names are sourced from the existing Defect grouping
  assert.match(css,/\.wo-combine-code\{/)
  assert.match(css,/\.wo-combine-badge\{/)
  assert.match(defectEnhancer,/code\.textContent='c'/)
- // Hotel Engineer 17 Oct authoritative list: 16 hotel pairs; 11 non-hotel pairs unchanged.
+ // Preserve prior groups; 25 Oct Hotel Rental Pool explicitly restores A606/A607 as one Combine.
  assert.doesNotMatch(groups,/"A517",\s*"A518"/)
- assert.doesNotMatch(groups,/"A606",\s*"A607"/)
+ assert.match(groups,/"A606",\s*"A607"/)
  assert.doesNotMatch(groups,/"A617",\s*"A618"/)
  assert.doesNotMatch(groups,/"A313",\s*"A314"/)
  assert.match(groups,/"A213",\s*"A214"/)
