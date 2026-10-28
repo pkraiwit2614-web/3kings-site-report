@@ -9,6 +9,13 @@ on:
       - 'supabase/migrations/20261027233000_b515_defect_sync_reconcile.sql'
       - 'tests/sql/b515-defect-sync-*.sql'
       - '.github/workflows/b515-sql-isolated.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'supabase/migrations/20261027233000_b515_defect_sync_reconcile.sql'
+      - 'tests/sql/b515-defect-sync-*.sql'
+      - '.github/workflows/b515-sql-isolated.yml'
   workflow_dispatch:
 
 permissions:
@@ -17,21 +24,24 @@ permissions:
 jobs:
   b515-postgres-isolated:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres_version: ['16', '17']
     services:
       postgres:
-        image: postgres:16
+        image: postgres:${{ matrix.postgres_version }}
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: test_only
           POSTGRES_DB: b515_positive
-        ports:
-          - 5432:5432
+        ports: ['5432:5432']
         options: >-
           --health-cmd "pg_isready -U postgres -d b515_positive"
           --health-interval 5s
           --health-timeout 5s
-          --health-retries 15
+          --health-retries 12
     env:
       PGHOST: localhost
       PGPORT: '5432'
@@ -63,7 +73,7 @@ jobs:
           grep -q "ROOM_B515_NOT_FOUND_IN_CANONICAL_INVENTORY" /tmp/preflight.log
           echo "PASS: Preflight fail-closed on missing B515 verified"
 
-      - name: Positive flow: apply baseline, B515 migration and execute SQL assertions
+      - name: Positive flow: apply baseline, B515 migration, assertions, regressions and tested rollback
         run: |
           set -euo pipefail
           export PGDATABASE=b515_positive
@@ -71,7 +81,7 @@ jobs:
           psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/20261019132800_defect_override_field_reconcile_20261019.sql
           psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/20261027233000_b515_defect_sync_reconcile.sql
           psql -X -v ON_ERROR_STOP=1 -f tests/sql/b515-defect-sync-reconcile-assertions.sql
-          echo "PASS: B515 positive SQL assertions and regressions verified on isolated PostgreSQL"
+          echo "PASS: B515 positive SQL assertions, regressions, and tested rollback verified on PostgreSQL ${{ matrix.postgres_version }}"
 
       - name: Assert fail-closed on negative scenarios in isolated database
         run: |

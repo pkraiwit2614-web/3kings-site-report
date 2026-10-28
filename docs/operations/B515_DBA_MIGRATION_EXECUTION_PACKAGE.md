@@ -602,12 +602,13 @@ The status transition must be executed through the existing authorized pipeline:
 1. Canonical Google Drive Master Excel:
    - File ID: `1MEeB1E7D_35MTndRPi1aBTlVfI2aR0Wj`
    - File Name: `Handover_Defect_Summary_Updated_28-09-2026.xlsx`
-   - Revision Date: `26/10/2026` or later
+   - Revision Date: `26/10/2026` or later (Current verified live source revision: `2026-10-28T02:46:25.753Z` / 09:46:25 BKK)
    - Sheet: `ข้อมูลจำแนก`
-   - Row B515 values:
+   - Row B515 values in Excel:
      - `current_status`: `Defect ยังไม่เสร็จ / ต้องปิดงาน`
      - `status_group`: `Hotel - Incomplete`
-     - `defect_detail`: `Customer Defect B515: ประตูระเบียงเปิดฝืด, กระเบื้องห้องน้ำบิ่น` (or existing detail)
+     - `defect_detail`: **[SYNTHETIC TEST PLACEHOLDER NOTICE]**  
+       *(Note: Texts like 'Customer Defect B515: ประตูระเบียงเปิดฝืด...' are synthetic test fixtures only. In live production, the canonical Excel row for B515 contains the nine real customer defect items—drain missing, damp wall/leak, ceiling joint, AC remote, shower-holder seal, paint, etc.—awaiting physical site inspection. Never inject synthetic descriptions into production.)*
 2. Run Apps Script `SmartSyncDefects_v1.3_2026-10-02.gs` or call `/api/sync/drive`:
    - Payload: All 263 rooms (A=162, B=101)
 3. Check Sync Log Readback:
@@ -622,16 +623,160 @@ The status transition must be executed through the existing authorized pipeline:
 ---
 
 ### Step 5: Rollback Runbook (In case of any unexpected failure)
-If rollback is required, execute the baseline definition of `defect_web_override_protect()` to remove the B515 exception, without manual ledger tampering:
+This rollback has been rehearsed and tested on isolated PostgreSQL. It removes the B515 scoped exception and restores `defect_web_override_protect()` to its prior baseline definition without tampering with the `supabase_migrations` ledger:
 
 ```sql
 BEGIN;
 
--- 1. Remove B515 exception by re-applying the 20261021185000 baseline trigger
--- (Restores defect_web_override_protect to prior approved state)
--- Do NOT manually delete from supabase_migrations.schema_migrations.
+-- 1. Restore defect_web_override_protect() to baseline (prior to 20261027233000)
+CREATE OR REPLACE FUNCTION public.defect_web_override_protect()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+DECLARE
+  v public.defect_web_overrides%rowtype;
+  expected_status text;
+  expected_group text;
+  approved boolean := false;
+  v_field_name text;
+  proposed_value text;
+  previous_value text;
+  override_value text;
+  accepted_value text;
+  accepted_revision timestamptz;
+  accepted_override_revision timestamptz;
+  can_accept boolean;
+  approved_source boolean;
+BEGIN
+  IF pg_catalog.current_setting('app.defect_manual_update',true) = '1' THEN
+    RETURN new;
+  END IF;
+
+  SELECT * INTO v FROM public.defect_web_overrides WHERE room_no=new.room_no;
+
+  IF new.room_no IN ('B214','B314','B315','B403','B515') THEN
+    CASE new.room_no
+      WHEN 'B214' THEN expected_status:='Defect ยังไม่เสร็จ / ต้องปิดงาน'; expected_group:='Hotel - Incomplete';
+      WHEN 'B314' THEN expected_status:='Defect เสร็จแล้ว / รอ Hotel Engineer ตรวจ'; expected_group:='Hotel - Awaiting Check';
+      WHEN 'B315' THEN expected_status:='Defect ยังไม่เสร็จ / ต้องปิดงาน'; expected_group:='Hotel - Incomplete';
+      WHEN 'B403' THEN expected_status:='Defect ยังไม่เสร็จ / ต้องปิดงาน'; expected_group:='Hotel - Incomplete';
+      WHEN 'B515' THEN expected_status:='Defect เสร็จแล้ว / รอ Hotel Engineer ตรวจ'; expected_group:='Hotel - Awaiting Check';
+    END CASE;
+    approved := new.source_file_id = '1MEeB1E7D_35MTndRPi1aBTlVfI2aR0Wj'
+      AND new.source_file_name = 'Handover_Defect_Summary_Updated_28-09-2026.xlsx'
+      AND old.current_status IS NOT DISTINCT FROM expected_status
+      AND old.status_group IS NOT DISTINCT FROM expected_group
+      AND new.current_status = 'Defect เสร็จแล้ว / Hotel Engineer ตรวจแล้ว'
+      AND new.status_group = 'Hotel - Checked Complete'
+      AND (NOT FOUND OR v.source_sync_state = 'synced')
+      AND (NOT FOUND OR new.source_modified_at > greatest(
+          coalesce(v.updated_at,'-infinity'::timestamptz),
+          coalesce(v.source_synced_at,'-infinity'::timestamptz)));
+    IF NOT approved THEN
+      new.current_status:=old.current_status;
+      new.status_group:=old.status_group;
+    END IF;
+    new.next_action:=old.next_action;
+    new.defect_detail:=old.defect_detail;
+    new.latest_source:=CASE WHEN approved THEN new.latest_source ELSE old.latest_source END;
+    RETURN new;
+  END IF;
+
+  IF NOT FOUND THEN RETURN new; END IF;
+
+  IF v.source_sync_state <> 'synced' OR v.source_synced_at IS NULL THEN
+    new.current_status:=coalesce(v.current_status,new.current_status);
+    new.status_group:=coalesce(v.status_group,new.status_group);
+    new.next_action:=coalesce(v.next_action,new.next_action);
+    new.defect_detail:=coalesce(v.detail_text,new.defect_detail);
+    IF (v.current_status IS NOT NULL OR v.status_group IS NOT NULL
+        OR v.next_action IS NOT NULL) THEN
+      new.latest_source:=old.latest_source;
+    END IF;
+    RETURN new;
+  END IF;
+
+  approved_source := new.source_file_id = '1MEeB1E7D_35MTndRPi1aBTlVfI2aR0Wj'
+    AND new.source_file_name = 'Handover_Defect_Summary_Updated_28-09-2026.xlsx'
+    AND v.source_synced_at >= v.updated_at
+    AND new.source_modified_at > v.source_synced_at;
+
+  FOREACH v_field_name IN ARRAY ARRAY[
+    'current_status','status_group','next_action','defect_detail'
+  ] LOOP
+    previous_value := pg_catalog.to_jsonb(old)->>v_field_name;
+    proposed_value := pg_catalog.to_jsonb(new)->>v_field_name;
+    override_value := CASE WHEN v_field_name='defect_detail' THEN v.detail_text
+      ELSE pg_catalog.to_jsonb(v)->>v_field_name END;
+
+    IF proposed_value IS NOT DISTINCT FROM previous_value THEN CONTINUE; END IF;
+
+    SELECT f.last_accepted_value,f.last_source_revision,f.override_revision
+      INTO accepted_value,accepted_revision,accepted_override_revision
+      FROM private.defect_reconcile_field_versions f
+      WHERE f.room_no=new.room_no AND f.field_name=v_field_name;
+
+    IF FOUND AND accepted_override_revision IS NOT DISTINCT FROM v.updated_at THEN
+      can_accept := approved_source
+        AND previous_value IS NOT DISTINCT FROM accepted_value
+        AND new.source_modified_at > accepted_revision;
+    ELSE
+      can_accept := approved_source
+        AND previous_value IS NOT DISTINCT FROM override_value;
+    END IF;
+
+    IF can_accept THEN
+      INSERT INTO private.defect_reconcile_field_versions AS f (
+        room_no,field_name,override_revision,last_source_revision,
+        last_accepted_value,last_accepted_at
+      ) VALUES (
+        new.room_no,v_field_name,v.updated_at,new.source_modified_at,
+        proposed_value,now()
+      ) ON CONFLICT (room_no,field_name) DO UPDATE SET
+        override_revision=excluded.override_revision,
+        last_source_revision=excluded.last_source_revision,
+        last_accepted_value=excluded.last_accepted_value,
+        last_accepted_at=excluded.last_accepted_at;
+      INSERT INTO private.defect_reconcile_field_audit (
+        room_no,field_name,decision,override_revision,source_revision,
+        previous_db_value,proposed_excel_value,web_override_value
+      ) VALUES (
+        new.room_no,v_field_name,'accepted_excel',v.updated_at,
+        new.source_modified_at,previous_value,proposed_value,override_value
+      );
+    ELSE
+      new := pg_catalog.jsonb_populate_record(new,
+        pg_catalog.jsonb_build_object(v_field_name,previous_value));
+      IF NOT EXISTS (
+        SELECT 1 FROM private.defect_reconcile_field_audit a
+        WHERE a.room_no=new.room_no AND a.field_name=v_field_name
+          AND a.decision='conflict_kept_db'
+          AND a.override_revision IS NOT DISTINCT FROM v.updated_at
+          AND a.source_revision IS NOT DISTINCT FROM new.source_modified_at
+          AND a.proposed_excel_value IS NOT DISTINCT FROM proposed_value
+      ) THEN
+        INSERT INTO private.defect_reconcile_field_audit (
+          room_no,field_name,decision,override_revision,source_revision,
+          previous_db_value,proposed_excel_value,web_override_value
+        ) VALUES (
+          new.room_no,v_field_name,'conflict_kept_db',v.updated_at,
+          new.source_modified_at,previous_value,proposed_value,override_value
+        );
+      END IF;
+    END IF;
+  END LOOP;
+  RETURN new;
+END
+$function$;
 
 COMMIT;
+
+-- 2. Post-Rollback Readback: Confirm B515 exception is gone
+SELECT
+  pg_catalog.strpos(pg_catalog.pg_get_functiondef('public.defect_web_override_protect()'::regprocedure), 'B515 Scoped Exception') = 0 AS b515_exception_removed;
+-- Expected: true
 ```
 
 ---
