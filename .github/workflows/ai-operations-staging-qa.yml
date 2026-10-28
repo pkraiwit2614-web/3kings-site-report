@@ -23,4 +23,4 @@ jobs:
         with:
           node-version: '22'
       - name: Pure offline P0-B, P0-C and command-gate tests
-        run: node --test tests/ai-operations-central-error-log.test.cjs tests/ai-operations-gas-source.test.cjs tests/ai-operations-gas-live.test.cjs tests/ai-operations-staging-control-plane.test.cjs
+        run: node --test tests/ai-operations-central-error-log.test.cjs tests/ai-operations-gas-source.test.cjs tests/ai-operations-gas-live.test.cjs tests/ai-operations-staging-control-plane.test.cjs tests/ai-operations-gas-oauth-worker.test.cjs
