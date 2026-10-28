@@ -5,6 +5,10 @@ on:
       - 'supabase/migrations/20261029024500_express_project_override_read_view.sql'
       - 'supabase/migrations/20261029025000_nonretiring_work_order_stage.sql'
       - 'tests/sql/workorder-express-overrides-isolated.sql'
+      - 'tests/express-override-consumer.test.cjs'
+      - 'tests/e2e/local-stack/supabase/seed.sql'
+      - 'app/api/materials/express-register/route.ts'
+      - 'components/ExpressRegisterSection.tsx'
       - '.github/workflows/qa-workorder-express-overrides.yml'
   workflow_dispatch:
 permissions:
@@ -27,6 +31,8 @@ jobs:
           --health-interval 5s --health-timeout 5s --health-retries 15
     steps:
       - uses: actions/checkout@v4
+      - name: Verify live consumer contract and RLS-preserving local fixture
+        run: node --test tests/express-override-consumer.test.cjs
       - name: Install PostgreSQL client
         run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
       - name: Run source-integrity and non-retiring regression fixture
