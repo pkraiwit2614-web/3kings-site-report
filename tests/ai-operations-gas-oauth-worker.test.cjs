@@ -1,0 +1,11 @@
+'use strict';
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const crypto=require('node:crypto').webcrypto;
+const {SCOPE,random,pkceChallenge,checkConfig,sign,handle}=require('../scripts/ai-operations/gas-oauth-worker-staging.cjs');
+test('OAuth scope is strictly read-only',()=>assert.equal(SCOPE,'https://www.googleapis.com/auth/script.projects.readonly'));
+test('PKCE SHA-256 RFC7636 test vector',async()=>assert.equal(await pkceChallenge('dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk',crypto),'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM'));
+test('nonce uses cryptographic random values',()=>{const a=random(crypto),b=random(crypto);assert.notEqual(a,b);assert.ok(a.length>=40);});
+test('HMAC signing is deterministic but key-specific',async()=>{const a=await sign('state','x'.repeat(32),crypto);assert.equal(a,await sign('state','x'.repeat(32),crypto));assert.notEqual(a,await sign('state','y'.repeat(32),crypto));});
+test('missing config always fails closed',()=>{assert.throws(()=>checkConfig({},'https://example.test'),/BRIDGE_DISABLED/);assert.throws(()=>checkConfig({BRIDGE_ENABLED:'true'},'https://example.test'),/CLIENT_ID_INVALID/);});
+test('unactivated bridge cannot issue OAuth redirects or fetch live GAS',async()=>{let called=0;const f=()=>{called++;throw Error('SHOULD_NOT_FETCH')};const health=await handle(new Request('https://example.test/health'),{}, {crypto,fetchFn:f});assert.equal(health.status,200);assert.equal((await health.json()).mode,'OFFLINE_NOT_CONNECTED');for(const path of ['/auth/start','/auth/callback','/api/source','/']){const r=await handle(new Request('https://example.test'+path),{}, {crypto,fetchFn:f});assert.equal(r.status,503);assert.equal((await r.json()).error,'BRIDGE_NOT_ACTIVATED');}assert.equal(called,0);});
