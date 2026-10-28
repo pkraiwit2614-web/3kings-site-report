@@ -111,6 +111,7 @@ async function handle(request,env,{crypto=globalThis.crypto,fetchFn=globalThis.f
  }
  if(!['/auth/start','/auth/callback','/auth/logout','/api/status','/api/source'].includes(url.pathname))return fail('NOT_FOUND',404);
  if(request.method!=='GET'&&!(request.method==='POST'&&url.pathname==='/auth/logout'))return fail('METHOD_NOT_ALLOWED',405);
+ let callbackStage='ENTRY';
  try{
   const ownerEmail=env.ALLOWED_EMAIL.toLowerCase();
   if(url.pathname==='/auth/start'){
@@ -124,15 +125,23 @@ async function handle(request,env,{crypto=globalThis.crypto,fetchFn=globalThis.f
   if(url.pathname==='/auth/callback'){
    const state=url.searchParams.get('state'),code=url.searchParams.get('code'),browser=getCookie(request,STATE_COOKIE);
    if(!state||!code||state.length>200||code.length>4096||!browser||!/^[A-Za-z0-9_-]{43}$/.test(browser))return fail('CALLBACK_INVALID',400);
+   callbackStage='STATE_CONSUME';
    const row=await env.DB.prepare('DELETE FROM oauth_state WHERE state=? AND owner=? AND browser_hash=? RETURNING verifier,expires,nonce').bind(state,ownerEmail,await shaHex(browser,crypto)).first();
    if(!row||row.expires<=now)return fail('STATE_EXPIRED',400);
+   callbackStage='TOKEN_EXCHANGE';
    const data=await exchange({grant_type:'authorization_code',code,code_verifier:row.verifier,redirect_uri:url.origin+'/auth/callback'},env,fetchFn);
+   callbackStage='ID_TOKEN_VERIFY';
    const owner=await verifyGoogleIdToken(data.id_token,env,row.nonce,fetchFn,crypto,now);
    if(typeof data.refresh_token!=='string'||!data.refresh_token)throw Error('NO_REFRESH_TOKEN');
+   callbackStage='TOKEN_ENCRYPT';
    const sealed=await seal(data.refresh_token,owner,env,crypto);
+   callbackStage='TOKEN_STORE';
    await env.DB.prepare('INSERT INTO oauth_token (owner,iv,ciphertext,updated) VALUES (?,?,?,?) ON CONFLICT(owner) DO UPDATE SET iv=excluded.iv,ciphertext=excluded.ciphertext,updated=excluded.updated').bind(owner,sealed.iv,sealed.ciphertext,now).run();
+   callbackStage='SESSION_CREATE';
    const session=random(crypto);
+   callbackStage='SESSION_STORE';
    await env.DB.prepare('INSERT INTO oauth_session (session_hash,owner,expires) VALUES (?,?,?)').bind(await shaHex(session,crypto),owner,now+3600).run();
+   callbackStage='SESSION_COOKIE';
    const headers=new Headers({'location':'/api/status','cache-control':'no-store','referrer-policy':'no-referrer'});
    headers.append('set-cookie',cookie(STATE_COOKIE,'',0,'Lax'));
    headers.append('set-cookie',cookie(SESSION_COOKIE,session,3600));
@@ -172,6 +181,6 @@ async function handle(request,env,{crypto=globalThis.crypto,fetchFn=globalThis.f
    }
   }
   return json({mode:'STAGING_ONLY',source:'GAS_API_HEAD_NOT_DEPLOYMENT',scope:READ_SCOPE,files:results});
- }catch(error){const allow=new Set(['RATE_LIMIT','TOKEN_EXCHANGE','TOKEN_INVALID','SCOPE_MISMATCH','ID_TOKEN','ID_TOKEN_FORMAT','ID_TOKEN_PARSE','ID_TOKEN_ALG','ID_TOKEN_CLAIMS','GOOGLE_JWKS','GOOGLE_KEY','GOOGLE_SIGNATURE','NO_REFRESH_TOKEN','GAS_READ_FAILED','GAS_CONTENT_INVALID','AMBIGUOUS_REMOTE','INVALID_REMOTE_SOURCE']);const phase=url.pathname==='/auth/start'?'START':url.pathname==='/auth/callback'?'CALLBACK':'API';return fail('OAUTH_'+phase+'_'+(allow.has(error?.message)?error.message:'INTERNAL'),502);}
+ }catch(error){const allow=new Set(['RATE_LIMIT','TOKEN_EXCHANGE','TOKEN_INVALID','SCOPE_MISMATCH','ID_TOKEN','ID_TOKEN_FORMAT','ID_TOKEN_PARSE','ID_TOKEN_ALG','ID_TOKEN_CLAIMS','GOOGLE_JWKS','GOOGLE_KEY','GOOGLE_SIGNATURE','NO_REFRESH_TOKEN','GAS_READ_FAILED','GAS_CONTENT_INVALID','AMBIGUOUS_REMOTE','INVALID_REMOTE_SOURCE']);const phase=url.pathname==='/auth/start'?'START':url.pathname==='/auth/callback'?'CALLBACK':'API';return fail('OAUTH_'+phase+'_'+(allow.has(error?.message)?error.message:(phase==='CALLBACK'?'INTERNAL_'+callbackStage:'INTERNAL')),502);}
 }
 module.exports={READ_SCOPE,SCOPES,AUTH_URL,TOKEN_URL,JWKS_URL,STATE_COOKIE,SESSION_COOKIE,random,sha,shaHex,config,verifyGoogleIdToken,seal,unseal,assertScopes,exchange,authenticatedOwner,handle};
