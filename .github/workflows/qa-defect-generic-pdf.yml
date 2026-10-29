@@ -5,6 +5,7 @@ on:
       - 'app/api/sync/drive/route.ts'
       - 'docs/apps-script/SmartSyncDefects_v1.3_2026-10-02.gs'
       - 'supabase/migrations/20261029160000_defect_doc167_a404_a405_detail_gate.sql'
+      - 'supabase/migrations/20261029201500_defect_pdf_header_notes_compatible.sql'
       - 'tests/defect-doc167-a404-a405.test.cjs'
       - 'tests/sql/defect-generic-pdf-isolated.sql'
       - 'tests/sql/defect-generic-rpc-isolated.sql'
@@ -54,6 +55,7 @@ jobs:
           export PGHOST=127.0.0.1 PGPORT=5432 PGUSER=postgres PGDATABASE=defect_qa
           psql -v ON_ERROR_STOP=1 -c 'CREATE SCHEMA private; CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role;'
           psql -v ON_ERROR_STOP=1 -f /tmp/generic-defect-helper.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261029201500_defect_pdf_header_notes_compatible.sql
           psql -v ON_ERROR_STOP=1 -f tests/sql/defect-generic-pdf-isolated.sql
       - name: Extract existing RPC body and replay full 263-room isolated fixture
         env:
