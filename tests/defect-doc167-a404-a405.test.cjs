@@ -22,6 +22,16 @@ test('A404+A405 exact Doc167 43 points accepted; malformed and unrelated content
   assert.equal(allowed('A404',source.replace('Doc ID 167','Doc ID 168')),true)
   assert.equal(allowed('A404','No evidence'),false)
 })
+test('real A404 Excel header with source notes accepted and malformed suffix blocked',()=>{
+  const actualHeader='A404 • Art House Group Doc ID 167 • PDF 28/10/2026 • Defect ใหม่ 43 รายการ (เฉพาะจุดตรวจห้อง A404; Combine A404+A405). สถานะ: รอตรวจ/รอดำเนินการ; ยังไม่มีหลักฐานแก้เสร็จหรือ Hotel OK; วันที่เอกสารไม่ใช่วันรับแจ้งจริง.';
+  const annotated=source.replace('A404 • Art House Group Doc ID 167 • PDF 28/10/2026 • Defect ใหม่ 43 รายการ',actualHeader);
+  assert.equal(allowed('A404',annotated),true);
+  assert.equal(allowed('A405',annotated),true);
+  assert.equal(allowed('B706',annotated),false);
+  assert.equal(allowed('A404',annotated.replace('#43 [PFur]','#42 [PFur]')),false);
+  assert.equal(allowed('A404',annotated.replace('43 รายการ','44 รายการ')),false);
+  assert.equal(allowed('A404',annotated.replace(actualHeader,actualHeader+'X'.repeat(450))),false);
+})
 test('new verified PDF details work for future room and document without parser edits',()=>{
   const fresh = 'A512 • Building Engineer Doc ID 168 • PDF 29/10/2026 • Defect ใหม่ 2 รายการ\n' +
     '#01 [MEP] Verified item\n#02 [Wet] Verified item';
