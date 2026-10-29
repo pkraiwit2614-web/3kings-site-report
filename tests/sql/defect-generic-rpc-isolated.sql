@@ -101,7 +101,7 @@ BEGIN
   THEN RAISE EXCEPTION 'half pair updated despite pending override';END IF;
   DELETE FROM public.defect_web_overrides WHERE room_no='A405';
   SELECT jsonb_agg(CASE WHEN x.value->>'room_no'='A405'
-       THEN jsonb_set(x.value,'{defect_detail}',to_jsonb('invalid detail')) ELSE x.value END ORDER BY x.value->>'room_no')
+       THEN jsonb_set(x.value,'{defect_detail}',to_jsonb('invalid detail'::text)) ELSE x.value END ORDER BY x.value->>'room_no')
   INTO swapped FROM jsonb_array_elements(p) AS x(value);
   r:=public.drive_sync_apply_condo_defects('isolated-only-test-key',
     'Handover_Defect_Summary_Updated_28-09-2026.xlsx',
