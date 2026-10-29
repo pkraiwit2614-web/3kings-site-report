@@ -361,3 +361,18 @@ BEGIN
  IF v->>'error'<>'closed_or_inactive_preserved' THEN RAISE EXCEPTION 'inactive bypass %',v; END IF;
  RAISE NOTICE 'PINNED CONTENT / APPROVED FIELD UPDATE / HISTORY / NULL DRYRUN PASS';
 END $test$;
+
+-- Separate backend proves fail-closed NOWAIT behavior without Production access.
+CREATE EXTENSION dblink;
+SELECT dblink_connect('writer','host=127.0.0.1 dbname=workorder_qa user=postgres password=isolated-only');
+SELECT dblink_exec('writer','BEGIN');
+SELECT dblink_exec('writer','LOCK TABLE public.defect_work_order_snapshot IN EXCLUSIVE MODE');
+DO $test$
+DECLARE v jsonb;
+BEGIN
+ v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A401-02',
+ '18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',(SELECT source_modified_at FROM public.work_order_promotion_approvals WHERE work_id='DF-A401-02'),false);
+ IF v->>'error'<>'concurrent_work_order_writer' THEN RAISE EXCEPTION 'concurrent writer bypass %',v; END IF;
+END $test$;
+SELECT dblink_exec('writer','ROLLBACK');
+SELECT dblink_disconnect('writer');
