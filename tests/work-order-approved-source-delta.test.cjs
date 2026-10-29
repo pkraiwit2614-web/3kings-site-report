@@ -39,7 +39,7 @@ function fixture(change=()=>{}){
   }else throw Error('Unexpected request '+path);
   return {getResponseCode:()=>200,getContentText:()=>result===null?'':JSON.stringify(result)};
  }}};
- vm.createContext(c);vm.runInContext(source,c);return {state,run:d=>c.workOrderApprovedSourceDelta_(null,d)};
+ vm.createContext(c);vm.runInContext(source,c);return {state,context:c,run:d=>c.workOrderApprovedSourceDelta_(null,d),defect:d=>c.defectApprovedPdfSource_(d)};
 }
 test('dry-run validates canonical rows without staging/approval/promotion writes',()=>{
  const f=fixture(),v=f.run(true);assert.equal(v.changed,0);assert.equal(v.status,'DRY_RUN_APPROVED_SOURCE');
@@ -90,4 +90,20 @@ test('SQL NULL next_action equals approved empty source action on retry',()=>{
   const f=fixture(s=>s.existing=[{...expected,next_action:null,source_active:true,qa_status:'APPROVED_NONRETIRING'}]);
   assert.equal(f.run(false).status,'NO_CHANGE');assert(!f.state.calls.some(x=>x.method==='post'));
  }finally{expected.next_action=previous;}
+});
+
+test('owner PDF bridge binds source revision, single room and zero-change DB readback',()=>{
+ const f=fixture(s=>Object.assign(s.m,{defect_source_file_id:'1MEeB1E7D_35MTndRPi1aBTlVfI2aR0Wj',defect_source_modified_at:revision,defect_rooms:['B706']}));
+ let reads=0,writes=0;
+ f.context.runDefectSyncV13_=opts=>{
+  assert.equal(opts.expectedSourceRevision,revision);assert.equal(opts.verifiedPdfDetailOnly,true);
+  assert.deepEqual(Array.from(opts.scopeRooms),['B706']);
+  if(opts.dryRun){reads++;return {status:'dry-run',changed:reads===1?1:0,changedRooms:reads===1?['B706']:[]};}
+  writes++;return {status:'success',changed:1};
+ };
+ const v=f.defect(false);assert.equal(v.status,'SCOPED_PDF_SOURCE_APPLIED');assert.equal(v.ui_verification_required,true);assert.equal(writes,1);assert.equal(reads,2);
+});
+test('owner PDF bridge refuses a partial Combine manifest',()=>{
+ const f=fixture(s=>Object.assign(s.m,{defect_source_file_id:'1MEeB1E7D_35MTndRPi1aBTlVfI2aR0Wj',defect_source_modified_at:revision,defect_rooms:['A404']}));
+ assert.throws(()=>f.defect(false),/INVALID_DEFECT_MANIFEST/);
 });
