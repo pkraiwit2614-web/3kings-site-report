@@ -16,7 +16,7 @@ DECLARE v_header text[]; v_expected integer; v_numbered integer; v_valid boolean
 BEGIN
   IF p_detail IS NULL OR length(p_detail)>100000 THEN RETURN false; END IF;
   v_header := regexp_match(btrim(split_part(p_detail,E'\n',1)),
-    '^([AB][0-9]{3}) • .{2,120} Doc ID [0-9]{1,12} • PDF [0-9]{2}/[0-9]{2}/[0-9]{4} • Defect ใหม่ ([0-9]{1,3}) รายการ.{0,400}$');
+    '^([AB][0-9]{3}) • .{2,120} Doc ID [0-9]{1,12} • PDF [0-9]{2}/[0-9]{2}/[0-9]{4} • Defect ใหม่ ([0-9]{1,3}) รายการ.{0,240}$');
   IF v_header IS NULL OR
     (v_header[1]<>p_room AND NOT(v_header[1]='A404' AND p_room='A405')) THEN RETURN false; END IF;
   v_expected:=v_header[2]::integer;
