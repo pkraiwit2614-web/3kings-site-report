@@ -496,7 +496,7 @@ function parseCondoDefectMasterV13_(sheet) {
  */
 function verifiedPdfDefectDetailV13_(room, detail) {
   if (!detail || String(detail).length > 100000) return false;
-  const header = String(detail).match(/^([AB]\d{3}) • [^\r\n]{2,120} Doc ID \d{1,12} • PDF \d{2}\/\d{2}\/\d{4} • Defect ใหม่ (\d{1,3}) รายการ[^\r\n]{0,240}(?:\r?\n|$)/);
+  const header = String(detail).match(/^([AB]\d{3}) • [^\r\n]{2,120}(?: Doc ID \d{1,12})? • (?:รับ )?PDF \d{2}\/\d{2}\/\d{4} • Defect ใหม่ (\d{1,3}) รายการ[^\r\n]{0,240}(?:\r?\n|$)/);
   if (!header) return false;
   const sourceRoom = header[1];
   // Approved Combine mirror only. All other PDF inspections require exact room attribution.
