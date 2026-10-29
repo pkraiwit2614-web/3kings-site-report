@@ -317,7 +317,7 @@ async function parseDefects(buffer: Buffer) {
 
 function verifiedPdfDefectDetail(roomNo: string, detail: string | null): boolean {
   if (!detail || detail.length > 100000) return false
-  const header = detail.match(/^([AB]\d{3}) • [^\r\n]{2,120} Doc ID \d{1,12} • PDF \d{2}\/\d{2}\/\d{4} • Defect ใหม่ (\d{1,3}) รายการ(?:\r?\n|$)/)
+  const header = detail.match(/^([AB]\d{3}) • [^\r\n]{2,120} Doc ID \d{1,12} • PDF \d{2}\/\d{2}\/\d{4} • Defect ใหม่ (\d{1,3}) รายการ[^\r\n]{0,400}(?:\r?\n|$)/)
   if (!header) return false
   const sourceRoom = header[1]
   // Approved Combine mirror. Other PDF inspections must identify their own room.
