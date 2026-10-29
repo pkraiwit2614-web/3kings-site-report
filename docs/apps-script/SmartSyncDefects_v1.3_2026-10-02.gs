@@ -173,6 +173,9 @@ function runDefectSyncV13_(opts) {
       throw new Error('Wrong Defect master workbook ID or name; database untouched.');
     }
     const modifiedIso = file.getLastUpdated().toISOString();
+    if (opts.expectedSourceRevision && modifiedIso !== opts.expectedSourceRevision) {
+      throw new Error('Approved PDF source revision changed; database untouched.');
+    }
 
     if (!opts.force && isUnchanged_(ctx.props, DEFECT_V13.STATE_KEY, file.getId(), modifiedIso)) {
       console.log(`Defect Sync v1.3 source unchanged, zero-write skip: ${file.getName()}`);
@@ -496,7 +499,7 @@ function parseCondoDefectMasterV13_(sheet) {
  */
 function verifiedPdfDefectDetailV13_(room, detail) {
   if (!detail || String(detail).length > 100000) return false;
-  const header = String(detail).match(/^([AB]\d{3}) • [^\r\n]{2,120} Doc ID \d{1,12} • PDF \d{2}\/\d{2}\/\d{4} • Defect ใหม่ (\d{1,3}) รายการ[^\r\n]{0,240}(?:\r?\n|$)/);
+  const header = String(detail).match(/^([AB]\d{3}) • [^\r\n]{2,120}(?: Doc ID \d{1,12})? • (?:รับ )?PDF \d{2}\/\d{2}\/\d{4} • Defect ใหม่ (\d{1,3}) รายการ[^\r\n]{0,240}(?:\r?\n|$)/);
   if (!header) return false;
   const sourceRoom = header[1];
   // Approved Combine mirror only. All other PDF inspections require exact room attribution.
@@ -536,7 +539,10 @@ function defectV13ScopedChanges_(prepared, oldByRoom, opts) {
     supplied.every((room, i) => room === expected[i]);
   const pdfPair = opts.scopeRooms.length === 2 &&
     supplied.length === 2 && supplied[0] === 'A404' && supplied[1] === 'A405';
-  if (!chatPilot && !pdfPair) {
+  const pdfSingle = opts.verifiedPdfDetailOnly === true && opts.scopeRooms.length === 1 &&
+    supplied.length === 1 && /^[AB]\d{3}$/.test(supplied[0]) &&
+    !['A404', 'A405'].includes(supplied[0]) && typeof opts.expectedSourceRevision === 'string';
+  if (!chatPilot && !pdfPair && !pdfSingle) {
     throw new Error('Scoped Defect sync: unapproved room scope; exact approved five-room scope or A404/A405 Combine required.');
   }
   const changed = all.filter(row => supplied.includes(row.room_no));

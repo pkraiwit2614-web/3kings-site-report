@@ -3,6 +3,9 @@ on:
   pull_request:
     paths:
       - 'supabase/migrations/20261029173000_nonretiring_approved_work_order_promotion.sql'
+      - 'supabase/migrations/20261029220000_verified_work_order_source_deltas.sql'
+      - 'docs/apps-script/WorkOrderApprovedSourceDelta.gs'
+      - 'tests/work-order-approved-source-delta.test.cjs'
       - 'tests/sql/workorder-nonretiring-promotion-isolated.sql'
       - '.github/workflows/qa-workorder-nonretiring-promotion.yml'
   workflow_dispatch:
@@ -32,6 +35,11 @@ jobs:
         env:
           PGPASSWORD: isolated-only
         run: psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5432 -U postgres -d workorder_qa -f tests/sql/workorder-nonretiring-promotion-isolated.sql
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Owner source-delta bridge offline safety
+        run: node --test tests/work-order-approved-source-delta.test.cjs
       - name: Release limitation
         run: |
           echo "Only an isolated SQL and approval-guard test."

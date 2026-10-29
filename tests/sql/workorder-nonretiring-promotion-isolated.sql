@@ -403,3 +403,136 @@ BEGIN
  IF (SELECT count(*) FROM public.defect_work_order_snapshot WHERE work_id LIKE 'DF-A401-MANAGED%' AND source_active)<>32 THEN RAISE EXCEPTION 'managed IDs retired'; END IF;
  RAISE NOTICE 'MANAGED COUNTS CANNOT MASK MISSING LEGACY ROWS PASS';
 END $test$;
+
+ALTER TABLE public.defect_work_order_import_staging ADD COLUMN staged_at timestamptz DEFAULT now();
+CREATE OR REPLACE FUNCTION public.defect_work_order_nonretiring_stage_import(p_sync_key text, p_source_file_id text, p_source_modified_at timestamp with time zone, p_rows jsonb, p_dry_run boolean DEFAULT true)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare v_total integer;v_unique integer;v_invalid integer;v_unknown integer;
+        v_new integer;v_changed integer:=0;v_before integer;v_active integer;
+        v_retired integer;v_source_last timestamptz;
+begin
+ if not private.drive_sync_key_valid(p_sync_key)
+ then return jsonb_build_object('ok',false,'error','invalid_sync_key');end if;
+ if p_source_file_id is distinct from '18P3OFYtOLsslCtDujlSQVf9IQSuplKcx'
+ then return jsonb_build_object('ok',false,'error','unapproved_source');end if;
+ if p_source_modified_at is null or p_source_modified_at>now()+interval '5 minutes'
+ then return jsonb_build_object('ok',false,'error','invalid_source_time');end if;
+ if p_rows is null or jsonb_typeof(p_rows)<>'array' or jsonb_array_length(p_rows)<>82
+ then return jsonb_build_object('ok',false,'error','expected_82_master_only_rows');end if;
+ perform pg_advisory_xact_lock(hashtext('3kings_work_order_stage_import_v1'));
+ select count(*),count(distinct work_id),count(*) filter (where
+    work_id is null or work_id !~ '^DF-[A-Za-z0-9()_-]+$'
+    or room_group is null or room_group !~ '[AB][0-9]{3}'
+    or building not in ('A','B') or left(room_group,1) is distinct from building
+    or nullif(btrim(contractor),'') is null or nullif(btrim(defect_item),'') is null
+    or source_master_row is null or source_master_row<=0
+    or stage_decision not in
+       ('STAGE_REVERIFY_NO_DB_WRITE','STAGE_HISTORY_ONLY','HOLD_MISSING_EVIDENCE','DENY_DISPATCH')
+ ) into v_total,v_unique,v_invalid
+ from jsonb_to_recordset(p_rows) as r(work_id text,room_group text,building text,
+    contractor text,defect_item text,source_master_row integer,stage_decision text);
+ if v_unique<>82 or v_invalid>0 then
+   return jsonb_build_object('ok',false,'error','invalid_or_duplicate_source', 'invalid',v_invalid);
+ end if;
+ select count(*) into v_unknown
+ from jsonb_to_recordset(p_rows) r(room_group text)
+ cross join lateral regexp_matches(r.room_group,'[AB][0-9]{3}','g') m(room)
+ where not exists(select 1 from public.condo_room_status c where c.room_no=m.room[1]);
+ if v_unknown<>0 then
+   return jsonb_build_object('ok',false,'error','unknown_room','count',v_unknown);
+ end if;
+ -- STOP if the 82 include an existing Work ID: this is only the independently reconciled master-only set.
+ select count(*) into v_before from jsonb_to_recordset(p_rows) r(work_id text)
+ inner join public.defect_work_order_snapshot w using(work_id);
+ if v_before>0 then
+  return jsonb_build_object('ok',false,'error','source_no_longer_master_only','matched',v_before);
+ end if;
+ select count(*) filter(where source_active),count(*) filter(where not source_active)
+ into v_active,v_retired from public.defect_work_order_snapshot;
+ select max(source_modified_at) into v_source_last from public.defect_work_order_import_staging;
+ if v_source_last is not null and p_source_modified_at<v_source_last then
+  return jsonb_build_object('ok',false,'error','stale_source');
+ end if;
+ select count(*) into v_new from jsonb_to_recordset(p_rows) r(work_id text)
+ where not exists(select 1 from public.defect_work_order_import_staging s where s.work_id=r.work_id);
+ if p_dry_run then
+  return jsonb_build_object('ok',true,'dry_run',true,'source_rows',82,
+    'would_stage_new',v_new,'production_active_unchanged',v_active,
+    'production_inactive_unchanged',v_retired,'production_mutation',0);
+ end if;
+ insert into public.defect_work_order_import_staging as s
+  (work_id,room_group,building,contractor,defect_item,source_work_status,stage_decision,
+   source_master_row,source_evidence_url,source_file_id,source_modified_at,source_payload)
+ select work_id,room_group,building,contractor,defect_item,source_work_status,stage_decision,
+   source_master_row,source_evidence_url,p_source_file_id,p_source_modified_at,payload
+ from jsonb_to_recordset(p_rows) as r(work_id text,room_group text,building text,
+   contractor text,defect_item text,source_work_status text,stage_decision text,
+   source_master_row integer,source_evidence_url text,payload jsonb)
+ on conflict(work_id) do update set
+   room_group=excluded.room_group,building=excluded.building,
+   contractor=excluded.contractor,defect_item=excluded.defect_item,
+   source_work_status=excluded.source_work_status,stage_decision=excluded.stage_decision,
+   source_master_row=excluded.source_master_row,source_evidence_url=excluded.source_evidence_url,
+   source_modified_at=excluded.source_modified_at,source_payload=excluded.source_payload,
+   staged_at=now()
+ where row(s.room_group,s.building,s.contractor,s.defect_item,s.source_work_status,
+           s.stage_decision,s.source_master_row,s.source_evidence_url,s.source_modified_at,
+           s.source_payload)
+ is distinct from
+ row(excluded.room_group,excluded.building,excluded.contractor,excluded.defect_item,
+     excluded.source_work_status,excluded.stage_decision,excluded.source_master_row,
+     excluded.source_evidence_url,excluded.source_modified_at,excluded.source_payload);
+ get diagnostics v_changed = row_count;
+ if (select count(*) from public.defect_work_order_snapshot where source_active)<>v_active or
+    (select count(*) from public.defect_work_order_snapshot where not source_active)<>v_retired
+ then raise exception 'production_status_changed_during_staging'; end if;
+ return jsonb_build_object('ok',true,'staged',82,'changed',v_changed,
+    'production_mutation',0,'active_unchanged',v_active,'inactive_unchanged',v_retired);
+end $function$
+;
+\i supabase/migrations/20261029220000_verified_work_order_source_deltas.sql
+DO $test$
+DECLARE rows jsonb;v jsonb;baseline jsonb;
+BEGIN
+ INSERT INTO public.condo_room_status VALUES('B706','Handover Complete','Non-Hotel - Handover Complete');
+ SELECT jsonb_agg(to_jsonb(w) ORDER BY work_id) INTO baseline FROM public.defect_work_order_snapshot w;
+ rows:=jsonb_build_array(jsonb_build_object('work_id','DF-B706-01','room_group','B706','building','B','contractor','RSE',
+ 'defect_item','Reported drain leak','source_work_status','รอดำเนินการ','stage_decision','STAGE_REVERIFY_NO_DB_WRITE',
+ 'source_master_row',148,'source_evidence_url','https://drive.google.com/file/d/verified','payload','{"next_action":"Inspect and repair"}'::jsonb));
+ v:=public.defect_work_order_nonretiring_stage_import(NULL,'18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',now(),rows,false);
+ IF v->>'error' IS DISTINCT FROM 'invalid_sync_key' THEN RAISE EXCEPTION 'NULL key accepted %',v;END IF;
+ v:=public.defect_work_order_nonretiring_stage_import('isolated-key-only','18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',now(),rows,NULL);
+ IF v->>'dry_run' IS DISTINCT FROM 'true' OR EXISTS(SELECT 1 FROM public.defect_work_order_import_staging WHERE work_id='DF-B706-01') THEN RAISE EXCEPTION 'NULL dryrun wrote staging %',v;END IF;
+ v:=public.defect_work_order_nonretiring_stage_import('isolated-key-only','18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',now(),rows,false);
+ IF v->>'staged' IS DISTINCT FROM '1' THEN RAISE EXCEPTION 'one verified delta rejected %',v;END IF;
+ v:=public.defect_work_order_nonretiring_stage_import('isolated-key-only','18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',now(),rows||rows,false);
+ IF v->>'error' IS DISTINCT FROM 'invalid_or_duplicate_source' THEN RAISE EXCEPTION 'duplicate accepted %',v;END IF;
+ v:=public.defect_work_order_nonretiring_stage_import('isolated-key-only','18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',now(),'[]'::jsonb,false);
+ IF v->>'error' IS DISTINCT FROM 'invalid_source_row_count' THEN RAISE EXCEPTION 'empty source accepted %',v;END IF;
+ IF (SELECT jsonb_agg(to_jsonb(w) ORDER BY work_id) FROM public.defect_work_order_snapshot w) IS DISTINCT FROM baseline THEN RAISE EXCEPTION 'staging changed Production';END IF;
+ RAISE NOTICE 'GENERIC BOUNDED STAGING / NULL KEY / NULL DRYRUN / DUPLICATE / SNAPSHOT PRESERVATION PASS';
+END $test$;
+
+DO $test$
+DECLARE v jsonb;r timestamptz;
+BEGIN
+ UPDATE public.defect_work_order_import_staging SET source_payload=source_payload||
+ '{"received_date":"2026-10-29","due_date":"2026-11-05","supervisor":"Verified PIC"}'::jsonb WHERE work_id='DF-B706-01';
+ SELECT source_modified_at INTO r FROM public.defect_work_order_import_staging WHERE work_id='DF-B706-01';
+ INSERT INTO public.work_order_promotion_approvals
+ (work_id,source_file_id,source_modified_at,approval_evidence_url,approved_by,completion_confirmed_open,
+ contractor_room_confirmed,override_queue_checked,combine_checked,approved_stage_snapshot)
+ SELECT work_id,source_file_id,source_modified_at,'https://drive.google.com/file/d/verified','Reviewer',
+ true,true,true,true,to_jsonb(s) FROM public.defect_work_order_import_staging s WHERE work_id='DF-B706-01';
+ v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-B706-01',
+ '18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,false);
+ IF v->>'status' IS DISTINCT FROM 'PROMOTED_NEW_WORK_ID' THEN RAISE EXCEPTION 'dated new ID failed %',v;END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.defect_work_order_snapshot WHERE work_id='DF-B706-01'
+ AND received_date='2026-10-29'::date AND due_date='2026-11-05'::date AND supervisor='Verified PIC') THEN RAISE EXCEPTION 'notice metadata lost';END IF;
+ IF (SELECT status_group FROM public.condo_room_status WHERE room_no='B706') IS DISTINCT FROM 'Non-Hotel - Handover Complete' THEN RAISE EXCEPTION 'handover status changed';END IF;
+ RAISE NOTICE 'APPROVED NOTICE / SEVEN-DAY DUE / PIC METADATA PRESERVED; HANDOVER UNCHANGED PASS';
+END $test$;
