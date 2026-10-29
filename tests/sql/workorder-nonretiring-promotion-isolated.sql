@@ -215,10 +215,10 @@ BEGIN
   SELECT jsonb_agg(to_jsonb(w) ORDER BY w.work_id) INTO snap FROM public.defect_work_order_snapshot w;
   v:=public.defect_work_order_promote_nonretiring_approved('bad-key','DF-A401-02',
       '18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,true);
-  IF v->>'error'<>'invalid_sync_key' THEN RAISE EXCEPTION 'key bypassed %',v; END IF;
+  IF v->>'error' IS DISTINCT FROM 'invalid_sync_key' THEN RAISE EXCEPTION 'key bypassed %',v; END IF;
   v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A401-02',
       '18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,true);
-  IF v->>'error'<>'approved_evidence_missing_or_stale'
+  IF v->>'error' IS DISTINCT FROM 'approved_evidence_missing_or_stale'
   THEN RAISE EXCEPTION 'unapproved Work ID promoted %',v; END IF;
   IF (SELECT jsonb_agg(to_jsonb(w) ORDER BY w.work_id) FROM public.defect_work_order_snapshot w)<>snap
   THEN RAISE EXCEPTION 'read-only preflight mutated baseline';END IF;
@@ -230,13 +230,13 @@ BEGIN
          true,true,true,true,(SELECT to_jsonb(s) FROM public.defect_work_order_import_staging s WHERE work_id='DF-A401-02'));
   v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A401-02',
       '18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,true);
-  IF v->>'status'<>'DRY_RUN_APPROVED' OR v->>'production_mutation'<>'0'
+  IF v->>'status' IS DISTINCT FROM 'DRY_RUN_APPROVED' OR v->>'production_mutation' IS DISTINCT FROM '0'
   THEN RAISE EXCEPTION 'approved dryrun failed %',v;END IF;
   IF (SELECT count(*) FROM public.defect_work_order_snapshot)<>74
   THEN RAISE EXCEPTION 'dry run inserted data';END IF;
   v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A401-02',
       '18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,false);
-  IF v->>'status'<>'PROMOTED_NEW_WORK_ID' OR v->>'retired'<>'0'
+  IF v->>'status' IS DISTINCT FROM 'PROMOTED_NEW_WORK_ID' OR v->>'retired' IS DISTINCT FROM '0'
   THEN RAISE EXCEPTION 'approved promotion failed %',v;END IF;
   IF (SELECT count(*) FROM public.defect_work_order_snapshot)<>75 OR
      (SELECT count(*) FROM public.defect_work_order_snapshot WHERE source_active)<>49 OR
@@ -247,12 +247,12 @@ BEGIN
   THEN RAISE EXCEPTION 'existing Work ID content changed';END IF;
   v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A401-02',
       '18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,false);
-  IF v->>'status'<>'ALREADY_PRESENT_NO_CHANGE' THEN
+  IF v->>'status' IS DISTINCT FROM 'ALREADY_PRESENT_NO_CHANGE' THEN
      RAISE EXCEPTION 'duplicate retry not idempotent %',v;END IF;
   v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A401-03',
       '18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',
       (SELECT source_modified_at FROM public.defect_work_order_import_staging WHERE work_id='DF-A401-03'),false);
-  IF v->>'error'<>'approved_evidence_missing_or_stale' THEN
+  IF v->>'error' IS DISTINCT FROM 'approved_evidence_missing_or_stale' THEN
     RAISE EXCEPTION 'second ID auto-activated %',v; END IF;
   RAISE NOTICE 'NON-RETIRING PROMOTION: APPROVAL/IDEMPOTENCE/PRESERVATION PASS';
 END $test$;
@@ -268,7 +268,7 @@ BEGIN
          'https://drive.google.com/file/d/verified','Approved Reviewer',true,true,true,true,(SELECT to_jsonb(s) FROM public.defect_work_order_import_staging s WHERE work_id='DF-A401-04'));
   v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A401-04',
       '18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,false);
-  IF v->>'error'<>'stage_not_dispatch_eligible' THEN
+  IF v->>'error' IS DISTINCT FROM 'stage_not_dispatch_eligible' THEN
     RAISE EXCEPTION 'history-only active promotion allowed %',v;END IF;
   SELECT source_modified_at INTO r FROM public.defect_work_order_import_staging WHERE work_id='DF-A404-01';
   INSERT INTO public.work_order_promotion_approvals
@@ -279,13 +279,13 @@ BEGIN
   INSERT INTO public.defect_web_overrides VALUES('A405','pending',NULL);
   v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A404-01',
       '18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,false);
-  IF v->>'error'<>'web_override_pending' THEN
+  IF v->>'error' IS DISTINCT FROM 'web_override_pending' THEN
     RAISE EXCEPTION 'pending Combine override bypassed %',v; END IF;
   DELETE FROM public.defect_web_overrides;
   UPDATE public.condo_room_status SET current_status='Hotel - Checked Complete' WHERE room_no='A405';
   v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A404-01',
       '18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,false);
-  IF v->>'error'<>'combine_status_mismatch' THEN
+  IF v->>'error' IS DISTINCT FROM 'combine_status_mismatch' THEN
     RAISE EXCEPTION 'Combine mismatch bypassed %',v;END IF;
   IF (SELECT count(*) FROM public.defect_work_order_snapshot)<>75
   THEN RAISE EXCEPTION 'rejected ID inserted';END IF;
@@ -330,10 +330,10 @@ BEGIN
  SELECT work_id,source_file_id,source_modified_at,'https://drive.google.com/file/d/verified','Reviewer',
  true,true,true,true,to_jsonb(s) FROM public.defect_work_order_import_staging s WHERE work_id='DF-A401-03';
  v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A401-03','18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,NULL);
- IF v->>'status'<>'DRY_RUN_APPROVED' OR EXISTS(SELECT 1 FROM public.defect_work_order_snapshot WHERE work_id='DF-A401-03') THEN RAISE EXCEPTION 'NULL dryrun wrote data %',v; END IF;
+ IF v->>'status' IS DISTINCT FROM 'DRY_RUN_APPROVED' OR EXISTS(SELECT 1 FROM public.defect_work_order_snapshot WHERE work_id='DF-A401-03') THEN RAISE EXCEPTION 'NULL dryrun wrote data %',v; END IF;
  UPDATE public.defect_work_order_import_staging SET defect_item='changed after approval' WHERE work_id='DF-A401-03';
  v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A401-03','18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,false);
- IF v->>'error'<>'approved_stage_content_changed' THEN RAISE EXCEPTION 'content drift bypassed %',v; END IF;
+ IF v->>'error' IS DISTINCT FROM 'approved_stage_content_changed' THEN RAISE EXCEPTION 'content drift bypassed %',v; END IF;
  SELECT to_jsonb(w) INTO before_row FROM public.defect_work_order_snapshot w WHERE work_id='DF-A401-LIVE1';
  INSERT INTO public.work_order_promotion_approvals
  (work_id,source_file_id,source_modified_at,approval_evidence_url,approved_by,
@@ -344,21 +344,21 @@ BEGIN
  '{"defect_item":"Verified corrected detail"}'::jsonb,'wrong'
  FROM public.defect_work_order_import_staging s WHERE work_id='DF-A401-02';
  v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A401-LIVE1','18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,false);
- IF v->>'error'<>'existing_record_version_or_mapping_conflict' THEN RAISE EXCEPTION 'version bypass %',v; END IF;
+ IF v->>'error' IS DISTINCT FROM 'existing_record_version_or_mapping_conflict' THEN RAISE EXCEPTION 'version bypass %',v; END IF;
  UPDATE public.work_order_promotion_approvals SET expected_snapshot_hash=md5(before_row::text) WHERE work_id='DF-A401-LIVE1';
  v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A401-LIVE1','18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,false);
- IF v->>'status'<>'UPDATED_APPROVED_FIELDS' THEN RAISE EXCEPTION 'approved update failed %',v; END IF;
+ IF v->>'status' IS DISTINCT FROM 'UPDATED_APPROVED_FIELDS' THEN RAISE EXCEPTION 'approved update failed %',v; END IF;
  IF (SELECT to_jsonb(w)-'defect_item'-'source_modified_at' FROM public.defect_work_order_snapshot w WHERE work_id='DF-A401-LIVE1') IS DISTINCT FROM (before_row-'defect_item'-'source_modified_at') THEN RAISE EXCEPTION 'update touched unrelated fields'; END IF;
  IF NOT EXISTS(SELECT 1 FROM public.work_order_promotion_audit WHERE work_id='DF-A401-LIVE1' AND previous_row=before_row) THEN RAISE EXCEPTION 'history missing'; END IF;
  v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A401-LIVE1','18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,false);
- IF v->>'status'<>'ALREADY_PRESENT_NO_CHANGE' THEN RAISE EXCEPTION 'update retry not idempotent %',v; END IF;
+ IF v->>'status' IS DISTINCT FROM 'ALREADY_PRESENT_NO_CHANGE' THEN RAISE EXCEPTION 'update retry not idempotent %',v; END IF;
  UPDATE public.work_order_promotion_approvals SET approved_fields='{"contractor":"Unapproved"}',last_applied_hash=NULL WHERE work_id='DF-A401-LIVE1';
  v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A401-LIVE1','18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,false);
- IF v->>'error'<>'unapproved_update_fields' THEN RAISE EXCEPTION 'assignment bypass %',v; END IF;
+ IF v->>'error' IS DISTINCT FROM 'unapproved_update_fields' THEN RAISE EXCEPTION 'assignment bypass %',v; END IF;
  UPDATE public.work_order_promotion_approvals SET approved_fields='{"defect_item":"new"}' WHERE work_id='DF-A401-LIVE1';
  UPDATE public.defect_work_order_snapshot SET source_active=false WHERE work_id='DF-A401-LIVE1';
  v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A401-LIVE1','18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,false);
- IF v->>'error'<>'closed_or_inactive_preserved' THEN RAISE EXCEPTION 'inactive bypass %',v; END IF;
+ IF v->>'error' IS DISTINCT FROM 'closed_or_inactive_preserved' THEN RAISE EXCEPTION 'inactive bypass %',v; END IF;
  RAISE NOTICE 'PINNED CONTENT / APPROVED FIELD UPDATE / HISTORY / NULL DRYRUN PASS';
 END $test$;
 
@@ -372,7 +372,34 @@ DECLARE v jsonb;
 BEGIN
  v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A401-02',
  '18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',(SELECT source_modified_at FROM public.work_order_promotion_approvals WHERE work_id='DF-A401-02'),false);
- IF v->>'error'<>'concurrent_work_order_writer' THEN RAISE EXCEPTION 'concurrent writer bypass %',v; END IF;
+ IF v->>'error' IS DISTINCT FROM 'concurrent_work_order_writer' THEN RAISE EXCEPTION 'concurrent writer bypass %',v; END IF;
 END $test$;
 SELECT dblink_exec('writer','ROLLBACK');
 SELECT dblink_disconnect('writer');
+
+DO $test$
+DECLARE payload jsonb; v jsonb; baseline jsonb;
+BEGIN
+ INSERT INTO public.defect_work_order_snapshot
+ SELECT (jsonb_populate_record(NULL::public.defect_work_order_snapshot,
+ to_jsonb(w)||jsonb_build_object('work_id','DF-A401-MANAGED'||i,'source_active',true))).*
+ FROM public.defect_work_order_snapshot w CROSS JOIN generate_series(1,32) i WHERE w.work_id='DF-A401-02';
+ INSERT INTO public.work_order_promotion_approvals
+ SELECT (jsonb_populate_record(NULL::public.work_order_promotion_approvals,
+ to_jsonb(a)||jsonb_build_object('work_id','DF-A401-MANAGED'||i))).*
+ FROM public.work_order_promotion_approvals a CROSS JOIN generate_series(1,32) i WHERE a.work_id='DF-A401-02';
+ SELECT jsonb_agg(to_jsonb(w) ORDER BY work_id) INTO baseline FROM public.defect_work_order_snapshot w;
+ SELECT jsonb_agg(to_jsonb(w)) INTO payload FROM public.defect_work_order_snapshot w
+ WHERE work_id LIKE 'DF-A401-MANAGED%' OR work_id='DF-A401-LIVE2';
+ v:=public.defect_work_order_sync_import('isolated-key-only','18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',
+ 'Defect_Work_Order_Updated_2026-10-15.xlsx',now(),payload,false);
+ IF v->>'ok' IS DISTINCT FROM 'false' THEN RAISE EXCEPTION 'managed incoming bypasses missing legacy guard %',v; END IF;
+ IF (SELECT jsonb_agg(to_jsonb(w) ORDER BY work_id) FROM public.defect_work_order_snapshot w) IS DISTINCT FROM baseline THEN RAISE EXCEPTION 'rejected partial workbook mutated rows'; END IF;
+ SELECT jsonb_agg(to_jsonb(w)) INTO payload FROM public.defect_work_order_snapshot w
+ WHERE source_active AND work_id NOT LIKE 'DF-A401-MANAGED%' AND work_id<>'DF-A401-02';
+ v:=public.defect_work_order_sync_import('isolated-key-only','18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',
+ 'Defect_Work_Order_Updated_2026-10-15.xlsx',now(),payload,false);
+ IF v->>'ok' IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'managed retention falsely blocks full legacy workbook %',v; END IF;
+ IF (SELECT count(*) FROM public.defect_work_order_snapshot WHERE work_id LIKE 'DF-A401-MANAGED%' AND source_active)<>32 THEN RAISE EXCEPTION 'managed IDs retired'; END IF;
+ RAISE NOTICE 'MANAGED COUNTS CANNOT MASK MISSING LEGACY ROWS PASS';
+END $test$;
