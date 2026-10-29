@@ -69,11 +69,13 @@ function workOrderApprovedSourceDelta_(manifestId,dryRun){
    const raw=response.getContentText();return raw?JSON.parse(raw):null;
   };
   const rpc=(name,body)=>{const out=request('rpc/'+name,'post',body);if(!out||out.ok!==true)throw Error('APPROVED_DELTA_RPC_REJECTED_'+String(out&&out.error||'unknown'));return out;};
-  const existing=request('defect_work_order_snapshot?select=work_id,room_group,building,contractor,defect_item,next_action,evidence_url,work_status,source_active,qa_status','get');
+  const existing=request('defect_work_order_snapshot?select=work_id,room_group,building,contractor,defect_item,next_action,evidence_url,work_status,source_active,qa_status,received_date,due_date,supervisor','get');
   const pending=rows.filter(row=>{
    const old=existing.find(x=>x.work_id===row.work_id);if(!old)return true;
    if(!old.source_active||old.qa_status!=='APPROVED_NONRETIRING'||old.room_group!==row.room_group||
-      old.contractor!==row.contractor||old.defect_item!==row.defect_item||
+      old.building!==row.building||old.contractor!==row.contractor||old.defect_item!==row.defect_item||
+      (old.received_date||null)!==(row.payload.received_date||null)||(old.due_date||null)!==(row.payload.due_date||null)||
+      (old.supervisor||'')!==row.payload.supervisor||
       old.next_action!==row.payload.next_action||old.evidence_url!==row.source_evidence_url||
       old.work_status!==row.source_work_status)throw Error('EXISTING_WORK_ID_CONFLICT');
    return false;
