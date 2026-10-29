@@ -34,7 +34,7 @@ function workOrderApprovedSourceDelta_(manifestId,dryRun){
   if(!sheet)throw Error('SOURCE_SHEET_MISSING');
   const values=sheet.getDataRange().getValues(),header=values[m.header_row-1];
   const required=['Work ID','ห้อง/กลุ่ม Combine','อาคาร','ผู้รับเหมา','รายการ Defect (หนึ่งจุด/บรรทัด)',
-   'แนวทางดำเนินการ / จำนวนจุด','ลิงก์ภาพ / PDF (ต้นฉบับ)','สถานะงาน','วันที่รับแจ้งจริง','ครบกำหนด 7 วัน','ผู้คุม A/B'];
+   'แนวทางดำเนินการ / จำนวนจุด','ลิงก์ภาพ / PDF (ตรวจวัน)','สถานะงาน','วันที่รับแจ้งจริง','ครบกำหนด 7 วัน','ผู้คุม A/B'];
   if(!header||required.some(x=>header.indexOf(x)<0))throw Error('SOURCE_HEADER_CHANGED');
   const field=(row,key)=>row[header.indexOf(key)];
   const text=(row,key)=>String(field(row,key)==null?'':field(row,key)).trim();
@@ -44,7 +44,7 @@ function workOrderApprovedSourceDelta_(manifestId,dryRun){
    const row=values[item.source_master_row-1];if(!row)throw Error('SOURCE_ROW_MISSING');
    const actual={work_id:text(row,'Work ID'),room_group:text(row,'ห้อง/กลุ่ม Combine'),building:text(row,'อาคาร'),
     contractor:text(row,'ผู้รับเหมา'),defect_item:text(row,'รายการ Defect (หนึ่งจุด/บรรทัด)'),
-    next_action:text(row,'แนวทางดำเนินการ / จำนวนจุด'),evidence_url:text(row,'ลิงก์ภาพ / PDF (ต้นฉบับ)'),
+    next_action:text(row,'แนวทางดำเนินการ / จำนวนจุด'),evidence_url:text(row,'ลิงก์ภาพ / PDF (ตรวจวัน)'),
     work_status:text(row,'สถานะงาน'),received_date:date(row,'วันที่รับแจ้งจริง'),due_date:date(row,'ครบกำหนด 7 วัน'),
     supervisor:text(row,'ผู้คุม A/B')};
    if(Object.keys(actual).some(k=>actual[k]!==item.expected[k])||actual.work_id!==item.work_id)
