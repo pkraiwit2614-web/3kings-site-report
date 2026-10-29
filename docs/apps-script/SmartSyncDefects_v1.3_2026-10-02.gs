@@ -452,7 +452,7 @@ function defectV13ScopedChanges_(prepared, oldByRoom, opts) {
   const pdfCombine = supplied.length === 2 &&
     supplied[0] === 'A404' && supplied[1] === 'A405';
   if (!chatPilot && !pdfCombine) {
-    throw new Error('Scoped Defect sync: unapproved room scope.');
+    throw new Error('Scoped Defect sync: unapproved room scope; exact five-room scope or A404/A405 Combine required.');
   }
 
   const changed = all.filter(row => supplied.includes(row.room_no));
