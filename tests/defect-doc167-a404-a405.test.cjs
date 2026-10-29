@@ -54,6 +54,16 @@ test('Scoped A404/A405 is atomic, detail-only and refuses unilateral or status c
   assert.throws(()=>scoped([{...updated[0],current_status:'Hotel - Checked Complete'},updated[1]],before,
     {scopeRooms:['A404','A405']}),/DOC167_COMBINE_PAIR_MISMATCH|unrelated field/)
 })
+test('Live GAS safeguards remain after generic PDF patch',()=>{
+  assert.match(gas,/const webConfirmed = old\.latest_source === 'Web App manual update'/)
+  assert.match(gas,/Defect master Excel changed during import; database untouched/)
+  assert.match(gas,/old\.latest_source === 'Web App manual update'/)
+  assert.match(gas,/disableLegacyDefectWritebackTriggerV13/)
+  assert.match(gas,/smartSyncDefectsV13Doc167DryRun/)
+  assert.match(gas,/smartSyncDefectsV13Doc167Force/)
+  assert.match(gas,/const lock = LockService\.getScriptLock\(\)/)
+  assert.match(gas,/if \(!opts\.scopeRooms\) \{\s+saveState_/)
+})
 test('Existing chat and B515 paths, Web override, Work Order and unrelated modules preserved',()=>{
   assert.match(gas,/src\.defect_detail\.includes\('รายการ Defect แจ้งผ่านแชต:'\)/)
   assert.match(gas,/src\.room_no === 'B515' && src\.defect_detail\.includes\('Customer Defect B515'\)/)
