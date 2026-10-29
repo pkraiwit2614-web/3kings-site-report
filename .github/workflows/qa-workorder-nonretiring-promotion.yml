@@ -3,6 +3,9 @@ on:
   pull_request:
     paths:
       - 'supabase/migrations/20261029173000_nonretiring_approved_work_order_promotion.sql'
+      - 'supabase/migrations/20261029220000_verified_work_order_source_deltas.sql'
+      - 'docs/apps-script/WorkOrderApprovedSourceDelta.gs'
+      - 'tests/work-order-approved-source-delta.test.cjs'
       - 'tests/sql/workorder-nonretiring-promotion-isolated.sql'
       - '.github/workflows/qa-workorder-nonretiring-promotion.yml'
   workflow_dispatch:
