@@ -178,12 +178,14 @@ function runDefectSyncV13_(opts) {
 
         defect_detail: (src.defect_detail && (
           src.defect_detail.includes('รายการ Defect แจ้งผ่านแชต:') ||
-          (src.room_no === 'B515' && src.defect_detail.includes('Customer Defect B515'))
+          (src.room_no === 'B515' && src.defect_detail.includes('Customer Defect B515')) ||
+          defectDoc167AcceptedV13_(src.room_no, src.defect_detail)
         )) ? src.defect_detail : old.defect_detail || null,
         synced_at: nowIso,
       };
     });
 
+    defectDoc167PairGateV13_(prepared);
     const { changed, pendingRooms } = defectV13ScopedChanges_(prepared, oldByRoom, opts);
 
     if (opts.dryRun) {
@@ -410,6 +412,27 @@ function parseCondoDefectMasterV13_(sheet) {
  * Shared diff guard. Regular scheduled sync retains exactly its old full-sync behavior.
  * Scoped pilot may update ONLY five chat-marked Q details, never another field.
  */
+function defectDoc167AcceptedV13_(room, detail) {
+  if (!/^(A404|A405)$/.test(String(room)) || !detail) return false;
+  const numbered = String(detail).match(/^#\d{2}\s+\[/gm) || [];
+  return String(detail).startsWith('A404 • Art House Group Doc ID 167 • PDF 28/10/2026') &&
+    String(detail).includes('Defect ใหม่ 43 รายการ') &&
+    numbered.length === 43 &&
+    numbered.every((marker, i) => Number(marker.slice(1, 3)) === i + 1);
+}
+
+function defectDoc167PairGateV13_(prepared) {
+  const pair = prepared.filter(row => row.room_no === 'A404' || row.room_no === 'A405');
+  if (!pair.some(row => defectDoc167AcceptedV13_(row.room_no, row.defect_detail))) return;
+  if (pair.length !== 2 ||
+      pair.some(row => !defectDoc167AcceptedV13_(row.room_no, row.defect_detail) ||
+        row.defect_detail !== pair[0].defect_detail ||
+        row.current_status !== pair[0].current_status ||
+        row.status_group !== pair[0].status_group)) {
+    throw new Error('DOC167_COMBINE_PAIR_MISMATCH: A404/A405 fail-closed');
+  }
+}
+
 function defectV13ScopedChanges_(prepared, oldByRoom, opts) {
   const all = prepared.filter(row =>
     defectMasterV13NeedsWrite_(row, oldByRoom[row.room_no] || null)
