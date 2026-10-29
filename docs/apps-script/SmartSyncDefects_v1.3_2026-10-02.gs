@@ -179,7 +179,7 @@ function runDefectSyncV13_(opts) {
         defect_detail: (src.defect_detail && (
           src.defect_detail.includes('รายการ Defect แจ้งผ่านแชต:') ||
           (src.room_no === 'B515' && src.defect_detail.includes('Customer Defect B515')) ||
-          defectDoc167AcceptedV13_(src.room_no, src.defect_detail)
+          verifiedPdfDefectDetailV13_(src.room_no, src.defect_detail)
         )) ? src.defect_detail : old.defect_detail || null,
         synced_at: nowIso,
       };
@@ -412,20 +412,25 @@ function parseCondoDefectMasterV13_(sheet) {
  * Shared diff guard. Regular scheduled sync retains exactly its old full-sync behavior.
  * Scoped pilot may update ONLY five chat-marked Q details, never another field.
  */
-function defectDoc167AcceptedV13_(room, detail) {
-  if (!/^(A404|A405)$/.test(String(room)) || !detail) return false;
-  const numbered = String(detail).match(/^#\d{2}\s+\[/gm) || [];
-  return String(detail).startsWith('A404 • Art House Group Doc ID 167 • PDF 28/10/2026') &&
-    String(detail).includes('Defect ใหม่ 43 รายการ') &&
-    numbered.length === 43 &&
-    numbered.every((marker, i) => Number(marker.slice(1, 3)) === i + 1);
+function verifiedPdfDefectDetailV13_(room, detail) {
+  if (!detail || String(detail).length > 100000) return false;
+  const header = String(detail).match(/^([AB]\d{3}) • [^\r\n]{2,120} Doc ID \d{1,12} • PDF \d{2}\/\d{2}\/\d{4} • Defect ใหม่ (\d{1,3}) รายการ(?:\r?\n|$)/);
+  if (!header) return false;
+  const sourceRoom = header[1];
+  // Approved Combine mirror only. All other PDF inspections require exact room attribution.
+  if (sourceRoom !== String(room) && !(sourceRoom === 'A404' && String(room) === 'A405')) return false;
+  const expected = Number(header[2]);
+  if (expected < 1 || expected > 200) return false;
+  const numbered = String(detail).match(/^#\d{2,3}\s+\[[^\]\r\n]+\]/gm) || [];
+  return numbered.length === expected &&
+    numbered.every((marker, i) => Number(marker.match(/^#(\d+)/)[1]) === i + 1);
 }
 
 function defectDoc167PairGateV13_(prepared) {
   const pair = prepared.filter(row => row.room_no === 'A404' || row.room_no === 'A405');
-  if (!pair.some(row => defectDoc167AcceptedV13_(row.room_no, row.defect_detail))) return;
+  if (!pair.some(row => verifiedPdfDefectDetailV13_(row.room_no, row.defect_detail))) return;
   if (pair.length !== 2 ||
-      pair.some(row => !defectDoc167AcceptedV13_(row.room_no, row.defect_detail) ||
+      pair.some(row => !verifiedPdfDefectDetailV13_(row.room_no, row.defect_detail) ||
         row.defect_detail !== pair[0].defect_detail ||
         row.current_status !== pair[0].current_status ||
         row.status_group !== pair[0].status_group)) {
