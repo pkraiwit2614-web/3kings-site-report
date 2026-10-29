@@ -138,19 +138,19 @@ BEGIN
   -- Treat the A404+A405 Combine as one inspection with two synchronized copies.
   -- Existing room delivery states remain under their normal RPC + override guards.
   IF EXISTS (
-    SELECT 1 FROM jsonb_array_elements(p_rows) r
-    WHERE upper(r->>'room_no') IN ('A404','A405')
-      AND private.verified_pdf_defect_detail(upper(r->>'room_no'),r->>'defect_detail')
+    SELECT 1 FROM jsonb_array_elements(p_rows) item
+    WHERE upper(item->>'room_no') IN ('A404','A405')
+      AND private.verified_pdf_defect_detail(upper(item->>'room_no'),item->>'defect_detail')
   ) AND (
-    (SELECT count(DISTINCT coalesce(r->>'defect_detail',''))
-     FROM jsonb_array_elements(p_rows) r
-     WHERE upper(r->>'room_no') IN ('A404','A405')) <> 1
-    OR (SELECT count(DISTINCT coalesce(r->>'current_status',''))
-        FROM jsonb_array_elements(p_rows) r
-        WHERE upper(r->>'room_no') IN ('A404','A405')) <> 1
-    OR (SELECT count(DISTINCT coalesce(r->>'status_group',''))
-        FROM jsonb_array_elements(p_rows) r
-        WHERE upper(r->>'room_no') IN ('A404','A405')) <> 1
+    (SELECT count(DISTINCT coalesce(item->>'defect_detail',''))
+     FROM jsonb_array_elements(p_rows) item
+     WHERE upper(item->>'room_no') IN ('A404','A405')) <> 1
+    OR (SELECT count(DISTINCT coalesce(item->>'current_status',''))
+        FROM jsonb_array_elements(p_rows) item
+        WHERE upper(item->>'room_no') IN ('A404','A405')) <> 1
+    OR (SELECT count(DISTINCT coalesce(item->>'status_group',''))
+        FROM jsonb_array_elements(p_rows) item
+        WHERE upper(item->>'room_no') IN ('A404','A405')) <> 1
   ) THEN
     RAISE EXCEPTION 'DOC167_COMBINE_PAIR_MISMATCH';
   END IF;
@@ -159,9 +159,9 @@ BEGIN
   -- Fail closed for the entire Combine when either room has an unfinished Web writeback.
   -- Do not let per-room override protection produce a one-sided PDF detail update.
   IF EXISTS (
-    SELECT 1 FROM jsonb_array_elements(p_rows) r
-    WHERE upper(r->>'room_no') IN ('A404','A405')
-      AND private.verified_pdf_defect_detail(upper(r->>'room_no'),r->>'defect_detail')
+    SELECT 1 FROM jsonb_array_elements(p_rows) item
+    WHERE upper(item->>'room_no') IN ('A404','A405')
+      AND private.verified_pdf_defect_detail(upper(item->>'room_no'),item->>'defect_detail')
   ) AND EXISTS (
     SELECT 1 FROM public.defect_web_overrides w
     WHERE w.room_no IN ('A404','A405')
