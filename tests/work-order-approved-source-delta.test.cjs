@@ -76,3 +76,10 @@ test('concurrent staged replacement cannot become owner-approved',()=>{
  assert(!f.state.calls.some(x=>x.path.startsWith('work_order_promotion_approvals?')));
  assert.equal(f.state.existing.length,0);
 });
+
+test('retry cannot conceal changed source notice/SLA/supervisor/building',()=>{
+ for(const [field,value] of [['received_date','2026-10-28'],['due_date','2026-11-06'],['supervisor','Unexpected'],['building','A']]){
+  const f=fixture(s=>s.existing=[{...expected,[field]:value,source_active:true,qa_status:'APPROVED_NONRETIRING'}]);
+  assert.throws(()=>f.run(false),/EXISTING_WORK_ID_CONFLICT/);assert(!f.state.calls.some(x=>x.method==='post'));
+ }
+});
