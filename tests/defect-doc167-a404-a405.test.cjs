@@ -104,3 +104,15 @@ test('Existing chat and B515 paths, Web override, Work Order and unrelated modul
   assert.doesNotMatch(sql,/CREATE OR REPLACE FUNCTION public\.defect_work_order_sync_import/)
   assert.doesNotMatch(sql,/DROP TABLE|DELETE FROM public|TRUNCATE/i)
 })
+
+test('verified unnumbered PDF uses receipt date without invented document number',()=>{
+ const report='B706 • Phuket Elite Care • รับ PDF 29/10/2026 • Defect ใหม่ 2 รายการ (แถวรายงาน; ไม่ใช่ยอดงานไม่ซ้ำ)\n#01 [RSE] drain leak\n#02 [REVIEW] door frame';
+ assert.equal(allowed('B706',report),true);assert.equal(allowed('B707',report),false);
+ assert.equal(allowed('B706',report.replace('#02','#03')),false);
+ const scoped=vm.runInContext('defectV13ScopedChanges_',context),row={room_no:'B706',defect_detail:report,current_status:'Handover Complete',status_group:'Non-Hotel - Handover Complete'};
+ const before={B706:{...row,defect_detail:null}},opts={scopeRooms:['B706'],verifiedPdfDetailOnly:true,expectedSourceRevision:'2026-10-29T14:00:00.000Z'};
+ assert.equal(scoped([row],before,opts).changed.length,1);
+ assert.throws(()=>scoped([row],before,{scopeRooms:['B706']}),/unapproved room scope/);
+ assert.throws(()=>scoped([{...row,current_status:'Pending Handover'}],before,opts),/unrelated field/);
+ assert.throws(()=>scoped([{...row,room_no:'A404'}],{A404:before.B706},{...opts,scopeRooms:['A404']}),/unapproved room scope/);
+});
