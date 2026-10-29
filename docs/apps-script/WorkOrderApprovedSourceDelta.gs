@@ -117,3 +117,34 @@ function workOrderApprovedSourceDelta_(manifestId,dryRun){
   lock.releaseLock();
  }
 }
+
+function defectApprovedPdfSourceDryRun(){return defectApprovedPdfSource_(true);}
+function defectApprovedPdfSourceApply(){return defectApprovedPdfSource_(false);}
+function defectApprovedPdfSource_(dryRun){
+ const id=PropertiesService.getScriptProperties().getProperty('WORK_ORDER_APPROVED_DELTA_MANIFEST_ID');
+ if(!id||!/^[A-Za-z0-9_-]{20,200}$/.test(id))throw Error('APPROVED_MANIFEST_REQUIRED');
+ const mf=DriveApp.getFileById(id),raw=mf.getBlob().getDataAsString('UTF-8');
+ if(raw.length>100000)throw Error('MANIFEST_TOO_LARGE');
+ const m=JSON.parse(raw),owner=Session.getEffectiveUser().getEmail();
+ if(!owner||mf.getOwner().getEmail()!==owner||m.approved_by!==owner||m.authorized_write!==true)
+  throw Error('OWNER_APPROVAL_REQUIRED');
+ if(m.defect_source_file_id!=='1MEeB1E7D_35MTndRPi1aBTlVfI2aR0Wj'||
+   !/^https:\/\/github[.]com\/pkraiwit2614-web\/3kings-site-report\/issues\/230#issuecomment-\d+$/.test(m.approval_evidence_url||'')||
+   !Array.isArray(m.defect_rooms)||m.defect_rooms.length!==1||
+   !/^[AB]\d{3}$/.test(m.defect_rooms[0])||['A404','A405'].includes(m.defect_rooms[0]))throw Error('INVALID_DEFECT_MANIFEST');
+ const f=DriveApp.getFileById(m.defect_source_file_id);
+ if(f.getOwner().getEmail()!==owner||f.getLastUpdated().toISOString()!==m.defect_source_modified_at)
+  throw Error('DEFECT_SOURCE_AUTHORITY_OR_REVISION_CHANGED');
+ const opts={force:true,scopeRooms:m.defect_rooms,verifiedPdfDetailOnly:true,expectedSourceRevision:m.defect_source_modified_at};
+ const before=runDefectSyncV13_({...opts,dryRun:true});
+ if(before.status!=='dry-run'||!Array.isArray(before.changedRooms)||
+   before.changedRooms.some(r=>!m.defect_rooms.includes(r))||before.changed!==before.changedRooms.length)
+  throw Error('DEFECT_PREFLIGHT_REJECTED');
+ if(dryRun!==false||before.changed===0)return before;
+ const applied=runDefectSyncV13_({...opts,dryRun:false});
+ if(applied.status!=='success'||applied.changed!==before.changed)throw Error('DEFECT_APPLY_RECEIPT_MISMATCH');
+ const after=runDefectSyncV13_({...opts,dryRun:true});
+ if(after.status!=='dry-run'||after.changed!==0)throw Error('DEFECT_DB_READBACK_MISMATCH');
+ return {ok:true,status:'SCOPED_PDF_SOURCE_APPLIED',changed:applied.changed,source_revision:m.defect_source_modified_at,
+  ui_verification_required:true};
+}
