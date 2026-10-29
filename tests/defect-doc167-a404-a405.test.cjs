@@ -37,6 +37,23 @@ test('Combine pair rejects mismatch without inventing a Hotel OK or changing sta
   assert.throws(()=>pairGate([row('A404'),row('A405',null)]),/DOC167_COMBINE_PAIR_MISMATCH/)
   assert.throws(()=>pairGate([row('A404'),{...row('A405'),current_status:'Hotel - Checked Complete'}]),/DOC167_COMBINE_PAIR_MISMATCH/)
 })
+test('Scoped A404/A405 is atomic, detail-only and refuses unilateral or status changes',()=>{
+  const scoped = vm.runInContext('defectV13ScopedChanges_',context)
+  const row = (room)=>({
+    room_no:room,defect_detail:source,
+    current_status:'Pending Handover / รอลูกค้าเข้าตรวจ',
+    status_group:'Non-Hotel - Pending Handover'
+  })
+  const old = (room)=>({...row(room),defect_detail:null})
+  const updated = [row('A404'),row('A405')]
+  const before = {A404:old('A404'),A405:old('A405')}
+  const result = scoped(updated,before,{scopeRooms:['A404','A405']})
+  assert.equal(result.changed.length,2)
+  assert.throws(()=>scoped(updated,before,{scopeRooms:['A404']}),/unapproved room scope/)
+  assert.throws(()=>scoped(updated,{...before,A405:row('A405')},{scopeRooms:['A404','A405']}),/atomically/)
+  assert.throws(()=>scoped([{...updated[0],current_status:'Hotel - Checked Complete'},updated[1]],before,
+    {scopeRooms:['A404','A405']}),/DOC167_COMBINE_PAIR_MISMATCH|unrelated field/)
+})
 test('Existing chat and B515 paths, Web override, Work Order and unrelated modules preserved',()=>{
   assert.match(gas,/src\.defect_detail\.includes\('รายการ Defect แจ้งผ่านแชต:'\)/)
   assert.match(gas,/src\.room_no === 'B515' && src\.defect_detail\.includes\('Customer Defect B515'\)/)
