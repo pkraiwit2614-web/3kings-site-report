@@ -444,27 +444,41 @@ function defectV13ScopedChanges_(prepared, oldByRoom, opts) {
   );
   if (!opts.scopeRooms) return { changed: all, pendingRooms: [] };
 
-  const expected = ['A311', 'A401', 'B204', 'B502', 'B707'];
+  const expectedChatPilot = ['A311', 'A401', 'B204', 'B502', 'B707'];
   const supplied = [...new Set(opts.scopeRooms)].sort();
-  if (supplied.length !== expected.length ||
-      supplied.some((room, i) => room !== expected[i])) {
-    throw new Error('Scoped Defect sync: exact approved five-room scope required.');
-  }
-  const changed = all.filter(row => supplied.includes(row.room_no));
-  if (changed.length > 5 || changed.some(row => !oldByRoom[row.room_no])) {
-    throw new Error('Scoped Defect sync requires existing canonical room records.');
+  const chatPilot = supplied.length === expectedChatPilot.length &&
+    supplied.every((room, i) => room === expectedChatPilot[i]);
+  // The currently authorized combined inspection is one atomic two-room group.
+  const pdfCombine = supplied.length === 2 &&
+    supplied[0] === 'A404' && supplied[1] === 'A405';
+  if (!chatPilot && !pdfCombine) {
+    throw new Error('Scoped Defect sync: unapproved room scope.');
   }
 
+  const changed = all.filter(row => supplied.includes(row.room_no));
+  if (changed.length > supplied.length ||
+      changed.some(row => !oldByRoom[row.room_no])) {
+    throw new Error('Scoped Defect sync requires existing canonical room records.');
+  }
   const protectedFields = [
     'building', 'floor', 'hotel_participation', 'customer_status',
     'current_status', 'status_group', 'follow_up', 'priority', 'next_action',
     'latest_source', 'source_note', 'hotel_complete_color', 'hotel_remarks',
   ];
+  if (pdfCombine) {
+    defectDoc167PairGateV13_(prepared);
+    // A partial pair write or an unexpected one-sided drift is not atomic.
+    if (changed.length !== 0 && changed.length !== 2) {
+      throw new Error('Scoped PDF Combine must write both rooms atomically.');
+    }
+  }
   changed.forEach(row => {
     const old = oldByRoom[row.room_no];
-    if (!row.defect_detail ||
-        !row.defect_detail.includes('รายการ Defect แจ้งผ่านแชต:')) {
-      throw new Error('Scoped Defect sync rejected non-chat Detail: ' + row.room_no);
+    const validDetail = chatPilot
+      ? Boolean(row.defect_detail && row.defect_detail.includes('รายการ Defect แจ้งผ่านแชต:'))
+      : verifiedPdfDefectDetailV13_(row.room_no, row.defect_detail);
+    if (!validDetail) {
+      throw new Error('Scoped Defect sync rejected unverified detail: ' + row.room_no);
     }
     const unsafe = protectedFields.filter(key =>
       normalizeComparable_(row[key]) !== normalizeComparable_(old[key])
