@@ -74,6 +74,24 @@ test('Live GAS safeguards remain after generic PDF patch',()=>{
   assert.match(gas,/const lock = LockService\.getScriptLock\(\)/)
   assert.match(gas,/if \(!opts\.scopeRooms\) \{\s+saveState_/)
 })
+test('Owner one-shot Closeout validates two-room dry-run, writes once, rechecks before UI acceptance',()=>{
+  const scoped = vm.createContext({console,Date})
+  vm.runInContext(gas,scoped,{timeout:1500})
+  const validated={status:'dry-run',rooms:263,validation:{buildingA:162,buildingB:101},
+    changed:2,changedRooms:['A404','A405']}
+  let reads=0,writes=0
+  scoped.smartSyncDefectsV13Doc167DryRun=()=>++reads===1 ? validated :
+    {...validated,changed:0,changedRooms:[]}
+  scoped.smartSyncDefectsV13Doc167Force=()=>{writes++;return {status:'success',changed:2,file:'approved.xlsx'}}
+  const out=scoped.smartSyncDefectsV13Doc167Closeout()
+  assert.equal(out.status,'SCOPED_SYNC_VERIFIED_DB')
+  assert.equal(out.ui_verification_required,true)
+  assert.equal(reads,2)
+  assert.equal(writes,1)
+  scoped.smartSyncDefectsV13Doc167DryRun=()=>({...validated,changed:1,changedRooms:['A404']})
+  assert.throws(()=>scoped.smartSyncDefectsV13Doc167Closeout(),/DOC167_SCOPED_DELTA_MISMATCH/)
+  assert.equal(writes,1)
+})
 test('Existing chat and B515 paths, Web override, Work Order and unrelated modules preserved',()=>{
   assert.match(gas,/src\.defect_detail\.includes\('รายการ Defect แจ้งผ่านแชต:'\)/)
   assert.match(gas,/src\.room_no === 'B515' && src\.defect_detail\.includes\('Customer Defect B515'\)/)
