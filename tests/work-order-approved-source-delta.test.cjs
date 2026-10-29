@@ -1,7 +1,7 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const source=fs.readFileSync('docs/apps-script/WorkOrderApprovedSourceDelta.gs','utf8');
 const owner='owner@example.test',revision='2026-10-29T14:00:00.000Z';
-const headers=['Work ID','ห้อง/กลุ่ม Combine','อาคาร','ผู้รับเหมา','รายการ Defect (หนึ่งจุด/บรรทัด)','แนวทางดำเนินการ / จำนวนจุด','ลิงก์ภาพ / PDF (ต้นฉบับ)','สถานะงาน','วันที่รับแจ้งจริง','ครบกำหนด 7 วัน','ผู้คุม A/B'];
+const headers=['Work ID','ห้อง/กลุ่ม Combine','อาคาร','ผู้รับเหมา','รายการ Defect (หนึ่งจุด/บรรทัด)','แนวทางดำเนินการ / จำนวนจุด','ลิงก์ภาพ / PDF (ตรวจวัน)','สถานะงาน','วันที่รับแจ้งจริง','ครบกำหนด 7 วัน','ผู้คุม A/B'];
 const expected={work_id:'DF-B706-01',room_group:'B706',building:'B',contractor:'RSE',defect_item:'Reported drain leak',
  next_action:'Inspect and repair',evidence_url:'https://drive.google.com/file/d/verified',work_status:'รอดำเนินการ',
  received_date:'2026-10-29',due_date:'2026-11-05',supervisor:''};
