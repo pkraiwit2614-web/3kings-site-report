@@ -109,6 +109,44 @@ function smartSyncDefectsV13Doc167Force() {
   });
 }
 
+/**
+ * Owner-run one-shot Doc167 Combine closeout. No triggers are installed.
+ * Dry-run gates precede one scoped write; a final dry-run verifies semantic parity.
+ * Room state, Work Order IDs, and all unrelated room deltas remain untouched.
+ */
+function smartSyncDefectsV13Doc167Closeout() {
+  const first = smartSyncDefectsV13Doc167DryRun();
+  if (!first || first.status !== 'dry-run' || first.rooms !== 263 ||
+      !first.validation || first.validation.buildingA !== 162 ||
+      first.validation.buildingB !== 101) {
+    throw new Error('DOC167_PREFLIGHT_FAILED: source inventory or runtime not validated');
+  }
+  const ids = (first.changedRooms || []).slice().sort().join(',');
+  if (first.changed === 0 && ids === '') {
+    return { status: 'NO_CHANGE', changed: 0, scope: 'A404,A405' };
+  }
+  if (first.changed !== 2 || ids !== 'A404,A405') {
+    throw new Error('DOC167_SCOPED_DELTA_MISMATCH: expected exactly A404,A405');
+  }
+  const applied = smartSyncDefectsV13Doc167Force();
+  if (!applied || applied.status !== 'success' || applied.changed !== 2) {
+    throw new Error('DOC167_SCOPED_WRITE_UNVERIFIED: require DB and web readback');
+  }
+  const second = smartSyncDefectsV13Doc167DryRun();
+  if (!second || second.status !== 'dry-run' || second.changed !== 0 ||
+      (second.changedRooms || []).length !== 0) {
+    throw new Error('DOC167_DB_READBACK_FAILED: do not retry without reconciliation');
+  }
+  return {
+    status: 'SCOPED_SYNC_VERIFIED_DB',
+    scope: 'A404,A405',
+    changed: applied.changed,
+    source_file: applied.file,
+    modified: applied.modified,
+    ui_verification_required: true
+  };
+}
+
 function runDefectSyncV13_(opts) {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(1000)) {
