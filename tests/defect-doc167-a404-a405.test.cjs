@@ -8,7 +8,7 @@ const route = fs.readFileSync('app/api/sync/drive/route.ts','utf8')
 const sql = fs.readFileSync('supabase/migrations/20261029160000_defect_doc167_a404_a405_detail_gate.sql','utf8')
 const source = 'A404 • Art House Group Doc ID 167 • PDF 28/10/2026 • Defect ใหม่ 43 รายการ\n' +
   Array.from({length:43},(_,i)=>'#'+String(i+1).padStart(2,'0')+' [PFur] verified point '+(i+1)).join('\n')
-const context=vm.createContext({console,Date})
+const context=vm.createContext({console,Date,normalizeComparable_: (v) => v == null ? '' : String(v).trim()})
 vm.runInContext(gas,context,{timeout:1500,filename:'SmartSyncDefects_v1.3.gs'})
 const allowed=vm.runInContext('verifiedPdfDefectDetailV13_',context)
 const pairGate=vm.runInContext('defectDoc167PairGateV13_',context)
