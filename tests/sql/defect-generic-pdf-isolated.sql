@@ -39,3 +39,14 @@ DO $t$ BEGIN
   END IF;
   RAISE NOTICE 'RPC helper permission boundary PASS';
 END $t$;
+
+DO $test$
+DECLARE report text;
+BEGIN
+ report:=E'B706 • Phuket Elite Care • รับ PDF 29/10/2026 • Defect ใหม่ 2 รายการ (แถวรายงาน ยังไม่ตัดซ้ำ)\n#01 [RSE] drain leak\n#02 [REVIEW] door frame';
+ IF private.verified_pdf_defect_detail('B706',report) IS DISTINCT FROM true THEN RAISE EXCEPTION 'verified unnumbered PDF rejected';END IF;
+ IF private.verified_pdf_defect_detail('B707',report) IS DISTINCT FROM false THEN RAISE EXCEPTION 'wrong room accepted';END IF;
+ IF private.verified_pdf_defect_detail('B706',replace(report,'#02','#03')) IS DISTINCT FROM false THEN RAISE EXCEPTION 'out of order accepted';END IF;
+ IF private.verified_pdf_defect_detail('B706',replace(report,'2 รายการ','3 รายการ')) IS DISTINCT FROM false THEN RAISE EXCEPTION 'incorrect count accepted';END IF;
+ RAISE NOTICE 'UNNUMBERED PDF / RECEIPT DATE / EXACT ROOM / NUMBERED COUNT PASS';
+END $test$;
