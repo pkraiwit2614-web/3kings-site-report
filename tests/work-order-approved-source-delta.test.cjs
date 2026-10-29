@@ -30,7 +30,7 @@ function fixture(change=()=>{}){
   }else if(path==='rpc/defect_work_order_nonretiring_stage_import'){
    if(body.p_dry_run===false)state.staged=body.p_rows.map(r=>({...r,source_payload:r.payload,source_file_id:m.source_file_id,source_modified_at:m.source_modified_at}));
    result={ok:true,dry_run:body.p_dry_run,staged:body.p_rows.length};
-  }else if(path.startsWith('defect_work_order_import_staging?'))result=state.staged;
+  }else if(path.startsWith('defect_work_order_import_staging?'))result=state.tamperedReadback?state.staged.map(s=>({...s,contractor:'Unapproved team'})):state.staged;
   else if(path.startsWith('work_order_promotion_approvals?'))result=null;
   else if(path==='rpc/defect_work_order_promote_nonretiring_approved'){
    if(state.rejectPromotion)result={ok:false,error:'web_override_pending'};
@@ -69,4 +69,10 @@ test('existing conflicting ID is never overwritten',()=>{
 test('exact applied ID retries without stage/approval mutation',()=>{
  const f=fixture(s=>s.existing=[{...expected,source_active:true,qa_status:'APPROVED_NONRETIRING'}]);assert.equal(f.run(false).status,'NO_CHANGE');
  assert(!f.state.calls.some(x=>x.method==='post'));
+});
+
+test('concurrent staged replacement cannot become owner-approved',()=>{
+ const f=fixture(s=>s.tamperedReadback=true);assert.throws(()=>f.run(false),/STAGING_READBACK_MISMATCH/);
+ assert(!f.state.calls.some(x=>x.path.startsWith('work_order_promotion_approvals?')));
+ assert.equal(f.state.existing.length,0);
 });
