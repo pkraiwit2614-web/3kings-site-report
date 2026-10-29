@@ -59,14 +59,18 @@ BEGIN
    RAISE EXCEPTION 'LEGACY_DROP_GUARD_DRIFT';
  END IF;
  d:=replace(d,'  v_before integer;','  v_before integer;
-  v_managed_active integer;');
+  v_managed_active integer;
+  v_unmanaged_incoming integer;');
  d:=replace(d,'  -- Do not silently archive most dispatch records if the workbook is partial.',
    '  SELECT count(*) INTO v_managed_active FROM public.defect_work_order_snapshot w
     WHERE w.source_active AND EXISTS(SELECT 1 FROM public.work_order_promotion_approvals a
       WHERE a.work_id=w.work_id AND a.promoted_at IS NOT NULL);
+  SELECT count(*) INTO v_unmanaged_incoming FROM jsonb_to_recordset(p_rows) i(work_id text)
+    WHERE NOT EXISTS(SELECT 1 FROM public.work_order_promotion_approvals a
+      WHERE a.work_id=i.work_id AND a.promoted_at IS NOT NULL);
   -- Do not silently archive most dispatch records if the workbook is partial.');
  d:=replace(d,'IF v_before >= 10 AND v_total < ceil(v_before * 0.65) THEN',
-   'IF (v_before-v_managed_active) >= 10 AND v_total < ceil((v_before-v_managed_active) * 0.65) THEN');
+   'IF (v_before-v_managed_active) >= 10 AND v_unmanaged_incoming < ceil((v_before-v_managed_active) * 0.65) THEN');
  EXECUTE d;
 END $guard$;
 
