@@ -86,7 +86,13 @@ function workOrderApprovedSourceDelta_(manifestId,dryRun){
   if(revision()!==m.source_modified_at)throw Error('SOURCE_CHANGED_BEFORE_WRITE');
   rpc('defect_work_order_nonretiring_stage_import',{...stageBody,p_dry_run:false});
   const staged=request('defect_work_order_import_staging?select=*&work_id=in.('+pending.map(x=>x.work_id).join(',')+')','get');
-  if(staged.length!==pending.length)throw Error('STAGING_READBACK_MISMATCH');
+  const stable=x=>JSON.stringify(Object.keys(x||{}).sort().map(k=>[k,x[k]]));
+  if(staged.length!==pending.length||new Set(staged.map(x=>x.work_id)).size!==pending.length||
+    staged.some(s=>{
+     const r=pending.find(x=>x.work_id===s.work_id);if(!r)return true;
+     return Object.keys(r).some(k=>k==='payload'?stable(r.payload)!==stable(s.source_payload):r[k]!==s[k])||
+      s.source_file_id!==m.source_file_id||new Date(s.source_modified_at).toISOString()!==m.source_modified_at;
+    }))throw Error('STAGING_READBACK_MISMATCH');
   const approvals=staged.map(s=>({work_id:s.work_id,source_file_id:m.source_file_id,source_modified_at:m.source_modified_at,
    approval_evidence_url:m.approval_evidence_url,approved_by:owner,completion_confirmed_open:true,contractor_room_confirmed:true,
    override_queue_checked:true,combine_checked:true,approved_stage_snapshot:s}));
