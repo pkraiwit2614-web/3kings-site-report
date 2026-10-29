@@ -224,10 +224,10 @@ BEGIN
   THEN RAISE EXCEPTION 'read-only preflight mutated baseline';END IF;
   INSERT INTO public.work_order_promotion_approvals
     (work_id,source_file_id,source_modified_at,approval_evidence_url,approved_by,
-     completion_confirmed_open,contractor_room_confirmed,override_queue_checked,combine_checked)
+     completion_confirmed_open,contractor_room_confirmed,override_queue_checked,combine_checked,approved_stage_snapshot)
   VALUES ('DF-A401-02','18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,
          'https://drive.google.com/file/d/verified-approval','Approved Reviewer',
-         true,true,true,true);
+         true,true,true,true,(SELECT to_jsonb(s) FROM public.defect_work_order_import_staging s WHERE work_id='DF-A401-02'));
   v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A401-02',
       '18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,true);
   IF v->>'status'<>'DRY_RUN_APPROVED' OR v->>'production_mutation'<>'0'
@@ -263,9 +263,9 @@ BEGIN
   SELECT source_modified_at INTO r FROM public.defect_work_order_import_staging WHERE work_id='DF-A401-04';
   INSERT INTO public.work_order_promotion_approvals
     (work_id,source_file_id,source_modified_at,approval_evidence_url,approved_by,
-     completion_confirmed_open,contractor_room_confirmed,override_queue_checked,combine_checked)
+     completion_confirmed_open,contractor_room_confirmed,override_queue_checked,combine_checked,approved_stage_snapshot)
   VALUES ('DF-A401-04','18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,
-         'https://drive.google.com/file/d/verified','Approved Reviewer',true,true,true,true);
+         'https://drive.google.com/file/d/verified','Approved Reviewer',true,true,true,true,(SELECT to_jsonb(s) FROM public.defect_work_order_import_staging s WHERE work_id='DF-A401-04'));
   v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A401-04',
       '18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,false);
   IF v->>'error'<>'stage_not_dispatch_eligible' THEN
@@ -273,9 +273,9 @@ BEGIN
   SELECT source_modified_at INTO r FROM public.defect_work_order_import_staging WHERE work_id='DF-A404-01';
   INSERT INTO public.work_order_promotion_approvals
     (work_id,source_file_id,source_modified_at,approval_evidence_url,approved_by,
-     completion_confirmed_open,contractor_room_confirmed,override_queue_checked,combine_checked)
+     completion_confirmed_open,contractor_room_confirmed,override_queue_checked,combine_checked,approved_stage_snapshot)
   VALUES ('DF-A404-01','18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,
-         'https://drive.google.com/file/d/verified','Approved Reviewer',true,true,true,true);
+         'https://drive.google.com/file/d/verified','Approved Reviewer',true,true,true,true,(SELECT to_jsonb(s) FROM public.defect_work_order_import_staging s WHERE work_id='DF-A404-01'));
   INSERT INTO public.defect_web_overrides VALUES('A405','pending',NULL);
   v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A404-01',
       '18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,false);
@@ -305,7 +305,7 @@ DO $test$
 DECLARE payload jsonb; v jsonb; prior jsonb;
 BEGIN
  SELECT to_jsonb(w) INTO prior FROM public.defect_work_order_snapshot w WHERE work_id='DF-A401-02';
- SELECT jsonb_agg(to_jsonb(w)) INTO payload FROM public.defect_work_order_snapshot w WHERE work_id<>'DF-A401-02';
+ SELECT jsonb_agg(to_jsonb(w)) INTO payload FROM public.defect_work_order_snapshot w WHERE work_id<>'DF-A401-02' AND source_active;
  v:=public.defect_work_order_sync_import('isolated-key-only','18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',
    'Defect_Work_Order_Updated_2026-10-15.xlsx',now(),payload,false);
  IF NOT coalesce((v->>'ok')::boolean,false) THEN RAISE EXCEPTION 'legacy replay failed %',v; END IF;
@@ -318,4 +318,46 @@ BEGIN
  IF (SELECT to_jsonb(w) FROM public.defect_work_order_snapshot w WHERE work_id='DF-A401-02') IS DISTINCT FROM prior
  THEN RAISE EXCEPTION 'PROMOTED_ID_OVERWRITTEN_BY_STALE_DISPATCH'; END IF;
  RAISE NOTICE 'PROMOTION SURVIVES SUBSEQUENT LEGACY IMPORT';
+END $test$;
+
+DO $test$
+DECLARE v jsonb; r timestamptz; before_row jsonb;
+BEGIN
+ SELECT source_modified_at INTO r FROM public.defect_work_order_import_staging WHERE work_id='DF-A401-03';
+ INSERT INTO public.work_order_promotion_approvals
+ (work_id,source_file_id,source_modified_at,approval_evidence_url,approved_by,
+ completion_confirmed_open,contractor_room_confirmed,override_queue_checked,combine_checked,approved_stage_snapshot)
+ SELECT work_id,source_file_id,source_modified_at,'https://drive.google.com/file/d/verified','Reviewer',
+ true,true,true,true,to_jsonb(s) FROM public.defect_work_order_import_staging s WHERE work_id='DF-A401-03';
+ v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A401-03','18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,NULL);
+ IF v->>'status'<>'DRY_RUN_APPROVED' OR EXISTS(SELECT 1 FROM public.defect_work_order_snapshot WHERE work_id='DF-A401-03') THEN RAISE EXCEPTION 'NULL dryrun wrote data %',v; END IF;
+ UPDATE public.defect_work_order_import_staging SET defect_item='changed after approval' WHERE work_id='DF-A401-03';
+ v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A401-03','18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,false);
+ IF v->>'error'<>'approved_stage_content_changed' THEN RAISE EXCEPTION 'content drift bypassed %',v; END IF;
+ SELECT to_jsonb(w) INTO before_row FROM public.defect_work_order_snapshot w WHERE work_id='DF-A401-LIVE1';
+ INSERT INTO public.work_order_promotion_approvals
+ (work_id,source_file_id,source_modified_at,approval_evidence_url,approved_by,
+ completion_confirmed_open,contractor_room_confirmed,override_queue_checked,combine_checked,
+ approved_stage_snapshot,approved_fields,expected_snapshot_hash)
+ SELECT 'DF-A401-LIVE1',source_file_id,source_modified_at,'https://drive.google.com/file/d/verified','Reviewer',
+ true,true,true,true,to_jsonb(s)||jsonb_build_object('work_id','DF-A401-LIVE1'),
+ '{"defect_item":"Verified corrected detail"}'::jsonb,'wrong'
+ FROM public.defect_work_order_import_staging s WHERE work_id='DF-A401-02';
+ v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A401-LIVE1','18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,false);
+ IF v->>'error'<>'existing_record_version_or_mapping_conflict' THEN RAISE EXCEPTION 'version bypass %',v; END IF;
+ UPDATE public.work_order_promotion_approvals SET expected_snapshot_hash=md5(before_row::text) WHERE work_id='DF-A401-LIVE1';
+ v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A401-LIVE1','18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,false);
+ IF v->>'status'<>'UPDATED_APPROVED_FIELDS' THEN RAISE EXCEPTION 'approved update failed %',v; END IF;
+ IF (SELECT to_jsonb(w)-'defect_item'-'source_modified_at' FROM public.defect_work_order_snapshot w WHERE work_id='DF-A401-LIVE1') IS DISTINCT FROM (before_row-'defect_item'-'source_modified_at') THEN RAISE EXCEPTION 'update touched unrelated fields'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.work_order_promotion_audit WHERE work_id='DF-A401-LIVE1' AND previous_row=before_row) THEN RAISE EXCEPTION 'history missing'; END IF;
+ v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A401-LIVE1','18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,false);
+ IF v->>'status'<>'ALREADY_PRESENT_NO_CHANGE' THEN RAISE EXCEPTION 'update retry not idempotent %',v; END IF;
+ UPDATE public.work_order_promotion_approvals SET approved_fields='{"contractor":"Unapproved"}',last_applied_hash=NULL WHERE work_id='DF-A401-LIVE1';
+ v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A401-LIVE1','18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,false);
+ IF v->>'error'<>'unapproved_update_fields' THEN RAISE EXCEPTION 'assignment bypass %',v; END IF;
+ UPDATE public.work_order_promotion_approvals SET approved_fields='{"defect_item":"new"}' WHERE work_id='DF-A401-LIVE1';
+ UPDATE public.defect_work_order_snapshot SET source_active=false WHERE work_id='DF-A401-LIVE1';
+ v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A401-LIVE1','18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,false);
+ IF v->>'error'<>'closed_or_inactive_preserved' THEN RAISE EXCEPTION 'inactive bypass %',v; END IF;
+ RAISE NOTICE 'PINNED CONTENT / APPROVED FIELD UPDATE / HISTORY / NULL DRYRUN PASS';
 END $test$;
