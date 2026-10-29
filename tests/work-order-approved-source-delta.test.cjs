@@ -83,3 +83,11 @@ test('retry cannot conceal changed source notice/SLA/supervisor/building',()=>{
   assert.throws(()=>f.run(false),/EXISTING_WORK_ID_CONFLICT/);assert(!f.state.calls.some(x=>x.method==='post'));
  }
 });
+
+test('SQL NULL next_action equals approved empty source action on retry',()=>{
+ const previous=expected.next_action;expected.next_action='';
+ try{
+  const f=fixture(s=>s.existing=[{...expected,next_action:null,source_active:true,qa_status:'APPROVED_NONRETIRING'}]);
+  assert.equal(f.run(false).status,'NO_CHANGE');assert(!f.state.calls.some(x=>x.method==='post'));
+ }finally{expected.next_action=previous;}
+});
