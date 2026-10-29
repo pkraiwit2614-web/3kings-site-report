@@ -13,6 +13,34 @@ BEGIN
 END
 $gate$;
 
+-- Independently validate standard PDF defect details without a fixed Document ID.
+CREATE OR REPLACE FUNCTION private.verified_pdf_defect_detail(p_room text,p_detail text)
+RETURNS boolean LANGUAGE plpgsql IMMUTABLE SECURITY INVOKER SET search_path TO ''
+AS $pdf$
+DECLARE v_header text[]; v_expected integer; v_numbered integer; v_valid boolean;
+BEGIN
+  IF p_detail IS NULL OR length(p_detail)>100000 THEN RETURN false; END IF;
+  v_header := regexp_match(btrim(split_part(p_detail,E'\n',1)),
+    '^([AB][0-9]{3}) • .{2,120} Doc ID [0-9]{1,12} • PDF [0-9]{2}/[0-9]{2}/[0-9]{4} • Defect ใหม่ ([0-9]{1,3}) รายการ$');
+  IF v_header IS NULL OR
+    (v_header[1]<>p_room AND NOT(v_header[1]='A404' AND p_room='A405')) THEN RETURN false; END IF;
+  v_expected:=v_header[2]::integer;
+  IF v_expected<1 OR v_expected>200 THEN RETURN false; END IF;
+  WITH numbered AS (
+    SELECT line,row_number() OVER(ORDER BY ord) AS seq
+    FROM regexp_split_to_table(p_detail,E'\n') WITH ORDINALITY AS src(line,ord)
+    WHERE left(line,1)='#'
+  )
+  SELECT count(*),coalesce(bool_and(coalesce(
+    line ~ '^#[0-9]{2,3}[[:space:]]+\[[^]]+\]' AND
+    substring(line FROM '^#([0-9]{2,3})')::integer=seq,false)),false)
+  INTO v_numbered,v_valid FROM numbered;
+  RETURN v_numbered=v_expected AND v_valid;
+END;
+$pdf$;
+REVOKE ALL ON FUNCTION private.verified_pdf_defect_detail(text,text) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION private.verified_pdf_defect_detail(text,text) TO service_role;
+
 CREATE OR REPLACE FUNCTION public.drive_sync_apply_condo_defects(
   p_sync_key text,
   p_source_file text,
@@ -112,7 +140,7 @@ BEGIN
   IF EXISTS (
     SELECT 1 FROM jsonb_array_elements(p_rows) r
     WHERE upper(r->>'room_no') IN ('A404','A405')
-      AND coalesce(r->>'defect_detail','') LIKE 'A404 • Art House Group Doc ID 167%'
+      AND private.verified_pdf_defect_detail(upper(r->>'room_no'),r->>'defect_detail')
   ) AND (
     (SELECT count(DISTINCT coalesce(r->>'defect_detail',''))
      FROM jsonb_array_elements(p_rows) r
@@ -151,13 +179,10 @@ BEGIN
             WHERE w.room_no = v_room
               AND (w.source_sync_state <> 'synced' OR w.source_synced_at IS NULL))
           AND c.defect_detail IS DISTINCT FROM r->>'defect_detail')
-      -- Doc 167 is one verified 43-point A404 inspection replicated in A405 Combine.
-      OR (v_room IN ('A404','A405')
-          AND coalesce(r->>'defect_detail','') LIKE 'A404 • Art House Group Doc ID 167 • PDF 28/10/2026%'
-          AND coalesce(r->>'defect_detail','') LIKE '%Defect ใหม่ 43 รายการ%'
+      -- Standard validated PDF detail from the canonical approved Master.
+      OR (private.verified_pdf_defect_detail(v_room,r->>'defect_detail')
           AND NOT EXISTS (SELECT 1 FROM public.defect_web_overrides w
-            WHERE w.room_no = v_room
-              AND (w.source_sync_state <> 'synced' OR w.source_synced_at IS NULL))
+            WHERE w.room_no=v_room AND (w.source_sync_state<>'synced' OR w.source_synced_at IS NULL))
           AND c.defect_detail IS DISTINCT FROM r->>'defect_detail')
       -- Scoped B515 Customer Defect detail
       OR (v_room = 'B515' AND coalesce(r->>'defect_detail','') LIKE '%Customer Defect B515%'
@@ -195,12 +220,9 @@ BEGIN
                 WHERE w.room_no = v_room
                   AND (w.source_sync_state <> 'synced' OR w.source_synced_at IS NULL))
               THEN r->>'defect_detail'
-            WHEN v_room IN ('A404','A405')
-              AND coalesce(r->>'defect_detail','') LIKE 'A404 • Art House Group Doc ID 167 • PDF 28/10/2026%'
-              AND coalesce(r->>'defect_detail','') LIKE '%Defect ใหม่ 43 รายการ%'
+            WHEN private.verified_pdf_defect_detail(v_room,r->>'defect_detail')
               AND NOT EXISTS (SELECT 1 FROM public.defect_web_overrides w
-                WHERE w.room_no = v_room
-                  AND (w.source_sync_state <> 'synced' OR w.source_synced_at IS NULL))
+                WHERE w.room_no=v_room AND (w.source_sync_state<>'synced' OR w.source_synced_at IS NULL))
               THEN r->>'defect_detail'
             WHEN v_room = 'B515' AND coalesce(r->>'defect_detail','') LIKE '%Customer Defect B515%'
               AND NOT EXISTS (SELECT 1 FROM public.defect_web_overrides w
