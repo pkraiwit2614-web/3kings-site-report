@@ -286,6 +286,7 @@ async function parseDefects(buffer: Buffer) {
         const detail = text(valueByHeader(r, headers, 'Defect Detail (Web App)'))
         if (detail?.includes('รายการ Defect แจ้งผ่านแชต:')) return detail
         if (roomNo === 'B515' && detail?.includes('Customer Defect B515')) return detail
+        if (defectDoc167Accepted(roomNo, detail)) return detail
         return null
       })(),
     })
@@ -300,7 +301,27 @@ async function parseDefects(buffer: Buffer) {
     throw new Error(`Defect building count mismatch: A=${aCount} B=${bCount}; expected A=${DEFECT_EXPECTED_A} B=${DEFECT_EXPECTED_B}`)
   }
 
+  // Doc 167 is one 43-point inspection on a two-room Combine; reject half-pair input.
+  const doc167Pair = out.filter(r => r.room_no === 'A404' || r.room_no === 'A405')
+  if (doc167Pair.some(r => defectDoc167Accepted(r.room_no, r.defect_detail))) {
+    if (doc167Pair.length !== 2 || doc167Pair.some(r =>
+      !defectDoc167Accepted(r.room_no, r.defect_detail) ||
+      r.defect_detail !== doc167Pair[0].defect_detail ||
+      r.current_status !== doc167Pair[0].current_status ||
+      r.status_group !== doc167Pair[0].status_group
+    )) throw new Error('DOC167_COMBINE_PAIR_MISMATCH: A404/A405')
+  }
+
   return { rows: out, counts: { total: out.length, A: aCount, B: bCount } }
+}
+
+function defectDoc167Accepted(roomNo: string, detail: string | null): boolean {
+  if (!['A404', 'A405'].includes(roomNo) || !detail) return false
+  const numbered = detail.match(/^#\d{2}\s+\[/gm) || []
+  return detail.startsWith('A404 • Art House Group Doc ID 167 • PDF 28/10/2026') &&
+    detail.includes('Defect ใหม่ 43 รายการ') &&
+    numbered.length === 43 &&
+    numbered.every((marker, i) => Number(marker.slice(1, 3)) === i + 1)
 }
 
 async function parseSchedule(buffer: Buffer, projectCode: string) {
