@@ -86,7 +86,7 @@ BEGIN
   THEN RAISE EXCEPTION 'unapproved Work ID promoted %',v; END IF;
   IF (SELECT jsonb_agg(to_jsonb(w) ORDER BY w.work_id) FROM public.defect_work_order_snapshot w)<>snap
   THEN RAISE EXCEPTION 'read-only preflight mutated baseline';END IF;
-  INSERT INTO private.work_order_promotion_approvals
+  INSERT INTO public.work_order_promotion_approvals
     (work_id,source_file_id,source_modified_at,approval_evidence_url,approved_by,
      completion_confirmed_open,contractor_room_confirmed,override_queue_checked,combine_checked)
   VALUES ('DF-A401-02','18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,
@@ -125,7 +125,7 @@ DO $test$
 DECLARE r timestamptz;v jsonb;
 BEGIN
   SELECT source_modified_at INTO r FROM public.defect_work_order_import_staging WHERE work_id='DF-A401-04';
-  INSERT INTO private.work_order_promotion_approvals
+  INSERT INTO public.work_order_promotion_approvals
     (work_id,source_file_id,source_modified_at,approval_evidence_url,approved_by,
      completion_confirmed_open,contractor_room_confirmed,override_queue_checked,combine_checked)
   VALUES ('DF-A401-04','18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,
@@ -135,7 +135,7 @@ BEGIN
   IF v->>'error'<>'stage_not_dispatch_eligible' THEN
     RAISE EXCEPTION 'history-only active promotion allowed %',v;END IF;
   SELECT source_modified_at INTO r FROM public.defect_work_order_import_staging WHERE work_id='DF-A404-01';
-  INSERT INTO private.work_order_promotion_approvals
+  INSERT INTO public.work_order_promotion_approvals
     (work_id,source_file_id,source_modified_at,approval_evidence_url,approved_by,
      completion_confirmed_open,contractor_room_confirmed,override_queue_checked,combine_checked)
   VALUES ('DF-A404-01','18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,
@@ -158,8 +158,8 @@ END $test$;
 DO $test$ BEGIN
   IF has_function_privilege('anon','public.defect_work_order_promote_nonretiring_approved(text,text,text,timestamptz,boolean)','EXECUTE') OR
      has_function_privilege('authenticated','public.defect_work_order_promote_nonretiring_approved(text,text,text,timestamptz,boolean)','EXECUTE') OR
-     has_table_privilege('anon','private.work_order_promotion_approvals','SELECT') OR
-     has_table_privilege('authenticated','private.work_order_promotion_approvals','INSERT')
+     has_table_privilege('anon','public.work_order_promotion_approvals','SELECT') OR
+     has_table_privilege('authenticated','public.work_order_promotion_approvals','INSERT')
   THEN RAISE EXCEPTION 'RBAC/RLS exposure'; END IF;
   RAISE NOTICE 'CLIENT ROLE DENIAL PASS';
 END $test$;
