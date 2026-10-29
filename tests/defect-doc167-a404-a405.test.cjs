@@ -10,7 +10,7 @@ const source = 'A404 • Art House Group Doc ID 167 • PDF 28/10/2026 • Defec
   Array.from({length:43},(_,i)=>'#'+String(i+1).padStart(2,'0')+' [PFur] verified point '+(i+1)).join('\n')
 const context=vm.createContext({console,Date})
 vm.runInContext(gas,context,{timeout:1500,filename:'SmartSyncDefects_v1.3.gs'})
-const allowed=vm.runInContext('defectDoc167AcceptedV13_',context)
+const allowed=vm.runInContext('verifiedPdfDefectDetailV13_',context)
 const pairGate=vm.runInContext('defectDoc167PairGateV13_',context)
 
 test('A404+A405 exact Doc167 43 points accepted; malformed and unrelated content rejected',()=>{
@@ -19,8 +19,17 @@ test('A404+A405 exact Doc167 43 points accepted; malformed and unrelated content
   assert.equal(allowed('A401',source),false)
   assert.equal(allowed('B515',source),false)
   assert.equal(allowed('A404',source.replace('#43','BAD')),false)
-  assert.equal(allowed('A404',source.replace('Doc ID 167','Doc ID 168')),false)
+  assert.equal(allowed('A404',source.replace('Doc ID 167','Doc ID 168')),true)
   assert.equal(allowed('A404','No evidence'),false)
+})
+test('new verified PDF details work for future room and document without parser edits',()=>{
+  const fresh = 'A512 • Building Engineer Doc ID 168 • PDF 29/10/2026 • Defect ใหม่ 2 รายการ\n' +
+    '#01 [MEP] Verified item\n#02 [Wet] Verified item';
+  assert.equal(allowed('A512',fresh),true)
+  assert.equal(allowed('A513',fresh),false)
+  assert.equal(allowed('A512',fresh.replace('2 รายการ','3 รายการ')),false)
+  assert.equal(allowed('A512',fresh.replace('#02','#01')),false)
+  assert.equal(allowed('A405',source),true)
 })
 test('Combine pair rejects mismatch without inventing a Hotel OK or changing statuses',()=>{
   const row=(room,detail=source)=>({room_no:room,defect_detail:detail,current_status:'Pending Handover / รอลูกค้าเข้าตรวจ',status_group:'Non-Hotel - Pending Handover'})
