@@ -1,0 +1,74 @@
+name: Defect generic PDF ingestion (isolated PostgreSQL 17)
+on:
+  pull_request:
+    paths:
+      - 'app/api/sync/drive/route.ts'
+      - 'docs/apps-script/SmartSyncDefects_v1.3_2026-10-02.gs'
+      - 'supabase/migrations/20261029160000_defect_doc167_a404_a405_detail_gate.sql'
+      - 'tests/defect-doc167-a404-a405.test.cjs'
+      - 'tests/sql/defect-generic-pdf-isolated.sql'
+      - 'tests/sql/defect-generic-rpc-isolated.sql'
+      - '.github/workflows/qa-defect-generic-pdf.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-postgresql-17:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: isolated-only
+          POSTGRES_DB: defect_qa
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d defect_qa"
+          --health-interval 5s --health-timeout 5s --health-retries 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Regression for GAS parser and existing B515/chat paths
+        run: node --test tests/defect-doc167-a404-a405.test.cjs
+      - name: Install PostgreSQL client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - name: Extract current SQL helper (without production RPC or real secrets)
+        shell: bash
+        run: |
+          set -euo pipefail
+          awk '
+            /^CREATE OR REPLACE FUNCTION private\.verified_pdf_defect_detail/ {inside=1}
+            inside {print}
+            /^GRANT EXECUTE ON FUNCTION private\.verified_pdf_defect_detail/ {exit}
+          ' supabase/migrations/20261029160000_defect_doc167_a404_a405_detail_gate.sql > /tmp/generic-defect-helper.sql
+          grep -q '^CREATE OR REPLACE FUNCTION private.verified_pdf_defect_detail' /tmp/generic-defect-helper.sql
+          grep -q '^GRANT EXECUTE ON FUNCTION private.verified_pdf_defect_detail' /tmp/generic-defect-helper.sql
+      - name: Run isolated SQL parser and role boundary regression
+        env:
+          PGPASSWORD: isolated-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PGHOST=127.0.0.1 PGPORT=5432 PGUSER=postgres PGDATABASE=defect_qa
+          psql -v ON_ERROR_STOP=1 -c 'CREATE SCHEMA private; CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role;'
+          psql -v ON_ERROR_STOP=1 -f /tmp/generic-defect-helper.sql
+          psql -v ON_ERROR_STOP=1 -f tests/sql/defect-generic-pdf-isolated.sql
+      - name: Extract existing RPC body and replay full 263-room isolated fixture
+        env:
+          PGPASSWORD: isolated-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          awk '
+            /^CREATE OR REPLACE FUNCTION public\.drive_sync_apply_condo_defects/ {inside=1}
+            inside {print}
+          ' supabase/migrations/20261029160000_defect_doc167_a404_a405_detail_gate.sql > /tmp/generic-defect-rpc.sql
+          grep -q '^CREATE OR REPLACE FUNCTION public.drive_sync_apply_condo_defects' /tmp/generic-defect-rpc.sql
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5432 -U postgres -d defect_qa -f tests/sql/defect-generic-rpc-isolated.sql
+      - name: Release gate reminder
+        run: |
+          echo "Isolated helper + synthetic full RPC replay only. Fingerprint guard, live GAS HEAD,"
+          echo "queue/single-writer, B515/Combine E2E, and authorized Production UI readback"
+          echo "remain mandatory before merge, migration or synchronization."

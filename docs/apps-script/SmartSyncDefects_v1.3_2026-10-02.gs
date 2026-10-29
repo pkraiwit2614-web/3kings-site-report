@@ -1,13 +1,18 @@
 /**
- * 3 Kings Construction — Defect Smart Sync v1.3 (2026-10-02)
+ * 3 Kings Construction — Defect Smart Sync v1.3 (Aligned 2026-10-13)
  *
- * Purpose:
- * - Stop rebuilding the condo master from status-bucket columns.
- * - Read the authoritative 263-row "ข้อมูลจำแนก" sheet directly.
- * - Keep the existing 263/A162/B101 + exact-room-set safety gates.
- * - Preserve the old smartSyncDefects15m trigger as rollback until cutover.
+ * Excel Master -> Supabase only. Paired with Defect Excel Writeback v2,
+ * which updates original XLSX workbooks from confirmed Web changes.
  *
- * Prerequisites: existing sync3Kings v1.1.x helpers and Smart Sync v1.2.
+ * IMPORTANT:
+ * - This file REPLACES ONLY the prior SmartSyncDefect v1.3 source file,
+ *   which contains the obsolete embedded DEFECT_WB writer starting after
+ *   defectMasterV13NeedsWrite_. Do not delete any other Apps Script files.
+ * - Existing sync3Kings helpers / Smart Sync configuration stay required.
+ * - Never paste v2 in the same source file; add it as a separate .gs file.
+ * - Never run the legacy runDefectWritebackScheduled handler again.
+ * - Paired v2 functions use separate names and the same project lock.
+ * - Source workbook identity and confirmed Web statuses are protected.
  */
 
 const DEFECT_V13 = {
@@ -47,7 +52,13 @@ function smartSyncDefectsV13_15m() {
 }
 
 function smartSyncDefectsV13DryRun() {
-  return runDefectSyncV13_({ dryRun: true, force: true });
+  const result = runDefectSyncV13_({
+    dryRun: true,
+    force: true
+  });
+
+  console.log(JSON.stringify(result, null, 2));
+  return result;
 }
 
 function smartSyncDefectsV13Force() {
@@ -55,24 +66,46 @@ function smartSyncDefectsV13Force() {
 }
 
 /**
- * One-shot, strictly-scoped Pre Fur. pilot.
- * All 263 source rows and DB inventory are validated before a 5-room subset is written.
- * This never marks the full workbook revision as accepted, because other rooms may differ.
- * It does not install or modify any triggers.
+ * PR #184 — five-room read-only preflight; uses the LIVE v1.3 source and helpers.
+ * Checks full canonical 263-room source/DB inventory but only proposes changes
+ * for A311, A401, B204, B502 and B707. Does not install/change any trigger.
  */
 function smartSyncDefectsV13PfurDryRun() {
   const result = runDefectSyncV13_({
-    dryRun: true, force: true,
+    dryRun: true,
+    force: true,
     scopeRooms: ['A311', 'A401', 'B204', 'B502', 'B707'],
   });
   console.log(JSON.stringify(result, null, 2));
   return result;
 }
 
+/** NOT for preflight. Run only after PR #184 SQL/GAS E2E release gates pass. */
 function smartSyncDefectsV13PfurForce() {
   return runDefectSyncV13_({
-    dryRun: false, force: true,
+    dryRun: false,
+    force: true,
     scopeRooms: ['A311', 'A401', 'B204', 'B502', 'B707'],
+  });
+}
+
+
+/**
+ * Scoped, fail-closed A404/A405 Doc167 Combine preflight.
+ * Never changes triggers, work order IDs, room statuses or unrelated rooms.
+ */
+function smartSyncDefectsV13Doc167DryRun() {
+  const result = runDefectSyncV13_({
+    dryRun: true, force: true, scopeRooms: ['A404','A405'],
+  });
+  console.log(JSON.stringify(result, null, 2));
+  return result;
+}
+
+/** Execute only after SOP15/16 and Web-override/single-writer gate PASS. */
+function smartSyncDefectsV13Doc167Force() {
+  return runDefectSyncV13_({
+    dryRun: false, force: true, scopeRooms: ['A404','A405'],
   });
 }
 
@@ -96,9 +129,10 @@ function runDefectSyncV13_(opts) {
     });
 
     file = findLatestFile_(folder, SMART_SYNC_CFG.DEFECT_FILE_RE);
-    // Reject backup, temp, or similarly named workbooks before any database write.
-    if (file.getId() !== DEFECT_V13.SOURCE_FILE_ID || file.getName() !== DEFECT_V13.SOURCE_FILE_NAME) {
-      throw new Error('Defect sync source is not the approved canonical workbook.');
+    // Prevent the importer from accepting another workbook (backup/latest copy).
+    if (!file || file.getId() !== DEFECT_V13.SOURCE_FILE_ID ||
+        file.getName() !== DEFECT_V13.SOURCE_FILE_NAME) {
+      throw new Error('Wrong Defect master workbook ID or name; database untouched.');
     }
     const modifiedIso = file.getLastUpdated().toISOString();
 
@@ -141,6 +175,10 @@ function runDefectSyncV13_(opts) {
     const nowIso = new Date().toISOString();
     const prepared = parsed.rows.map(src => {
       const old = oldByRoom[src.room_no] || {};
+      // Manual saves on the Web App remain authoritative until the database's
+      // override lifecycle explicitly releases them. Preserve provenance too:
+      // v2 writes status to F/I/L/Q, intentionally leaving Master M/N alone.
+      const webConfirmed = old.latest_source === 'Web App manual update';
       return {
         room_no: src.room_no,
         building: src.building,
@@ -155,8 +193,8 @@ function runDefectSyncV13_(opts) {
         priority: src.priority,
         next_action: src.next_action,
 
-        latest_source: src.latest_source || old.latest_source || null,
-        source_note: src.source_note || old.source_note || null,
+        latest_source: webConfirmed ? old.latest_source : (src.latest_source || old.latest_source || null),
+        source_note: webConfirmed ? (old.source_note || null) : (src.source_note || old.source_note || null),
 
         old_overall_status: old.old_overall_status || null,
         old_handover_result: old.old_handover_result || null,
@@ -178,12 +216,14 @@ function runDefectSyncV13_(opts) {
 
         defect_detail: (src.defect_detail && (
           src.defect_detail.includes('รายการ Defect แจ้งผ่านแชต:') ||
-          (src.room_no === 'B515' && src.defect_detail.includes('Customer Defect B515'))
+          (src.room_no === 'B515' && src.defect_detail.includes('Customer Defect B515')) ||
+          verifiedPdfDefectDetailV13_(src.room_no, src.defect_detail)
         )) ? src.defect_detail : old.defect_detail || null,
         synced_at: nowIso,
       };
     });
 
+    defectDoc167PairGateV13_(prepared);
     const { changed, pendingRooms } = defectV13ScopedChanges_(prepared, oldByRoom, opts);
 
     if (opts.dryRun) {
@@ -200,6 +240,9 @@ function runDefectSyncV13_(opts) {
       };
     }
 
+    if (file.getLastUpdated().toISOString() !== modifiedIso) {
+      throw new Error('Defect master Excel changed during import; database untouched, retry later.');
+    }
     if (changed.length) {
       upsertComposite_(ctx, 'condo_room_status', changed, 'room_no');
     }
@@ -216,11 +259,11 @@ function runDefectSyncV13_(opts) {
         `Defect Sync v1.3 validated 263 rooms (A=162, B=101, exact room set); ` +
         `${changed.length} semantic row(s) changed; ` +
         (opts.scopeRooms
-          ? `SCOPED pilot only; ${pendingRooms.length} other difference(s) deliberately untouched`
+          ? `SCOPED pilot only; ${pendingRooms.length} other difference(s) left untouched`
           : 'full workbook'),
     });
 
-    // A scoped import is NOT acceptance of the complete Master revision.
+    // Scoped import must never accept the whole workbook revision.
     if (!opts.scopeRooms) {
       saveState_(ctx.props, DEFECT_V13.STATE_KEY, file.getId(), modifiedIso);
     }
@@ -308,7 +351,7 @@ function parseCondoDefectMasterV13_(sheet) {
   const latestSourceCol = optionalColumn('Latest Source');
   const sourceNoteCol = optionalColumn('Source Note');
   const completeColorCol = optionalColumn('Hotel Complete Color');
-  const remarksCol = optionalColumn('Hotel Remarks');
+  const remarksCol = optionalColumn('Hotel Remarks')
   const defectDetailCol = optionalColumn('Defect Detail (Web App)');
 
   const rows = [];
@@ -376,7 +419,9 @@ function parseCondoDefectMasterV13_(sheet) {
       source_note: sourceNoteCol >= 0 ? cleanText_(values[r][sourceNoteCol]) || null : null,
       hotel_complete_color: completeColorCol >= 0 ? cleanText_(values[r][completeColorCol]) || null : null,
       hotel_remarks: remarksCol >= 0 ? cleanText_(values[r][remarksCol]) || null : null,
-      defect_detail: defectDetailCol >= 0 ? cleanText_(values[r][defectDetailCol]) || null : null,
+      defect_detail: defectDetailCol >= 0
+  ? cleanText_(values[r][defectDetailCol]) || null
+  : null,
     });
   }
 
@@ -407,9 +452,36 @@ function parseCondoDefectMasterV13_(sheet) {
 }
 
 /**
- * Shared diff guard. Regular scheduled sync retains exactly its old full-sync behavior.
- * Scoped pilot may update ONLY five chat-marked Q details, never another field.
+ * PR #184: preserve normal scheduled sync behavior exactly as before.
+ * The pilot may modify only explicit chat-marked defect_detail for five rooms;
+ * any unrelated existing field difference for those rooms fails closed.
  */
+function verifiedPdfDefectDetailV13_(room, detail) {
+  if (!detail || String(detail).length > 100000) return false;
+  const header = String(detail).match(/^([AB]\d{3}) • [^\r\n]{2,120} Doc ID \d{1,12} • PDF \d{2}\/\d{2}\/\d{4} • Defect ใหม่ (\d{1,3}) รายการ(?:\r?\n|$)/);
+  if (!header) return false;
+  const sourceRoom = header[1];
+  // Approved Combine mirror only. All other PDF inspections require exact room attribution.
+  if (sourceRoom !== String(room) && !(sourceRoom === 'A404' && String(room) === 'A405')) return false;
+  const expected = Number(header[2]);
+  if (expected < 1 || expected > 200) return false;
+  const numbered = String(detail).match(/^#\d{2,3}\s+\[[^\]\r\n]+\]/gm) || [];
+  return numbered.length === expected &&
+    numbered.every((marker, i) => Number(marker.match(/^#(\d+)/)[1]) === i + 1);
+}
+
+function defectDoc167PairGateV13_(prepared) {
+  const pair = prepared.filter(row => row.room_no === 'A404' || row.room_no === 'A405');
+  if (!pair.some(row => verifiedPdfDefectDetailV13_(row.room_no, row.defect_detail))) return;
+  if (pair.length !== 2 ||
+      pair.some(row => !verifiedPdfDefectDetailV13_(row.room_no, row.defect_detail) ||
+        row.defect_detail !== pair[0].defect_detail ||
+        row.current_status !== pair[0].current_status ||
+        row.status_group !== pair[0].status_group)) {
+    throw new Error('DOC167_COMBINE_PAIR_MISMATCH: A404/A405 fail-closed');
+  }
+}
+
 function defectV13ScopedChanges_(prepared, oldByRoom, opts) {
   const all = prepared.filter(row =>
     defectMasterV13NeedsWrite_(row, oldByRoom[row.room_no] || null)
@@ -417,16 +489,28 @@ function defectV13ScopedChanges_(prepared, oldByRoom, opts) {
   if (!opts.scopeRooms) return { changed: all, pendingRooms: [] };
 
   const expected = ['A311', 'A401', 'B204', 'B502', 'B707'];
-  const supplied = [...new Set(opts.scopeRooms)].sort();
-  if (supplied.length !== expected.length ||
-      supplied.some((room, i) => room !== expected[i])) {
+  if (!Array.isArray(opts.scopeRooms)) {
     throw new Error('Scoped Defect sync: exact approved five-room scope required.');
   }
+  const supplied = [...new Set(opts.scopeRooms)].sort();
+  const chatPilot = opts.scopeRooms.length === expected.length &&
+    supplied.length === expected.length &&
+    supplied.every((room, i) => room === expected[i]);
+  const pdfPair = opts.scopeRooms.length === 2 &&
+    supplied.length === 2 && supplied[0] === 'A404' && supplied[1] === 'A405';
+  if (!chatPilot && !pdfPair) {
+    throw new Error('Scoped Defect sync: unapproved room scope; exact approved five-room scope or A404/A405 Combine required.');
+  }
   const changed = all.filter(row => supplied.includes(row.room_no));
-  if (changed.length > 5 || changed.some(row => !oldByRoom[row.room_no])) {
+  if (changed.length > supplied.length || changed.some(row => !oldByRoom[row.room_no])) {
     throw new Error('Scoped Defect sync requires existing canonical room records.');
   }
-
+  if (pdfPair) {
+    defectDoc167PairGateV13_(prepared);
+    if (changed.length !== 0 && changed.length !== 2) {
+      throw new Error('Scoped PDF Combine must write both rooms atomically.');
+    }
+  }
   const protectedFields = [
     'building', 'floor', 'hotel_participation', 'customer_status',
     'current_status', 'status_group', 'follow_up', 'priority', 'next_action',
@@ -434,9 +518,15 @@ function defectV13ScopedChanges_(prepared, oldByRoom, opts) {
   ];
   changed.forEach(row => {
     const old = oldByRoom[row.room_no];
-    if (!row.defect_detail ||
-        !row.defect_detail.includes('รายการ Defect แจ้งผ่านแชต:')) {
-      throw new Error('Scoped Defect sync rejected non-chat Detail: ' + row.room_no);
+    const accepted = chatPilot
+      ? Boolean(row.defect_detail && row.defect_detail.includes('รายการ Defect แจ้งผ่านแชต:'))
+      : verifiedPdfDefectDetailV13_(row.room_no, row.defect_detail);
+    if (!accepted) {
+      throw new Error('Scoped Defect sync rejected unverified Detail: ' + row.room_no);
+    }
+    if (old.latest_source === 'Web App manual update' &&
+        normalizeComparable_(row.defect_detail) !== normalizeComparable_(old.defect_detail)) {
+      throw new Error('Scoped Defect sync blocked unacknowledged Web detail: ' + row.room_no);
     }
     const unsafe = protectedFields.filter(key =>
       normalizeComparable_(row[key]) !== normalizeComparable_(old[key])
@@ -477,4 +567,17 @@ function defectMasterV13NeedsWrite_(row, old) {
   return fields.some(
     key => normalizeComparable_(row[key]) !== normalizeComparable_(old[key])
   );
+}
+/** One-time, explicit cleanup of ONLY the obsolete embedded Writeback v1 handler. */
+function disableLegacyDefectWritebackTriggerV13() {
+  const handler = 'runDefectWritebackScheduled';
+  let removed = 0;
+  ScriptApp.getProjectTriggers().forEach(function(trigger) {
+    if (trigger.getHandlerFunction() === handler) {
+      ScriptApp.deleteTrigger(trigger);
+      removed++;
+    }
+  });
+  console.log('Legacy v1 Defect Writeback triggers removed: ' + removed);
+  return {ok:true,handler:handler,removed:removed};
 }

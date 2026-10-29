@@ -286,6 +286,7 @@ async function parseDefects(buffer: Buffer) {
         const detail = text(valueByHeader(r, headers, 'Defect Detail (Web App)'))
         if (detail?.includes('รายการ Defect แจ้งผ่านแชต:')) return detail
         if (roomNo === 'B515' && detail?.includes('Customer Defect B515')) return detail
+        if (verifiedPdfDefectDetail(roomNo, detail)) return detail
         return null
       })(),
     })
@@ -300,7 +301,31 @@ async function parseDefects(buffer: Buffer) {
     throw new Error(`Defect building count mismatch: A=${aCount} B=${bCount}; expected A=${DEFECT_EXPECTED_A} B=${DEFECT_EXPECTED_B}`)
   }
 
+  // Doc 167 is one 43-point inspection on a two-room Combine; reject half-pair input.
+  const doc167Pair = out.filter(r => r.room_no === 'A404' || r.room_no === 'A405')
+  if (doc167Pair.some(r => verifiedPdfDefectDetail(String(r.room_no), typeof r.defect_detail === 'string' ? r.defect_detail : null))) {
+    if (doc167Pair.length !== 2 || doc167Pair.some(r =>
+      !verifiedPdfDefectDetail(String(r.room_no), typeof r.defect_detail === 'string' ? r.defect_detail : null) ||
+      r.defect_detail !== doc167Pair[0].defect_detail ||
+      r.current_status !== doc167Pair[0].current_status ||
+      r.status_group !== doc167Pair[0].status_group
+    )) throw new Error('DOC167_COMBINE_PAIR_MISMATCH: A404/A405')
+  }
+
   return { rows: out, counts: { total: out.length, A: aCount, B: bCount } }
+}
+
+function verifiedPdfDefectDetail(roomNo: string, detail: string | null): boolean {
+  if (!detail || detail.length > 100000) return false
+  const header = detail.match(/^([AB]\d{3}) • [^\r\n]{2,120} Doc ID \d{1,12} • PDF \d{2}\/\d{2}\/\d{4} • Defect ใหม่ (\d{1,3}) รายการ(?:\r?\n|$)/)
+  if (!header) return false
+  const sourceRoom = header[1]
+  // Approved Combine mirror. Other PDF inspections must identify their own room.
+  if (sourceRoom !== roomNo && !(sourceRoom === 'A404' && roomNo === 'A405')) return false
+  const expected = Number(header[2])
+  if (expected < 1 || expected > 200) return false
+  const numbered = Array.from(detail.matchAll(/^#(\d{2,3})\s+\[[^\]\r\n]+\]/gm))
+  return numbered.length === expected && numbered.every((m, i) => Number(m[1]) === i + 1)
 }
 
 async function parseSchedule(buffer: Buffer, projectCode: string) {
