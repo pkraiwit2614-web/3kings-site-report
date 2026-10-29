@@ -516,3 +516,23 @@ BEGIN
  IF (SELECT jsonb_agg(to_jsonb(w) ORDER BY work_id) FROM public.defect_work_order_snapshot w) IS DISTINCT FROM baseline THEN RAISE EXCEPTION 'staging changed Production';END IF;
  RAISE NOTICE 'GENERIC BOUNDED STAGING / NULL KEY / NULL DRYRUN / DUPLICATE / SNAPSHOT PRESERVATION PASS';
 END $test$;
+
+DO $test$
+DECLARE v jsonb;r timestamptz;
+BEGIN
+ UPDATE public.defect_work_order_import_staging SET source_payload=source_payload||
+ '{"received_date":"2026-10-29","due_date":"2026-11-05","supervisor":"Verified PIC"}'::jsonb WHERE work_id='DF-B706-01';
+ SELECT source_modified_at INTO r FROM public.defect_work_order_import_staging WHERE work_id='DF-B706-01';
+ INSERT INTO public.work_order_promotion_approvals
+ (work_id,source_file_id,source_modified_at,approval_evidence_url,approved_by,completion_confirmed_open,
+ contractor_room_confirmed,override_queue_checked,combine_checked,approved_stage_snapshot)
+ SELECT work_id,source_file_id,source_modified_at,'https://drive.google.com/file/d/verified','Reviewer',
+ true,true,true,true,to_jsonb(s) FROM public.defect_work_order_import_staging s WHERE work_id='DF-B706-01';
+ v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-B706-01',
+ '18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,false);
+ IF v->>'status' IS DISTINCT FROM 'PROMOTED_NEW_WORK_ID' THEN RAISE EXCEPTION 'dated new ID failed %',v;END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.defect_work_order_snapshot WHERE work_id='DF-B706-01'
+ AND received_date='2026-10-29'::date AND due_date='2026-11-05'::date AND supervisor='Verified PIC') THEN RAISE EXCEPTION 'notice metadata lost';END IF;
+ IF (SELECT status_group FROM public.condo_room_status WHERE room_no='B706') IS DISTINCT FROM 'Non-Hotel - Handover Complete' THEN RAISE EXCEPTION 'handover status changed';END IF;
+ RAISE NOTICE 'APPROVED NOTICE / SEVEN-DAY DUE / PIC METADATA PRESERVED; HANDOVER UNCHANGED PASS';
+END $test$;
