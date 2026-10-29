@@ -111,100 +111,7 @@ BEGIN
   -- Serialized import: one workbook version at a time.
   PERFORM pg_advisory_xact_lock(hashtext('3kings_work_order_import_v1'));
   SELECT count(*),count(DISTINCT work_id),count(*) FILTER (
-    WHERE work_id IS NULL OR work_id !~ '^DF-[A-Za-z0-9()_-]+
-
-DO $test$
-DECLARE v jsonb; r timestamptz; snap jsonb;
-BEGIN
-  SELECT source_modified_at INTO r FROM public.defect_work_order_import_staging WHERE work_id='DF-A401-02';
-  SELECT jsonb_agg(to_jsonb(w) ORDER BY w.work_id) INTO snap FROM public.defect_work_order_snapshot w;
-  v:=public.defect_work_order_promote_nonretiring_approved('bad-key','DF-A401-02',
-      '18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,true);
-  IF v->>'error'<>'invalid_sync_key' THEN RAISE EXCEPTION 'key bypassed %',v; END IF;
-  v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A401-02',
-      '18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,true);
-  IF v->>'error'<>'approved_evidence_missing_or_stale'
-  THEN RAISE EXCEPTION 'unapproved Work ID promoted %',v; END IF;
-  IF (SELECT jsonb_agg(to_jsonb(w) ORDER BY w.work_id) FROM public.defect_work_order_snapshot w)<>snap
-  THEN RAISE EXCEPTION 'read-only preflight mutated baseline';END IF;
-  INSERT INTO public.work_order_promotion_approvals
-    (work_id,source_file_id,source_modified_at,approval_evidence_url,approved_by,
-     completion_confirmed_open,contractor_room_confirmed,override_queue_checked,combine_checked)
-  VALUES ('DF-A401-02','18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,
-         'https://drive.google.com/file/d/verified-approval','Approved Reviewer',
-         true,true,true,true);
-  v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A401-02',
-      '18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,true);
-  IF v->>'status'<>'DRY_RUN_APPROVED' OR v->>'production_mutation'<>'0'
-  THEN RAISE EXCEPTION 'approved dryrun failed %',v;END IF;
-  IF (SELECT count(*) FROM public.defect_work_order_snapshot)<>74
-  THEN RAISE EXCEPTION 'dry run inserted data';END IF;
-  v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A401-02',
-      '18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,false);
-  IF v->>'status'<>'PROMOTED_NEW_WORK_ID' OR v->>'retired'<>'0'
-  THEN RAISE EXCEPTION 'approved promotion failed %',v;END IF;
-  IF (SELECT count(*) FROM public.defect_work_order_snapshot)<>75 OR
-     (SELECT count(*) FROM public.defect_work_order_snapshot WHERE source_active)<>49 OR
-     (SELECT count(*) FROM public.defect_work_order_snapshot WHERE NOT source_active)<>26
-  THEN RAISE EXCEPTION 'nonretiring baseline invariant failed';END IF;
-  IF (SELECT jsonb_agg(to_jsonb(w) ORDER BY w.work_id)
-        FROM public.defect_work_order_snapshot w WHERE work_id<>'DF-A401-02')<>snap
-  THEN RAISE EXCEPTION 'existing Work ID content changed';END IF;
-  v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A401-02',
-      '18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,false);
-  IF v->>'status'<>'ALREADY_PRESENT_NO_CHANGE' THEN
-     RAISE EXCEPTION 'duplicate retry not idempotent %',v;END IF;
-  v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A401-03',
-      '18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',
-      (SELECT source_modified_at FROM public.defect_work_order_import_staging WHERE work_id='DF-A401-03'),false);
-  IF v->>'error'<>'approved_evidence_missing_or_stale' THEN
-    RAISE EXCEPTION 'second ID auto-activated %',v; END IF;
-  RAISE NOTICE 'NON-RETIRING PROMOTION: APPROVAL/IDEMPOTENCE/PRESERVATION PASS';
-END $test$;
-
-DO $test$
-DECLARE r timestamptz;v jsonb;
-BEGIN
-  SELECT source_modified_at INTO r FROM public.defect_work_order_import_staging WHERE work_id='DF-A401-04';
-  INSERT INTO public.work_order_promotion_approvals
-    (work_id,source_file_id,source_modified_at,approval_evidence_url,approved_by,
-     completion_confirmed_open,contractor_room_confirmed,override_queue_checked,combine_checked)
-  VALUES ('DF-A401-04','18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,
-         'https://drive.google.com/file/d/verified','Approved Reviewer',true,true,true,true);
-  v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A401-04',
-      '18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,false);
-  IF v->>'error'<>'stage_not_dispatch_eligible' THEN
-    RAISE EXCEPTION 'history-only active promotion allowed %',v;END IF;
-  SELECT source_modified_at INTO r FROM public.defect_work_order_import_staging WHERE work_id='DF-A404-01';
-  INSERT INTO public.work_order_promotion_approvals
-    (work_id,source_file_id,source_modified_at,approval_evidence_url,approved_by,
-     completion_confirmed_open,contractor_room_confirmed,override_queue_checked,combine_checked)
-  VALUES ('DF-A404-01','18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,
-         'https://drive.google.com/file/d/verified','Approved Reviewer',true,true,true,true);
-  INSERT INTO public.defect_web_overrides VALUES('A405','pending',NULL);
-  v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A404-01',
-      '18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,false);
-  IF v->>'error'<>'web_override_pending' THEN
-    RAISE EXCEPTION 'pending Combine override bypassed %',v; END IF;
-  DELETE FROM public.defect_web_overrides;
-  UPDATE public.condo_room_status SET current_status='Hotel - Checked Complete' WHERE room_no='A405';
-  v:=public.defect_work_order_promote_nonretiring_approved('isolated-key-only','DF-A404-01',
-      '18P3OFYtOLsslCtDujlSQVf9IQSuplKcx',r,false);
-  IF v->>'error'<>'combine_status_mismatch' THEN
-    RAISE EXCEPTION 'Combine mismatch bypassed %',v;END IF;
-  IF (SELECT count(*) FROM public.defect_work_order_snapshot)<>75
-  THEN RAISE EXCEPTION 'rejected ID inserted';END IF;
-  RAISE NOTICE 'COMBINE/OVERRIDE/HISTORY-ONLY FAIL-CLOSED PASS';
-END $test$;
-DO $test$ BEGIN
-  IF has_function_privilege('anon','public.defect_work_order_promote_nonretiring_approved(text,text,text,timestamptz,boolean)','EXECUTE') OR
-     has_function_privilege('authenticated','public.defect_work_order_promote_nonretiring_approved(text,text,text,timestamptz,boolean)','EXECUTE') OR
-     has_table_privilege('anon','public.work_order_promotion_approvals','SELECT') OR
-     has_table_privilege('authenticated','public.work_order_promotion_approvals','INSERT')
-  THEN RAISE EXCEPTION 'RBAC/RLS exposure'; END IF;
-  RAISE NOTICE 'CLIENT ROLE DENIAL PASS';
-END $test$;
-
+    WHERE work_id IS NULL OR work_id !~ '^DF-[A-Za-z0-9()_-]+$'
        OR room_group IS NULL OR room_group !~ '[AB][0-9]{3}'
        OR building NOT IN ('A','B') OR building IS NULL
        OR left(room_group,1) IS DISTINCT FROM building
@@ -298,7 +205,7 @@ END $test$;
                             'active_total',(SELECT count(*) FROM public.defect_work_order_snapshot WHERE source_active));
 END;
 $function$
-
+;
 \i supabase/migrations/20261029173000_nonretiring_approved_work_order_promotion.sql
 
 DO $test$
