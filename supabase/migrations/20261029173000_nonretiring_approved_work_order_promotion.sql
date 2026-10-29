@@ -1,7 +1,7 @@
 -- Surgical review-to-production Work Order promotion. NO existing importer changes.
 -- Production apply requires separate SOP 15/16 engineering, SQL/RLS, rollback and UI gates.
 -- This migration only creates an isolated approval ledger and a default dry-run RPC.
-CREATE TABLE IF NOT EXISTS private.work_order_promotion_approvals (
+CREATE TABLE IF NOT EXISTS public.work_order_promotion_approvals (
   work_id text PRIMARY KEY REFERENCES public.defect_work_order_import_staging(work_id),
   source_file_id text NOT NULL CHECK (source_file_id='18P3OFYtOLsslCtDujlSQVf9IQSuplKcx'),
   source_modified_at timestamptz NOT NULL,
@@ -14,9 +14,9 @@ CREATE TABLE IF NOT EXISTS private.work_order_promotion_approvals (
   combine_checked boolean NOT NULL CHECK (combine_checked),
   revoked_at timestamptz
 );
-ALTER TABLE private.work_order_promotion_approvals ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON private.work_order_promotion_approvals FROM PUBLIC,anon,authenticated;
-GRANT SELECT,INSERT,UPDATE ON private.work_order_promotion_approvals TO service_role;
+ALTER TABLE public.work_order_promotion_approvals ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.work_order_promotion_approvals FROM PUBLIC,anon,authenticated;
+GRANT SELECT,INSERT,UPDATE ON public.work_order_promotion_approvals TO service_role;
 
 CREATE OR REPLACE FUNCTION public.defect_work_order_promote_nonretiring_approved(
   p_sync_key text,
@@ -29,7 +29,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path TO ''
 AS $promote$
 DECLARE
   s public.defect_work_order_import_staging%ROWTYPE;
-  a private.work_order_promotion_approvals%ROWTYPE;
+  a public.work_order_promotion_approvals%ROWTYPE;
   v_rooms text[];
   v_room text;
   v_room_count integer;
@@ -47,7 +47,7 @@ BEGIN
   IF p_work_id IS NULL OR p_work_id !~ '^DF-[A-Za-z0-9()_-]+$'
   THEN RETURN jsonb_build_object('ok',false,'error','invalid_work_id'); END IF;
 
-  SELECT * INTO s FROM public.defect_work_order_import_staging WHERE work_id=p_work_id;
+  SELECT * INTO s FROM public.defect_work_order_import_staging WHERE work_id=p_work_id FOR SHARE;
   IF NOT FOUND THEN RETURN jsonb_build_object('ok',false,'error','work_id_not_staged'); END IF;
 
   IF s.source_file_id IS DISTINCT FROM '18P3OFYtOLsslCtDujlSQVf9IQSuplKcx'
@@ -59,7 +59,7 @@ BEGIN
      OR s.source_work_status NOT IN ('รอดำเนินการ','ยังไม่เริ่ม','กำลังดำเนินการ')
   THEN RETURN jsonb_build_object('ok',false,'error','stage_not_dispatch_eligible'); END IF;
 
-  SELECT * INTO a FROM private.work_order_promotion_approvals WHERE work_id=p_work_id;
+  SELECT * INTO a FROM public.work_order_promotion_approvals WHERE work_id=p_work_id FOR SHARE;
   IF NOT FOUND OR a.revoked_at IS NOT NULL OR
      a.source_file_id IS DISTINCT FROM s.source_file_id OR
      a.source_modified_at IS DISTINCT FROM s.source_modified_at OR
