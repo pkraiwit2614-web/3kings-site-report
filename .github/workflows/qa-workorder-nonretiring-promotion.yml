@@ -1,0 +1,39 @@
+name: Work Order per-ID non-retiring promotion SQL QA
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/20261029173000_nonretiring_approved_work_order_promotion.sql'
+      - 'tests/sql/workorder-nonretiring-promotion-isolated.sql'
+      - '.github/workflows/qa-workorder-nonretiring-promotion.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-postgres-17:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: isolated-only
+          POSTGRES_DB: workorder_qa
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d workorder_qa"
+          --health-interval 5s --health-timeout 5s --health-retries 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - name: Test without any Production secrets or active Production data
+        env:
+          PGPASSWORD: isolated-only
+        run: psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5432 -U postgres -d workorder_qa -f tests/sql/workorder-nonretiring-promotion-isolated.sql
+      - name: Release limitation
+        run: |
+          echo "Only an isolated SQL and approval-guard test."
+          echo "No rows were approved on Production; no active Work Order was added."
+          echo "SOP15/16, rollback, authorized owner evidence and production UI are separate gates."
