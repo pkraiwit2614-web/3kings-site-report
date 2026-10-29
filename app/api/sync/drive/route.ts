@@ -303,9 +303,9 @@ async function parseDefects(buffer: Buffer) {
 
   // Doc 167 is one 43-point inspection on a two-room Combine; reject half-pair input.
   const doc167Pair = out.filter(r => r.room_no === 'A404' || r.room_no === 'A405')
-  if (doc167Pair.some(r => defectDoc167Accepted(r.room_no, r.defect_detail))) {
+  if (doc167Pair.some(r => defectDoc167Accepted(r.room_no, typeof r.defect_detail === 'string' ? r.defect_detail : null))) {
     if (doc167Pair.length !== 2 || doc167Pair.some(r =>
-      !defectDoc167Accepted(r.room_no, r.defect_detail) ||
+      !defectDoc167Accepted(r.room_no, typeof r.defect_detail === 'string' ? r.defect_detail : null) ||
       r.defect_detail !== doc167Pair[0].defect_detail ||
       r.current_status !== doc167Pair[0].current_status ||
       r.status_group !== doc167Pair[0].status_group
