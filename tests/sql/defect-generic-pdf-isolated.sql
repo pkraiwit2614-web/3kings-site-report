@@ -6,7 +6,7 @@ DECLARE
   source text;
   future text;
 BEGIN
-  source := 'A404 • Art House Group Doc ID 167 • PDF 28/10/2026 • Defect ใหม่ 43 รายการ' || E'\n' ||
+  source := 'A404 • Art House Group Doc ID 167 • PDF 28/10/2026 • Defect ใหม่ 43 รายการ (เฉพาะจุดตรวจห้อง A404; Combine A404+A405). สถานะ: รอตรวจ/รอดำเนินการ; ยังไม่มีหลักฐานแก้เสร็จหรือ Hotel OK; วันที่เอกสารไม่ใช่วันรับแจ้งจริง.' || E'\n' ||
     (SELECT string_agg('#'||lpad(i::text,2,'0')||' [PFur] verified point '||i,E'\n' ORDER BY i)
      FROM generate_series(1,43) i);
   IF NOT private.verified_pdf_defect_detail('A404',source)
