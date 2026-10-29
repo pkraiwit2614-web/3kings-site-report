@@ -155,6 +155,21 @@ BEGIN
     RAISE EXCEPTION 'DOC167_COMBINE_PAIR_MISMATCH';
   END IF;
 
+
+  -- Fail closed for the entire Combine when either room has an unfinished Web writeback.
+  -- Do not let per-room override protection produce a one-sided PDF detail update.
+  IF EXISTS (
+    SELECT 1 FROM jsonb_array_elements(p_rows) r
+    WHERE upper(r->>'room_no') IN ('A404','A405')
+      AND private.verified_pdf_defect_detail(upper(r->>'room_no'),r->>'defect_detail')
+  ) AND EXISTS (
+    SELECT 1 FROM public.defect_web_overrides w
+    WHERE w.room_no IN ('A404','A405')
+      AND (w.source_sync_state IS DISTINCT FROM 'synced' OR w.source_synced_at IS NULL)
+  ) THEN
+    RAISE EXCEPTION 'DOC167_COMBINE_WEB_OVERRIDE_PENDING';
+  END IF;
+
   FOR r IN SELECT value FROM jsonb_array_elements(p_rows)
   LOOP
     v_room := upper(r->>'room_no');
