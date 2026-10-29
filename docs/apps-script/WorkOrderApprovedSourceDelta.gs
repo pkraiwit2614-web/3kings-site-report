@@ -76,7 +76,7 @@ function workOrderApprovedSourceDelta_(manifestId,dryRun){
       old.building!==row.building||old.contractor!==row.contractor||old.defect_item!==row.defect_item||
       (old.received_date||null)!==(row.payload.received_date||null)||(old.due_date||null)!==(row.payload.due_date||null)||
       (old.supervisor||'')!==row.payload.supervisor||
-      old.next_action!==row.payload.next_action||old.evidence_url!==row.source_evidence_url||
+      (old.next_action||'')!==(row.payload.next_action||'')||old.evidence_url!==row.source_evidence_url||
       old.work_status!==row.source_work_status)throw Error('EXISTING_WORK_ID_CONFLICT');
    return false;
   });
