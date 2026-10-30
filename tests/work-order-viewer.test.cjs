@@ -120,7 +120,12 @@ test('Defect Report highlights only confirmed open Work Orders and never affects
 
 test('Work Order last-change header uses Work Order source editing time, not import time',()=>{
  assert.match(page,/rows\.map\(r=>r\.source_modified_at\)/)
- assert.doesNotMatch(page,/\.rpc\(/)
+ // The only new RPC is explicit per-Work-ID completion, disabled by default.
+ assert.match(page,/NEXT_PUBLIC_WORK_ORDER_COMPLETION_ENABLED==='true'/)
+ assert.match(page,/canComplete=permitted&&canEditDefect\(role\)&&completionEnabled/)
+ assert.match(page,/if\(!canComplete\|\|!confirmRow\|\|saving\)return/)
+ assert.match(page,/\.rpc\('defect_work_order_complete'/)
+ assert.equal([...page.matchAll(/\.rpc\(/g)].length,1)
  assert.match(page,/<span>ข้อมูลอัปเดต<\/span><b>\{dateTimeTH\(latestWorkDetailSourceAt\)\}<\/b>/)
  assert.doesNotMatch(page,/dateTimeTH\(latestImport\)/)
 })
@@ -184,7 +189,12 @@ test('read-only discrepancies use current room classification and preserve role,
  assert.match(page,/finished\(r\.work_status\)/)
  assert.match(page,/<details className="panel wo-reconciliation">/)
  assert.match(css,/body\.report-print-mode\[data-print-report="Above Condo — Work Order"\] \.wo-reconciliation,/)
- assert.doesNotMatch(page,/\.rpc\(|\.insert\(|\.update\(|\.delete\(|\.upsert\(/)
+ // Reconciliation remains read-only; only the separate disabled-by-default
+ // Work-ID completion flow is permitted to call one authorization-checked RPC.
+ assert.match(page,/NEXT_PUBLIC_WORK_ORDER_COMPLETION_ENABLED==='true'/)
+ assert.equal([...page.matchAll(/\.rpc\(/g)].length,1)
+ assert.match(page,/\.rpc\('defect_work_order_complete'/)
+ assert.doesNotMatch(page,/\.insert\(|\.update\(|\.delete\(|\.upsert\(/)
 })
 
 test('handover-complete rooms and Combine groups with an open active Work ID remain printable',()=>{
