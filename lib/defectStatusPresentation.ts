@@ -5,6 +5,13 @@ export type DefectStatusView={
   hotel_participation:string|null
 }
 
+/** Map verified legacy/source aliases to existing Flow categories for display only. */
+export function canonicalDefectStatusGroup(group:string|null,hotelParticipation:string|null):string|null{
+  if(group==='Hotel - Completed / Awaiting Hotel Inspection'&&hotelParticipation==='ร่วมโรงแรม')return 'Hotel - Awaiting Check'
+  if(group==='Handover Complete'&&hotelParticipation==='ไม่ร่วมโรงแรม')return 'Non-Hotel - Handover Complete'
+  return group
+}
+
 export function statusTone(r:DefectStatusView):'danger'|'warn'|'good'|'neutral'{
   if(r.status_group==='Hotel - Incomplete')return 'danger'
   if(r.status_group==='Hotel - Awaiting Check'||r.status_group==='Non-Hotel - Pending Handover')return 'warn'
