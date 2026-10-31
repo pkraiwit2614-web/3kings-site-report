@@ -124,3 +124,17 @@ test('rate limit, CSRF-safe logout, unauthenticated source and method guards',as
  const unauthorized=await f.run(f.request('/api/source'));assert.equal(unauthorized.status,401);
  const wrongMethod=await f.run(f.request('/api/source','','POST'));assert.equal(wrongMethod.status,405);
 });
+
+test('token failures are classified without exposing response details or retrying one-time codes',async()=>{
+ const env={GOOGLE_CLIENT_ID:'test.apps.googleusercontent.com',GOOGLE_CLIENT_SECRET:'fake-secret'};
+ const params={grant_type:'authorization_code',code:'one-time-private-code',code_verifier:'test-verifier'};
+ for(const [name,expected] of [['TypeError','TOKEN_REQUEST_NETWORK'],['TimeoutError','TOKEN_REQUEST_TIMEOUT']]){
+  let calls=0;
+  const fetchFn=async()=>{calls++;const error=new Error('private oauth credential');error.name=name;throw error;};
+  await assert.rejects(bridge.exchange(params,env,fetchFn),e=>e.message===expected&&!e.message.includes('private'));
+  assert.equal(calls,1);
+ }
+ await assert.rejects(bridge.exchange(params,env,async()=>({ok:true,json:async()=>{throw Error('raw private response');}})),/TOKEN_RESPONSE_INVALID/);
+ await assert.rejects(bridge.exchange(params,env,async()=>({ok:false,status:401})),/TOKEN_EXCHANGE/);
+ await assert.rejects(bridge.exchange(params,env,async()=>({ok:true,json:async()=>({access_token:'private',expires_in:3600,scope:12})})),/SCOPE_MISMATCH/);
+});
