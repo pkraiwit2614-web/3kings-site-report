@@ -16,7 +16,7 @@ test('Defect Report header presentation is unchanged; only timestamp source is r
 test('live Defect records still load independently of timestamp read',()=>{
   assert.match(page,/Promise\.all\(\[/)
   assert.match(page,/requireSuccessfulReads\(\[\{error:roomRead\.error\}\]\)/)
-  assert.match(page,/setRows\(\(roomRead\.data\|\|\[\]\) as RoomRow\[\]\)/)
+  assert.match(page,/setRows\(\(\(roomRead\.data\|\|\[\]\) as RoomRow\[\]\)\.map\(row=>\(\{\.\.\.row,status_group:canonicalDefectStatusGroup\(row\.status_group,row\.hotel_participation\)\}\)\)\)/)
   assert.match(page,/if\(!alive\|\|signal\.aborted\)return/)
   assert.match(page,/supabase\.channel\('defect-report-status'\)/)
 })
