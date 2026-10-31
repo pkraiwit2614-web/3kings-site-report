@@ -164,6 +164,8 @@ jobs:
         run: node tests/google-calendar-live-edit.test.cjs
       - name: Calendar procurement date/permission guard regression
         run: node tests/calendar-procurement-integration.test.cjs
+      - name: Google Calendar auto sync SOP 12 regression
+        run: node --test tests/google-calendar-auto-sync.test.cjs
 
       # Validate live Materials print table columns, repeating headers and page-width allocation.
       - name: Materials print pagination regression
