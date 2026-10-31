@@ -128,6 +128,8 @@ test('received Defect date is read per Work ID, including separate rounds in the
  assert.match(page,/received_date:string\|null/)
  assert.match(page,/defect_work_order_snapshot'\)\.select\('work_id,room_group,building,contractor,defect_item,next_action,received_date,/)
  assert.match(page,/const noticeForRow=\(r:WorkOrder\):string\|null=>r\.received_date/)
+ assert.match(page,/next_action,received_date,work_status,source_modified_at,imported_at'\)\.eq\('source_active',false\)/)
+ assert.match(page,/รับแจ้ง Defect: \{noticeDateTH\(r\.received_date\)\}/)
  assert.match(page,/select\('room_no,status_group'\)/)
  assert.doesNotMatch(page,/HOTEL_NOTICE_DATE_BY_ROOM|hotelNoticeISO|noticeMap/)
  assert.match(page,/วันที่รับแจ้ง Defect/)
