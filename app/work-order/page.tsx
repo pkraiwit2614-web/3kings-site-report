@@ -16,26 +16,11 @@ type WorkOrder={
   evidence_url:string|null;qa_status:string|null;conflict_note:string|null;
   source_sync_note:string|null;source_modified_at:string;imported_at:string;
 }
-type RoomStatus={room_no:string;status_group:string|null;latest_source:string|null;source_note:string|null}
+type RoomStatus={room_no:string;status_group:string|null}
 type Quick='ALL'|'A'|'B'|'OVERDUE'
-const HOTEL_NOTICE_DATE_BY_ROOM:Record<string,string>={
- A202:'2026-09-21',A211:'2026-09-24',A313:'2026-09-26',A314:'2026-09-26',A326:'2026-09-26',
- A410:'2026-09-27',A412:'2026-09-27',A501:'2026-09-16',A616:'2026-09-27',B212:'2026-09-22',B214:'2026-09-23'
-}
-// Match the source and fallback dates already used in Defect Report; never infer from Excel's due_date.
-function hotelNoticeISO(r:RoomStatus|undefined):string|null{
- if(!r)return null
- const sourceText=[r.latest_source,r.source_note].filter(Boolean).join(' ')
- const m=sourceText.match(/(\d{1,2})\/(\d{1,2})\/(20\d{2})/)
- if(m){
-  const year=Number(m[3]),month=Number(m[2]),day=Number(m[1])
-  const checked=new Date(Date.UTC(year,month-1,day))
-  if(checked.getUTCFullYear()===year&&checked.getUTCMonth()===month-1&&checked.getUTCDate()===day)
-   return String(year)+'-'+String(month).padStart(2,'0')+'-'+String(day).padStart(2,'0')
- }
- return HOTEL_NOTICE_DATE_BY_ROOM[r.room_no]||null
-}
-const noticeDateTH=(iso:string|null)=>iso?iso.slice(8,10)+'/'+iso.slice(5,7)+'/'+String(Number(iso.slice(0,4))+543).slice(-2):'-'
+// A verified received date belongs to its Work ID, not to every defect in the room.
+// A document date or room-status note must never substitute for a missing Work ID date.
+const noticeDateTH=(iso:string|null)=>iso?iso.slice(8,10)+'/'+iso.slice(5,7)+'/'+String(Number(iso.slice(0,4))+543).slice(-2):'รอยืนยัน'
 function todayInBangkok():string{
  const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Bangkok',day:'2-digit',month:'2-digit',year:'numeric'}).formatToParts(new Date())
  const v=(type:string)=>parts.find(p=>p.type===type)?.value||''
@@ -102,8 +87,8 @@ export default function WorkOrderViewer(){
   const sb=getSupabase()
   const [order,master,inactive]=await Promise.all([
    sb.from('defect_work_order_snapshot').select('work_id,room_group,building,contractor,defect_item,next_action,received_date,due_date,work_status,evidence_url,qa_status,conflict_note,source_sync_note,source_modified_at,imported_at').eq('source_active',true).order('work_id'),
-   sb.from('condo_room_status').select('room_no,status_group,latest_source,source_note'),
-   sb.from('defect_work_order_snapshot').select('work_id,room_group,building,contractor,defect_item,next_action,work_status,source_modified_at,imported_at').eq('source_active',false).order('work_id')
+   sb.from('condo_room_status').select('room_no,status_group'),
+   sb.from('defect_work_order_snapshot').select('work_id,room_group,building,contractor,defect_item,next_action,received_date,work_status,source_modified_at,imported_at').eq('source_active',false).order('work_id')
   ])
   if(order.error||master.error||inactive.error)throw new Error(order.error?.message||master.error?.message||inactive.error?.message||'อ่านข้อมูลไม่สำเร็จ')
   setRows((order.data||[]) as WorkOrder[])
@@ -122,9 +107,8 @@ export default function WorkOrderViewer(){
  },[reload])
 
  const roomMap=useMemo(()=>new Map(rooms.map(r=>[r.room_no,r.status_group])),[rooms])
- const noticeMap=useMemo(()=>new Map(rooms.map(r=>[r.room_no,hotelNoticeISO(r)])),[rooms])
  const todayISO=todayInBangkok()
- const noticeForRow=(r:WorkOrder):string|null=>ids(r.room_group).map(room=>noticeMap.get(room)||null).filter((v):v is string=>Boolean(v)).sort()[0]||null
+ const noticeForRow=(r:WorkOrder):string|null=>r.received_date
  const daysForRow=(r:WorkOrder)=>elapsedCalendarDays(noticeForRow(r),todayISO)
  // Dispatch is defined by an active, unfinished Work ID, not by room handover state.
  // The read query already restricts this collection to source_active=true.
@@ -151,7 +135,7 @@ export default function WorkOrderViewer(){
   if(quick==='A'||quick==='B'){if(r.building!==quick)return false}
   if(quick==='OVERDUE'&&!((daysForRow(r)??0)>7))return false
   return true
- }).sort((a,b)=>a.contractor.localeCompare(b.contractor,'th')||a.room_group.localeCompare(b.room_group)||a.work_id.localeCompare(b.work_id)),[inScope,quick,noticeMap,todayISO])
+ }).sort((a,b)=>a.contractor.localeCompare(b.contractor,'th')||a.room_group.localeCompare(b.room_group)||a.work_id.localeCompare(b.work_id)),[inScope,quick,todayISO])
  const latestWorkDetailSourceAt=rows.map(r=>r.source_modified_at).filter(Boolean).sort().at(-1)||null
  const kpiRows:Record<Quick,WorkOrder[]>={
   ALL:inScope,A:inScope.filter(r=>r.building==='A'),B:inScope.filter(r=>r.building==='B'),
@@ -181,10 +165,10 @@ export default function WorkOrderViewer(){
     <summary>ตรวจความต่าง Excel ↔ Defect: {reviewLostFromDispatch.length} งานค้างไม่อยู่ในชุดแจกงาน · {reviewNeedsRoomRecheck.length} งานค้างในห้องตรวจรับแล้ว/รอตรวจสถานะ</summary>
     <p>งานที่ยังไม่ปิดในทะเบียน Active จะแสดงในรายการและใบพิมพ์เสมอ แม้ห้องส่งมอบแล้ว ข้อมูลส่วนนี้ใช้ตรวจสอบเท่านั้น ไม่เปิดงานหรือปิดงานจากเว็บโดยอัตโนมัติ</p>
     {reviewLostFromDispatch.length>0&&<div><b>ค้างในทะเบียนเดิม แต่ถูกถอดจากรายการ Active ใน Excel</b>
-      <ul>{reviewLostFromDispatch.map(r=><li key={r.work_id}><b>{groupLabel(r.room_group)}</b> · {r.work_id} · {r.defect_item} · ตรวจชีตใบแจกงานต้นฉบับก่อนเปิดกลับ</li>)}</ul>
+      <ul>{reviewLostFromDispatch.map(r=><li key={r.work_id}><b>{groupLabel(r.room_group)}</b> · {r.work_id} · {r.defect_item} · รับแจ้ง Defect: {noticeDateTH(r.received_date)} · ตรวจชีตใบแจกงานต้นฉบับก่อนเปิดกลับ</li>)}</ul>
     </div>}
     {reviewNeedsRoomRecheck.length>0&&<div><b>งานค้างในห้องที่ตรวจรับแล้ว หรือยังตรวจสถานะไม่ได้ (ยังแสดงในใบติดตามงาน)</b>
-      <ul>{reviewNeedsRoomRecheck.map(r=><li key={r.work_id}><b>{groupLabel(r.room_group)}</b> · {r.work_id} · {r.defect_item} · ยืนยันสิทธิ์เข้าห้องและตรวจรายการก่อนเข้าทำ</li>)}</ul>
+      <ul>{reviewNeedsRoomRecheck.map(r=><li key={r.work_id}><b>{groupLabel(r.room_group)}</b> · {r.work_id} · {r.defect_item} · รับแจ้ง Defect: {noticeDateTH(r.received_date)} · ยืนยันสิทธิ์เข้าห้องและตรวจรายการก่อนเข้าทำ</li>)}</ul>
     </div>}
    </details>
    <section className="panel wo-filters">
@@ -201,12 +185,12 @@ export default function WorkOrderViewer(){
    <section className="panel wo-sheet">
     <div className="wo-sheet-title"><h2>รายการสำหรับตรวจและแจกงาน</h2><span>แสดง {filtered.length} รายการ</span></div>
     <div className="table-wrap wo-table-wrap"><table className="wo-table"><thead><tr>
-     <th>ห้อง / Work ID</th><th>รับแจ้ง</th><th>รายละเอียด Defect</th><th>งานที่ต้องทำต่อ</th><th>ผู้รับเหมา</th>
+     <th>ห้อง / Work ID</th><th>วันที่รับแจ้ง Defect</th><th>รายละเอียด Defect</th><th>งานที่ต้องทำต่อ</th><th>ผู้รับเหมา</th>
      <th>สถานะงาน / ตรวจสอบ</th><th className="wo-evidence-col">หลักฐาน</th><th className="wo-print-only">ตรวจงาน / ลงชื่อ</th>
     </tr></thead><tbody>
      {filtered.map(r=>{const notice=noticeForRow(r);const elapsed=elapsedCalendarDays(notice,todayISO);return <tr key={r.work_id}>
       <td><div className="wo-room-label"><b>{groupLabel(r.room_group)}</b>{isCombine(r.room_group)&&<span className="wo-combine-code" title="ห้อง Combine">c</span>}</div>{isCombine(r.room_group)&&<span className="wo-combine-badge" title="ห้อง Combine ใช้งานชุดเดียวกัน">Combine: {ids(r.room_group).join(' + ')}</span>}<small>{r.work_id}</small></td>
-      <td><small>วันที่แจ้ง : {noticeDateTH(notice)}</small><small>เหลือเวลา : {elapsed===null?'-':elapsed+' วัน'}</small>{elapsed!==null&&elapsed>7?<small className="wo-overdue">เกินกำหนด</small>:elapsed!==null&&elapsed>4?<small className="wo-warning">{warningText(elapsed)}</small>:null}</td>
+      <td><small>วันที่รับแจ้ง Defect: {noticeDateTH(notice)}</small><small>เหลือเวลา : {elapsed===null?'-':elapsed+' วัน'}</small>{elapsed!==null&&elapsed>7?<small className="wo-overdue">เกินกำหนด</small>:elapsed!==null&&elapsed>4?<small className="wo-warning">{warningText(elapsed)}</small>:null}</td>
       <td>{r.defect_item}</td>
       <td>{r.next_action||'รอระบุรายละเอียด'}</td>
       <td><b>{r.contractor}</b></td>
