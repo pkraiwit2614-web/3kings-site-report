@@ -78,10 +78,20 @@ function assertScopes(value,grantType){
  if(!scopes.has(READ_SCOPE)||![...scopes].every(s=>allowed.has(s)))throw Error('SCOPE_MISMATCH');
 }
 async function exchange(params,env,fetchFn){
- const response=await fetchFn(TOKEN_URL,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({...params,client_id:env.GOOGLE_CLIENT_ID,client_secret:env.GOOGLE_CLIENT_SECRET}),redirect:'error',signal:AbortSignal.timeout(12000)});
+ // Classify failures without echoing Google token responses, request bodies, codes, or secrets.
+ // An authorization code is single-use: never automatically retry a failed exchange.
+ let response;
+ try{
+  response=await fetchFn(TOKEN_URL,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({...params,client_id:env.GOOGLE_CLIENT_ID,client_secret:env.GOOGLE_CLIENT_SECRET}),redirect:'error',signal:AbortSignal.timeout(12000)});
+ }catch(error){
+  throw Error(error?.name==='TimeoutError'||error?.name==='AbortError'?'TOKEN_REQUEST_TIMEOUT':'TOKEN_REQUEST_NETWORK');
+ }
+ if(!response||typeof response.ok!=='boolean')throw Error('TOKEN_RESPONSE_INVALID');
  if(!response.ok)throw Error('TOKEN_EXCHANGE');
- const data=await response.json();
- if(typeof data.access_token!=='string'||!data.access_token||!Number.isFinite(data.expires_in)||data.expires_in<30)throw Error('TOKEN_INVALID');
+ let data;
+ try{data=await response.json();}catch{throw Error('TOKEN_RESPONSE_INVALID');}
+ if(!data||typeof data!=='object'||typeof data.access_token!=='string'||!data.access_token||!Number.isFinite(data.expires_in)||data.expires_in<30)throw Error('TOKEN_INVALID');
+ if(data.scope!==undefined&&typeof data.scope!=='string')throw Error('SCOPE_MISMATCH');
  assertScopes(data.scope,params.grant_type);
  return data;
 }
@@ -181,6 +191,6 @@ async function handle(request,env,{crypto=globalThis.crypto,fetchFn=globalThis.f
    }
   }
   return json({mode:'STAGING_ONLY',source:'GAS_API_HEAD_NOT_DEPLOYMENT',scope:READ_SCOPE,files:results});
- }catch(error){const allow=new Set(['RATE_LIMIT','TOKEN_EXCHANGE','TOKEN_INVALID','SCOPE_MISMATCH','ID_TOKEN','ID_TOKEN_FORMAT','ID_TOKEN_PARSE','ID_TOKEN_ALG','ID_TOKEN_CLAIMS','GOOGLE_JWKS','GOOGLE_KEY','GOOGLE_SIGNATURE','NO_REFRESH_TOKEN','GAS_READ_FAILED','GAS_CONTENT_INVALID','AMBIGUOUS_REMOTE','INVALID_REMOTE_SOURCE']);const phase=url.pathname==='/auth/start'?'START':url.pathname==='/auth/callback'?'CALLBACK':'API';return fail('OAUTH_'+phase+'_'+(allow.has(error?.message)?error.message:(phase==='CALLBACK'?'INTERNAL_'+callbackStage:'INTERNAL')),502);}
+ }catch(error){const allow=new Set(['RATE_LIMIT','TOKEN_EXCHANGE','TOKEN_REQUEST_TIMEOUT','TOKEN_REQUEST_NETWORK','TOKEN_RESPONSE_INVALID','TOKEN_INVALID','SCOPE_MISMATCH','ID_TOKEN','ID_TOKEN_FORMAT','ID_TOKEN_PARSE','ID_TOKEN_ALG','ID_TOKEN_CLAIMS','GOOGLE_JWKS','GOOGLE_KEY','GOOGLE_SIGNATURE','NO_REFRESH_TOKEN','GAS_READ_FAILED','GAS_CONTENT_INVALID','AMBIGUOUS_REMOTE','INVALID_REMOTE_SOURCE']);const phase=url.pathname==='/auth/start'?'START':url.pathname==='/auth/callback'?'CALLBACK':'API';return fail('OAUTH_'+phase+'_'+(allow.has(error?.message)?error.message:(phase==='CALLBACK'?'INTERNAL_'+callbackStage:'INTERNAL')),502);}
 }
 module.exports={READ_SCOPE,SCOPES,AUTH_URL,TOKEN_URL,JWKS_URL,STATE_COOKIE,SESSION_COOKIE,random,sha,shaHex,config,verifyGoogleIdToken,seal,unseal,assertScopes,exchange,authenticatedOwner,handle};
