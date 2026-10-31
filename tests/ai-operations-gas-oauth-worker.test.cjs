@@ -37,6 +37,7 @@ async function fixture(){
   const sig=await crypto.subtle.sign('RSASSA-PKCS1-v1_5',keys.privateKey,new TextEncoder().encode(h+'.'+p));
   return h+'.'+p+'.'+b64(sig);
  }
+ let remoteFiles=[{name:'Remote',type:'SERVER_JS',source:mockSource}];
  const fetchFn=async(url,opts)=>{
   calls.push({url,method:opts.method,redirect:opts.redirect});
   if(url===bridge.JWKS_URL)return{ok:true,json:async()=>({keys:[jwk]})};
@@ -45,7 +46,7 @@ async function fixture(){
    if(grant==='authorization_code')return{ok:true,json:async()=>({access_token:'fake-access',refresh_token:'fake-refresh',id_token:await jwt(),expires_in:3600,scope:scopeOverride||bridge.SCOPES})};
    if(grant==='refresh_token')return{ok:true,json:async()=>({access_token:'fake-access-refresh',expires_in:3600,scope:bridge.SCOPES})};
   }
-  if(url.startsWith('https://script.googleapis.com/v1/projects/'))return{ok:true,json:async()=>({files:[{name:'Remote',type:'SERVER_JS',source:mockSource}]})};
+  if(url.startsWith('https://script.googleapis.com/v1/projects/'))return{ok:true,json:async()=>({files:remoteFiles})};
   throw Error('unexpected external call');
  };
  const request=(path,cookie='',method='GET',extra={})=>new Request(origin+path,{method,headers:{...(cookie?{cookie}:{}),...extra}});
@@ -61,7 +62,7 @@ async function fixture(){
  async function callback(flow,cookie=flow.stateCookie,t=now){
   return run(request('/auth/callback?state='+encodeURIComponent(flow.state)+'&code=fake-code',cookie),t);
  }
- return{env,states,sessions,tokens,rates,calls,request,run,start,callback,setClaims:x=>{claimsOverride=x;},setScope:x=>{scopeOverride=x;}};
+ return{env,states,sessions,tokens,rates,calls,request,run,start,callback,setClaims:x=>{claimsOverride=x;},setScope:x=>{scopeOverride=x;},setRemoteFiles:x=>{remoteFiles=x;}};
 }
 test('PKCE RFC7636 and minimal readonly OAuth scope',async()=>{
  assert.equal(await bridge.sha('dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk',crypto),'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM');
@@ -104,6 +105,27 @@ test('OAuth owner flow: state cookie, verified Google JWT, encrypted token, sess
  assert.ok(f.calls.every(c=>c.redirect==='manual'), 'all Google requests must be non-following in Cloudflare Workers');
  const replay=await f.callback(flow);assert.equal(replay.status,400);
  const noCookie=await f.run(f.request('/api/source'));assert.equal(noCookie.status,401);
+});
+test('owner-confirmed SmartSyncDefects double extension maps only to allowlisted legacy name',async()=>{
+ const f=await fixture(),flow=await f.start();
+ const res=await f.callback(flow);assert.equal(res.status,303);
+ const sessionCookie=res.headers.getSetCookie().find(s=>s.startsWith(bridge.SESSION_COOKIE+'=')).split(';')[0];
+ f.env.TARGETS_JSON=JSON.stringify([{scriptId,files:['SmartSyncDefects_v1.3']}]);
+ f.setRemoteFiles([{name:'SmartSyncDefects_v1.3.gs',type:'SERVER_JS',source:mockSource}]);
+ const found=await f.run(f.request('/api/source',sessionCookie));
+ assert.equal(found.status,200);
+ const file=(await found.json()).files[0];
+ assert.equal(file.remoteFile,'SmartSyncDefects_v1.3');
+ assert.equal(file.status,'FOUND');
+ assert.equal(file.sha256,await bridge.shaHex(mockSource,crypto));
+ f.env.TARGETS_JSON=JSON.stringify([{scriptId,files:['DifferentName']}]);
+ const different=await f.run(f.request('/api/source',sessionCookie));
+ assert.equal((await different.json()).files[0].status,'NOT_FOUND');
+ f.env.TARGETS_JSON=JSON.stringify([{scriptId,files:['SmartSyncDefects_v1.3']}]);
+ f.setRemoteFiles([{name:'SmartSyncDefects_v1.3.gs',type:'SERVER_JS',source:mockSource},{name:'SmartSyncDefects_v1.3',type:'SERVER_JS',source:mockSource}]);
+ const ambiguous=await f.run(f.request('/api/source',sessionCookie));
+ assert.equal(ambiguous.status,502);
+ assert.equal((await ambiguous.json()).error,'OAUTH_API_AMBIGUOUS_REMOTE');
 });
 test('wrong Google email cannot store tokens or create sessions',async()=>{
  const f=await fixture(),flow=await f.start();
