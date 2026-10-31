@@ -84,6 +84,11 @@ test('OAuth owner flow: state cookie, verified Google JWT, encrypted token, sess
  assert.equal(flow.url.searchParams.get('redirect_uri'),origin+'/auth/callback');
  const res=await f.callback(flow);assert.equal(res.status,303);
  const cookies=res.headers.getSetCookie();assert.ok(cookies.some(s=>s.includes(bridge.SESSION_COOKIE)));
+ const sessionHeader=cookies.find(s=>s.startsWith(bridge.SESSION_COOKIE+'='));
+ assert.ok(sessionHeader.includes('SameSite=Lax'), 'OAuth callback session survives safe cross-site top-level GET');
+ assert.ok(sessionHeader.includes('Secure')&&sessionHeader.includes('HttpOnly')&&sessionHeader.includes('Path=/'));
+ assert.ok(sessionHeader.includes('Max-Age=3600'));
+ assert.ok(!sessionHeader.includes('SameSite=None'));
  const sessionCookie=cookies.find(s=>s.startsWith(bridge.SESSION_COOKIE+'=')).split(';')[0];
  assert.equal(f.tokens.size,1);assert.equal(f.sessions.size,1);
  assert.ok(!JSON.stringify([...f.tokens]).includes('fake-refresh'));
