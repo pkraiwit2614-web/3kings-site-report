@@ -10,7 +10,7 @@ import DefectCombineRoomEnhancer from '@/components/DefectCombineRoomEnhancer'
 import DefectReportTabs from '@/components/DefectReportTabs'
 import {hotelRoomLabel,hotelRoomMembers,normalizeHotelRoom} from '@/lib/hotelRoomGroups'
 import {flowCombineKey} from '@/lib/flowCombineOne'
-import {DEFECT_AWAITING_ACCEPTANCE_LABEL,statusLabel,statusTone} from '@/lib/defectStatusPresentation'
+import {DEFECT_AWAITING_ACCEPTANCE_LABEL,canonicalDefectStatusGroup,statusLabel,statusTone} from '@/lib/defectStatusPresentation'
 import {summarizeDefectDetail} from '@/lib/defectDetailSummary'
 import DefectInputPanel from '@/components/DefectInputPanel'
 import { getSupabase } from '@/lib/supabase'
@@ -170,7 +170,7 @@ export default function DefectDetailPage(){
         ])
         requireSuccessfulReads([{error:roomRead.error}])
         if(!alive||signal.aborted)return
-        setRows((roomRead.data||[]) as RoomRow[])
+        setRows(((roomRead.data||[]) as RoomRow[]).map(row=>({...row,status_group:canonicalDefectStatusGroup(row.status_group,row.hotel_participation)})))
         // A failed timestamp read must not substitute a stale source-file date.
         setLatestDefectChangeAt(!latestChangeRead.error && typeof latestChangeRead.data==='string'?latestChangeRead.data:null)
         setLoadError(false)
