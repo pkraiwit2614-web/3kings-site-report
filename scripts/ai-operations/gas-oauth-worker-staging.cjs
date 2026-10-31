@@ -187,7 +187,11 @@ async function handle(request,env,{crypto=globalThis.crypto,fetchFn=globalThis.f
     cache.set(t.scriptId,content.files);
    }
    for(const name of t.files){
-    const matches=cache.get(t.scriptId).filter(f=>f.name===name&&f.type==='SERVER_JS');
+    // The owner-confirmed Apps Script Editor shows SmartSyncDefects_v1.3.gs.gs:
+    // its GAS API File.name is SmartSyncDefects_v1.3.gs (Editor adds the final .gs).
+    // Preserve the existing secret allowlist; alias only this one exact legacy target.
+    const matches=cache.get(t.scriptId).filter(f=>f.type==='SERVER_JS'&&
+     (f.name===name||(name==='SmartSyncDefects_v1.3'&&f.name==='SmartSyncDefects_v1.3.gs')));
     if(matches.length>1)throw Error('AMBIGUOUS_REMOTE');
     if(matches.length&&typeof matches[0].source!=='string')throw Error('INVALID_REMOTE_SOURCE');
     results.push({remoteFile:name,status:matches.length?'FOUND':'NOT_FOUND',sha256:matches.length?await shaHex(matches[0].source,crypto):null});
