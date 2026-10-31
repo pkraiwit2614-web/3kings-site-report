@@ -52,7 +52,8 @@ async function verifyGoogleIdToken(token,env,nonce,fetchFn,crypto,now){
  try{header=JSON.parse(dec.decode(decode(parts[0])));payload=JSON.parse(dec.decode(decode(parts[1])));}catch{throw Error('ID_TOKEN_PARSE');}
  if(header.alg!=='RS256'||typeof header.kid!=='string'||header.kid.length>256)throw Error('ID_TOKEN_ALG');
  if(!['accounts.google.com','https://accounts.google.com'].includes(payload.iss)||payload.aud!==env.GOOGLE_CLIENT_ID||!Number.isFinite(payload.exp)||payload.exp<=now||!Number.isFinite(payload.iat)||payload.iat>now+60||payload.iat<now-3600||payload.nonce!==nonce||payload.email_verified!==true||typeof payload.sub!=='string'||!payload.sub||payload.email?.toLowerCase()!==env.ALLOWED_EMAIL.toLowerCase())throw Error('ID_TOKEN_CLAIMS');
- const response=await fetchFn(JWKS_URL,{method:'GET',redirect:'error',signal:AbortSignal.timeout(12000)});
+ // Cloudflare Workers only supports follow/manual. Refuse all redirects rather than following them.
+ const response=await fetchFn(JWKS_URL,{method:'GET',redirect:'manual',signal:AbortSignal.timeout(12000)});
  if(!response.ok)throw Error('GOOGLE_JWKS');
  const keys=(await response.json()).keys;
  const jwk=Array.isArray(keys)?keys.find(k=>k.kid===header.kid&&k.kty==='RSA'&&(!k.alg||k.alg==='RS256')&&(!k.use||k.use==='sig')):null;
@@ -82,7 +83,7 @@ async function exchange(params,env,fetchFn){
  // An authorization code is single-use: never automatically retry a failed exchange.
  let response;
  try{
-  response=await fetchFn(TOKEN_URL,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({...params,client_id:env.GOOGLE_CLIENT_ID,client_secret:env.GOOGLE_CLIENT_SECRET}),redirect:'error',signal:AbortSignal.timeout(12000)});
+  response=await fetchFn(TOKEN_URL,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({...params,client_id:env.GOOGLE_CLIENT_ID,client_secret:env.GOOGLE_CLIENT_SECRET}),redirect:'manual',signal:AbortSignal.timeout(12000)});
  }catch(error){
   throw Error(error?.name==='TimeoutError'||error?.name==='AbortError'?'TOKEN_REQUEST_TIMEOUT':'TOKEN_REQUEST_NETWORK');
  }
@@ -177,7 +178,7 @@ async function handle(request,env,{crypto=globalThis.crypto,fetchFn=globalThis.f
   const results=[],cache=new Map();
   for(const t of targets){
    if(!cache.has(t.scriptId)){
-    const api=await fetchFn('https://script.googleapis.com/v1/projects/'+encodeURIComponent(t.scriptId)+'/content',{method:'GET',headers:{authorization:'Bearer '+data.access_token,accept:'application/json'},redirect:'error',signal:AbortSignal.timeout(12000)});
+    const api=await fetchFn('https://script.googleapis.com/v1/projects/'+encodeURIComponent(t.scriptId)+'/content',{method:'GET',headers:{authorization:'Bearer '+data.access_token,accept:'application/json'},redirect:'manual',signal:AbortSignal.timeout(12000)});
     if(!api.ok)throw Error('GAS_READ_FAILED');
     const content=await api.json();
     if(!Array.isArray(content.files))throw Error('GAS_CONTENT_INVALID');
