@@ -8,7 +8,8 @@ import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
 import { getSupabase } from '@/lib/supabase'
 import {flowCombineKey} from '@/lib/flowCombineOne'
-import {DEFECT_AWAITING_ACCEPTANCE_LABEL,canonicalDefectStatusGroup} from '@/lib/defectStatusPresentation'
+import {DEFECT_AWAITING_ACCEPTANCE_LABEL} from '@/lib/defectStatusPresentation'
+import {canonicalDefectStatusGroup} from '@/lib/defectStatusPresentation'
 import {embedRenderedSvgFonts} from '@/lib/embedRenderedSvgFonts'
 
 type FlowRow={
