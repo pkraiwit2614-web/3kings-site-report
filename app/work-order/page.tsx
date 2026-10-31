@@ -88,7 +88,7 @@ export default function WorkOrderViewer(){
   const [order,master,inactive]=await Promise.all([
    sb.from('defect_work_order_snapshot').select('work_id,room_group,building,contractor,defect_item,next_action,received_date,due_date,work_status,evidence_url,qa_status,conflict_note,source_sync_note,source_modified_at,imported_at').eq('source_active',true).order('work_id'),
    sb.from('condo_room_status').select('room_no,status_group'),
-   sb.from('defect_work_order_snapshot').select('work_id,room_group,building,contractor,defect_item,next_action,work_status,source_modified_at,imported_at').eq('source_active',false).order('work_id')
+   sb.from('defect_work_order_snapshot').select('work_id,room_group,building,contractor,defect_item,next_action,received_date,work_status,source_modified_at,imported_at').eq('source_active',false).order('work_id')
   ])
   if(order.error||master.error||inactive.error)throw new Error(order.error?.message||master.error?.message||inactive.error?.message||'อ่านข้อมูลไม่สำเร็จ')
   setRows((order.data||[]) as WorkOrder[])
@@ -165,10 +165,10 @@ export default function WorkOrderViewer(){
     <summary>ตรวจความต่าง Excel ↔ Defect: {reviewLostFromDispatch.length} งานค้างไม่อยู่ในชุดแจกงาน · {reviewNeedsRoomRecheck.length} งานค้างในห้องตรวจรับแล้ว/รอตรวจสถานะ</summary>
     <p>งานที่ยังไม่ปิดในทะเบียน Active จะแสดงในรายการและใบพิมพ์เสมอ แม้ห้องส่งมอบแล้ว ข้อมูลส่วนนี้ใช้ตรวจสอบเท่านั้น ไม่เปิดงานหรือปิดงานจากเว็บโดยอัตโนมัติ</p>
     {reviewLostFromDispatch.length>0&&<div><b>ค้างในทะเบียนเดิม แต่ถูกถอดจากรายการ Active ใน Excel</b>
-      <ul>{reviewLostFromDispatch.map(r=><li key={r.work_id}><b>{groupLabel(r.room_group)}</b> · {r.work_id} · {r.defect_item} · ตรวจชีตใบแจกงานต้นฉบับก่อนเปิดกลับ</li>)}</ul>
+      <ul>{reviewLostFromDispatch.map(r=><li key={r.work_id}><b>{groupLabel(r.room_group)}</b> · {r.work_id} · {r.defect_item} · รับแจ้ง Defect: {noticeDateTH(r.received_date)} · ตรวจชีตใบแจกงานต้นฉบับก่อนเปิดกลับ</li>)}</ul>
     </div>}
     {reviewNeedsRoomRecheck.length>0&&<div><b>งานค้างในห้องที่ตรวจรับแล้ว หรือยังตรวจสถานะไม่ได้ (ยังแสดงในใบติดตามงาน)</b>
-      <ul>{reviewNeedsRoomRecheck.map(r=><li key={r.work_id}><b>{groupLabel(r.room_group)}</b> · {r.work_id} · {r.defect_item} · ยืนยันสิทธิ์เข้าห้องและตรวจรายการก่อนเข้าทำ</li>)}</ul>
+      <ul>{reviewNeedsRoomRecheck.map(r=><li key={r.work_id}><b>{groupLabel(r.room_group)}</b> · {r.work_id} · {r.defect_item} · รับแจ้ง Defect: {noticeDateTH(r.received_date)} · ยืนยันสิทธิ์เข้าห้องและตรวจรายการก่อนเข้าทำ</li>)}</ul>
     </div>}
    </details>
    <section className="panel wo-filters">
