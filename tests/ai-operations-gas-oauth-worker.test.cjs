@@ -38,7 +38,7 @@ async function fixture(){
   return h+'.'+p+'.'+b64(sig);
  }
  const fetchFn=async(url,opts)=>{
-  calls.push({url,method:opts.method});
+  calls.push({url,method:opts.method,redirect:opts.redirect});
   if(url===bridge.JWKS_URL)return{ok:true,json:async()=>({keys:[jwk]})};
   if(url===bridge.TOKEN_URL){
    const grant=new URLSearchParams(opts.body).get('grant_type');
@@ -96,6 +96,7 @@ test('OAuth owner flow: state cookie, verified Google JWT, encrypted token, sess
  assert.equal(body.files[0].sha256,await bridge.shaHex(mockSource,crypto));
  assert.ok(!JSON.stringify(body).includes(scriptId));assert.ok(!JSON.stringify(body).includes(mockSource));
  assert.ok(f.calls.filter(c=>c.url.startsWith('https://script.googleapis.com')).every(c=>c.method==='GET'));
+ assert.ok(f.calls.every(c=>c.redirect==='manual'), 'all Google requests must be non-following in Cloudflare Workers');
  const replay=await f.callback(flow);assert.equal(replay.status,400);
  const noCookie=await f.run(f.request('/api/source'));assert.equal(noCookie.status,401);
 });
@@ -136,5 +137,6 @@ test('token failures are classified without exposing response details or retryin
  }
  await assert.rejects(bridge.exchange(params,env,async()=>({ok:true,json:async()=>{throw Error('raw private response');}})),/TOKEN_RESPONSE_INVALID/);
  await assert.rejects(bridge.exchange(params,env,async()=>({ok:false,status:401})),/TOKEN_EXCHANGE/);
+ await assert.rejects(bridge.exchange(params,env,async(_url,opts)=>{assert.equal(opts.redirect,'manual');return {ok:false,status:302,headers:{get:()=> 'https://untrusted.example/'}};}),/TOKEN_EXCHANGE/);
  await assert.rejects(bridge.exchange(params,env,async()=>({ok:true,json:async()=>({access_token:'private',expires_in:3600,scope:12})})),/SCOPE_MISMATCH/);
 });
