@@ -1,0 +1,27 @@
+name: Central Closure Evidence Offline QA
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/ai-operations/closure-evidence-gate.cjs'
+      - 'tests/ai-operations-closure-evidence-gate.test.cjs'
+      - '.github/workflows/central-closure-evidence-qa.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/ai-operations/closure-evidence-gate.cjs'
+      - 'tests/ai-operations-closure-evidence-gate.test.cjs'
+      - '.github/workflows/central-closure-evidence-qa.yml'
+permissions:
+  contents: read
+jobs:
+  offline-receipt-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Offline closure receipt regression (no secrets, no network)
+        run: node --test tests/ai-operations-closure-evidence-gate.test.cjs
