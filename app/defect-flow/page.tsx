@@ -9,6 +9,7 @@ import PageHeader from '@/components/PageHeader'
 import { getSupabase } from '@/lib/supabase'
 import {flowCombineKey} from '@/lib/flowCombineOne'
 import {DEFECT_AWAITING_ACCEPTANCE_LABEL} from '@/lib/defectStatusPresentation'
+import {canonicalDefectStatusGroup} from '@/lib/defectStatusPresentation'
 import {embedRenderedSvgFonts} from '@/lib/embedRenderedSvgFonts'
 
 type FlowRow={
@@ -355,7 +356,7 @@ export default function DefectFlowPage(){
       const {data,error}=await supabase.from('condo_room_status').select('room_no,building,customer_status,hotel_participation,status_group,synced_at').order('room_no')
       if(!alive)return
       if(error){setError(error.message);setLoading(false);return}
-      setRows((data||[]) as FlowRow[]);setError('');setLoading(false)
+      setRows(((data||[]) as FlowRow[]).map(row=>({...row,status_group:canonicalDefectStatusGroup(row.status_group,row.hotel_participation)})));setError('');setLoading(false)
     }
     void load()
     const channel=supabase.channel('live-defect-flow').on('postgres_changes',{event:'*',schema:'public',table:'condo_room_status'},()=>{void load()}).subscribe()

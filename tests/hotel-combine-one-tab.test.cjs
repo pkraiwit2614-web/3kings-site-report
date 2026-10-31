@@ -54,3 +54,31 @@ test('Hotel-only grouping deep-links to grouped Report and preserves role/source
   assert.ok(src.includes("select('room_no,building,customer_status,hotel_participation,status_group,synced_at')"))
   for(const method of ['insert','update','upsert','delete'])assert.ok(!src.includes(".from('condo_room_status')."+method+"("))
 })
+
+test('legacy status aliases are display-only and appear in every relevant Flow/Report projection',()=>{
+  const displaySource=fs.readFileSync(path.join(__dirname,'../lib/defectStatusPresentation.ts'),'utf8')
+  const reportSource=fs.readFileSync(path.join(__dirname,'../app/defects/page.tsx'),'utf8')
+  const {canonicalDefectStatusGroup:normalize}=load(displaySource)
+  const fixture=[
+    {room_no:'A620',hotel_participation:'ร่วมโรงแรม',status_group:'Hotel - Completed / Awaiting Hotel Inspection'},
+    {room_no:'B706',hotel_participation:'ไม่ร่วมโรงแรม',status_group:'Handover Complete'},
+    {room_no:'B312',hotel_participation:'ร่วมโรงแรม',status_group:'Hotel - Incomplete'},
+  ]
+  const projected=fixture.map(room=>({...room,status_group:normalize(room.status_group,room.hotel_participation)}))
+  assert.deepEqual(projected.map(room=>room.status_group),[
+    'Hotel - Awaiting Check','Non-Hotel - Handover Complete','Hotel - Incomplete'
+  ])
+  assert.deepEqual(fixture.map(room=>room.status_group),[
+    'Hotel - Completed / Awaiting Hotel Inspection','Handover Complete','Hotel - Incomplete'
+  ])
+  assert.equal(normalize('Handover Complete','ร่วมโรงแรม'),'Handover Complete')
+  assert.equal(normalize('Hotel - Completed / Awaiting Hotel Inspection','ไม่ร่วมโรงแรม'),'Hotel - Completed / Awaiting Hotel Inspection')
+  assert.equal(normalize(null,'ร่วมโรงแรม'),null)
+  assert.equal(new Set(projected.map(room=>room.room_no)).size,3)
+  assert.ok(src.includes('canonicalDefectStatusGroup(row.status_group,row.hotel_participation)'))
+  assert.ok(reportSource.includes('canonicalDefectStatusGroup(row.status_group,row.hotel_participation)'))
+  assert.ok(src.includes("const flowRows=view==='combine'?combineRows:rows"))
+  assert.ok(src.includes("const hotelCombineRows=useMemo(()=>combineRows.filter(r=>r.hotel_participation==='ร่วมโรงแรม')"))
+  assert.ok(reportSource.includes("id:'status-handover-complete'"))
+  assert.ok(reportSource.includes("id:'hotel-status-awaiting-acceptance'"))
+})
