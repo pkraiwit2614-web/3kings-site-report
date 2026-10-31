@@ -155,7 +155,9 @@ async function handle(request,env,{crypto=globalThis.crypto,fetchFn=globalThis.f
    callbackStage='SESSION_COOKIE';
    const headers=new Headers({'location':'/api/status','cache-control':'no-store','referrer-policy':'no-referrer'});
    headers.append('set-cookie',cookie(STATE_COOKIE,'',0,'Lax'));
-   headers.append('set-cookie',cookie(SESSION_COOKIE,session,3600));
+   // Lax is required for the first safe top-level GET after Google's cross-site OAuth redirect.
+   // Preserve __Host-, Secure, HttpOnly, one-hour lifetime and Origin validation on POST logout.
+   headers.append('set-cookie',cookie(SESSION_COOKIE,session,3600,'Lax'));
    return new Response(null,{status:303,headers});
   }
   let owner;
