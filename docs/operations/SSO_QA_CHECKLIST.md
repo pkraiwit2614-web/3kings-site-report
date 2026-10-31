@@ -48,3 +48,11 @@ The Vercel connector path is the default for HTTP checks now; authenticated brow
 - `tests/production-sso-preflight.test.mjs`: verifies protected HTTP status, client-loading shell, no arbitrary host, no token/cookie, and failure handling.
 - `.github/workflows/production-sso-boundary.yml`: PR contract test; after reviewed merge, optional manual main-only HTTP diagnostic. Never deploys, uses no secrets, and cannot claim UI E2E PASS.
 - GitHub PR CI must pass before review. Do not merge automatically while Production identity and authorization E2E remain incomplete.
+
+## Approved separate QA identity (2026-10-26)
+- User authorized `p.kraiwit2614+3kingsqa@gmail.com` as **Viewer-only QA**, distinct from the existing base-email `manager` account. A Gmail plus alias routes to the same mailbox and is not independently secure.
+- Supabase Production preflight found the QA alias absent from both `auth.users` and `public.profiles`. Account has **not** been provisioned.
+- Create using the normal Supabase Auth administrative invite flow, not direct SQL writes to `auth.users`. Complete invitation and verify a distinct auth UID and a dedicated `viewer` profile. Never modify the existing manager role.
+- QA session must not have write permissions. Verify allowed /defects and /reports, denied payroll and users, RLS isolation and zero mutating requests. Record FAIL/BLOCKED if not observed.
+- Protect QA authentication with scoped short-lived secrets and reviewed GitHub environment gates. Keep Vercel SSO enabled; do not leak bearer tokens, share URLs, session state, passwords or bypass secrets.
+- **Remaining external setup**: Auth invite/create user and GitHub environment secret administration are not supported by currently connected actions. Until configured, authenticated Production E2E must remain PENDING.
