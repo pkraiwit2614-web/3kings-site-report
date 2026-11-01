@@ -11,7 +11,7 @@ const migration=read('supabase/migrations/20261015121500_defect_work_order_reado
 
 test('read-only dispatch loads active Work IDs and only excludes finished work, irrespective of room status',()=>{
  assert.match(page,/from\('defect_work_order_snapshot'\)\.select/)
- assert.match(page,/from\('condo_room_status'\)\.select/)
+ assert.doesNotMatch(page,/from\('condo_room_status'\)\.select/)
  assert.match(page,/rows\.filter\(r=>!finished\(r\.work_status\)&&ids\(r\.room_group\)\.length>0\)/)
  assert.doesNotMatch(page,/members\.every\(room=>roomMap\.get\(room\)==='Hotel - Incomplete'\)/)
  assert.match(page,/finished\(r\.work_status\)/)
@@ -128,9 +128,8 @@ test('received Defect date is read per Work ID, including separate rounds in the
  assert.match(page,/received_date:string\|null/)
  assert.match(page,/defect_work_order_snapshot'\)\.select\('work_id,room_group,building,contractor,defect_item,next_action,received_date,/)
  assert.match(page,/const noticeForRow=\(r:WorkOrder\):string\|null=>r\.received_date/)
- assert.match(page,/next_action,received_date,work_status,source_modified_at,imported_at'\)\.eq\('source_active',false\)/)
- assert.match(page,/รับแจ้ง Defect: \{noticeDateTH\(r\.received_date\)\}/)
- assert.match(page,/select\('room_no,status_group'\)/)
+ assert.doesNotMatch(page,/next_action,received_date,work_status,source_modified_at,imported_at'\)\.eq\('source_active',false\)/)
+ assert.doesNotMatch(page,/select\('room_no,status_group'\)/)
  assert.doesNotMatch(page,/HOTEL_NOTICE_DATE_BY_ROOM|hotelNoticeISO|noticeMap/)
  assert.match(page,/วันที่รับแจ้ง Defect/)
  assert.match(page,/noticeDateTH\(notice\)/)
@@ -163,42 +162,32 @@ test('Work Order update header matches Report typography without changing the da
  assert.match(page,/rows\.map\(r=>r\.source_modified_at\)/)
 })
 
-test('inactive but unfinished Work IDs are visible only in read-only reconciliation, never dispatch totals',()=>{
+test('inactive historical Work IDs do not leak into dispatch or visible reconciler lists',()=>{
  assert.match(page,/\.eq\('source_active',true\)/)
- assert.match(page,/\.eq\('source_active',false\)/)
- assert.match(page,/reviewLostFromDispatch=useMemo/)
- assert.match(page,/reviewNeedsRoomRecheck=useMemo/)
- assert.match(page,/reviewLostFromDispatch\.map/)
- assert.match(page,/reviewNeedsRoomRecheck\.map/)
+ assert.doesNotMatch(page,/\.eq\('source_active',false\)/)
+ assert.doesNotMatch(page,/reviewLostFromDispatch|reviewNeedsRoomRecheck|wo-reconciliation/)
  assert.match(page,/const eligible=useMemo\(\(\)=>rows\.filter/)
  assert.match(page,/const counters:Record<Quick,number>=\{ALL:kpiRows\.ALL\.length/)
- assert.match(page,/ไม่เปิดงานหรือปิดงานจากเว็บโดยอัตโนมัติ/)
  assert.doesNotMatch(page,/\.update\(|\.insert\(|\.delete\(|\.upsert\(/)
 })
 
-
-test('read-only discrepancies use current room classification and preserve role, print and Combine boundaries',()=>{
+test('removing reconciliation notices retains role, print and Combine boundaries',()=>{
  assert.match(page,/if\(!permitted\)return <AppShell>/)
  assert.match(page,/const permitted=canAccessWorkOrder\(role\)/)
  assert.match(acl,/\['owner','admin','viewer_editor'\]\.includes\(role\)/)
  assert.match(acl,/permissionDecision\(role,'defect','view'/)
  assert.match(page,/rows\.filter\(r=>!finished\(r\.work_status\)&&ids\(r\.room_group\)\.length>0\)/)
- assert.doesNotMatch(page,/members\.every\(room=>roomMap\.get\(room\)==='Hotel - Incomplete'\)/)
  assert.match(page,/flatMap\(room=>hotelRoomMembers\(room\)\)/)
- assert.match(page,/group==='Hotel - Checked Complete'\|\|group==='Non-Hotel - Handover Complete'/)
- assert.match(page,/finished\(r\.work_status\)/)
- assert.match(page,/<details className="panel wo-reconciliation">/)
+ assert.doesNotMatch(page,/<details className="panel wo-reconciliation">|reviewNeedsRoomRecheck|reviewLostFromDispatch/)
  assert.match(css,/body\.report-print-mode\[data-print-report="Above Condo — Work Order"\] \.wo-reconciliation,/)
  assert.doesNotMatch(page,/\.rpc\(|\.insert\(|\.update\(|\.delete\(|\.upsert\(/)
 })
 
 test('handover-complete rooms and Combine groups with an open active Work ID remain printable',()=>{
  assert.match(page,/const eligible=useMemo\(\(\)=>rows\.filter\(r=>!finished\(r\.work_status\)&&ids\(r\.room_group\)\.length>0\),\[rows\]\)/)
- assert.match(page,/return !group\|\|group==='Hotel - Checked Complete'\|\|group==='Non-Hotel - Handover Complete'/)
- assert.match(page,/งานที่ยังไม่ปิดในทะเบียน Active จะแสดงในรายการและใบพิมพ์เสมอ/)
  assert.match(page,/\{filtered\.map\(r=>/)
  assert.match(page,/source_active',true/)
- assert.match(page,/source_active',false/)
+ assert.doesNotMatch(page,/source_active',false/)
  assert.doesNotMatch(page,/\.update\(|\.insert\(|\.delete\(|\.upsert\(/)
  assert.match(read('app/defects/page.tsx'),/members\.forEach\(room=>open\.add\(room\)\)/)
 })
