@@ -12,7 +12,7 @@ const migration=read('supabase/migrations/20261015121500_defect_work_order_reado
 test('read-only dispatch loads active Work IDs and only excludes finished work, irrespective of room status',()=>{
  assert.match(page,/from\('defect_work_order_snapshot'\)\.select/)
  assert.doesNotMatch(page,/from\('condo_room_status'\)\.select/)
- assert.match(page,/rows\.filter\(r=>!finished\(r\.work_status\)&&ids\(r\.room_group\)\.length>0\)/)
+ assert.match(page,/rows\.filter\(r=>\(!finished\(r\.work_status\)\|\|completionConflict\(r\)\)&&ids\(r\.room_group\)\.length>0\)/)
  assert.doesNotMatch(page,/members\.every\(room=>roomMap\.get\(room\)==='Hotel - Incomplete'\)/)
  assert.match(page,/finished\(r\.work_status\)/)
  assert.doesNotMatch(page,/\.insert\(|\.update\(|\.upsert\(|\.delete\(/)
@@ -166,7 +166,7 @@ test('inactive historical Work IDs do not leak into dispatch or visible reconcil
  assert.match(page,/\.eq\('source_active',true\)/)
  assert.doesNotMatch(page,/\.eq\('source_active',false\)/)
  assert.doesNotMatch(page,/reviewLostFromDispatch|reviewNeedsRoomRecheck|wo-reconciliation/)
- assert.match(page,/const eligible=useMemo\(\(\)=>rows\.filter/)
+ assert.match(page,/const eligible=useMemo\(\(\)=>rows\.filter\(r=>\(!finished\(r\.work_status\)\|\|completionConflict\(r\)\)&&ids\(r\.room_group\)\.length>0\),\[rows\]\)/)
  assert.match(page,/const counters:Record<Quick,number>=\{ALL:kpiRows\.ALL\.length/)
  assert.doesNotMatch(page,/\.update\(|\.insert\(|\.delete\(|\.upsert\(/)
 })
@@ -176,7 +176,7 @@ test('removing reconciliation notices retains role, print and Combine boundaries
  assert.match(page,/const permitted=canAccessWorkOrder\(role\)/)
  assert.match(acl,/\['owner','admin','viewer_editor'\]\.includes\(role\)/)
  assert.match(acl,/permissionDecision\(role,'defect','view'/)
- assert.match(page,/rows\.filter\(r=>!finished\(r\.work_status\)&&ids\(r\.room_group\)\.length>0\)/)
+ assert.match(page,/rows\.filter\(r=>\(!finished\(r\.work_status\)\|\|completionConflict\(r\)\)&&ids\(r\.room_group\)\.length>0\)/)
  assert.match(page,/flatMap\(room=>hotelRoomMembers\(room\)\)/)
  assert.doesNotMatch(page,/<details className="panel wo-reconciliation">|reviewNeedsRoomRecheck|reviewLostFromDispatch/)
  assert.match(css,/body\.report-print-mode\[data-print-report="Above Condo — Work Order"\] \.wo-reconciliation,/)
@@ -184,7 +184,7 @@ test('removing reconciliation notices retains role, print and Combine boundaries
 })
 
 test('handover-complete rooms and Combine groups with an open active Work ID remain printable',()=>{
- assert.match(page,/const eligible=useMemo\(\(\)=>rows\.filter\(r=>!finished\(r\.work_status\)&&ids\(r\.room_group\)\.length>0\),\[rows\]\)/)
+ assert.match(page,/const eligible=useMemo\(\(\)=>rows\.filter\(r=>\(!finished\(r\.work_status\)\|\|completionConflict\(r\)\)&&ids\(r\.room_group\)\.length>0\),\[rows\]\)/)
  assert.match(page,/\{filtered\.map\(r=>/)
  assert.match(page,/source_active',true/)
  assert.doesNotMatch(page,/source_active',false/)
@@ -194,7 +194,7 @@ test('handover-complete rooms and Combine groups with an open active Work ID rem
 
 
 test('HOLD print safety: HOLD items are excluded from dispatch/print and preserved in staff tracking',()=>{
- assert.match(page,/const isHold=\(r:WorkOrder\)=>\/HOLD\/i\.test\(r\.work_status\|\|''\)\|\|\/HOLD\/i\.test\(r\.qa_status\|\|''\)/)
+ assert.match(page,/const isHold=\(r:WorkOrder\)=>completionConflict\(r\)\|\|\/HOLD\/i\.test\(r\.work_status\|\|''\)\|\|\/HOLD\/i\.test\(r\.qa_status\|\|''\)/)
  assert.match(page,/const dispatchEligible=useMemo\(\(\)=>eligible\.filter\(r=>!isHold\(r\)\),\[eligible\]\)/)
  assert.match(page,/const holdEligible=useMemo\(\(\)=>eligible\.filter\(r=>isHold\(r\)\),\[eligible\]\)/)
  assert.match(page,/inScope=useMemo\(\(\)=>\{\s*const needle=normalize\(query\)\s*return dispatchEligible\.filter/)
@@ -221,4 +221,57 @@ test('HOLD print safety: HOLD items are excluded from dispatch/print and preserv
  assert.ok(hold.some(r => r.work_id === 'DF-A416-04'));
  assert.ok(hold.some(r => r.work_id === 'DF-A512-01'));
  assert.ok(hold.some(r => r.work_id === 'DF-A612-08'));
+})
+
+
+test('completed statuses are hidden unless unfinished QA requires an internal HOLD',()=>{
+ const statusDone=v=>/เสร็จแล้ว|เสร็จสิ้น|งดแจก|ยกเลิก/.test(v||'');
+ const hasConflict=r=>statusDone(r.work_status)&&/ยังไม่เสร็จ/.test(r.qa_status||'');
+ assert.ok(statusDone('เสร็จสิ้น'));
+ assert.ok(statusDone('แก้ไขเสร็จแล้ว — งดแจก'));
+ assert.ok(statusDone('ยกเลิก'));
+ assert.ok(!statusDone('รอดำเนินการ'));
+ assert.ok(!statusDone('รอเริ่มงาน'));
+ assert.ok(hasConflict({work_status:'เสร็จสิ้น',qa_status:'งานบานตู้ยังไม่เสร็จ'}));
+ assert.ok(!hasConflict({work_status:'เสร็จสิ้น',qa_status:'APPROVED_NONRETIRING'}));
+ assert.match(page,/const completionConflict=/);
+ assert.match(page,/const isHold=\(r:WorkOrder\)=>completionConflict\(r\)/);
+ assert.match(page,/completionConflict\(r\)\?'สถานะขัดแย้ง — รอตรวจสอบ'/);
+ assert.doesNotMatch(page,/\.update\(|\.insert\(|\.delete\(|\.upsert\(/);
+});
+
+test('status dropdown filters only active unfinished dispatch and keeps HOLD as internal-only',()=>{
+ assert.match(page,/const \[statusFilter,setStatusFilter\]=useState\('ALL'\)/)
+ assert.match(page,/statusChoices=useMemo\(\(\)=>\[\.\.\.new Set\(dispatchEligible\.map\(r=>displayWorkStatus\(r\.work_status\)\)\)\]/)
+ assert.match(page,/statusFilter!=='ALL'&&\(statusFilter==='HOLD'\|\|displayWorkStatus\(r\.work_status\)!==statusFilter\)/)
+ assert.match(page,/statusFilter!=='ALL'&&statusFilter!=='HOLD'/)
+ assert.match(page,/<select aria-label="กรองตามสถานะงาน" value=\{statusFilter\}/)
+ assert.match(page,/<option value="ALL">ทุกสถานะงานค้าง<\/option>/)
+ assert.match(page,/<option value="HOLD">HOLD \/ รอตรวจสอบ \(ภายใน\)<\/option>/)
+ assert.match(page,/setStatusFilter\('ALL'\)/)
+ assert.match(page,/setStatusFilter\('HOLD'\)/)
+ assert.match(page,/const dispatchEligible=useMemo\(\(\)=>eligible\.filter\(r=>!isHold\(r\)\)/)
+ assert.match(page,/const holdEligible=useMemo\(\(\)=>eligible\.filter\(r=>isHold\(r\)\)/)
+ assert.match(css,/\.wo-filters input,\.wo-filters select/)
+ assert.match(css,/\.report-print-filters\{display:none!important\}/)
+ assert.doesNotMatch(page,/\.insert\(|\.update\(|\.upsert\(|\.delete\(/)
+ const sample=[
+  {work_status:'รอดำเนินการ',qa_status:''},
+  {work_status:'รอตรวจ',qa_status:'VERIFIED'},
+  {work_status:'เสร็จสิ้น',qa_status:'APPROVED'},
+  {work_status:'เสร็จสิ้น',qa_status:'งานบานตู้ยังไม่เสร็จ'},
+  {work_status:'HOLD',qa_status:'HOLD_MISSING_EVIDENCE'}
+ ];
+ const isDone=r=>/เสร็จแล้ว|เสร็จสิ้น|งดแจก|ยกเลิก/.test(r.work_status);
+ const conflict=r=>isDone(r)&&/ยังไม่เสร็จ/.test(r.qa_status);
+ const hold=r=>conflict(r)||/HOLD/i.test(r.work_status)||/HOLD/i.test(r.qa_status);
+ const eligible=sample.filter(r=>!isDone(r)||conflict(r));
+ const dispatch=eligible.filter(r=>!hold(r));
+ const internal=eligible.filter(hold);
+ const choices=[...new Set(dispatch.map(r=>r.work_status))];
+ assert.deepEqual(choices,['รอดำเนินการ','รอตรวจ']);
+ assert.equal(dispatch.filter(r=>r.work_status==='รอตรวจ').length,1);
+ assert.equal(dispatch.filter(r=>r.work_status==='HOLD').length,0);
+ assert.equal(internal.length,2);
+ assert.equal(dispatch.filter(r=>r.work_status==='เสร็จสิ้น').length,0);
 })
