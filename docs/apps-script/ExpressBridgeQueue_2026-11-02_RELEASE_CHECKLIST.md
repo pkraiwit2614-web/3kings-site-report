@@ -15,7 +15,7 @@ The user authorized development and impact assessment of a queue exclusively for
 
 ## Failure investigation checkpoint
 
-On 2026-11-02, Apps Script API / `clasp run` produced `NOT_FOUND` and zero-second API Executions. Subsequently the exact Master Import Dry-run was selected and invoked in the **existing Apps Script Editor** at 21:21:34 Asia/Bangkok; the next inspected Execution entry showed `Canceled`, duration ~43.389 seconds, with **no PREFLIGHT_PASS evidence**. The reason for cancellation was not verified. **Do not execute the live Master writer or registry writer on this evidence.** Obtain complete Editor/Execution log and rerun dry-run only when failure/cancellation handling is understood.
+On 2026-11-02, Apps Script API / `clasp run` produced `NOT_FOUND` and zero-second API Executions. An initial Editor dry-run at 21:21:34 Asia/Bangkok was canceled after ~43 seconds; its cancellation root cause remains unverified. **Recovery later the same day:** a fresh, exact Editor invocation of `expressBridgeMasterImportDryRun20261022` produced `MASTER_IMPORT_PREFLIGHT_PASS` at 22:38:53; subsequent scoped Master writer and Express Registry writer passed their existing readback gates. See verified execution evidence below. This proves the Editor execution path worked; it does **not** establish the cause of the earlier manual cancellation or repair `clasp run`.
 
 ## Impact matrix
 
@@ -55,3 +55,33 @@ On 2026-11-02, Apps Script API / `clasp run` produced `NOT_FOUND` and zero-secon
 On 2026-11-02, an isolated copy of this branch ran `node scripts/test-express-bridge-queue.cjs` with exit status `0`: disabled default, allowlist, owner/expiry/UUID/fingerprint checks, inherited release gates, no trigger installer, and no call to legacy Materials Sync.
 
 This is **offline unit QA only**, not live GAS/Source/Master/DB/Web acceptance.
+
+## Verified 2026-11-02 live E2E recovery (22:38–22:59 Asia/Bangkok)
+
+The **existing** owner-controlled GAS functions were executed through Apps Script Editor, without any production code/trigger/OAuth changes:
+
+| Boundary | Evidence |
+|---|---|
+| Master dry-run | `MASTER_IMPORT_PREFLIGHT_PASS` 22:38:53; source CSV 17, documents 3,758, lines 13,256, review 273, skippedCanceled 68, unassignedPlot 3,229 |
+| Existing Master Release Gates | Read-only `inspectExpressBridgeGates20261023` 22:40:24: both Master and DB gates were already `true`; neither was changed in this workflow |
+| Same-ID XLSX Master writer | `MASTER_REGISTER_WRITE_READBACK_PASS` 22:45:38; original ID `1Yr9iNVo54g4PrB2ntFb6E_ouI_ohHqSn`; before SHA-256 `b6de48054aaa9f7297b5c02ea4084591160e2d9bc5b38aa17c0c8b6aefec2505`, after `519e3a96ea2d2897599c6945e3a331ead820917416847209316d51aa99a70a1f`; updated only the two approved Express register worksheets |
+| Independent Drive file readback | The original Drive file retained the same ID and was 4,216,349 bytes; ZIP integrity check `testzip()=None`, 61 ZIP parts, 13 worksheet XML parts, register sheet12 rows=3,759 and sheet13 rows=13,257 (including header), SHA-256 exactly matches the GAS readback log |
+| Registry dry-run | `DB_SYNC_DRY_RUN_PASS` 22:47:56; documents=3,758, lines=13,256 |
+| Existing Express Registry DB writer | `DB_REGISTER_READBACK_PASS` 22:53:39; completed Batch ID `5f139284-b339-4ef2-9a61-4f47b4fba28e`, sourceFiles=17, documents=3,758, lines=13,256, review=273; Supabase independently confirmed `state=complete` |
+| New PO/PL | All 20 source-identified new document numbers found in Supabase, 20 header rows and 72 item rows |
+| Historical proof | Earlier document numbers `PL0000001`, `PL0000588`, `PL0000589`, `PC690225004`, `PC690225005` remain in the *full-history latest batch* |
+| Authenticated Production UI | `https://3kings-site-report.vercel.app/materials`, signed-in browser: Express section showed 3,758 documents, 13,256 lines, 273 review. Exact filter `PO691102001` returned one document dated 02/11/69. The existing Procurement/Materials operational rows were not manually changed by the registry import |
+
+**Important boundary:** These successes apply to the **existing** Express Bridge source → same-ID XLSX two-register-tabs → isolated Supabase Express Register → authenticated Materials page. They do **not** prove an arbitrary registered PO/PL was promoted into operational `procurement_items` or physically received. Express Registry remains a read-only, historical view until SOP evidence maps it to a specific Plot/ordering/receipt status.
+
+## Isolated GAS queue QA evidence
+
+A separate GAS project named `3Kings_ExpressQueue_Isolated_QA_20261102` (script ID `1TZ8Pn4k7hiKYU02C0516ALUZ4T86-GWzHcxapN_cPZl8v97a6hMQQ6rw`) was created only for testing. The staged worker's Google service globals were replaced **in this QA project only** with `QAMock` service objects so the test did not authorize Drive/Sheets OAuth scopes or access Production data. `runExpressQueueIsolatedQA20261102()` passed in Apps Script V8 with log `ISOLATED_GAS_QA_PASS` at 22:58:54. Synthetic dataset: 3 documents, 4 lines. Coverage: disabled fail-closed, synthetic request validation, both inherited release gates using simulated writers only, and no legacy Materials calls.
+
+The **actual proposed production worker** remains on this Draft PR and was **not** pushed to the live GAS project; no Express Queue transport Sheet, Script Property, or trigger has been activated. Real queue transport/lock/trigger integration and owner-only access QA remain PENDING. The QA source differs from the staged source only by replacement of Google service globals with self-contained mocks and the QA script ID.
+
+## Release decision
+
+- **Existing Express Bridge source→Master→DB→authenticated UI: PASS** for the verified 2026-11-02 batch.
+- **Proposed new Express Queue: STAGING_QA_PASS / NOT_PRODUCTION_READY**. Do not merge/push/enable without independent integration review of the new owner-only Queue Sheet, exact-source fingerprint, auth, locks, retry safety, elapsed 6-minute GAS execution limit, and regression on all unrelated pipelines.
+- **clasp Execution API: NOT_FIXED**. Apps Script Editor was the working alternative; the earlier canceled execution's cause was not conclusively identified.
