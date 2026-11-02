@@ -45,8 +45,10 @@ function dateTimeTH(v:string|null|undefined){
 }
 const ids=(group:string):string[]=>[...new Set((group.toUpperCase().match(/[AB]\d{3}/g)||[]).flatMap(room=>hotelRoomMembers(room)))]
 const isCombine=(group:string)=>ids(group).some(room=>hotelRoomMembers(room).length>1)
-const finished=(v:string|null)=>/เสร็จแล้ว|งดแจก|ยกเลิก/.test(v||'')
-const isHold=(r:WorkOrder)=>/HOLD/i.test(r.work_status||'')||/HOLD/i.test(r.qa_status||'')
+const finished=(v:string|null)=>/เสร็จแล้ว|เสร็จสิ้น|งดแจก|ยกเลิก/.test(v||'')
+// A completed label with an explicit unfinished QA note is tracked internally, not dispatched.
+const completionConflict=(r:WorkOrder)=>finished(r.work_status)&&/ยังไม่เสร็จ/.test(r.qa_status||'')
+const isHold=(r:WorkOrder)=>completionConflict(r)||/HOLD/i.test(r.work_status||'')||/HOLD/i.test(r.qa_status||'')
 // Label-only change: the Excel/source work_status is preserved.
 const displayWorkStatus=(v:string|null)=>v||'รอตรวจ'
 function roomSearchText(group:string){
@@ -103,7 +105,7 @@ export default function WorkOrderViewer(){
  const daysForRow=(r:WorkOrder)=>elapsedCalendarDays(noticeForRow(r),todayISO)
  // Dispatch is defined by an active, unfinished Work ID, not by room handover state.
  // The read query already restricts this collection to source_active=true.
- const eligible=useMemo(()=>rows.filter(r=>!finished(r.work_status)&&ids(r.room_group).length>0),[rows])
+ const eligible=useMemo(()=>rows.filter(r=>(!finished(r.work_status)||completionConflict(r))&&ids(r.room_group).length>0),[rows])
  // Dispatch/Print dataset excludes HOLD items so contractors never receive unverified work automatically.
  const dispatchEligible=useMemo(()=>eligible.filter(r=>!isHold(r)),[eligible])
  // Tracking dataset preserves all HOLD items for staff follow-up and verification.
@@ -211,7 +213,7 @@ export default function WorkOrderViewer(){
       <td>{r.defect_item}</td>
       <td>{r.next_action||'รอระบุรายละเอียด'}</td>
       <td><b>{r.contractor}</b></td>
-      <td><span className="wo-hold-badge">HOLD</span><b>{displayWorkStatus(r.work_status)}</b><small>{r.qa_status||'รอตรวจรายการ'}</small></td>
+      <td><span className="wo-hold-badge">HOLD</span><b>{completionConflict(r)?'สถานะขัดแย้ง — รอตรวจสอบ':displayWorkStatus(r.work_status)}</b><small>{r.qa_status||'รอตรวจรายการ'}</small></td>
       <td><small className="wo-conflict">{r.conflict_note||r.qa_status||'รอยืนยันหลักฐาน/ชิ้นส่วน'}</small></td>
       <td className="wo-evidence-col">{r.evidence_url?.startsWith('https://drive.google.com/')?<a target="_blank" rel="noreferrer" href={r.evidence_url}>เปิดภาพ / PDF</a>:<small>รอหลักฐาน</small>}</td>
      </tr>})}
