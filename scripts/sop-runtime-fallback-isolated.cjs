@@ -3,7 +3,7 @@
 // Never call live services from this module or treat simulation output as live PASS.
 const ORDER = Object.freeze(['connected_api','same_project_editor','approved_endpoint']);
 const READ_ONLY = new Set(['read_only','inspect','po_check_read_only','count_read_only']);
-const ALLOWED = new Set(['authorized_write','publish_only','document_only']);
+const ALLOWED = new Set(['authorized_write','publish_only']);
 function result(status, extra={}) { return {status, ...extra, liveProductionPass:false}; }
 function present(x) { return typeof x === 'string' && x.trim().length>0; }
 async function isolatedFallback(scenario) {
