@@ -45,7 +45,12 @@ function run({approvals=[approval()],master=record(),rpcError=null}={}){
     workOrderIsoDate20261015_:v=>v?String(v):null,
     UrlFetchApp:{fetch:(url,options)=>{
       calls.push({url,body:options.payload?JSON.parse(options.payload):null});
-      const result=url.includes('work_order_promotion_approvals?')?approvals:
+      const result=url.includes('work_order_promotion_approvals?select=work_id,source_file_id')?approvals:
+        url.includes('work_order_promotion_approvals?select=work_id')?approvals.map(x=>({work_id:x.work_id})):
+        url.includes('defect_work_order_snapshot?')?[]:
+        url.includes('defect_work_order_import_staging?')?[]:
+        url.includes('/rpc/defect_work_order_nonretiring_stage_import')?
+          {ok:true,dry_run:JSON.parse(options.payload).p_dry_run,staged:1}:
         rpcError?{ok:false,error:rpcError}:
         options.payload&&JSON.parse(options.payload).p_dry_run?
           {ok:true,status:'DRY_RUN_APPROVED'}:
@@ -77,10 +82,12 @@ test('promotes approved Master Work ID through dry-run then live unchanged RPC o
 });
 test('unapproved IDs cannot enter production even when present in Master',()=>{
   const {result,calls,cleaned}=run({approvals:[]});
-  assert.equal(result.status,'NO_CHANGE');
+  assert.equal(result.status,'STAGED_REVIEW_ONLY');
   assert.equal(result.promoted,0);
-  assert.equal(calls.filter(x=>x.url.includes('/rpc/')).length,0);
-  assert.equal(cleaned,0);
+  assert.equal(result.stage.staged,1);
+  assert.equal(calls.filter(x=>x.url.includes('/rpc/defect_work_order_promote_nonretiring_approved')).length,0);
+  assert.equal(calls.filter(x=>x.url.includes('/rpc/defect_work_order_nonretiring_stage_import')).length,2);
+  assert.equal(cleaned,1);
 });
 test('source differs from approved payload => HOLD, without RPC mutation',()=>{
   const changed=record();changed[3]='Other team';
