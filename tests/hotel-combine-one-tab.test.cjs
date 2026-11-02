@@ -4,6 +4,9 @@ const fs=require('node:fs')
 const path=require('node:path')
 const ts=require('typescript')
 
+// Run the targeted current-status count regression in the existing Flow CI step.
+require('./defect-flow-new-status-counts.test.cjs')
+
 const src=fs.readFileSync(path.join(__dirname,'../app/defect-flow/page.tsx'),'utf8')
 const groupSource=fs.readFileSync(path.join(__dirname,'../lib/hotelRoomGroups.ts'),'utf8')
 const helperSource=fs.readFileSync(path.join(__dirname,'../lib/flowCombineOne.ts'),'utf8')
@@ -51,7 +54,7 @@ test('Hotel-only grouping deep-links to grouped Report and preserves role/source
   assert.ok(src.includes("view==='hotel-combine'?'hotel-combine-one-flow-'"))
   assert.ok(src.includes("formula={'ร่วมโรงแรม '+stream.list.length+(combineMode?' ชุดห้อง':' ห้อง')}"))
   assert.ok(src.includes("view==='hotel-combine'?hotelCombineWarnings:[]"))
-  assert.ok(src.includes("select('room_no,building,customer_status,hotel_participation,status_group,synced_at')"))
+  assert.ok(src.includes("select('room_no,building,customer_status,hotel_participation,current_status,status_group,synced_at')"))
   for(const method of ['insert','update','upsert','delete'])assert.ok(!src.includes(".from('condo_room_status')."+method+"("))
 })
 
@@ -75,8 +78,8 @@ test('legacy status aliases are display-only and appear in every relevant Flow/R
   assert.equal(normalize('Hotel - Completed / Awaiting Hotel Inspection','ไม่ร่วมโรงแรม'),'Hotel - Completed / Awaiting Hotel Inspection')
   assert.equal(normalize(null,'ร่วมโรงแรม'),null)
   assert.equal(new Set(projected.map(room=>room.room_no)).size,3)
-  assert.ok(src.includes('canonicalDefectStatusGroup(row.status_group,row.hotel_participation)'))
-  assert.ok(reportSource.includes('canonicalDefectStatusGroup(row.status_group,row.hotel_participation)'))
+  assert.ok(src.includes('canonicalDefectStatusGroup(row.status_group,row.hotel_participation,row.current_status)'))
+  assert.ok(reportSource.includes('canonicalDefectStatusGroup(row.status_group,row.hotel_participation,row.current_status)'))
   assert.ok(src.includes("const flowRows=view==='combine'?combineRows:rows"))
   assert.ok(src.includes("const hotelCombineRows=useMemo(()=>combineRows.filter(r=>r.hotel_participation==='ร่วมโรงแรม')"))
   assert.ok(reportSource.includes("id:'status-handover-complete'"))
