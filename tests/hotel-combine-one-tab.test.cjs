@@ -4,6 +4,9 @@ const fs=require('node:fs')
 const path=require('node:path')
 const ts=require('typescript')
 
+// Run the targeted current-status count regression in the existing Flow CI step.
+require('./defect-flow-new-status-counts.test.cjs')
+
 const src=fs.readFileSync(path.join(__dirname,'../app/defect-flow/page.tsx'),'utf8')
 const groupSource=fs.readFileSync(path.join(__dirname,'../lib/hotelRoomGroups.ts'),'utf8')
 const helperSource=fs.readFileSync(path.join(__dirname,'../lib/flowCombineOne.ts'),'utf8')
