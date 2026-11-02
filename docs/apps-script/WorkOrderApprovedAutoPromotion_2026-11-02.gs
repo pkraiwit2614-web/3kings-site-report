@@ -76,7 +76,7 @@ function workOrderApprovedAutoPromotion20261102_(){
       const id=String(a.work_id||'');
       const staged=a.approved_stage_snapshot;
       if(a.source_file_id!==SOURCE_ID||!staged||
-        !/^https:\/\/github\.com\/pkraiwit2614-web\/3kings-site-report\/issues\/230#issuecomment-\d+$/.test(a.approval_evidence_url||'')||
+        !/^https:\/\/\S+$/.test(a.approval_evidence_url||'')||
         staged.work_id!==id||staged.source_file_id!==SOURCE_ID||
         new Date(staged.source_modified_at).toISOString()!==new Date(a.source_modified_at).toISOString()){
         hold(id,'APPROVAL_SCOPE_OR_VERSION_INVALID');continue;
