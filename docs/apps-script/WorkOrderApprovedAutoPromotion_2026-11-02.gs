@@ -136,11 +136,87 @@ function workOrderApprovedAutoPromotion20261102_(){
         }else hold(id,'PROMOTION_REJECTED_'+String(result&&result.error||'unexpected'));
       }catch(e){hold(id,'PROMOTION_API_ERROR_'+String(e.message||e).slice(0,90));}
     }
-    out.status=out.held?'PARTIAL_HOLD':out.promoted?'PROMOTED_APPROVED':'NO_CHANGE';
+    // Approved promotion remains separate from stage-only intake for newly edited
+    // but still-unapproved Work IDs. Neither operation grants approval by itself.
+    try{
+      out.stage=workOrderStageUnapprovedMaster20261102_(idRows,str,dt,call,revision);
+    }catch(e){
+      out.stage={status:'HOLD_STAGE_API',reason:String(e&&e.message||e).slice(0,120)};
+    }
+    out.status=out.held?'PARTIAL_HOLD':out.promoted?'PROMOTED_APPROVED':
+      out.stage&&out.stage.staged?'STAGED_REVIEW_ONLY':'NO_CHANGE';
     console.log('WORK_ORDER_APPROVED_AUTO '+JSON.stringify(out));
     return out;
   }finally{
     if(temp)cleanupTempSpreadsheet_(temp);
     lock.releaseLock();
   }
+}
+
+
+/**
+ * Stage only NEW/CHANGED, UNAPPROVED, unfinished Master Work IDs for review.
+ * This never approves or promotes an ID; only the original guarded per-ID RPC
+ * may subsequently move an approved row into the Production snapshot.
+ */
+function workOrderStageUnapprovedMaster20261102_(idRows,str,dt,call,revision){
+  const sourceId='18P3OFYtOLsslCtDujlSQVf9IQSuplKcx';
+  const [snapshot,approved,staged]=[
+    call('defect_work_order_snapshot?select=work_id&limit=1000'),
+    call('work_order_promotion_approvals?select=work_id&limit=1000'),
+    call('defect_work_order_import_staging?select=work_id,room_group,building,contractor,defect_item,source_work_status,stage_decision,source_master_row,source_evidence_url,source_payload&limit=1000')
+  ];
+  if(!Array.isArray(snapshot)||!Array.isArray(approved)||!Array.isArray(staged))
+    throw Error('UNAPPROVED_INTAKE_READ_FAILED');
+  const activeIds=new Set(snapshot.map(x=>x.work_id));
+  const approvedIds=new Set(approved.map(x=>x.work_id));
+  const stageById=new Map(staged.map(x=>[x.work_id,x]));
+  const openStatuses=new Set(['รอดำเนินการ','ยังไม่เริ่ม','กำลังดำเนินการ']);
+  const changes=[];
+  let holds=0;
+  for(const [id,{row,index}] of idRows){
+    if(activeIds.has(id)||approvedIds.has(id))continue;
+    const room=str(row,'ห้อง/กลุ่ม Combine'),building=str(row,'อาคาร');
+    const team=str(row,'ผู้รับเหมา'),item=str(row,'รายการ Defect (หนึ่งจุด/บรรทัด)');
+    const status=str(row,'สถานะงาน'),next=str(row,'แนวทางดำเนินการ / จำนวนจุด');
+    const evidence=str(row,'ลิงก์ภาพ / PDF (ตรวจวัน)');
+    if(!room||!team||!item||!/^[AB]\d{3}([+/][AB]\d{3})?$/.test(room)||room[0]!==building){
+      holds++;continue;
+    }
+    // History/closed records are left alone. Ambiguous open work is staged HOLD.
+    if(/เสร็จสิ้น|เสร็จแล้ว|งดแจก|ยกเลิก/.test(status))continue;
+    const ready=openStatuses.has(status)&&!(/HOLD|รอยืนยัน|รอจำแนก/i.test(team+' '+next))&&
+      /^https:\/\/drive\.google\.com\//.test(evidence);
+    const decision=ready?'STAGE_REVERIFY_NO_DB_WRITE':'HOLD_MISSING_EVIDENCE';
+    let received='',due='';
+    try{received=dt(row,'วันที่รับแจ้งจริง');due=dt(row,'ครบกำหนด 7 วัน');}
+    catch(e){holds++;continue;}
+    const payload={next_action:next,received_date:received,due_date:due,
+      supervisor:str(row,'ผู้คุม A/B')};
+    const candidate={work_id:id,room_group:room,building,contractor:team,
+      defect_item:item,source_work_status:status,stage_decision:decision,
+      source_master_row:index,source_evidence_url:evidence||null,payload};
+    const previous=stageById.get(id);
+    if(previous&&previous.room_group===room&&previous.building===building&&
+      previous.contractor===team&&previous.defect_item===item&&
+      previous.source_work_status===status&&previous.stage_decision===decision&&
+      previous.source_master_row===index&&
+      (previous.source_evidence_url||'')===evidence&&
+      JSON.stringify(previous.source_payload||{})===JSON.stringify(payload))continue;
+    changes.push(candidate);
+  }
+  if(!changes.length)return {status:'NO_CHANGE',staged:0,held_unmappable:holds};
+  // Bounded stage-only intake; no production writer and no approval mutations.
+  const batch=changes.slice(0,50);
+  const body={p_sync_key:PropertiesService.getScriptProperties().getProperty('DEFECT_SYNC_KEY'),
+    p_source_file_id:sourceId,p_source_modified_at:revision,p_rows:batch,p_dry_run:true};
+  const dry=call('rpc/defect_work_order_nonretiring_stage_import','post',body);
+  if(!dry||dry.ok!==true||dry.dry_run!==true)
+    return {status:'HOLD_STAGE_DRY_RUN',staged:0,reason:dry&&dry.error||'rejected'};
+  const written=call('rpc/defect_work_order_nonretiring_stage_import','post',
+    {...body,p_dry_run:false});
+  if(!written||written.ok!==true||Number(written.staged)!==batch.length)
+    return {status:'HOLD_STAGE_WRITE',staged:0,reason:written&&written.error||'rejected'};
+  return {status:'STAGED_FOR_APPROVAL',staged:batch.length,
+    held_unmappable:holds,remaining:changes.length-batch.length,production_mutation:0};
 }
