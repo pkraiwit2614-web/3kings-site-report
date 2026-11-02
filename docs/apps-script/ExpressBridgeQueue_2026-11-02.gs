@@ -200,7 +200,13 @@ function processExpressBridgeQueue20261102() {
   try {
     const result = expressQueueExecute20261102_(action);
     const code = result && typeof result.status === 'string' ? result.status : '';
-    if (!code || /^(ERROR|FAIL|HOLD)/i.test(code))
+    const accepted = {
+      EXPRESS_MASTER_DRY_RUN: ['MASTER_IMPORT_PREFLIGHT_PASS', 'MASTER_REGISTER_ALREADY_CURRENT'],
+      EXPRESS_MASTER_IMPORT: ['MASTER_REGISTER_WRITE_READBACK_PASS', 'MASTER_IMPORT_NO_CHANGE'],
+      EXPRESS_REGISTRY_DRY_RUN: ['DB_SYNC_DRY_RUN_PASS'],
+      EXPRESS_REGISTRY_SYNC: ['DB_REGISTER_READBACK_PASS', 'DB_REGISTER_NO_CHANGE']
+    };
+    if (!code || !accepted[action] || accepted[action].indexOf(code) < 0)
       throw Error('EXPRESS_QUEUE_UNEXPECTED_EXECUTOR_RESULT');
     // A source change or incomplete import requires human review, never
     // automatic retry or implicit promotion to completed Production QA.
