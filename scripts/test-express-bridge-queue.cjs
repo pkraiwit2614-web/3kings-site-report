@@ -27,9 +27,9 @@ const context = vm.createContext({
   EB_qaReadFolder_: () => { calls.push(['source']); return [{ id: 'file', name: 'PO.csv', hash: 'sha' }]; },
   EB_dbFingerprint_: () => 'a'.repeat(64),
   expressBridgeMasterImportDryRun20261022: () => { calls.push(['masterDryRun']); return { status: 'MASTER_IMPORT_PREFLIGHT_PASS' }; },
-  expressBridgeMasterImportOnce20261022: () => { calls.push(['masterWrite']); return { status: 'MASTER_IMPORT_PASS' }; },
+  expressBridgeMasterImportOnce20261022: () => { calls.push(['masterWrite']); return { status: 'MASTER_REGISTER_WRITE_READBACK_PASS' }; },
   expressBridgeRegistrySyncDryRun20261022: () => { calls.push(['dbDryRun']); return { status: 'DB_SYNC_DRY_RUN_PASS' }; },
-  expressBridgeRegistrySyncOnce20261022: () => { calls.push(['dbWrite']); return { status: 'DB_REGISTER_SYNC_PASS' }; }
+  expressBridgeRegistrySyncOnce20261022: () => { calls.push(['dbWrite']); return { status: 'DB_REGISTER_READBACK_PASS' }; }
 });
 script.runInContext(context);
 
@@ -72,14 +72,14 @@ assert.deepEqual(calls.pop(), ['masterDryRun']);
 assert.throws(() => run("expressQueueExecute20261102_('EXPRESS_MASTER_IMPORT')"), /MASTER_RELEASE_GATE_OFF/);
 assert.equal(calls.filter(x => x[0] === 'masterWrite').length, 0);
 props.set('EXPRESS_BRIDGE_MASTER_WRITE_APPROVED', 'true');
-assert.equal(run("expressQueueExecute20261102_('EXPRESS_MASTER_IMPORT').status"), 'MASTER_IMPORT_PASS');
+assert.equal(run("expressQueueExecute20261102_('EXPRESS_MASTER_IMPORT').status"), 'MASTER_REGISTER_WRITE_READBACK_PASS');
 assert.deepEqual(calls.pop(), ['masterWrite']);
 
 assert.equal(run("expressQueueExecute20261102_('EXPRESS_REGISTRY_DRY_RUN').status"), 'DB_SYNC_DRY_RUN_PASS');
 assert.deepEqual(calls.pop(), ['dbDryRun']);
 assert.throws(() => run("expressQueueExecute20261102_('EXPRESS_REGISTRY_SYNC')"), /REGISTRY_RELEASE_GATE_OFF/);
 props.set('EXPRESS_BRIDGE_DB_SYNC_APPROVED', 'true');
-assert.equal(run("expressQueueExecute20261102_('EXPRESS_REGISTRY_SYNC').status"), 'DB_REGISTER_SYNC_PASS');
+assert.equal(run("expressQueueExecute20261102_('EXPRESS_REGISTRY_SYNC').status"), 'DB_REGISTER_READBACK_PASS');
 assert.deepEqual(calls.pop(), ['dbWrite']);
 assert.throws(() => run("expressQueueExecute20261102_('MATERIALS_SYNC')"), /ACTION_NOT_ALLOWED/);
 
@@ -89,5 +89,82 @@ assert.doesNotMatch(source, /ScriptApp\.newTrigger\s*\(/,
   'No installer is allowed in staged source');
 assert.doesNotMatch(source, /setProperty\s*\(/,
   'Queue must not activate its own ScriptProperties gates');
+
+/* Worker state-machine simulation: same code as the staged GAS source, no network. */
+const queueData = [
+  [
+    'request_id', 'action', 'source_fingerprint', 'requested_at',
+    'expires_at', 'requester', 'status', 'started_at', 'finished_at',
+    'result_code', 'master_file_id', 'notes', 'worker_version',
+    'verification_status', 'verified_at'
+  ],
+  [...row]
+];
+const controlData = [
+  ['key', 'value', 'description'],
+  ['schema_version', '1', ''],
+  ['allowed_script_project_id', '1sKddwvs-DOav0ltdrcxyqPXYinXE3uCgFKmDzGu_XEb4VvMvYVwDUDeT', ''],
+  ['allowed_master_file_id', '1Yr9iNVo54g4PrB2ntFb6E_ouI_ohHqSn', ''],
+  ['owner_email', owner, ''],
+  ['queue_state', 'STAGING_DISABLED', ''],
+  ['worker_active', 'FALSE', '']
+];
+const range = (data, startRow, startColumn, nRows, nCols) => ({
+  getDisplayValues: () => Array.from({ length: nRows }, (_, r) =>
+    Array.from({ length: nCols }, (_, col) => data[startRow - 1 + r][startColumn - 1 + col] || '')),
+  setValue: value => { data[startRow - 1][startColumn - 1] = value; },
+  setValues: values => values.forEach((v, r) => v.forEach((value, col) => {
+    data[startRow - 1 + r][startColumn - 1 + col] = value;
+  }))
+});
+context.DriveApp.getFileById = id => {
+  assert.equal(id, 'new-private-express-queue-sheet');
+  return {
+    getOwner: () => ({ getEmail: () => owner }),
+    getSharingAccess: () => 'PRIVATE',
+    getEditors: () => [{ getEmail: () => owner }]
+  };
+};
+const controlSheet = {
+  getDataRange: () => range(controlData, 1, 1, controlData.length, 3)
+};
+const requestsSheet = {
+  getRange: (r, col, nRows = 1, nCols = 1) => range(queueData, r, col, nRows, nCols),
+  getLastRow: () => queueData.length
+};
+context.SpreadsheetApp.openById = id => {
+  assert.equal(id, 'new-private-express-queue-sheet');
+  return { getSheetByName: name => name === 'Control' ? controlSheet : name === 'Requests' ? requestsSheet : null };
+};
+context.SpreadsheetApp.flush = () => {};
+context.LockService.getUserLock = () => ({
+  tryLock: () => true,
+  releaseLock: () => {}
+});
+props.set('EXPRESS_QUEUE_ENABLED_20261102', 'true');
+props.set('EXPRESS_QUEUE_SHEET_ID_20261102', 'new-private-express-queue-sheet');
+
+assert.equal(run('expressQueueStatus20261102().enabled'), false);
+assert.equal(run('processExpressBridgeQueue20261102().status'), 'DISABLED_BY_CONTROL');
+assert.equal(queueData[1][6], 'REQUESTED', 'Disabled control must not claim a request');
+
+controlData.find(r => r[0] === 'queue_state')[1] = 'LIVE_APPROVED';
+controlData.find(r => r[0] === 'worker_active')[1] = 'TRUE';
+queueData[1][3] = new Date(Date.now() - 120000).toISOString();
+queueData[1][4] = new Date(Date.now() + 1200000).toISOString();
+assert.equal(run('processExpressBridgeQueue20261102().status'), 'WAIT_QA');
+assert.equal(queueData[1][6], 'WAIT_QA', 'Worker must never mark a successful execution COMPLETE');
+assert.equal(queueData[1][9], 'MASTER_IMPORT_PREFLIGHT_PASS');
+assert.equal(run('processExpressBridgeQueue20261102().status'), 'NO_PENDING',
+  'Previously claimed request must never execute again');
+
+queueData[1] = [...row];
+queueData[1][1] = 'EXECUTE_ARBITRARY_FUNCTION';
+queueData[1][3] = new Date(Date.now() - 120000).toISOString();
+queueData[1][4] = new Date(Date.now() + 1200000).toISOString();
+assert.equal(run('processExpressBridgeQueue20261102().status'), 'REVIEW');
+assert.equal(queueData[1][6], 'REVIEW', 'Unknown action cannot be executed');
+
+
 console.log('PASS: isolated Express Queue syntax, disabled default, request validation,');
 console.log('      four-action allowlist, both inherited release gates, no legacy Materials/trigger mutations.');
