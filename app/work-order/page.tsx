@@ -46,6 +46,7 @@ function dateTimeTH(v:string|null|undefined){
 const ids=(group:string):string[]=>[...new Set((group.toUpperCase().match(/[AB]\d{3}/g)||[]).flatMap(room=>hotelRoomMembers(room)))]
 const isCombine=(group:string)=>ids(group).some(room=>hotelRoomMembers(room).length>1)
 const finished=(v:string|null)=>/เสร็จแล้ว|งดแจก|ยกเลิก/.test(v||'')
+const isHold=(r:WorkOrder)=>/HOLD/i.test(r.work_status||'')||/HOLD/i.test(r.qa_status||'')
 // Label-only change: the Excel/source work_status is preserved.
 const displayWorkStatus=(v:string|null)=>v||'รอตรวจ'
 function roomSearchText(group:string){
@@ -103,17 +104,29 @@ export default function WorkOrderViewer(){
  // Dispatch is defined by an active, unfinished Work ID, not by room handover state.
  // The read query already restricts this collection to source_active=true.
  const eligible=useMemo(()=>rows.filter(r=>!finished(r.work_status)&&ids(r.room_group).length>0),[rows])
+ // Dispatch/Print dataset excludes HOLD items so contractors never receive unverified work automatically.
+ const dispatchEligible=useMemo(()=>eligible.filter(r=>!isHold(r)),[eligible])
+ // Tracking dataset preserves all HOLD items for staff follow-up and verification.
+ const holdEligible=useMemo(()=>eligible.filter(r=>isHold(r)),[eligible])
  const teams=useMemo(()=>[...new Set(eligible.map(r=>r.contractor))].sort((a,b)=>a.localeCompare(b,'th')),[eligible])
  // Search and contractor limit the context for every KPI; the selected KPI
  // then selects the rows that appear in the table and on the printed report.
  const inScope=useMemo(()=>{
   const needle=normalize(query)
-  return eligible.filter(r=>{
+  return dispatchEligible.filter(r=>{
    if(contractor!=='ALL'&&r.contractor!==contractor)return false
    if(!needle)return true
    return normalize([r.work_id,r.room_group,roomSearchText(r.room_group),r.defect_item,r.next_action,r.contractor].filter(Boolean).join(' ')).includes(needle)
   })
- },[eligible,query,contractor])
+ },[dispatchEligible,query,contractor])
+ const holdInScope=useMemo(()=>{
+  const needle=normalize(query)
+  return holdEligible.filter(r=>{
+   if(contractor!=='ALL'&&r.contractor!==contractor)return false
+   if(!needle)return true
+   return normalize([r.work_id,r.room_group,roomSearchText(r.room_group),r.defect_item,r.next_action,r.contractor].filter(Boolean).join(' ')).includes(needle)
+  })
+ },[holdEligible,query,contractor])
  const filtered=useMemo(()=>inScope.filter(r=>{
   if(quick==='A'||quick==='B'){if(r.building!==quick)return false}
   if(quick==='OVERDUE'&&!((daysForRow(r)??0)>7))return false
@@ -126,6 +139,7 @@ export default function WorkOrderViewer(){
  }
  const counters:Record<Quick,number>={ALL:kpiRows.ALL.length,A:kpiRows.A.length,B:kpiRows.B.length,OVERDUE:kpiRows.OVERDUE.length}
  const kpiContractors:Record<Quick,[string,number][]>={ALL:contractorCounts(kpiRows.ALL),A:contractorCounts(kpiRows.A),B:contractorCounts(kpiRows.B),OVERDUE:contractorCounts(kpiRows.OVERDUE)}
+ const holdContractors=useMemo(()=>contractorCounts(holdInScope),[holdInScope])
  const labels:Record<Quick,string>={ALL:'งานที่กำลังดำเนินการทั้งหมด',A:'อาคาร A',B:'อาคาร B',OVERDUE:'งานค้างเกิน 7 วัน'}
  const scope=labels[quick]+' • '+(contractor==='ALL'?'ทุกผู้รับเหมา':contractor)+(query?' • ค้นหา '+query:'')
  if(!permitted)return <AppShell><section className="panel" role="alert">สิทธิ์ Work Order จำกัดสำหรับทีม 3 Kings ที่ได้รับสิทธิ์ Defect เท่านั้น</section></AppShell>
@@ -137,12 +151,20 @@ export default function WorkOrderViewer(){
    <section className="wo-kpis" aria-label="กรองรายการตามจำนวนงาน">
     {(['ALL','A','B','OVERDUE'] as Quick[]).map(kind=><button key={kind} type="button" aria-pressed={quick===kind} className={'wo-kpi '+(quick===kind?'selected ':'')+(kind==='OVERDUE'?'late':'')} onClick={()=>setQuick(kind)}>
      <div className="wo-kpi-head"><span>{labels[kind]}</span><b>{counters[kind]}</b></div>
-     <small>รายการงาน</small>
+     <small>รายการงานพร้อมแจก</small>
      <div className="wo-kpi-team-list" aria-label="จำนวนงานแยกผู้รับเหมา">
       {kpiContractors[kind].map(([name,count])=><span key={name} className="wo-kpi-team"><strong>{name}</strong><b>{count}</b></span>)}
       {!kpiContractors[kind].length&&<small>ไม่มีงานค้าง</small>}
      </div>
     </button>)}
+    <button type="button" className="wo-kpi wo-kpi-hold" onClick={()=>{document.getElementById('wo-hold-tracking')?.scrollIntoView({behavior:'smooth'})}} aria-label="งาน HOLD สำหรับเจ้าหน้าที่ติดตามภายใน">
+     <div className="wo-kpi-head"><span>งาน HOLD / รอตรวจสอบ</span><b>{holdInScope.length}</b></div>
+     <small>ติดตามภายใน (ไม่รวมใบแจกงาน)</small>
+     <div className="wo-kpi-team-list" aria-label="จำนวนงาน HOLD แยกผู้รับเหมา">
+      {holdContractors.map(([name,count])=><span key={name} className="wo-kpi-team"><strong>{name}</strong><b>{count}</b></span>)}
+      {!holdContractors.length&&<small>ไม่มีงาน HOLD</small>}
+     </div>
+    </button>
    </section>
    <section className="panel wo-filters">
     <label>ค้นหา ห้อง / งาน / ผู้รับเหมา
@@ -174,6 +196,27 @@ export default function WorkOrderViewer(){
      {!filtered.length&&<tr><td colSpan={7} className="wo-empty">ไม่พบรายการงานค้างตามตัวกรอง</td><td className="wo-print-only"/></tr>}
     </tbody></table></div>
    </section>
+   {holdInScope.length>0&&<section className="panel wo-sheet wo-hold-section" id="wo-hold-tracking" aria-label="รายการ HOLD รอตรวจสอบ">
+    <div className="wo-sheet-title">
+     <h2>รายการ HOLD / รอตรวจสอบ (ติดตามภายใน)</h2>
+     <span>แสดง {holdInScope.length} รายการ (คัดแยกออกจากใบแจกงานผู้รับเหมา)</span>
+    </div>
+    <div className="table-wrap wo-table-wrap"><table className="wo-table wo-hold-table"><thead><tr>
+     <th>ห้อง / Work ID</th><th>วันที่รับแจ้ง Defect</th><th>รายละเอียด Defect</th><th>งานที่ต้องทำต่อ</th><th>ผู้รับเหมา</th>
+     <th>สถานะงาน / QA</th><th>สาเหตุที่ติด HOLD</th><th className="wo-evidence-col">หลักฐาน</th>
+    </tr></thead><tbody>
+     {holdInScope.map(r=>{const notice=noticeForRow(r);const elapsed=elapsedCalendarDays(notice,todayISO);return <tr key={r.work_id} className="wo-hold-row">
+      <td><div className="wo-room-label"><b>{groupLabel(r.room_group)}</b>{isCombine(r.room_group)&&<span className="wo-combine-code" title="ห้อง Combine">c</span>}</div>{isCombine(r.room_group)&&<span className="wo-combine-badge" title="ห้อง Combine ใช้งานชุดเดียวกัน">Combine: {ids(r.room_group).join(' + ')}</span>}<small>{r.work_id}</small></td>
+      <td><small>วันที่รับแจ้ง Defect: {noticeDateTH(notice)}</small><small>เหลือเวลา : {elapsed===null?'-':elapsed+' วัน'}</small></td>
+      <td>{r.defect_item}</td>
+      <td>{r.next_action||'รอระบุรายละเอียด'}</td>
+      <td><b>{r.contractor}</b></td>
+      <td><span className="wo-hold-badge">HOLD</span><b>{displayWorkStatus(r.work_status)}</b><small>{r.qa_status||'รอตรวจรายการ'}</small></td>
+      <td><small className="wo-conflict">{r.conflict_note||r.qa_status||'รอยืนยันหลักฐาน/ชิ้นส่วน'}</small></td>
+      <td className="wo-evidence-col">{r.evidence_url?.startsWith('https://drive.google.com/')?<a target="_blank" rel="noreferrer" href={r.evidence_url}>เปิดภาพ / PDF</a>:<small>รอหลักฐาน</small>}</td>
+     </tr>})}
+    </tbody></table></div>
+   </section>}
    <p className="wo-screen-scope">ขอบเขต: {scope} • {filtered.length} รายการ</p>
   </>}
  </AppShell>
