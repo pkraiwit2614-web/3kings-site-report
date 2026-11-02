@@ -54,6 +54,9 @@ const context=vm.createContext({
  }
 });
 new vm.Script(source,{filename:'ExpressBridgeAutoScheduler_2026-11-02.gs'}).runInContext(context);
+// Replace only the external adapters after load; keep the real state machine.
+context.expressQueueSourceSignature20261102_ = () => signature;
+context.expressQueueDBComplete20261102_ = () => dbReady ? {state:'complete',document_count:3,line_count:4} : null;
 const run=f=>vm.runInContext(f,context);
 assert.equal(run('expressBridgeAutoTick20261102().status'),'DISABLED_BY_CONTROL');
 control.queue_state='LIVE_APPROVED';control.worker_active='TRUE';control.auto_enabled='TRUE';
