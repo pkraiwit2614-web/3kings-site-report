@@ -191,3 +191,34 @@ test('handover-complete rooms and Combine groups with an open active Work ID rem
  assert.doesNotMatch(page,/\.update\(|\.insert\(|\.delete\(|\.upsert\(/)
  assert.match(read('app/defects/page.tsx'),/members\.forEach\(room=>open\.add\(room\)\)/)
 })
+
+
+test('HOLD print safety: HOLD items are excluded from dispatch/print and preserved in staff tracking',()=>{
+ assert.match(page,/const isHold=\(r:WorkOrder\)=>\/HOLD\/i\.test\(r\.work_status\|\|''\)\|\|\/HOLD\/i\.test\(r\.qa_status\|\|''\)/)
+ assert.match(page,/const dispatchEligible=useMemo\(\(\)=>eligible\.filter\(r=>!isHold\(r\)\),\[eligible\]\)/)
+ assert.match(page,/const holdEligible=useMemo\(\(\)=>eligible\.filter\(r=>isHold\(r\)\),\[eligible\]\)/)
+ assert.match(page,/inScope=useMemo\(\(\)=>\{\s*const needle=normalize\(query\)\s*return dispatchEligible\.filter/)
+ assert.match(page,/className="panel wo-sheet wo-hold-section"/)
+ assert.match(page,/className="wo-kpi wo-kpi-hold"/)
+ assert.match(css,/body\.report-print-mode\[data-print-report="Above Condo — Work Order"\] \.wo-kpi-hold\{display:none!important\}/)
+ assert.match(css,/body\.report-print-mode\[data-print-report="Above Condo — Work Order"\] \.wo-hold-section\{display:none!important\}/)
+
+ const isHoldFn = r => /HOLD/i.test(r.work_status||'')||/HOLD/i.test(r.qa_status||'');
+ const sampleRows = [
+  {work_id:'DF-B602-01',room_group:'B602',contractor:'3 Kings',work_status:'รอตรวจ',qa_status:'VERIFIED'},
+  {work_id:'DF-B602-23',room_group:'B602',contractor:'3 Kings',work_status:'HOLD รอยืนยันชิ้นส่วน',qa_status:'HOLD_MISSING_EVIDENCE'},
+  {work_id:'DF-A416-01',room_group:'A416',contractor:'RSE',work_status:'รอตรวจ',qa_status:'VERIFIED'},
+  {work_id:'DF-A416-04',room_group:'A416',contractor:'RSE',work_status:'HOLD',qa_status:'HOLD_MISSING_EVIDENCE'},
+  {work_id:'DF-A512-01',room_group:'A512',contractor:'RSE',work_status:'HOLD',qa_status:'HOLD'},
+  {work_id:'DF-A612-08',room_group:'A612',contractor:'3 Kings',work_status:'HOLD',qa_status:'HOLD_MISSING_EVIDENCE'}
+ ];
+ const dispatch = sampleRows.filter(r => !isHoldFn(r));
+ const hold = sampleRows.filter(r => isHoldFn(r));
+ assert.equal(dispatch.length, 2);
+ assert.equal(hold.length, 4);
+ assert.ok(!dispatch.some(r => r.work_id === 'DF-B602-23'));
+ assert.ok(hold.some(r => r.work_id === 'DF-B602-23'));
+ assert.ok(hold.some(r => r.work_id === 'DF-A416-04'));
+ assert.ok(hold.some(r => r.work_id === 'DF-A512-01'));
+ assert.ok(hold.some(r => r.work_id === 'DF-A612-08'));
+})

@@ -3,7 +3,7 @@
 .wo-update-meta span{font-size:8.5px;color:var(--muted);font-weight:700}
 .wo-update-meta b{font-size:10px;color:var(--navy);font-weight:800;white-space:nowrap}
 @media(max-width:760px){.wo-update-meta{align-items:flex-start}}
-.wo-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 0 12px}
+.wo-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:0 0 12px}
 .wo-kpi{appearance:none;min-width:0;min-height:118px;text-align:left;display:flex;flex-direction:column;gap:6px;align-items:stretch;cursor:pointer;border:1px solid #d9e0e7;border-radius:12px;background:#fff;color:#24384f;padding:13px 14px;box-shadow:0 2px 8px rgba(20,40,60,.045)}
 .wo-kpi-head{display:flex;align-items:flex-start;justify-content:space-between;gap:7px}
 .wo-kpi-head span{font-size:12px;font-weight:800;line-height:1.3}
@@ -11,6 +11,8 @@
 .wo-kpi small{font-size:10px;color:#69788a}
 .wo-kpi.selected{border-color:#172a43;background:#ebf1f9;box-shadow:inset 0 0 0 1px #172a43}
 .wo-kpi.late .wo-kpi-head>b{color:#ad4337}
+.wo-kpi-hold{border-color:#e4dcce;background:#fffdfa}
+.wo-kpi-hold .wo-kpi-head>b{color:#9a5b13}
 .wo-kpi:focus-visible{outline:3px solid #4091dc;outline-offset:2px}
 .wo-kpi-team-list{display:flex;align-content:flex-start;flex-wrap:wrap;gap:5px;margin-top:3px;width:100%}
 .wo-kpi-team{display:inline-flex;align-items:center;gap:5px;padding:3px 6px;border:1px solid #dce4ed;background:#f5f8fc;border-radius:7px;font-size:10px;line-height:1.25;min-width:0;max-width:100%;overflow-wrap:anywhere}
@@ -52,6 +54,11 @@
 .wo-table a{font-weight:700;color:#1561a7}
 .wo-empty{text-align:center!important;color:#65758a!important;padding:30px!important}
 .wo-error{border-color:#c55342}
+.wo-hold-section{margin-top:14px;border:1px solid #e5dccb;background:#fffdfa}
+.wo-hold-section .wo-sheet-title h2{color:#7c480f}
+.wo-hold-badge{display:inline-block;padding:1px 5px;border-radius:4px;background:#fef3c7;border:1px solid #fde68a;color:#92400e;font-size:9px;font-weight:900;margin-right:4px;letter-spacing:.3px}
+.wo-hold-table th{background:#faf4ea}
+@media(max-width:1100px){.wo-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:900px){.wo-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.wo-kpi{min-height:96px}}
 @media(max-width:620px){.wo-kpis{grid-template-columns:1fr}.wo-kpi{padding:10px}.wo-kpi-head>b{font-size:23px}.wo-filters{display:grid;grid-template-columns:1fr}.wo-filters label{min-width:0}}
 @media print{
@@ -59,6 +66,8 @@
  body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-filters,
  body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-screen-scope,
  body.report-print-mode[data-print-report="Above Condo — Work Order"] .report-print-filters{display:none!important}
+ body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-kpi-hold{display:none!important}
+ body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-hold-section{display:none!important}
  body.report-print-mode[data-print-report="Above Condo — Work Order"] .report-print-header{margin-bottom:3mm!important;padding-bottom:2mm!important}
  body.report-print-mode[data-print-report="Above Condo — Work Order"] .report-print-brand{margin-bottom:2mm!important}
  body.report-print-mode[data-print-report="Above Condo — Work Order"] .wo-kpis{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:1.8mm!important;margin:0 0 2.5mm!important;break-inside:avoid!important}
