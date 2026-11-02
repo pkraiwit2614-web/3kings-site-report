@@ -66,7 +66,7 @@ function run({approvals=[approval()],master=record(),rpcError=null}={}){
 test('existing 2h handler invokes approved processor only on normal Work Order shift',()=>{
   assert.match(legacy,/function syncWorkOrderHourly20261015\(\)/);
   assert.match(legacy,/workOrderApprovedAutoPromotion20261102_\(\)/);
-  assert.match(legacy,/day===7\|\|hour<8\|\|hour>18/);
+  assert.match(legacy,/Preserve the existing Production 24-hour/);
   assert.match(legacy,/workOrderRun20261015_\(false,false\)/);
   assert.doesNotMatch(source,/newTrigger\(|ScriptApp|\.delete\(/);
 });
