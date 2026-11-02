@@ -58,3 +58,7 @@ These skills are agent guidance, **not** a server-side authorization, authentica
 - **Mode:** authorized_write (only the user-scoped records; inspection-only messages remain read-only).
 - **Risk-proportionate workflow:** Data/document/read-only operations must NOT require Git branch, CI or new Vercel Preview. Reuse verified source snapshots/checks within the same command; pause conflicting records only; readback targeted outputs and report PASS/FAIL/PENDING accurately.
 - **Subordinate helpers:** Superpowers/Task Observer optional process helpers must not block the user-facing task or repeat SOP/source loads; six project safety rules and RBAC/RLS are unchanged.
+
+## 02/11/2026 — Existing GAS Sync execution fallback
+- For user-authorized Defect/Work Order source updates, resolve the ACTIVE GLOBAL SOP `clasp NOT_FOUND` addendum through live Drive before attempting existing GAS sync. `NOT_FOUND` is an execution-path blocker, not automatic missing Master or permission to bypass Writer/Queue/Approval rules. Follow the approved original-channel priority and check prior execution/dedup before retry.
+- Preserve 5 hard gates, Combine/Work ID history, Web override/queue and existing Runtime restrictions; the row-revision conflict rule for business records is **not** a blanket source-file Revision/ACL/Writer Ownership prewrite audit. Do not change Work Plan/OOO/OOS or other modules. E2E requires Source→Execution/Sync Log→DB→authenticated Defect/Work Order UI; otherwise `PENDING/BLOCKED_EXECUTION_PATH`.
