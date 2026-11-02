@@ -166,7 +166,7 @@ test('inactive historical Work IDs do not leak into dispatch or visible reconcil
  assert.match(page,/\.eq\('source_active',true\)/)
  assert.doesNotMatch(page,/\.eq\('source_active',false\)/)
  assert.doesNotMatch(page,/reviewLostFromDispatch|reviewNeedsRoomRecheck|wo-reconciliation/)
- assert.match(page,/const eligible=useMemo\(\(\)=>rows\.filter/)
+ assert.match(page,/const eligible=useMemo\(\(\)=>rows\.filter\(r=>\(!finished\(r\.work_status\)\|\|completionConflict\(r\)\)&&ids\(r\.room_group\)\.length>0\),\[rows\]\)/)
  assert.match(page,/const counters:Record<Quick,number>=\{ALL:kpiRows\.ALL\.length/)
  assert.doesNotMatch(page,/\.update\(|\.insert\(|\.delete\(|\.upsert\(/)
 })
@@ -184,7 +184,7 @@ test('removing reconciliation notices retains role, print and Combine boundaries
 })
 
 test('handover-complete rooms and Combine groups with an open active Work ID remain printable',()=>{
- assert.match(page,/const eligible=useMemo\(\(\)=>rows\.filter\(r=>!finished\(r\.work_status\)&&ids\(r\.room_group\)\.length>0\),\[rows\]\)/)
+ assert.match(page,/const eligible=useMemo\(\(\)=>rows\.filter\(r=>\(!finished\(r\.work_status\)\|\|completionConflict\(r\)\)&&ids\(r\.room_group\)\.length>0\),\[rows\]\)/)
  assert.match(page,/\{filtered\.map\(r=>/)
  assert.match(page,/source_active',true/)
  assert.doesNotMatch(page,/source_active',false/)
@@ -194,7 +194,7 @@ test('handover-complete rooms and Combine groups with an open active Work ID rem
 
 
 test('HOLD print safety: HOLD items are excluded from dispatch/print and preserved in staff tracking',()=>{
- assert.match(page,/const isHold=\(r:WorkOrder\)=>\/HOLD\/i\.test\(r\.work_status\|\|''\)\|\|\/HOLD\/i\.test\(r\.qa_status\|\|''\)/)
+ assert.match(page,/const isHold=\(r:WorkOrder\)=>completionConflict\(r\)\|\|\/HOLD\/i\.test\(r\.work_status\|\|''\)\|\|\/HOLD\/i\.test\(r\.qa_status\|\|''\)/)
  assert.match(page,/const dispatchEligible=useMemo\(\(\)=>eligible\.filter\(r=>!isHold\(r\)\),\[eligible\]\)/)
  assert.match(page,/const holdEligible=useMemo\(\(\)=>eligible\.filter\(r=>isHold\(r\)\),\[eligible\]\)/)
  assert.match(page,/inScope=useMemo\(\(\)=>\{\s*const needle=normalize\(query\)\s*return dispatchEligible\.filter/)
@@ -222,3 +222,20 @@ test('HOLD print safety: HOLD items are excluded from dispatch/print and preserv
  assert.ok(hold.some(r => r.work_id === 'DF-A512-01'));
  assert.ok(hold.some(r => r.work_id === 'DF-A612-08'));
 })
+
+
+test('completed statuses are hidden unless unfinished QA requires an internal HOLD',()=>{
+ const statusDone=v=>/เสร็จแล้ว|เสร็จสิ้น|งดแจก|ยกเลิก/.test(v||'');
+ const hasConflict=r=>statusDone(r.work_status)&&/ยังไม่เสร็จ/.test(r.qa_status||'');
+ assert.ok(statusDone('เสร็จสิ้น'));
+ assert.ok(statusDone('แก้ไขเสร็จแล้ว — งดแจก'));
+ assert.ok(statusDone('ยกเลิก'));
+ assert.ok(!statusDone('รอดำเนินการ'));
+ assert.ok(!statusDone('รอเริ่มงาน'));
+ assert.ok(hasConflict({work_status:'เสร็จสิ้น',qa_status:'งานบานตู้ยังไม่เสร็จ'}));
+ assert.ok(!hasConflict({work_status:'เสร็จสิ้น',qa_status:'APPROVED_NONRETIRING'}));
+ assert.match(page,/const completionConflict=/);
+ assert.match(page,/const isHold=\(r:WorkOrder\)=>completionConflict\(r\)/);
+ assert.match(page,/completionConflict\(r\)\?'สถานะขัดแย้ง — รอตรวจสอบ'/);
+ assert.doesNotMatch(page,/\.update\(|\.insert\(|\.delete\(|\.upsert\(/);
+});
