@@ -58,3 +58,7 @@ These skills are agent guidance, **not** a server-side authorization, authentica
 - This skill is Trigger 06 only (`อัปเดตวัสดุ`, `อัปเดตวัสดุตามเดิม`); the shared authoritative Drive SOP has both Trigger 06 and 07.
 - Trigger 07 (`เช็ก PO`, `เช็ค PO`, `ตรวจ PO`) remains READ_ONLY and Express-only. It cannot inherit the authorized_write permission of this skill.
 - Do not edit raw Express export, duplicate PO-line quantity across Plots, set Received without receipt, or delete unmatched PR/Plan. An unavailable sync is PENDING, not success.
+
+## 02/11/2026 — Existing Express GAS execution fallback
+- If an authorized Trigger 06 Import/Sync using existing Apps Script execution returns `clasp NOT_FOUND`, apply the current GLOBAL SOP fallback; check exact project/function/deployment and the prior source fingerprint and sync outcomes. Do not create new queue/trigger/OAuth or write Supabase instead of Master.
+- Keep Express PO/PL/PR dedup, receipts, exact File ID, line/Plot, Approval/HOLD, existing Runtime queue and original Sync path. After authorized execution require actual Source→Master→Sync Log→DB→Materials Web evidence. Trigger 07 (`เช็ก PO`) remains read-only, even when `NOT_FOUND` is observed.
