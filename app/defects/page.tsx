@@ -58,7 +58,7 @@ const categories:Category[]=[
   {id:'hotel-nocustomer',label:'ไม่มีลูกค้า • ร่วมโรงแรม',tone:'hotel',predicate:r=>r.customer_status==='ไม่มีลูกค้า'&&r.hotel_participation==='ร่วมโรงแรม'},
   {id:'nonhotel-customer',label:'มีลูกค้า • ไม่ร่วมโรงแรม',tone:'neutral',predicate:r=>r.customer_status==='มีลูกค้า'&&r.hotel_participation==='ไม่ร่วมโรงแรม'},
   {id:'nonhotel-no-customer',label:'ไม่มีลูกค้า • ไม่ร่วมโรงแรม',tone:'neutral',predicate:r=>r.customer_status==='ไม่มีลูกค้า'&&r.hotel_participation==='ไม่ร่วมโรงแรม'},
-  {id:'status-incomplete',label:'เพิ่งได้รับแจ้ง Defect',tone:'danger',predicate:r=>r.status_group==='Hotel - Incomplete'},
+  {id:'status-incomplete',label:'เพิ่งได้รับแจ้ง Defect',tone:'danger',predicate:r=>r.status_group==='Hotel - Incomplete'||r.status_group==='Non-Hotel - Incomplete'},
   {id:'status-awaiting-hotel',label:DEFECT_AWAITING_ACCEPTANCE_LABEL,tone:'warn',predicate:r=>r.status_group==='Hotel - Awaiting Check'},
   {id:'status-awaiting-acceptance',label:DEFECT_AWAITING_ACCEPTANCE_LABEL,tone:'warn',predicate:isAwaitingAcceptance},
   {id:'status-hotel-checked',label:'Hotel Engineer ตรวจแล้ว',tone:'good',predicate:r=>r.status_group==='Hotel - Checked Complete'&&r.hotel_participation==='ร่วมโรงแรม'},
@@ -81,6 +81,8 @@ const categories:Category[]=[
   {id:'hotel-nocustomer-awaiting-receive',label:'ไม่มีลูกค้า • ร่วมโรงแรม • '+DEFECT_AWAITING_ACCEPTANCE_LABEL,tone:'warn',predicate:r=>r.customer_status==='ไม่มีลูกค้า'&&r.hotel_participation==='ร่วมโรงแรม'&&(r.status_group==='Hotel - Awaiting Check'||r.status_group==='Non-Hotel - Pending Handover')},
   {id:'hotel-nocustomer-checked',label:'ไม่มีลูกค้า • ร่วมโรงแรม • Hotel Engineer ตรวจแล้ว',tone:'good',predicate:r=>r.customer_status==='ไม่มีลูกค้า'&&r.hotel_participation==='ร่วมโรงแรม'&&r.status_group==='Hotel - Checked Complete'},
   {id:'hotel-nocustomer-pending',label:'ไม่มีลูกค้า • ร่วมโรงแรม • '+DEFECT_AWAITING_ACCEPTANCE_LABEL,tone:'warn',predicate:r=>r.customer_status==='ไม่มีลูกค้า'&&r.hotel_participation==='ร่วมโรงแรม'&&r.status_group==='Non-Hotel - Pending Handover'},
+  {id:'nonhotel-customer-incomplete',label:'มีลูกค้า • ไม่ร่วมโรงแรม • เพิ่งได้รับแจ้ง Defect',tone:'danger',predicate:r=>r.customer_status==='มีลูกค้า'&&r.hotel_participation==='ไม่ร่วมโรงแรม'&&r.status_group==='Non-Hotel - Incomplete'},
+  {id:'nonhotel-nocustomer-incomplete',label:'ไม่มีลูกค้า • ไม่ร่วมโรงแรม • เพิ่งได้รับแจ้ง Defect',tone:'danger',predicate:r=>r.customer_status==='ไม่มีลูกค้า'&&r.hotel_participation==='ไม่ร่วมโรงแรม'&&r.status_group==='Non-Hotel - Incomplete'},
   {id:'nonhotel-customer-complete',label:'มีลูกค้า • ไม่ร่วมโรงแรม • ลูกค้าตรวจรับเรียบร้อยแล้ว',tone:'good',predicate:r=>r.customer_status==='มีลูกค้า'&&r.hotel_participation==='ไม่ร่วมโรงแรม'&&r.status_group==='Non-Hotel - Handover Complete'},
   {id:'nonhotel-customer-pending',label:'มีลูกค้า • ไม่ร่วมโรงแรม • '+DEFECT_AWAITING_ACCEPTANCE_LABEL,tone:'warn',predicate:r=>r.customer_status==='มีลูกค้า'&&r.hotel_participation==='ไม่ร่วมโรงแรม'&&r.status_group==='Non-Hotel - Pending Handover'},
   {id:'nonhotel-customer-awaiting-receive',label:'มีลูกค้า • ไม่ร่วมโรงแรม • '+DEFECT_AWAITING_ACCEPTANCE_LABEL,tone:'warn',predicate:r=>r.customer_status==='มีลูกค้า'&&r.hotel_participation==='ไม่ร่วมโรงแรม'&&(r.status_group==='Non-Hotel - Pending Handover'||r.status_group==='Hotel - Checked Complete')},
@@ -171,7 +173,7 @@ export default function DefectDetailPage(){
         ])
         requireSuccessfulReads([{error:roomRead.error}])
         if(!alive||signal.aborted)return
-        setRows(((roomRead.data||[]) as RoomRow[]).map(row=>({...row,status_group:canonicalDefectStatusGroup(row.status_group,row.hotel_participation)})))
+        setRows(((roomRead.data||[]) as RoomRow[]).map(row=>({...row,status_group:canonicalDefectStatusGroup(row.status_group,row.hotel_participation,row.current_status)})))
         // A failed timestamp read must not substitute a stale source-file date.
         setLatestDefectChangeAt(!latestChangeRead.error && typeof latestChangeRead.data==='string'?latestChangeRead.data:null)
         setLoadError(false)
