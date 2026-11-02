@@ -239,3 +239,39 @@ test('completed statuses are hidden unless unfinished QA requires an internal HO
  assert.match(page,/completionConflict\(r\)\?'สถานะขัดแย้ง — รอตรวจสอบ'/);
  assert.doesNotMatch(page,/\.update\(|\.insert\(|\.delete\(|\.upsert\(/);
 });
+
+test('status dropdown filters only active unfinished dispatch and keeps HOLD as internal-only',()=>{
+ assert.match(page,/const \[statusFilter,setStatusFilter\]=useState\('ALL'\)/)
+ assert.match(page,/statusChoices=useMemo\(\(\)=>\[\.\.\.new Set\(dispatchEligible\.map\(r=>displayWorkStatus\(r\.work_status\)\)\)\]/)
+ assert.match(page,/statusFilter!=='ALL'&&\(statusFilter==='HOLD'\|\|displayWorkStatus\(r\.work_status\)!==statusFilter\)/)
+ assert.match(page,/statusFilter!=='ALL'&&statusFilter!=='HOLD'/)
+ assert.match(page,/<select aria-label="กรองตามสถานะงาน" value=\{statusFilter\}/)
+ assert.match(page,/<option value="ALL">ทุกสถานะงานค้าง<\/option>/)
+ assert.match(page,/<option value="HOLD">HOLD \/ รอตรวจสอบ \(ภายใน\)<\/option>/)
+ assert.match(page,/setStatusFilter\('ALL'\)/)
+ assert.match(page,/setStatusFilter\('HOLD'\)/)
+ assert.match(page,/const dispatchEligible=useMemo\(\(\)=>eligible\.filter\(r=>!isHold\(r\)\)/)
+ assert.match(page,/const holdEligible=useMemo\(\(\)=>eligible\.filter\(r=>isHold\(r\)\)/)
+ assert.match(css,/\.wo-filters input,\.wo-filters select/)
+ assert.match(css,/\.report-print-filters\{display:none!important\}/)
+ assert.doesNotMatch(page,/\.insert\(|\.update\(|\.upsert\(|\.delete\(/)
+ const sample=[
+  {work_status:'รอดำเนินการ',qa_status:''},
+  {work_status:'รอตรวจ',qa_status:'VERIFIED'},
+  {work_status:'เสร็จสิ้น',qa_status:'APPROVED'},
+  {work_status:'เสร็จสิ้น',qa_status:'งานบานตู้ยังไม่เสร็จ'},
+  {work_status:'HOLD',qa_status:'HOLD_MISSING_EVIDENCE'}
+ ];
+ const isDone=r=>/เสร็จแล้ว|เสร็จสิ้น|งดแจก|ยกเลิก/.test(r.work_status);
+ const conflict=r=>isDone(r)&&/ยังไม่เสร็จ/.test(r.qa_status);
+ const hold=r=>conflict(r)||/HOLD/i.test(r.work_status)||/HOLD/i.test(r.qa_status);
+ const eligible=sample.filter(r=>!isDone(r)||conflict(r));
+ const dispatch=eligible.filter(r=>!hold(r));
+ const internal=eligible.filter(hold);
+ const choices=[...new Set(dispatch.map(r=>r.work_status))];
+ assert.deepEqual(choices,['รอดำเนินการ','รอตรวจ']);
+ assert.equal(dispatch.filter(r=>r.work_status==='รอตรวจ').length,1);
+ assert.equal(dispatch.filter(r=>r.work_status==='HOLD').length,0);
+ assert.equal(internal.length,2);
+ assert.equal(dispatch.filter(r=>r.work_status==='เสร็จสิ้น').length,0);
+})
