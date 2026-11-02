@@ -14,6 +14,10 @@ test('read-only inspection never calls a fallback executor',async()=>{
  let calls=0; const v=base();v.mode='read_only';v.adapters.connected_api=mk(async()=>{calls++;return {status:'EXECUTED'}});
  const r=await isolatedFallback(v);assert.equal(r.status,'READ_ONLY_NO_EXECUTION');assert.equal(calls,0);assert.equal(r.liveProductionPass,false);
 });
+test('unrelated document-only work cannot invoke GAS fallback',async()=>{
+ let calls=0;const v=base();v.mode='document_only';v.adapters.connected_api=mk(async()=>{calls++});
+ const r=await isolatedFallback(v);assert.equal(r.status,'BLOCKED_UNSUPPORTED_MODE');assert.equal(calls,0);
+});
 test('existing connected API is first and requires execution evidence',async()=>{
  const v=base(), calls=[];v.adapters.connected_api=mk(async()=>{calls.push('api');return {status:'EXECUTED',executionId:'SYNTHETIC_EXEC_1',exactTarget:true}});
  v.adapters.same_project_editor=mk(async()=>{calls.push('editor');return {status:'EXECUTED'}});
