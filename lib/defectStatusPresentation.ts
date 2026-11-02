@@ -6,14 +6,18 @@ export type DefectStatusView={
 }
 
 /** Map verified legacy/source aliases to existing Flow categories for display only. */
-export function canonicalDefectStatusGroup(group:string|null,hotelParticipation:string|null):string|null{
+export function canonicalDefectStatusGroup(group:string|null,hotelParticipation:string|null,currentStatus?:string|null):string|null{
+  // Display-only reconciliation: newly reported defects reopen the visible count,
+  // without erasing a room's historical handover or changing the Excel/DB source.
+  if(/^เพิ่งได้รับแจ้ง\s+Defect\b/i.test((currentStatus||'').trim()))
+    return hotelParticipation==='ไม่ร่วมโรงแรม'?'Non-Hotel - Incomplete':'Hotel - Incomplete'
   if(group==='Hotel - Completed / Awaiting Hotel Inspection'&&hotelParticipation==='ร่วมโรงแรม')return 'Hotel - Awaiting Check'
   if(group==='Handover Complete'&&hotelParticipation==='ไม่ร่วมโรงแรม')return 'Non-Hotel - Handover Complete'
   return group
 }
 
 export function statusTone(r:DefectStatusView):'danger'|'warn'|'good'|'neutral'{
-  if(r.status_group==='Hotel - Incomplete')return 'danger'
+  if(r.status_group==='Hotel - Incomplete'||r.status_group==='Non-Hotel - Incomplete')return 'danger'
   if(r.status_group==='Hotel - Awaiting Check'||r.status_group==='Non-Hotel - Pending Handover')return 'warn'
   if(r.status_group==='Hotel - Checked Complete')return r.hotel_participation==='ไม่ร่วมโรงแรม'?'warn':'good'
   if(r.status_group==='Non-Hotel - Handover Complete')return 'good'
@@ -23,7 +27,7 @@ export function statusTone(r:DefectStatusView):'danger'|'warn'|'good'|'neutral'{
 export const DEFECT_AWAITING_ACCEPTANCE_LABEL='Defect เสร็จแล้ว • รอลูกค้า / Hotel ตรวจรับ'
 
 export function statusLabel(r:DefectStatusView):string{
-  if(r.status_group==='Hotel - Incomplete')return 'เพิ่งได้รับแจ้ง Defect'
+  if(r.status_group==='Hotel - Incomplete'||r.status_group==='Non-Hotel - Incomplete')return 'เพิ่งได้รับแจ้ง Defect'
   if(r.status_group==='Hotel - Awaiting Check')return DEFECT_AWAITING_ACCEPTANCE_LABEL
   if(r.status_group==='Hotel - Checked Complete')return r.hotel_participation==='ไม่ร่วมโรงแรม'?DEFECT_AWAITING_ACCEPTANCE_LABEL:'Hotel Engineer ตรวจแล้ว'
   if(r.status_group==='Non-Hotel - Pending Handover')return DEFECT_AWAITING_ACCEPTANCE_LABEL
