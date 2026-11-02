@@ -12,7 +12,7 @@ const migration=read('supabase/migrations/20261015121500_defect_work_order_reado
 test('read-only dispatch loads active Work IDs and only excludes finished work, irrespective of room status',()=>{
  assert.match(page,/from\('defect_work_order_snapshot'\)\.select/)
  assert.doesNotMatch(page,/from\('condo_room_status'\)\.select/)
- assert.match(page,/rows\.filter\(r=>!finished\(r\.work_status\)&&ids\(r\.room_group\)\.length>0\)/)
+ assert.match(page,/rows\.filter\(r=>\(!finished\(r\.work_status\)\|\|completionConflict\(r\)\)&&ids\(r\.room_group\)\.length>0\)/)
  assert.doesNotMatch(page,/members\.every\(room=>roomMap\.get\(room\)==='Hotel - Incomplete'\)/)
  assert.match(page,/finished\(r\.work_status\)/)
  assert.doesNotMatch(page,/\.insert\(|\.update\(|\.upsert\(|\.delete\(/)
@@ -176,7 +176,7 @@ test('removing reconciliation notices retains role, print and Combine boundaries
  assert.match(page,/const permitted=canAccessWorkOrder\(role\)/)
  assert.match(acl,/\['owner','admin','viewer_editor'\]\.includes\(role\)/)
  assert.match(acl,/permissionDecision\(role,'defect','view'/)
- assert.match(page,/rows\.filter\(r=>!finished\(r\.work_status\)&&ids\(r\.room_group\)\.length>0\)/)
+ assert.match(page,/rows\.filter\(r=>\(!finished\(r\.work_status\)\|\|completionConflict\(r\)\)&&ids\(r\.room_group\)\.length>0\)/)
  assert.match(page,/flatMap\(room=>hotelRoomMembers\(room\)\)/)
  assert.doesNotMatch(page,/<details className="panel wo-reconciliation">|reviewNeedsRoomRecheck|reviewLostFromDispatch/)
  assert.match(css,/body\.report-print-mode\[data-print-report="Above Condo — Work Order"\] \.wo-reconciliation,/)
