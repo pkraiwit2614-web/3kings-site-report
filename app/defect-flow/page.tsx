@@ -17,6 +17,7 @@ type FlowRow={
   building:'A'|'B'|string
   customer_status:string
   hotel_participation:string
+  current_status:string|null
   status_group:string|null
   synced_at:string|null
 }
@@ -30,6 +31,7 @@ const GROUP={
   awaiting:'Hotel - Awaiting Check',
   roomInspection:'Hotel - Awaiting Room Inspection',
   incomplete:'Hotel - Incomplete',
+  nonHotelIncomplete:'Non-Hotel - Incomplete',
   handover:'Non-Hotel - Handover Complete',
   pending:'Non-Hotel - Pending Handover',
   awaitingSale:'Non-Hotel - Awaiting Sale',
@@ -166,12 +168,14 @@ function buildingCounts(rows:FlowRow[],building:'A'|'B'){
     customerNonHandover:status('มีลูกค้า','ไม่ร่วมโรงแรม',GROUP.handover),
     customerNonPending:status('มีลูกค้า','ไม่ร่วมโรงแรม',GROUP.pending),
     customerNonChecked:status('มีลูกค้า','ไม่ร่วมโรงแรม',GROUP.checked),
+    customerNonIncomplete:status('มีลูกค้า','ไม่ร่วมโรงแรม',GROUP.nonHotelIncomplete),
     noHotelChecked:status('ไม่มีลูกค้า','ร่วมโรงแรม',GROUP.checked),
     noHotelHandover:status('ไม่มีลูกค้า','ร่วมโรงแรม',GROUP.handover),
     noHotelAwaiting:status('ไม่มีลูกค้า','ร่วมโรงแรม',GROUP.awaiting),
     noHotelPending:status('ไม่มีลูกค้า','ร่วมโรงแรม',GROUP.pending),
     noHotelIncomplete:status('ไม่มีลูกค้า','ร่วมโรงแรม',GROUP.incomplete),
     noNonAwaitingSale:status('ไม่มีลูกค้า','ไม่ร่วมโรงแรม',GROUP.awaitingSale),
+    noNonIncomplete:status('ไม่มีลูกค้า','ไม่ร่วมโรงแรม',GROUP.nonHotelIncomplete),
   }
 }
 
@@ -206,11 +210,12 @@ function BuildingFlow({top,building,data,combineMode=false}:{top:number;building
   const nonHotelCustomer:StatusItem[]=[
     {label:'Customer Accepted',lines:['ลูกค้าตรวจรับเรียบร้อยแล้ว'],count:data.customerNonHandover,tone:'good',href:link(defectHref({filter:'nonhotel-customer-complete',building}))},
     {label:'Awaiting Acceptance',lines:awaitingAcceptanceLines,count:data.customerNonPending+data.customerNonChecked,tone:'warn',href:link(defectHref({filter:'nonhotel-customer-awaiting-receive',building}))},
+    ...(data.customerNonIncomplete>0?[{label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:data.customerNonIncomplete,tone:'danger' as Tone,href:link(defectHref({filter:'nonhotel-customer-incomplete',building}))}]:[]),
   ]
-  const nonHotelNoCustomer:StatusItem[]=data.noNonAwaitingSale>0?[
-    {label:'Awaiting Sale',lines:['Awaiting Sale','ยังไม่มีลูกค้า'],count:data.noNonAwaitingSale,tone:'neutral',href:link(defectHref({filter:'nonhotel-nosale',building}))},
-  ]:[
-    {label:'Clear',lines:['ไม่มีห้องคงค้าง'],count:0,tone:'good'},
+  const nonHotelNoCustomer:StatusItem[]=[
+    ...(data.noNonAwaitingSale>0?[{label:'Awaiting Sale',lines:['Awaiting Sale','ยังไม่มีลูกค้า'],count:data.noNonAwaitingSale,tone:'neutral' as Tone,href:link(defectHref({filter:'nonhotel-nosale',building}))}]:[]),
+    ...(data.noNonIncomplete>0?[{label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:data.noNonIncomplete,tone:'danger' as Tone,href:link(defectHref({filter:'nonhotel-nocustomer-incomplete',building}))}]:[]),
+    ...(!data.noNonAwaitingSale&&!data.noNonIncomplete?[{label:'Clear',lines:['ไม่มีห้องคงค้าง'],count:0,tone:'good' as Tone}]:[]),
   ]
   return <g>
     <a href={link(defectHref({building}))} className="flow-link" aria-label={`เปิดรายละเอียดตึก ${building}`}>
@@ -353,10 +358,10 @@ export default function DefectFlowPage(){
     let alive=true
     const supabase=getSupabase()
     const load=async()=>{
-      const {data,error}=await supabase.from('condo_room_status').select('room_no,building,customer_status,hotel_participation,status_group,synced_at').order('room_no')
+      const {data,error}=await supabase.from('condo_room_status').select('room_no,building,customer_status,hotel_participation,current_status,status_group,synced_at').order('room_no')
       if(!alive)return
       if(error){setError(error.message);setLoading(false);return}
-      setRows(((data||[]) as FlowRow[]).map(row=>({...row,status_group:canonicalDefectStatusGroup(row.status_group,row.hotel_participation)})));setError('');setLoading(false)
+      setRows(((data||[]) as FlowRow[]).map(row=>({...row,status_group:canonicalDefectStatusGroup(row.status_group,row.hotel_participation,row.current_status)})));setError('');setLoading(false)
     }
     void load()
     const channel=supabase.channel('live-defect-flow').on('postgres_changes',{event:'*',schema:'public',table:'condo_room_status'},()=>{void load()}).subscribe()
@@ -418,7 +423,7 @@ export default function DefectFlowPage(){
       checked:checkedRows.length-legacyNonHotelChecked,
       handover:flowRows.filter(r=>r.status_group===GROUP.handover).length,
       awaitingAcceptance:flowRows.filter(r=>r.status_group===GROUP.awaiting).length+flowRows.filter(r=>r.status_group===GROUP.pending).length+legacyNonHotelChecked,
-      incomplete:flowRows.filter(r=>r.status_group===GROUP.incomplete).length,
+      incomplete:flowRows.filter(r=>r.status_group===GROUP.incomplete||r.status_group===GROUP.nonHotelIncomplete).length,
       legacyNonHotelChecked,
     }
   },[flowRows])
