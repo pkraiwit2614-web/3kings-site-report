@@ -37,7 +37,7 @@ function workOrderApprovedAutoPromotion20261102_(){
   try{
     const approvals=call('work_order_promotion_approvals?select=work_id,source_file_id,source_modified_at,approval_evidence_url,approved_at,approved_stage_snapshot,approved_fields,expected_snapshot_hash,promoted_at,revoked_at&revoked_at=is.null&promoted_at=is.null&order=approved_at.asc&limit=500');
     if(!Array.isArray(approvals))throw Error('APPROVAL_READ_FAILED');
-    if(!approvals.length)return out;
+    // Even without approvals, scan Master and stage eligible NEW IDs for review.
     const file=DriveApp.getFileById(SOURCE_ID);
     if(file.getName()!=='Defect_Work_Order_Updated_2026-10-15.xlsx'||
       file.getMimeType()!=='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
@@ -202,7 +202,8 @@ function workOrderStageUnapprovedMaster20261102_(idRows,str,dt,call,revision){
       previous.source_work_status===status&&previous.stage_decision===decision&&
       previous.source_master_row===index&&
       (previous.source_evidence_url||'')===evidence&&
-      JSON.stringify(previous.source_payload||{})===JSON.stringify(payload))continue;
+      ['next_action','received_date','due_date','supervisor'].every(k=>
+        String((previous.source_payload||{})[k]||'')===String(payload[k]||'')))continue;
     changes.push(candidate);
   }
   if(!changes.length)return {status:'NO_CHANGE',staged:0,held_unmappable:holds};
