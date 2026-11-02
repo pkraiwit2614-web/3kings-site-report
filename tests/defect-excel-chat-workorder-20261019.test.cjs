@@ -24,7 +24,7 @@ test('Excel chat-marked detail is read by both existing importers without changi
 })
 
 test('open Work IDs appear for hotel, non-hotel, handed-over, and Combine rooms without reclassifying the room', () => {
-  assert.match(order, /rows\.filter\(r=>!finished\(r\.work_status\)&&ids\(r\.room_group\)\.length>0\)/)
+  assert.match(order, /rows\.filter\(r=>\(!finished\(r\.work_status\)\|\|completionConflict\(r\)\)&&ids\(r\.room_group\)\.length>0\)/)
   assert.match(report, /members\.forEach\(room=>open\.add\(room\)\)/)
   assert.doesNotMatch(order, /members\.every\(room=>roomMap\.get\(room\)==='Hotel - Incomplete'\)/)
   assert.match(order, /\.eq\('source_active',true\)/)
