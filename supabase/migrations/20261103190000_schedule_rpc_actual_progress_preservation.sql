@@ -63,7 +63,7 @@ BEGIN
   FROM public.schedule_tasks
   WHERE project_id = v_project_id AND is_active = true;
 
-  -- Set expected minimum inventory for canonical Above Villa projects
+  -- Set expected minimum canonical inventory for Above Villa projects
   v_expected_min := CASE
     WHEN p_project_code = 'AV-P6' THEN 87
     WHEN p_project_code = 'AV-P7' THEN 67
@@ -245,12 +245,13 @@ BEGIN
   -- 6. Stale Task Deactivation (Strict Full Snapshot Proof Required)
   -- Deactivation of unreferenced tasks is ONLY permitted when Full Snapshot is strictly proven:
   -- A) Explicit directive in source file (e.g. #full_snapshot), OR
-  -- B) Incoming rows count matches or exceeds existing active tasks AND meets minimum expected inventory.
+  -- B) Incoming rows count matches or exceeds the project's canonical expected inventory (e.g. 87 for AV-P6)
+  --    AND is not missing an unreasonable number of existing tasks.
   -- Partial payloads (e.g. 1, 44, 60, 86 rows out of 87) MUST NOT deactivate remaining tasks.
   v_is_full_snapshot := (
     (p_source_file ILIKE '%#full_snapshot%' OR p_source_file ILIKE '%[full_snapshot]%')
     OR
-    (v_count >= v_existing_active_count AND v_count >= v_expected_min)
+    (v_count >= v_expected_min AND (v_existing_active_count = 0 OR v_count >= (v_existing_active_count - 5)))
   );
 
   IF v_is_full_snapshot THEN
@@ -289,7 +290,7 @@ BEGIN
     'deactivation_applied', (v_deactivated > 0),
     'deactivation_skipped_reason', CASE
       WHEN NOT v_is_full_snapshot AND v_existing_active_count > v_count THEN
-        format('full_snapshot_not_proven: incoming count %s < existing active %s', v_count, v_existing_active_count)
+        format('full_snapshot_not_proven: incoming count %s < expected inventory %s', v_count, v_expected_min)
       ELSE NULL
     END
   );
