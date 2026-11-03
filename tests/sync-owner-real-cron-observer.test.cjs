@@ -246,3 +246,30 @@ test('Daily audit with all parsed/verified rows skipped has no change and sends 
  assert.equal(f.send.length,0);
  assert.equal(f.incidents.length,0);
 });
+
+test('Express unchanged source fingerprint compared with last completed registry is silent',async()=>{
+ const f=fixture([]);
+ const base={
+   id:'44444444-4444-4444-8444-444444444444',
+   created_at:'2026-11-03T11:10:00Z',
+   completed_at:'2026-11-03T11:11:00Z',
+   source_fingerprint:'same-files-sha256',state:'complete',
+   document_count:3758
+ };
+ const changedRun={...base,id:'55555555-5555-4555-8555-555555555555',
+   created_at:'2026-11-03T12:10:00Z',completed_at:'2026-11-03T12:11:00Z'};
+ const orig=f.transport;
+ f.transport=async(url,opts={})=>{
+   if(String(url).includes('/rest/v1/express_register_runs?')){
+     const filter=new URL(url).searchParams.get('created_at')||'';
+     return {ok:true,status:200,json:async()=>filter.startsWith('lt.')?[base]:[changedRun]};
+   }
+   return orig(url,opts);
+ };
+ const out=await tick(f,'2026-11-03T12:20:00Z',{
+   ...env,SYNC_OWNER_ENABLED_PIPELINES:'express'});
+ assert.equal(out.mode,'SYNC_MONITOR_OBSERVED');
+ assert.equal(out.noChange,1);
+ assert.equal(f.incidents.length,0);
+ assert.equal(f.send.length,0);
+});
