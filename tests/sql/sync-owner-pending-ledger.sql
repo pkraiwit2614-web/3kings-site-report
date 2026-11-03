@@ -107,7 +107,7 @@ RESET ROLE;
 -- Prevent two overlapping Cloudflare cron executions claiming the same Master
 -- with different Run IDs. This must be rejected without changing Daily tables.
 SET ROLE service_role;
-DO $
+DO $$
 DECLARE
  blocked boolean := false;
 BEGIN
@@ -127,7 +127,7 @@ BEGIN
  PERFORM public.line_sync_owner_record_pending(
    'schedule','master-plot6','schedule:next-after-resolved',
    'New unique incident after resolution',null,false);
-END $;
+END $$;
 RESET ROLE;
 
 SELECT 'SYNC_OWNER_PENDING_INCIDENTS_SQL_PASS' AS acceptance;
