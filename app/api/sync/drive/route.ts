@@ -50,7 +50,8 @@ function num(value: unknown): number | null {
 function pct(value: unknown): number | null {
   const n = num(value)
   if (n === null) return null
-  const v = n > 1 && n <= 100 ? n / 100 : n
+  const isPercentString = typeof value === 'string' && value.includes('%')
+  const v = isPercentString || (n > 1 && n <= 100) ? n / 100 : n
   return Math.max(0, Math.min(1, v))
 }
 
@@ -358,6 +359,15 @@ async function parseSchedule(buffer: Buffer, projectCode: string) {
     const occurrence = (identityCounts.get(identityBase) || 0) + 1
     identityCounts.set(identityBase, occurrence)
 
+    const rawActual = valueByHeader(r, headers, '% หน้างานล่าสุด')
+    let parsedActual: number | null = null
+    if (rawActual !== null && rawActual !== undefined && String(rawActual).trim() !== '' && String(rawActual).trim() !== '-') {
+      parsedActual = pct(rawActual)
+      if (parsedActual === null) {
+        throw new Error(`Invalid actual progress value at row ${i + 1}: ${rawActual}`)
+      }
+    }
+
     out.push({
       source_identity: sourceIdentity(projectCode, category, taskName, area, occurrence),
       source_task_no: sourceTaskNo(valueByHeader(r, headers, 'ID'), i - h),
@@ -369,7 +379,7 @@ async function parseSchedule(buffer: Buffer, projectCode: string) {
       planned_end: isoDate(valueByHeader(r, headers, 'จบตามแผน')),
       baseline_progress: pct(valueByHeaderPrefix(r, headers, '% ตาม Schedule')),
       imported_plan_progress: pct(valueByHeader(r, headers, '% แผน ณ วันรายงาน')),
-      actual_progress: pct(valueByHeader(r, headers, '% หน้างานล่าสุด')) ?? 0,
+      actual_progress: parsedActual,
       plan_status: text(valueByHeader(r, headers, 'สถานะแผน (Auto)')),
       site_status: text(valueByHeader(r, headers, 'สถานะหน้างาน')),
       actual_start: isoDate(valueByHeader(r, headers, 'เริ่มจริง')),
