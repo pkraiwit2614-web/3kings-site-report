@@ -819,7 +819,27 @@ async function syncOwnerReadEvidence(env,enabled,activatedAt,now,transport){
   }
   runs.sort((a,b)=>syncOwnerAuditDate(a.createdAt)-syncOwnerAuditDate(b.createdAt)||
     a.runKey.localeCompare(b.runKey));
-  return {status:'READ_COMPLETE',runs};
+  const baseline=[];
+  // Express registry may re-run an unchanged snapshot days after a previous
+  // completed import. Compare to the last pre-activation source fingerprint.
+  // A missing baseline is UNKNOWN, never automatically "NO_CHANGE".
+  if(enabled.has('express')){
+    const q=new URLSearchParams({select:'id,created_at,completed_at,state,source_fingerprint,document_count',
+      order:'created_at.desc',limit:'1',
+      created_at:'lt.'+new Date(syncOwnerAuditDate(activatedAt)).toISOString()});
+    try{
+      const response=await transport(env.SUPABASE_URL.replace(/\/$/,'')+
+        '/rest/v1/express_register_runs?'+q.toString(),{
+        method:'GET',headers:supabaseHeaders(env),
+        signal:AbortSignal.timeout(12000)});
+      if(!response?.ok)return {status:'HOLD_EXPRESS_BASELINE_READ_FAILED',runs:[]};
+      const rows=await response.json();
+      if(!Array.isArray(rows)||rows.length>1)
+        return {status:'HOLD_EXPRESS_BASELINE_INVALID',runs:[]};
+      if(rows[0])baseline.push(syncOwnerNormalize(rows[0],'express_register_runs'));
+    }catch{return {status:'HOLD_EXPRESS_BASELINE_UNAVAILABLE',runs:[]};}
+  }
+  return {status:'READ_COMPLETE',runs,baseline};
 }
 async function syncOwnerProbeDatabase(env,pipeline,transport){
   // A DB probe alone is never represented as authenticated Web parity.
@@ -915,6 +935,8 @@ async function syncOwnerRealScheduledTick(env,{enabled,activatedAt,hash,transpor
       bySource.set(x.pipeline+'|'+x.source_file_id,x);
   }
   const previous=new Map();
+  for(const old of evidence.baseline||[])
+    if(old&&old.source)previous.set(old.pipeline+'|'+old.source,old);
   const stats={observed:evidence.runs.length,noChange:0,
     pendingRecorded:0,waiting:0,overdue:0,failures:0,
     ownerAccepted:0,hold:0,unsupported:[...enabled].filter(x=>!SYNC_OWNER_SUPPORTED.has(x))};
