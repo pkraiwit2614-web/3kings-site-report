@@ -976,8 +976,8 @@ async function syncOwnerRealScheduledTick(env,{enabled,activatedAt,hash,transpor
         alert_status:'pending',schedule_verified:false});
     }catch{stats.hold++;}
   }
-  return {mode:stats.hold?'SYNC_MONITOR_PARTIAL':'SYNC_MONITOR_OBSERVED',
-    delivered:stats.ownerAccepted>0,...stats};
+  return {mode:stats.hold||stats.unsupported.length?'SYNC_MONITOR_PARTIAL':
+    'SYNC_MONITOR_OBSERVED',delivered:stats.ownerAccepted>0,...stats};
 }
 
 export async function syncOwnerMonitorTick(env,{hash,transport=fetch,now=new Date(),forcePipeline=null,testItem=null}={}){
