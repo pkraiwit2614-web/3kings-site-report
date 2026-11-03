@@ -18,7 +18,7 @@ test('link visibility uses only active unfinished Work IDs like the existing Wor
  assert.match(viewer,/const completionConflict=\(r:WorkOrder\)=>finished\(r\.work_status\)&&\/ยังไม่เสร็จ\//)
 })
 test('nonexistent open Work Order gives alert, not a dead link; works for Combine members',()=>{
- assert.match(report,/window\.alert\(workOrderReadState==='ready'\?'ไม่พบ Work Order ที่ยังเปิดอยู่/)
+ assert.match(report,/window\.alert\(workOrderReadState==='ready'\?'Work Order ไม่มีรายการที่ยังเปิดอยู่/)
  assert.match(report,/workOpenByRoom\.has\(other\.room_no\)/)
  assert.match(report,/href=\{'\/work-order\?room='\+encodeURIComponent\(other\.room_no\)\}/)
  assert.match(report,/data-has-open-work="false"/)
