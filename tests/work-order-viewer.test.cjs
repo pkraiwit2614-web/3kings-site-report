@@ -187,7 +187,7 @@ test('handover-complete rooms and Combine groups with an open active Work ID rem
  assert.match(page,/const eligible=useMemo\(\(\)=>rows\.filter\(r=>\(!finished\(r\.work_status\)\|\|completionConflict\(r\)\)&&ids\(r\.room_group\)\.length>0\),\[rows\]\)/)
  assert.match(page,/\{filtered\.map\(r=>/)
  assert.match(page,/source_active',true/)
- assert.doesNotMatch(page,/source_active',false/)
+ assert.match(page,/\.eq\('source_active',false\)\.ilike\('work_status','HOLD%'\)/)
  assert.doesNotMatch(page,/\.update\(|\.insert\(|\.delete\(|\.upsert\(/)
  assert.match(read('app/defects/page.tsx'),/members\.forEach\(room=>open\.add\(room\)\)/)
 })
