@@ -663,6 +663,32 @@ async function syncOwnerDb(env,rpcName,args,transport=fetch){
  * the next actual, distinct, observed sync run before warning about missing
  * Web proof. An unobserved scheduled run is not fabricated.
  */
+
+/** Optional one-secret configuration; preserves all ten existing Worker bindings. */
+function syncOwnerConfiguredEnv(env){
+  const raw=env?.SYNC_OWNER_MONITOR_CONFIG;
+  if(raw===undefined||raw===null||raw==='')return env;
+  let c;
+  try{c=JSON.parse(raw);}catch{
+    return Object.assign(Object.create(env),{SYNC_OWNER_MONITOR_ENABLED:'false'});
+  }
+  const known=new Set(['schedule','defects','materials','photos',
+    'daily_site_report','express','work_order','hotel_work_plan']);
+  if(!c || c.version!==1 || typeof c.enabled!=='boolean'||
+    !Array.isArray(c.pipelines)||
+    c.pipelines.some(x=>typeof x!=='string'||!known.has(x))||
+    c.pipelines.length>8 || new Set(c.pipelines).size!==c.pipelines.length||
+    typeof c.activatedAt!=='string'){
+    return Object.assign(Object.create(env),{SYNC_OWNER_MONITOR_ENABLED:'false'});
+  }
+  return Object.assign(Object.create(env),{
+    SYNC_OWNER_MONITOR_ENABLED:c.enabled?'true':'false',
+    SYNC_OWNER_ENABLED_PIPELINES:c.pipelines.join(','),
+    SYNC_OWNER_MONITOR_ACTIVATED_AT:c.activatedAt,
+    SYNC_OWNER_DAILY_SOURCE_ID:typeof c.dailySourceId==='string'?c.dailySourceId:'',
+    SYNC_OWNER_LIVE_TEST_ENABLED:c.liveTestEnabled===true?'true':'false'
+  });
+}
 const SYNC_OWNER_CANONICAL_SOURCES=Object.freeze({
   defects:['Handover_Defect_Summary_Updated_28-09-2026.xlsx'],
   materials:['ABOVE_MATERIALS_STATUS_Stock_Updated_2026-09-20.xlsx'],
@@ -981,6 +1007,7 @@ async function syncOwnerRealScheduledTick(env,{enabled,activatedAt,hash,transpor
 }
 
 export async function syncOwnerMonitorTick(env,{hash,transport=fetch,now=new Date(),forcePipeline=null,testItem=null}={}){
+  env=syncOwnerConfiguredEnv(env);
   const base={mode:'SYNC_MONITOR_OFF',delivered:false};
   if(env.SYNC_OWNER_MONITOR_ENABLED!=='true')return base;
   if(testItem && env.SYNC_OWNER_LIVE_TEST_ENABLED!=='true')
@@ -1078,6 +1105,7 @@ export default {
   async fetch(request,env){
     const url=new URL(request.url);
     if(url.pathname==='/sync-owner/health' && request.method==='GET'){
+      env=syncOwnerConfiguredEnv(env);
       return json({
         service:'3kings-line-autopilot',
         module:'sync-owner-monitor',
@@ -1195,9 +1223,10 @@ export default {
         reportDate:r.reportDate,http:r.http??null});
     }catch{console.warn('daily_owner_report_tick_failed');}
     // Sync Owner Monitoring: independent from AUTOPILOT_ENABLED
-    if(env.SYNC_OWNER_MONITOR_ENABLED==='true'){
+    const monitorEnv=syncOwnerConfiguredEnv(env);
+    if(monitorEnv.SYNC_OWNER_MONITOR_ENABLED==='true'){
       try{
-        const outcome=await syncOwnerMonitorTick(env,{hash:sha256hex});
+        const outcome=await syncOwnerMonitorTick(monitorEnv,{hash:sha256hex});
         console.info('sync_owner_monitor_tick',outcome);
       }catch{console.error('sync_owner_monitor_tick_failed');}
     }
