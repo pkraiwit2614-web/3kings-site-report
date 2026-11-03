@@ -8,7 +8,7 @@
 - GitHub main is not deployed Worker source. Existing Worker bindings/crons remain untouched.
 
 ## B. NEW separate Supabase Production notification ledger — APPLIED + READBACK PASS
-- Applied reviewed `supabase/migrations/20261103120000_sync_owner_line_ledger_isolated.sql` via connected Supabase apply_migration. API returned `{"success":true}`.
+- Applied reviewed `supabase/migrations/20261103115147_sync_owner_line_ledger_isolated_20261103.sql` via connected Supabase apply_migration. API returned `{"success":true}`.
 - Readback verified `line_autopilot.sync_owner_deliveries`, `public.line_sync_owner_claim`, `public.line_sync_owner_ack`.
 - Grants: `service_role` can read/claim/ack; `anon` and `authenticated` cannot read ledger or execute claim.
 - Production transaction-isolated synthetic test: `new` → `in_flight` → `delivered` → `already_sent`, same retry UUID. Explicit `ROLLBACK`; new ledger stayed **0 rows**.
