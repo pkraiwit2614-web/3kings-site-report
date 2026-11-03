@@ -12,6 +12,7 @@ BEGIN
   END IF;
 END $$;
 \i supabase/migrations/20261103210000_sync_owner_pending_incidents.sql
+\i supabase/migrations/20261104070000_sync_owner_active_source_unique.sql
 
 -- 1. Security / permission verification
 DO $$
@@ -101,6 +102,32 @@ BEGIN
     RAISE EXCEPTION 'DUPLICATE RESOLVE SUCCEEDED';
   END IF;
 END $$;
+RESET ROLE;
+
+-- Prevent two overlapping Cloudflare cron executions claiming the same Master
+-- with different Run IDs. This must be rejected without changing Daily tables.
+SET ROLE service_role;
+DO $
+DECLARE
+ blocked boolean := false;
+BEGIN
+ PERFORM public.line_sync_owner_record_pending(
+   'schedule','master-plot6','schedule:original-1',
+   'Missing authenticated Web E2E readback',null,false);
+ BEGIN
+  PERFORM public.line_sync_owner_record_pending(
+   'schedule','master-plot6','schedule:original-2',
+   'Second concurrent incident on same source',null,false);
+ EXCEPTION WHEN unique_violation THEN blocked := true;
+ END;
+ IF NOT blocked THEN RAISE EXCEPTION 'SECOND ACTIVE SOURCE INCIDENT ALLOWED'; END IF;
+ IF NOT public.line_sync_owner_resolve_pending(
+   'schedule','schedule:original-1','Verified corrected') THEN
+   RAISE EXCEPTION 'FIRST SOURCE INCIDENT RESOLVE FAILED'; END IF;
+ PERFORM public.line_sync_owner_record_pending(
+   'schedule','master-plot6','schedule:next-after-resolved',
+   'New unique incident after resolution',null,false);
+END $;
 RESET ROLE;
 
 SELECT 'SYNC_OWNER_PENDING_INCIDENTS_SQL_PASS' AS acceptance;
