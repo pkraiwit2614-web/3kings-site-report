@@ -8,7 +8,7 @@ const imports=async()=>Promise.all([
  import(pathToFileURL(path.resolve(__dirname,'../operations/sync-monitor/owner-alerts.mjs')).href)
 ]);
 const drive=()=>({id:'11111111-1111-4111-8111-111111111111',
- sync_type:'materials',status:'success',source_file:'ABOVE_MATERIALS_STATUS.xlsx',
+ sync_type:'materials',status:'success',source_file:'ABOVE_MATERIALS_STATUS_Stock_Updated_2026-09-20.xlsx',
  created_at:'2026-11-03T10:19:51Z',rows_read:614,rows_written:15,
  message:'Sync completed'});
 const daily=()=>({id:45,created_at:'2026-11-03T10:52:00Z',
@@ -64,7 +64,7 @@ test('Work Order and Hotel must report missing per-run E2E evidence',async()=>{
 });
 test('zero writes are displayed as zero, not inferred error or full E2E PASS',async()=>{
  const [m,o]=await imports();
- const a=drive();a.sync_type='schedule';a.rows_read=0;a.rows_written=0;
+ const a=drive();a.sync_type='schedule';a.source_file='Above Villa Plot6 Construction Progress_Updated_2026-09-21.xlsx';a.rows_read=0;a.rows_written=0;
  const r=m.fromDriveSyncRun(a);
  assert.equal(o.classifyRun(r).status,'UNVERIFIED');
  assert.match(o.lineMessage(r,o.classifyRun(r)),/เขียน DB ในรอบนี้: 0 รายการงาน/);
