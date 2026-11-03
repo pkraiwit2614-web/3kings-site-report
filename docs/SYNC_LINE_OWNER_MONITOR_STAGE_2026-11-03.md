@@ -13,7 +13,7 @@
 ## Isolated implementation and ledger
 - `operations/sync-monitor/owner-alerts.mjs`: OFF-by-default owner-only message/status logic; accepts independent E2E proof; stable per-pipeline+run hash.
 - `operations/sync-monitor/pipeline-metrics.mjs`: count adapters with actual units; does not infer Web PASS or error-row counts.
-- `supabase/migrations/20261103120000_sync_owner_line_ledger_isolated.sql`: new, separate `line_autopilot.sync_owner_deliveries` table with unique event key and pipeline/run pair, stable LINE retry UUID, service-role-only `line_sync_owner_claim` and `line_sync_owner_ack` RPCs. **Not yet applied to Production**.
+- `supabase/migrations/20261103115147_sync_owner_line_ledger_isolated_20261103.sql`: new, separate `line_autopilot.sync_owner_deliveries` table with unique event key and pipeline/run pair, stable LINE retry UUID, service-role-only `line_sync_owner_claim` and `line_sync_owner_ack` RPCs. **Not yet applied to Production**.
 - Never modify existing `line_autopilot.deliveries`, `line_autopilot_claim`, `line_autopilot_ack`, source Excel, Synced Supabase tables, GAS triggers or existing Web feature flags.
 - Isolated PostgreSQL 17 test: service-role permissions and anon/auth deny, new→in-flight→already_sent, ack idempotency and no delivered downgrade. Test run `41627811872`: **PASS**.
 - Mock LINE + existing Daily LINE regression and count-format tests run `41627811866`: **PASS**.
