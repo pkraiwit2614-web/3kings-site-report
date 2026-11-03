@@ -48,7 +48,7 @@ test('Flow and Report both project the current status, and their New Defect link
   for(const id of ['status-incomplete','nonhotel-customer-incomplete','nonhotel-nocustomer-incomplete']){
     assert.ok(report.includes("id:'"+id+"'"),'missing Report link target '+id)
   }
-  for(const f of ['nonhotel-customer-incomplete','nonhotel-nocustomer-incomplete'])
+  for(const f of ['nonhotel-customer-new','nonhotel-nocustomer-new'])
     assert.ok(flow.includes("filter:'"+f+"'"),'missing Flow link '+f)
   assert.match(flow,/customerNonIncomplete:status\(/)
   assert.match(flow,/noNonIncomplete:status\(/)
@@ -76,10 +76,11 @@ test('new-only Flow counts exclude five older Hotel open defects and preserve 18
   assert.equal(all.filter(r=>r.hotel_participation==='ร่วมโรงแรม'&&!isNew(r)).length,5)
   assert.match(flow,/const isNewDefect=/)
   assert.match(flow,/count:v.newly/)
-  assert.match(flow,/count:v.incomplete-v.newly/)
+  assert.doesNotMatch(flow,/label:'Open Defect'/)
   for(const id of ['newly-notified','old-incomplete','hotel-newly-notified','hotel-old-incomplete','hotel-customer-new','hotel-nocustomer-new','nonhotel-customer-new','nonhotel-nocustomer-new'])
    assert.ok(report.includes("id:'"+id+"'"),id)
   assert.doesNotMatch(flow,/count:v.incomplete,tone:'danger'/)
+  assert.doesNotMatch(flow,/Defect ค้างเดิม/)
 });
 
 test('Defect Report keeps old incomplete room labels distinct from newly notified status',()=>{
