@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'supabase/migrations/20261103190000_schedule_rpc_actual_progress_preservation.sql'
+      - 'supabase/migrations/20261103210000_schedule_strict_snapshot_identity_v325.sql'
       - 'tests/sql/schedule-rpc-preservation-isolated.sql'
       - 'tests/schedule-progress-preservation.test.cjs'
       - '.github/workflows/qa-schedule-rpc-preservation.yml'

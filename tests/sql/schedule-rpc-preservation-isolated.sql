@@ -82,6 +82,7 @@ CREATE TABLE public.drive_sync_runs (
 -- APPLY SURGICAL MIGRATION
 -- ====================================================================
 \i supabase/migrations/20261103190000_schedule_rpc_actual_progress_preservation.sql
+\i supabase/migrations/20261103210000_schedule_strict_snapshot_identity_v325.sql
 
 -- ====================================================================
 -- SEED 87 CANONICAL TASKS FOR PLOT 6
@@ -259,147 +260,126 @@ BEGIN
 END $$;
 
 -- ====================================================================
--- TEST 5B: REGRESSION — PAYLOAD 87 ROWS WITH MISMATCHED/FOREIGN SOURCE IDENTITIES
--- Must NOT deactivate the 87 canonical tasks even though row count is 87!
--- Full snapshot proof must fail because source identities do not match existing tasks.
+-- TEST 5B: FULL-SIZE FOREIGN IDENTITIES MUST FAIL BEFORE WRITE
 -- ====================================================================
 DO $$
 DECLARE
-  v_foreign_rows jsonb := '[]'::jsonb;
+  v_rows jsonb := '[]'::jsonb;
   v_res jsonb;
-  v_active_canon integer;
+  v_old integer;
+  v_foreign integer;
   i integer;
 BEGIN
-  -- Construct 87 rows with foreign/mismatched source identities
   FOR i IN 1..87 LOOP
-    v_foreign_rows := v_foreign_rows || jsonb_build_array(jsonb_build_object(
+    v_rows := v_rows || jsonb_build_array(jsonb_build_object(
       'source_identity', 'P6-FOREIGN-' || lpad(i::text, 3, '0'),
       'source_task_no', i::text,
       'task_name', 'Foreign Task ' || i,
       'actual_progress', 0.50
     ));
   END LOOP;
-
-  v_res := public.drive_sync_apply_schedule(
-    'test-isolated-sync-key',
-    'AV-P6',
-    'payload_87_foreign_identities.xlsx',
-    v_foreign_rows
-  );
-
-  IF (v_res->>'ok')::boolean IS NOT TRUE THEN
-    RAISE EXCEPTION 'TEST 5B FAILED: RPC call failed: %', v_res;
+  v_res := public.drive_sync_apply_schedule('test-isolated-sync-key','AV-P6','foreign_fullsize.xlsx',v_rows);
+  IF (v_res->>'ok')::boolean IS NOT FALSE OR v_res->>'error' <> 'full_snapshot_identity_conflict' THEN
+    RAISE EXCEPTION 'TEST 5B FAILED: foreign 87-row payload must fail closed; got %', v_res;
   END IF;
-
-  -- Assert Full Snapshot NOT proven despite 87 rows!
-  IF (v_res->>'full_snapshot_proven')::boolean IS NOT FALSE THEN
-    RAISE EXCEPTION 'TEST 5B FAILED: 87 foreign rows should NOT prove full snapshot!';
+  SELECT count(*) INTO v_old FROM public.schedule_tasks
+  WHERE is_active AND source_identity LIKE 'P6-ID-%';
+  SELECT count(*) INTO v_foreign FROM public.schedule_tasks
+  WHERE source_identity LIKE 'P6-FOREIGN-%';
+  IF v_old <> 87 OR v_foreign <> 0 THEN
+    RAISE EXCEPTION 'TEST 5B FAILED: unexpected physical duplicates! original %, foreign %', v_old, v_foreign;
   END IF;
-
-  -- Assert zero stale rows deactivated
-  IF (v_res->>'cleaned_stale_rows')::integer <> 0 THEN
-    RAISE EXCEPTION 'TEST 5B FAILED: Stale rows were deactivated! Expected 0, got %', (v_res->>'cleaned_stale_rows');
-  END IF;
-
-  -- Assert all 87 original canonical tasks remain active
-  SELECT count(*) INTO v_active_canon
-  FROM public.schedule_tasks
-  WHERE project_id = 'fa7c6969-5ecc-42c0-9e95-c68a733ef357'
-    AND is_active = true
-    AND source_identity LIKE 'P6-ID-%';
-
-  IF v_active_canon <> 87 THEN
-    RAISE EXCEPTION 'TEST 5B FAILED: Original canonical tasks were deactivated! Expected 87 active, got %', v_active_canon;
-  END IF;
-
-  -- Clean up the 87 foreign tasks from test table so subsequent tests run on canonical data
-  DELETE FROM public.schedule_tasks WHERE source_identity LIKE 'P6-FOREIGN-%';
-
-  RAISE NOTICE 'SUCCESS TEST 5B: 87 foreign rows did NOT deactivate original tasks (full snapshot proof safely rejected).';
+  RAISE NOTICE 'SUCCESS TEST 5B: full-size identity drift refused without modifying 87 canonical rows.';
 END $$;
 
 -- ====================================================================
--- TEST 6: PAYLOAD 87 ROWS (FULL SNAPSHOT) + NULL/BLANK/GENUINE ZERO
--- Add a 88th stale task to verify safe deactivation when 87 rows match canonical full snapshot
+-- TEST 6: IDENTICAL 87-TASK SNAPSHOT PRESERVES EXISTING PROGRESS
 -- ====================================================================
-INSERT INTO public.schedule_tasks (
-  id, project_id, source_identity, source_task_no, task_name, actual_progress, is_active
-) VALUES (
-  '88888888-8888-8888-8888-888888888888'::uuid,
-  'fa7c6969-5ecc-42c0-9e95-c68a733ef357'::uuid,
-  'P6-STALE-088',
-  '88',
-  'Stale Task Candidate',
-  0.15,
-  true
-);
+DO $$
+DECLARE
+  v_rows jsonb := '[]'::jsonb;
+  v_res jsonb;
+  v_active integer;
+  v_p1 numeric;
+  v_p2 numeric;
+  v_p3 numeric;
+  v_p4 numeric;
+  v_p5 numeric;
+  i integer;
+BEGIN
+  v_rows := v_rows || jsonb_build_array(
+    jsonb_build_object('source_identity','P6-ID-001','task_name','Task 1','actual_progress',''),
+    jsonb_build_object('source_identity','P6-ID-002','task_name','Task 2','actual_progress',null),
+    jsonb_build_object('source_identity','P6-ID-003','task_name','Task 3','actual_progress','-'),
+    jsonb_build_object('source_identity','P6-ID-004','task_name','Task 4','actual_progress',0),
+    jsonb_build_object('source_identity','P6-ID-005','task_name','Task 5','actual_progress',100)
+  );
+  FOR i IN 6..87 LOOP
+    v_rows := v_rows || jsonb_build_array(jsonb_build_object(
+      'source_identity', 'P6-ID-' || lpad(i::text,3,'0'),
+      'task_name', 'Task ' || i,
+      'actual_progress',0.85
+    ));
+  END LOOP;
+  v_res := public.drive_sync_apply_schedule('test-isolated-sync-key','AV-P6','canonical_p6_87.xlsx',v_rows);
+  IF (v_res->>'ok')::boolean IS NOT TRUE OR (v_res->>'rows')::integer <> 87 THEN
+    RAISE EXCEPTION 'TEST 6 FAILED: expected exactly 87 written rows and ok true: %', v_res;
+  END IF;
+  IF (v_res->>'full_snapshot_proven')::boolean IS NOT TRUE THEN
+    RAISE EXCEPTION 'TEST 6 FAILED: matching canonical identities not recognized: %', v_res;
+  END IF;
+  IF (v_res->>'cleaned_stale_rows')::integer <> 0 THEN
+    RAISE EXCEPTION 'TEST 6 FAILED: unexpected deactivation: %', v_res;
+  END IF;
+  SELECT count(*) INTO v_active FROM public.schedule_tasks
+    WHERE project_id='fa7c6969-5ecc-42c0-9e95-c68a733ef357' AND is_active;
+  SELECT actual_progress INTO v_p1 FROM public.schedule_tasks WHERE source_identity='P6-ID-001';
+  SELECT actual_progress INTO v_p2 FROM public.schedule_tasks WHERE source_identity='P6-ID-002';
+  SELECT actual_progress INTO v_p3 FROM public.schedule_tasks WHERE source_identity='P6-ID-003';
+  SELECT actual_progress INTO v_p4 FROM public.schedule_tasks WHERE source_identity='P6-ID-004';
+  SELECT actual_progress INTO v_p5 FROM public.schedule_tasks WHERE source_identity='P6-ID-005';
+  IF v_active<>87 OR v_p1<>0.70 OR v_p2<>0.70 OR v_p3<>0.70 OR v_p4<>0 OR v_p5<>1 THEN
+    RAISE EXCEPTION 'TEST 6 FAILED: active %, progress values %,%,%,%,%',v_active,v_p1,v_p2,v_p3,v_p4,v_p5;
+  END IF;
+  RAISE NOTICE 'SUCCESS TEST 6: full canonical 87, blank/null/dash preserved, genuine 0 and 100 accepted; accurate row count.';
+END $$;
 
+-- ====================================================================
+-- TEST 6B: STALE 88TH TASK CANNOT BE RETIRED WITHOUT AUTHORIZED RECONCILIATION
+-- ====================================================================
+INSERT INTO public.schedule_tasks(
+  project_id,source_identity,source_task_no,task_name,actual_progress,is_active
+) VALUES(
+  'fa7c6969-5ecc-42c0-9e95-c68a733ef357','P6-STALE-088','88','Stale task',0.15,true
+);
 DO $$
 DECLARE
   v_rows jsonb := '[]'::jsonb;
   v_res jsonb;
   v_active integer;
   v_stale_active boolean;
-  v_stale_exists boolean;
-  v_p1 numeric;
-  v_p2 numeric;
-  v_p3 numeric;
-  v_p4 numeric;
   i integer;
 BEGIN
-  -- Build 87 canonical rows with edge cases:
-  -- Row 1: Blank string -> preserve existing (0.70)
-  -- Row 2: NULL -> preserve existing (0.70)
-  -- Row 3: Dash '-' -> preserve existing (0.70)
-  -- Row 4: Genuine 0 -> set to 0.00
-  -- Row 5: 100% (passed as integer 100) -> set to 1.00
-  -- Rows 6..87: Normal decimals
-  v_rows := v_rows || jsonb_build_array(
-    jsonb_build_object('source_identity', 'P6-ID-001', 'task_name', 'Task 1', 'actual_progress', ''),
-    jsonb_build_object('source_identity', 'P6-ID-002', 'task_name', 'Task 2', 'actual_progress', null),
-    jsonb_build_object('source_identity', 'P6-ID-003', 'task_name', 'Task 3', 'actual_progress', '-'),
-    jsonb_build_object('source_identity', 'P6-ID-004', 'task_name', 'Task 4', 'actual_progress', 0),
-    jsonb_build_object('source_identity', 'P6-ID-005', 'task_name', 'Task 5', 'actual_progress', 100)
-  );
-
-  FOR i IN 6..87 LOOP
+  FOR i IN 1..87 LOOP
     v_rows := v_rows || jsonb_build_array(jsonb_build_object(
-      'source_identity', 'P6-ID-' || lpad(i::text, 3, '0'),
-      'task_name', 'Task ' || i,
-      'actual_progress', 0.85
+      'source_identity','P6-ID-' || lpad(i::text,3,'0'),
+      'task_name','Task ' || i,'actual_progress',0.99
     ));
   END LOOP;
-
-  v_res := public.drive_sync_apply_schedule('test-isolated-sync-key', 'AV-P6', 'canonical_p6_87.xlsx', v_rows);
-
-  IF (v_res->>'ok')::boolean IS NOT TRUE THEN RAISE EXCEPTION 'TEST 6 FAILED: RPC call failed: %', v_res; END IF;
-  IF (v_res->>'full_snapshot_proven')::boolean IS NOT TRUE THEN RAISE EXCEPTION 'TEST 6 FAILED: 87 rows must prove full snapshot'; END IF;
-  IF (v_res->>'cleaned_stale_rows')::integer <> 1 THEN RAISE EXCEPTION 'TEST 6 FAILED: Expected 1 stale row deactivated, got %', v_res->>'cleaned_stale_rows'; END IF;
-
-  -- Assert Stale Task 88 is deactivated (is_active = false) but STILL EXISTS (NOT deleted!)
-  SELECT is_active INTO v_stale_active FROM public.schedule_tasks WHERE id = '88888888-8888-8888-8888-888888888888';
-  IF v_stale_active IS NOT FALSE THEN RAISE EXCEPTION 'TEST 6 FAILED: Stale task should be is_active=false!'; END IF;
-
-  -- Assert Row 1, 2, 3 preserved existing 0.70
-  SELECT actual_progress INTO v_p1 FROM public.schedule_tasks WHERE source_identity = 'P6-ID-001';
-  IF v_p1 <> 0.70 THEN RAISE EXCEPTION 'TEST 6 FAILED: Row 1 Blank progress not preserved! got %', v_p1; END IF;
-
-  SELECT actual_progress INTO v_p2 FROM public.schedule_tasks WHERE source_identity = 'P6-ID-002';
-  IF v_p2 <> 0.70 THEN RAISE EXCEPTION 'TEST 6 FAILED: Row 2 NULL progress not preserved! got %', v_p2; END IF;
-
-  SELECT actual_progress INTO v_p3 FROM public.schedule_tasks WHERE source_identity = 'P6-ID-003';
-  IF v_p3 <> 0.70 THEN RAISE EXCEPTION 'TEST 6 FAILED: Row 3 Dash progress not preserved! got %', v_p3; END IF;
-
-  -- Assert Row 4 Genuine Zero accepted
-  SELECT actual_progress INTO v_p4 FROM public.schedule_tasks WHERE source_identity = 'P6-ID-004';
-  IF v_p4 <> 0.00 THEN RAISE EXCEPTION 'TEST 6 FAILED: Row 4 Genuine zero not set! got %', v_p4; END IF;
-
-  -- Assert exactly 87 active tasks
-  SELECT count(*) INTO v_active FROM public.schedule_tasks WHERE project_id = 'fa7c6969-5ecc-42c0-9e95-c68a733ef357' AND is_active = true;
-  IF v_active <> 87 THEN RAISE EXCEPTION 'TEST 6 FAILED: active count expected 87, got %', v_active; END IF;
-
-  RAISE NOTICE 'SUCCESS TEST 6: Full Snapshot proven, 87 tasks updated/preserved, stale task deactivated safely without deletion.';
+  v_res := public.drive_sync_apply_schedule('test-isolated-sync-key','AV-P6','87_of_88.xlsx',v_rows);
+  IF (v_res->>'ok')::boolean IS NOT FALSE OR v_res->>'error'<>'full_snapshot_identity_conflict' THEN
+    RAISE EXCEPTION 'TEST 6B FAILED: 87/88 identity set must fail closed: %',v_res;
+  END IF;
+  SELECT count(*) INTO v_active FROM public.schedule_tasks WHERE is_active
+    AND project_id='fa7c6969-5ecc-42c0-9e95-c68a733ef357';
+  SELECT is_active INTO v_stale_active FROM public.schedule_tasks WHERE source_identity='P6-STALE-088';
+  IF v_active<>88 OR v_stale_active IS NOT TRUE THEN
+    RAISE EXCEPTION 'TEST 6B FAILED: stale row or history changed: active %',v_active;
+  END IF;
+  RAISE NOTICE 'SUCCESS TEST 6B: ambiguous 87/88 payload rejected; no stale deactivation.';
 END $$;
+-- Isolated test cleanup only; never run this test on Production.
+DELETE FROM public.schedule_tasks WHERE source_identity='P6-STALE-088';
 
 -- ====================================================================
 -- TEST 7: ATOMIC ROLLBACK TEST
