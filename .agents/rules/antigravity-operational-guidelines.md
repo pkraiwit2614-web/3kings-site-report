@@ -67,3 +67,8 @@ Conduct an impact analysis across all six dimensions before and after modifying 
 3. **Application Backend / Runtime**: Enforces actual RBAC/RLS and database constraints.
 
 *Note: This rule set defines agent operational guidelines and autonomy within an authorized scope. It does NOT grant autonomous production deployment or permission to alter data outside the assigned scope.*
+
+## 2026-11-02 — SOP v2.1 precedence / GAS fallback without Production changes
+- Live Drive INDEX + ACTIVE module SOP + ACTIVE GLOBAL v2.1 / 02-Nov fallback outrank older agent guidance. Standard file edits do **not** require ACL/Revision/Writer Ownership collision audits as prewrite prerequisites; provider-enforced authorization and existing runtime locks/approvals remain unchanged.
+- `clasp run` or Apps Script `scripts.run` `NOT_FOUND` means the attempted execution path is unverified, not that the script project or source is absent. For scoped user-authorized execution, inspect exact project/function/identity and prior result, then reuse the original connected API, original editor/runner, or approved existing endpoint. Existing triggers may be observed; no new OAuth, cloud account, deployment or trigger is installed as fallback.
+- Keep READ_ONLY as READ_ONLY. Keep Source/File ID, dedup keys, history, queue/HOLD and output QA intact. A simulation is `SOP_RUNTIME_FALLBACK_ISOLATED_PASS`; live `SOP_RUNTIME_FALLBACK_PASS` requires real execution and destination readback. Unavailable methods are `BLOCKED_EXECUTION_PATH`, not success.

@@ -7,6 +7,9 @@ on:
       - '.agents/skills/**'
       - 'docs/agent-skills/**'
       - 'scripts/validate-agent-skills.mjs'
+      - 'scripts/sop-runtime-fallback-isolated.cjs'
+      - 'tests/sop-runtime-fallback-isolated.test.cjs'
+      - '.agents/rules/antigravity-operational-guidelines.md'
       - 'scripts/task-observer-release-gate.mjs'
       - 'tests/task-observer-release-gate.test.mjs'
       - '.github/workflows/task-observer-release-audit.yml'
@@ -25,6 +28,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Verify 17 skills, manifest and safety contract
         run: node scripts/validate-agent-skills.mjs
+      - name: Isolated SOP NOT_FOUND fallback decision, zero production I/O
+        run: node --test tests/sop-runtime-fallback-isolated.test.cjs
       - name: Verify 7 Superpowers methods and 17 SOP mappings
         run: node scripts/validate-superpowers-integration.mjs
       - name: Validate read-only Task Observer and all 17 mappings

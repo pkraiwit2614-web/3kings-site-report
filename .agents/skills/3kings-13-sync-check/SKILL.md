@@ -52,3 +52,7 @@ These skills are agent guidance, **not** a server-side authorization, authentica
 - A standalone Sync check is read-only; when used as QA of an authorized source update, run inline rather than requiring a new approval.
 - Run only QA tied to real blast radius. Git branch/CI/Preview apply to actual code/release, not to plain data/document/read-only tasks. Preserve valid same-SHA CI/Preview evidence; never report Production DONE without live confirmation.
 - Advisory Superpowers and Task Observer are conditional and must not block the main task, request extra authorizations or re-open the same SOP.
+
+## 02/11/2026 — NOT_FOUND must not escalate read-only QA
+- SOP 13 inspection NEVER triggers GAS, clasp run, import, source write or runtime changes to fix `NOT_FOUND`. Check prior Execution/Sync logs and Source→DB→authenticated UI as read-only evidence. Report unknown or blocked steps, without implying a run succeeded.
+- When SOP 13 is only an inline QA component of a separately authorized write, the writer's ACTIVE module SOP + GLOBAL addendum governs permitted fallback. This read-only skill alone grants no execution permission or `SOP_RUNTIME_FALLBACK_PASS`.
