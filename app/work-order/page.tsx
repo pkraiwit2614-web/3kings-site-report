@@ -67,6 +67,9 @@ export default function WorkOrderViewer(){
  const {role}=useAccessRole()
  const permitted=canAccessWorkOrder(role)
  const [rows,setRows]=useState<WorkOrder[]>([])
+ // Secondary staff-only review queue. Inactive HOLD never joins dispatch or print.
+ const [inactiveHoldRows,setInactiveHoldRows]=useState<WorkOrder[]>([])
+ const [inactiveHoldError,setInactiveHoldError]=useState('')
  const [loading,setLoading]=useState(true)
  const [error,setError]=useState('')
  const [quick,setQuick]=useState<Quick>('ALL')
@@ -90,6 +93,10 @@ export default function WorkOrderViewer(){
   const order=await sb.from('defect_work_order_snapshot').select('work_id,room_group,building,contractor,defect_item,next_action,received_date,due_date,work_status,evidence_url,qa_status,conflict_note,source_sync_note,source_modified_at,imported_at').eq('source_active',true).order('work_id')
   if(order.error)throw new Error(order.error.message||'อ่านข้อมูลไม่สำเร็จ')
   setRows((order.data||[]) as WorkOrder[])
+  const inactive=await sb.from('defect_work_order_snapshot').select('work_id,room_group,building,contractor,defect_item,next_action,received_date,due_date,work_status,evidence_url,qa_status,conflict_note,source_sync_note,source_modified_at,imported_at').eq('source_active',false).ilike('work_status','HOLD%').order('work_id')
+  // If inactive HOLD is unreadable, existing active work remains available.
+  setInactiveHoldRows(inactive.error?[]:(inactive.data||[]) as WorkOrder[])
+  setInactiveHoldError(inactive.error?inactive.error.message:'')
  },[])
  useEffect(()=>{
   let alive=true
@@ -135,6 +142,16 @@ export default function WorkOrderViewer(){
    return normalize([r.work_id,r.room_group,roomSearchText(r.room_group),r.defect_item,r.next_action,r.contractor].filter(Boolean).join(' ')).includes(needle)
   })
  },[holdEligible,query,contractor,statusFilter])
+ // A separate non-active review panel, not a dispatch/print dataset.
+ const inactiveHoldInScope=useMemo(()=>{
+  const needle=normalize(query)
+  return inactiveHoldRows.filter(r=>{
+   if(!isHold(r)||finished(r.work_status)||ids(r.room_group).length===0)return false
+   if(statusFilter!=='ALL'&&statusFilter!=='HOLD')return false
+   if(contractor!=='ALL'&&r.contractor!==contractor)return false
+   return !needle||normalize([r.work_id,r.room_group,roomSearchText(r.room_group),r.defect_item,r.next_action,r.contractor].filter(Boolean).join(' ')).includes(needle)
+  })
+ },[inactiveHoldRows,query,contractor,statusFilter])
  const filtered=useMemo(()=>inScope.filter(r=>{
   if(quick==='A'||quick==='B'){if(r.building!==quick)return false}
   if(quick==='OVERDUE'&&!((daysForRow(r)??0)>7))return false
@@ -230,6 +247,27 @@ export default function WorkOrderViewer(){
       <td><small className="wo-conflict">{r.conflict_note||r.qa_status||'รอยืนยันหลักฐาน/ชิ้นส่วน'}</small></td>
       <td className="wo-evidence-col">{r.evidence_url?.startsWith('https://drive.google.com/')?<a target="_blank" rel="noreferrer" href={r.evidence_url}>เปิดภาพ / PDF</a>:<small>รอหลักฐาน</small>}</td>
      </tr>})}
+    </tbody></table></div>
+   </section>}
+   {inactiveHoldError&&<div className="panel wo-error" role="status">ตรวจรายการ HOLD ที่ยังไม่ Active ไม่สำเร็จ: {inactiveHoldError} (งานพร้อมแจกยังแสดงตามเดิม)</div>}
+   {inactiveHoldInScope.length>0&&<section className="panel wo-sheet wo-hold-section wo-unapproved-hold" aria-label="HOLD ที่ยังไม่ Active สำหรับติดตามภายใน">
+    <div className="wo-sheet-title"><h2>HOLD ที่ยังไม่ Active (ติดตามภายในเท่านั้น)</h2>
+     <span>{inactiveHoldInScope.length} รายการ • ไม่รวมยอดงานพร้อมแจก / ไม่พิมพ์ใบแจกงาน / ไม่เปลี่ยนสถานะอนุมัติ</span>
+    </div>
+    <div className="table-wrap wo-table-wrap"><table className="wo-table"><thead><tr>
+     <th>ห้อง / Work ID</th><th>วันที่รับแจ้ง</th><th>รายละเอียด Defect</th><th>สิ่งที่ต้องตรวจสอบ</th><th>ทีม / ผู้รับเหมา</th><th>สถานะ / หลักฐาน</th>
+    </tr></thead><tbody>
+     {inactiveHoldInScope.map(r=><tr key={r.work_id} className="wo-hold-row">
+      <td><b>{groupLabel(r.room_group)}</b><small>{r.work_id}</small></td>
+      <td>{noticeDateTH(r.received_date)}</td>
+      <td>{r.defect_item}</td>
+      <td>{r.next_action||'รอระบุรายละเอียด'}</td>
+      <td>{r.contractor}</td>
+      <td><span className="wo-hold-badge">HOLD — ไม่ Active</span><b>{displayWorkStatus(r.work_status)}</b>
+       <small>{r.qa_status||'รอ QA'}</small><small>ตรวจ Master/Approval ก่อนเปิดใช้งาน</small>
+       {r.evidence_url?.startsWith('https://drive.google.com/')&&<a target="_blank" rel="noreferrer" href={r.evidence_url}>เปิดหลักฐาน</a>}
+      </td>
+     </tr>)}
     </tbody></table></div>
    </section>}
    <p className="wo-screen-scope">ขอบเขต: {scope} • {filtered.length} รายการ</p>
