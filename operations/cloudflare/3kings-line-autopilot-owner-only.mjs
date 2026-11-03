@@ -769,9 +769,10 @@ function syncOwnerNoChange(run,previous){
     }catch{return false;}
   }
   if(run.pipeline==='daily_site_report')
-    return run.written===0&&run.parsed===run.skipped&&
-      !!run.sourceRevision&&previous?.sourceRevision===run.sourceRevision &&
-      previous.status==='success';
+    // Native audit confirms every parsed row is verified and skipped (no
+    // inserts/updates). That is stronger no-delta proof than a file timestamp.
+    return run.written===0&&Number.isSafeInteger(run.parsed)&&
+      run.parsed>=0&&run.parsed===run.skipped;
   if(run.pipeline==='express')
     return !!run.sourceRevision&&previous?.sourceRevision===run.sourceRevision &&
       previous.status==='success';
