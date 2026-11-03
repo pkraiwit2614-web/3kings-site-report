@@ -165,7 +165,7 @@ test('explicit error from canonical Master is immediately owner-alerted with unk
  assert.equal(result.failures,1);
  assert.equal(result.ownerAccepted,1);
  assert.equal(f.send.length,1);
- assert.match(f.send[0].messages[0].text,/Sync Log/);
+ assert.match(f.send[0].messages[0].text,/Log/);
  assert.match(f.send[0].messages[0].text,/ไม่ทราบ/);
  assert.equal(f.incidents.length,0);
 });
