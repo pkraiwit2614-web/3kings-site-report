@@ -44,7 +44,7 @@ export async function collectObservedRuns(readPage,{
      for(const row of rows){
        try{
          const run=stream.parse(row);
-         if(!validatedTime(run.created_at)){
+         if(!validatedTime(run.created_at) || Date.parse(run.created_at)<Date.parse(since) || Date.parse(run.created_at)>Date.parse(until)){
            errors.push({stream:stream.table,reason:'BAD_EVENT_TIME'});
            continue;
          }
@@ -85,11 +85,10 @@ export function makeSupabaseReadPage(env,transport=fetch){
    const s=STREAMS.find(x=>x.table===table);
    if(!s||s.fields!==fields)throw Error('MONITOR_SOURCE_NOT_ALLOWLISTED');
    const q=new URLSearchParams({
-     select:fields,created_at:'gte.'+since,'created_at':'gte.'+since,
+     select:fields,
      order:'created_at.asc,id.asc',limit:String(limit),offset:String(offset)
    });
    // PostgREST supports multiple filters on the same column through raw query.
-   q.delete('created_at');
    const uri=url+'/rest/v1/'+table+'?'+q.toString()+
      '&created_at=gte.'+encodeURIComponent(since)+
      '&created_at=lte.'+encodeURIComponent(until);
