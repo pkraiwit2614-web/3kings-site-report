@@ -1,0 +1,44 @@
+name: Schedule RPC Progress Preservation SQL QA
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/20261103190000_schedule_rpc_actual_progress_preservation.sql'
+      - 'tests/sql/schedule-rpc-preservation-isolated.sql'
+      - 'tests/schedule-progress-preservation.test.cjs'
+      - '.github/workflows/qa-schedule-rpc-preservation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-postgres-17:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: isolated-only
+          POSTGRES_DB: schedule_qa
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d schedule_qa"
+          --health-interval 5s --health-timeout 5s --health-retries 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - name: Test without any Production secrets or active Production data
+        env:
+          PGPASSWORD: isolated-only
+        run: psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5432 -U postgres -d schedule_qa -f tests/sql/schedule-rpc-preservation-isolated.sql
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Schedule progress preservation regression
+        run: node tests/schedule-progress-preservation.test.cjs
+      - name: Release limitation
+        run: |
+          echo "Only an isolated PostgreSQL 17 test without production dependencies."
+          echo "SOP 15/16, rollback, authorized owner evidence and production readback are separate gates."

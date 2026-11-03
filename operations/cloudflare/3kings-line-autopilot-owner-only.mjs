@@ -257,7 +257,7 @@ async function dailyGroupMemberCount(env,groupId,transport=fetch){
 // Retry only in a few predefined short windows on the SAME report day.
 // LINE de-duplicates an unchanged retry key for 24h; we never create a
 // replacement key and the morning-only policy prevents retries after 24h.
-const RETRY_SLOTS=new Set(['08:12','08:32','09:02','10:02']);
+const RETRY_SLOTS=new Set(['07:55','08:12','08:32','09:02','10:02']);
 export function dailyRetryWindow(when){
   return RETRY_SLOTS.has(when.localTime) && when.day>='2026-10-20';
 }
@@ -280,7 +280,7 @@ export async function dailySiteSendTick(env,{db,hash,transport=fetch,now=new Dat
   if(env.DAILY_SITE_LINE_ENABLED!=='true'||!env.DAILY_LINE_BRIDGE_TOKEN
     ||!env.LINE_CHANNEL_ACCESS_TOKEN||!env.SUPABASE_URL)return stats;
   if(when.dayOfWeek===0||when.day<'2026-10-21'
-    ||when.localTime<'08:00'||when.localTime>'13:00')return stats;
+    ||when.localTime<'07:45'||when.localTime>'13:00')return stats;
   if(typeof db!=='function'||typeof hash!=='function')
     throw Error('DB_DEPENDENCY_MISSING');
   const endpoint=env.SUPABASE_URL.replace(/\/$/,'')+
@@ -491,7 +491,7 @@ export async function dailyOwnerSummaryTick(env,{db,hash,transport=fetch,now=new
   if(env.DAILY_SITE_LINE_ENABLED!=='true'||!env.DAILY_LINE_BRIDGE_TOKEN||
      !env.SUPABASE_URL||!env.LINE_CHANNEL_ACCESS_TOKEN||
      !/^U[0-9a-f]{32}$/i.test(env.LINE_OWNER_USER_ID||''))return base;
-  if(when.dayOfWeek===0||when.day<'2026-10-21'||when.localTime<'08:00'||
+  if(when.dayOfWeek===0||when.day<'2026-10-21'||when.localTime<'07:45'||
      when.localTime>'18:00')return base;
   if(typeof db!=='function'||typeof hash!=='function')throw Error('OWNER_DEPENDENCY_MISSING');
   const gateway=env.SUPABASE_URL.replace(/\/$/,'')+'/functions/v1/kings_daily_line_images/';
@@ -724,6 +724,7 @@ export default {
     }
 
     // Owner-only mode: NEVER invoke the former group sender or summary DM.
+    // Scheduled morning cron: 00:45 UTC = 07:45 Asia/Bangkok, Monday-Saturday.
     try {
       const r=await dailyOwnerSummaryTick(env,{db:dailyLineRpc,hash:sha256hex});
       console.info('daily_owner_report_tick',{mode:r.mode,accepted:r.delivered,
