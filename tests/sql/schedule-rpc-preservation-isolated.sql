@@ -82,7 +82,7 @@ CREATE TABLE public.drive_sync_runs (
 \i supabase/migrations/20261103190000_schedule_rpc_actual_progress_preservation.sql
 
 -- ====================================================================
--- SEED EXISTING TASKS
+-- SEED EXISTING TASKS (7 tasks)
 -- ====================================================================
 INSERT INTO public.schedule_tasks (
   project_id, source_identity, source_task_no, task_name, actual_progress, is_active
@@ -96,10 +96,71 @@ INSERT INTO public.schedule_tasks (
   ('fa7c6969-5ecc-42c0-9e95-c68a733ef357'::uuid, 'P6-TASK-07', '7', 'Task 7 - Stale candidate', 0.30, true);
 
 -- ====================================================================
--- TEST SUITE EXECUTION
+-- TEST 1: SAFEGUARD TEST — Small/Partial Payload Must NOT Deactivate Remaining Tasks
+-- 7 active tasks exist. Sending 1 task (1 < ceil(7 * 0.5) = 4) must NOT deactivate Task 2..7.
 -- ====================================================================
+SELECT public.drive_sync_apply_schedule(
+  'test-isolated-sync-key',
+  'AV-P6',
+  'test_partial_payload.xlsx',
+  '[{"source_identity": "P6-TASK-01", "task_name": "Task 1 Updated", "actual_progress": 0.80}]'::jsonb
+);
 
--- Test Batch: Valid rows preserving progress and updating genuine values
+DO $$
+DECLARE
+  v_active_count integer;
+  v_p1 numeric;
+BEGIN
+  SELECT count(*) INTO v_active_count FROM public.schedule_tasks WHERE project_id = 'fa7c6969-5ecc-42c0-9e95-c68a733ef357' AND is_active = true;
+  IF v_active_count <> 7 THEN
+    RAISE EXCEPTION 'SAFEGUARD FAILED: Small payload deactivated tasks! Expected 7 active, got %', v_active_count;
+  END IF;
+
+  SELECT actual_progress INTO v_p1 FROM public.schedule_tasks WHERE source_identity = 'P6-TASK-01';
+  IF v_p1 <> 0.80 THEN
+    RAISE EXCEPTION 'ASSERTION FAILED: Task 1 progress should be updated to 0.80, got %', v_p1;
+  END IF;
+
+  RAISE NOTICE 'SUCCESS TEST 1: Small partial payload safely updated row without deactivating remaining tasks.';
+END $$;
+
+-- Reset Task 1 back to 0.75 for main test
+UPDATE public.schedule_tasks SET actual_progress = 0.75 WHERE source_identity = 'P6-TASK-01';
+
+-- ====================================================================
+-- TEST 2: ATOMIC ROLLBACK TEST — Multi-row batch with invalid row 2 must not leave row 1 modified
+-- ====================================================================
+DO $$
+DECLARE
+  v_res jsonb;
+  v_p1 numeric;
+BEGIN
+  v_res := public.drive_sync_apply_schedule(
+    'test-isolated-sync-key',
+    'AV-P6',
+    'test_atomic_rollback.xlsx',
+    '[
+      {"source_identity": "P6-TASK-01", "task_name": "Task 1 - Malicious Update", "actual_progress": 0.99},
+      {"source_identity": "P6-TASK-02", "task_name": "Task 2 - Broken", "actual_progress": "INVALID_TEXT_PROGRESS"}
+    ]'::jsonb
+  );
+
+  IF (v_res->>'ok')::boolean IS NOT FALSE THEN
+    RAISE EXCEPTION 'ASSERTION FAILED: Batch with invalid row should return ok=false';
+  END IF;
+
+  SELECT actual_progress INTO v_p1 FROM public.schedule_tasks WHERE source_identity = 'P6-TASK-01';
+  IF v_p1 <> 0.75 THEN
+    RAISE EXCEPTION 'ATOMIC ROLLBACK FAILED: Row 1 was written despite Row 2 validation failure! actual_progress=%', v_p1;
+  END IF;
+
+  RAISE NOTICE 'SUCCESS TEST 2: Pre-validation and atomic rollback verified (Row 1 untouched).';
+END $$;
+
+-- ====================================================================
+-- TEST 3: FULL SNAPSHOT TEST — Valid batch meeting threshold (6 rows >= ceil(7*0.5)=4)
+-- Deactivates Task 7, preserves nulls/blanks, updates genuine values.
+-- ====================================================================
 SELECT public.drive_sync_apply_schedule(
   'test-isolated-sync-key',
   'AV-P6',
@@ -126,7 +187,6 @@ DECLARE
   v_p6 numeric;
   v_p_new numeric;
   v_p7_active boolean;
-  v_p7_exists boolean;
 BEGIN
   SELECT actual_progress INTO v_p1 FROM public.schedule_tasks WHERE source_identity = 'P6-TASK-01';
   IF v_p1 <> 0.75 THEN RAISE EXCEPTION 'ASSERTION_FAILED: Task 1 expected 0.75, got %', v_p1; END IF;
@@ -155,27 +215,12 @@ BEGIN
     RAISE EXCEPTION 'ASSERTION_FAILED: Stale Task 7 should be deactivated (is_active=false)';
   END IF;
 
-  RAISE NOTICE 'SUCCESS: All preservation, genuine zero, update, new row and deactivation assertions PASSED';
+  RAISE NOTICE 'SUCCESS TEST 3: All preservation, genuine zero, update, new row and full snapshot deactivation PASSED';
 END $$;
 
--- Test Fail-Closed: Invalid numeric format must fail closed and return ok=false
-DO $$
-DECLARE
-  v_res jsonb;
-BEGIN
-  v_res := public.drive_sync_apply_schedule(
-    'test-isolated-sync-key',
-    'AV-P6',
-    'test_invalid.xlsx',
-    '[{"source_identity": "P6-TASK-01", "task_name": "Task 1", "actual_progress": "not-a-number"}]'::jsonb
-  );
-  IF (v_res->>'ok')::boolean IS NOT FALSE THEN
-    RAISE EXCEPTION 'ASSERTION_FAILED: Invalid progress string should return ok=false';
-  END IF;
-  RAISE NOTICE 'SUCCESS: Invalid progress format failed closed as expected: %', v_res->>'error';
-END $$;
-
--- Test Fail-Closed: New task with blank/null progress must fail closed and return ok=false
+-- ====================================================================
+-- TEST 4: FAIL CLOSED ON NEW TASK WITHOUT PROGRESS
+-- ====================================================================
 DO $$
 DECLARE
   v_res jsonb;
@@ -189,15 +234,15 @@ BEGIN
   IF (v_res->>'ok')::boolean IS NOT FALSE THEN
     RAISE EXCEPTION 'ASSERTION_FAILED: New task without progress should return ok=false';
   END IF;
-  RAISE NOTICE 'SUCCESS: New task without progress failed closed as expected: %', v_res->>'error';
+  RAISE NOTICE 'SUCCESS TEST 4: New task without progress failed closed as expected: %', v_res->>'error';
 END $$;
 
--- Verify Task 1 actual_progress is still 0.75 (unmodified by failed transactions)
+-- Final Verification of untouched state
 DO $$
 DECLARE
   v_p1 numeric;
 BEGIN
   SELECT actual_progress INTO v_p1 FROM public.schedule_tasks WHERE source_identity = 'P6-TASK-01';
-  IF v_p1 <> 0.75 THEN RAISE EXCEPTION 'ASSERTION_FAILED: Task 1 progress was modified during failed transactions!'; END IF;
+  IF v_p1 <> 0.75 THEN RAISE EXCEPTION 'ASSERTION_FAILED: Task 1 progress was modified!'; END IF;
   RAISE NOTICE 'FINAL PASS: Isolated PostgreSQL 17 test suite completed with 100%% assertions green.';
 END $$;
