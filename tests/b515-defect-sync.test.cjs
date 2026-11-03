@@ -56,6 +56,25 @@ test('SmartSyncDefects_v1.3 Apps Script includes B515 Customer Defect detail', (
   assert.match(gas, /src\.room_no === 'B515' && src\.defect_detail\.includes\('Customer Defect B515'\)/)
 })
 
+test('Regression protection: B214, B314, B315, B403 and prior B515 transitions are preserved exactly', () => {
+  // Verify B214, B314, B315, B403 in trigger CASE statement
+  assert.match(migration, /WHEN 'B214' THEN expected_status:='Defect ยังไม่เสร็จ \/ ต้องปิดงาน'; expected_group:='Hotel - Incomplete';/)
+  assert.match(migration, /WHEN 'B314' THEN expected_status:='Defect เสร็จแล้ว \/ รอ Hotel Engineer ตรวจ'; expected_group:='Hotel - Awaiting Check';/)
+  assert.match(migration, /WHEN 'B315' THEN expected_status:='Defect ยังไม่เสร็จ \/ ต้องปิดงาน'; expected_group:='Hotel - Incomplete';/)
+  assert.match(migration, /WHEN 'B403' THEN expected_status:='Defect ยังไม่เสร็จ \/ ต้องปิดงาน'; expected_group:='Hotel - Incomplete';/)
+  assert.match(migration, /WHEN 'B515' THEN expected_status:='Defect เสร็จแล้ว \/ รอ Hotel Engineer ตรวจ'; expected_group:='Hotel - Awaiting Check';/)
+
+  // Target transition for Hotel Engineer check remains intact
+  assert.match(migration, /new\.current_status = 'Defect เสร็จแล้ว \/ Hotel Engineer ตรวจแล้ว'/)
+  assert.match(migration, /new\.status_group = 'Hotel - Checked Complete'/)
+
+  // Unapproved transitions fallback to old values
+  assert.match(migration, /new\.current_status:=old\.current_status;/)
+  assert.match(migration, /new\.status_group:=old\.status_group;/)
+  assert.match(migration, /new\.next_action:=old\.next_action;/)
+  assert.match(migration, /new\.defect_detail:=old\.defect_detail;/)
+})
+
 test('Zero touch on protected zones in SQL statements: Materials, Payroll, Calendar, OOO/OOS, RBAC/RLS', () => {
   // Strip comments first to inspect executable SQL statements
   const sqlWithoutComments = migration.replace(/--.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')
