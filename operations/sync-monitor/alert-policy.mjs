@@ -1,3 +1,4 @@
+import {isCanonicalSyncSource} from './source-catalog.mjs';
 /**
  * 3 Kings owner LINE policy: quiet no-change, deferred E2E verification.
  *
@@ -6,14 +7,15 @@
  * deadline. A guessed cadence is NOT an alert deadline.
  */
 const stamp=value=>typeof value==='string'&&Number.isFinite(Date.parse(value));
-const skippedStatus=new Set(['SKIP','NO_CHANGE_VERIFIED','NO_CHANGE_UNVERIFIED']);
 const normalized=v=>String(v||'').toLowerCase();
 
 /** Only an explicit, scoped source-check response can justify a silent skip. */
 export function isVerifiedNoChange(run,result,noChangeProof){
  if(result?.status==='FAIL')return false;
  if(run?.source_system==='drive_sync_runs' &&
-   run.sync_type==='schedule' && run.status==='success' &&
+   run.sync_type==='schedule' &&
+   isCanonicalSyncSource(run.sync_type,run.source_file) &&
+   run.status==='success' &&
    run.metrics?.read===0 && run.metrics?.written===0 &&
    /^Apps Script check completed; source unchanged, sync skipped$/i.test(
      String(run.message||'').trim()))
