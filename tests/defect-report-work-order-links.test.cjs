@@ -1,0 +1,33 @@
+const test=require('node:test')
+const assert=require('node:assert/strict')
+const fs=require('node:fs')
+const report=fs.readFileSync('app/defects/page.tsx','utf8')
+const viewer=fs.readFileSync('app/work-order/page.tsx','utf8')
+
+test('Defect Report link does not depend on nonempty defect_detail (A512 and all rooms)',()=>{
+ assert.doesNotMatch(report,/r\.defect_detail\?\.trim\(\)\s*&&\s*canAccessWorkOrder\(role\)/)
+ assert.match(report,/\{canAccessWorkOrder\(role\)\s*\?\(workOpenByRoom\.has\(r\.room_no\)/)
+ assert.match(report,/href=\{'\/work-order\?room='\+encodeURIComponent\(r\.room_no\)\}/)
+})
+test('link visibility uses only active unfinished Work IDs like the existing Work Order viewer',()=>{
+ assert.match(report,/\.select\('room_group,work_status,qa_status'\)\.eq\('source_active',true\)/)
+ assert.match(report,/const finished=\/เสร็จแล้ว\|เสร็จสิ้น\|งดแจก\|ยกเลิก\//)
+ assert.match(report,/const completionConflict=finished&&\/ยังไม่เสร็จ\/\.test\(item\.qa_status\|\|''\)/)
+ assert.match(report,/if\(finished&&!completionConflict\)continue/)
+ assert.match(viewer,/const finished=\(v:string\|null\)=>\/เสร็จแล้ว\|เสร็จสิ้น\|งดแจก\|ยกเลิก\//)
+ assert.match(viewer,/const completionConflict=\(r:WorkOrder\)=>finished\(r\.work_status\)&&\/ยังไม่เสร็จ\//)
+})
+test('nonexistent open Work Order gives alert, not a dead link; works for Combine members',()=>{
+ assert.match(report,/window\.alert\(workOrderReadState==='ready'\?'Work Order ไม่มีรายการที่ยังเปิดอยู่/)
+ assert.match(report,/workOpenByRoom\.has\(other\.room_no\)/)
+ assert.match(report,/href=\{'\/work-order\?room='\+encodeURIComponent\(other\.room_no\)\}/)
+ assert.match(report,/data-has-open-work="false"/)
+ assert.match(report,/\.flatMap\(room=>hotelRoomMembers\(room\)\)/)
+ assert.match(report,/members\.forEach\(room=>open\.add\(room\)\)/)
+})
+test('existing Defect role gate and read-only data boundary are preserved',()=>{
+ assert.match(report,/if\(!canAccessWorkOrder\(role\)\)/)
+ assert.match(report,/\.eq\('source_active',true\)/)
+ assert.doesNotMatch(report,/from\('defect_work_order_snapshot'\)\.(insert|update|upsert|delete)\(/)
+ assert.match(viewer,/if\(!permitted\)return <AppShell>/)
+})

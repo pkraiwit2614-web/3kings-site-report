@@ -138,7 +138,7 @@ export default function DefectDetailPage(){
   const showDashboard=role!==null&&canAccessPath(role,'/')
   const [loadError,setLoadError]=useState(false)
   const [rows,setRows]=useState<RoomRow[]>([])
-  const [workOrders,setWorkOrders]=useState<{room_group:string;work_status:string|null}[]>([])
+  const [workOrders,setWorkOrders]=useState<{room_group:string;work_status:string|null;qa_status:string|null}[]>([])
   const [workOrderReadState,setWorkOrderReadState]=useState<'loading'|'ready'|'error'>('loading')
   const [latestDefectChangeAt,setLatestDefectChangeAt]=useState<string|null>(null)
   const [loading,setLoading]=useState(true)
@@ -233,9 +233,9 @@ export default function DefectDetailPage(){
     const supabase=getSupabase()
     const loadOrders=async()=>{
       const {data,error}=await supabase.from('defect_work_order_snapshot')
-        .select('room_group,work_status').eq('source_active',true)
+        .select('room_group,work_status,qa_status').eq('source_active',true)
       if(active){
-        setWorkOrders(error?[]:(data||[]) as {room_group:string;work_status:string|null}[])
+        setWorkOrders(error?[]:(data||[]) as {room_group:string;work_status:string|null;qa_status:string|null}[])
         setWorkOrderReadState(error?'error':'ready')
       }
     }
@@ -253,7 +253,11 @@ export default function DefectDetailPage(){
   const workOpenByRoom=useMemo(()=>{
     const open=new Set<string>()
     for(const item of workOrders){
-      if(/เสร็จแล้ว|งดแจก|ยกเลิก/.test(item.work_status||''))continue
+      // Match the existing Work Order viewer: completed jobs only remain actionable
+      // when QA explicitly records that they are not finished.
+      const finished=/เสร็จแล้ว|เสร็จสิ้น|งดแจก|ยกเลิก/.test(item.work_status||'')
+      const completionConflict=finished&&/ยังไม่เสร็จ/.test(item.qa_status||'')
+      if(finished&&!completionConflict)continue
       const members=[...new Set((item.room_group.toUpperCase().match(/[AB]\d{3}/g)||[])
         .flatMap(room=>hotelRoomMembers(room)))]
       members.forEach(room=>open.add(room))
@@ -408,17 +412,23 @@ export default function DefectDetailPage(){
               </>:<div className="defect-detail-text muted">-</div>}
               <div className="defect-summary-meta"><b>วันที่งาน/อัพเดท :</b> {r.defect_detail?.trim()?summaryByRoom.get(r.room_no)?.dates||'-':'-'}</div>
               <div className="defect-summary-meta"><b>ดู Work Order :</b>{' '}
-                {r.defect_detail?.trim()&&canAccessWorkOrder(role)
+                {canAccessWorkOrder(role)
                   ?(workOpenByRoom.has(r.room_no)
                     ?<Link className="defect-work-order-link" data-has-open-work={workOpenByRoom.has(r.room_no)?'true':'false'} href={'/work-order?room='+encodeURIComponent(r.room_no)}>ดู Work Order →</Link>
-                    :<button type="button" className="defect-work-order-link" data-has-open-work="false" onClick={()=>window.alert(workOrderReadState==='ready'?'Work Order ไม่มี\nห้อง '+hotelRoomLabel(r.room_no):'ยังไม่สามารถตรวจสอบ Work Order ได้ กรุณาลองใหม่')}>ดู Work Order →</button>)
+                    :<button type="button" className="defect-work-order-link" data-has-open-work="false" onClick={()=>window.alert(workOrderReadState==='ready'?'Work Order ไม่มีรายการที่ยังเปิดอยู่\nห้อง '+hotelRoomLabel(r.room_no):'ยังไม่สามารถตรวจสอบ Work Order ได้ กรุณาลองใหม่')}>ดู Work Order →</button>)
                   :'-'}
               </div>
               {combineMode&&combinedMembers(r.room_no).filter(other=>other.room_no!==r.room_no).map(other=><div key={other.room_no} className="combine-member-detail">
                 <div className="defect-summary-work-label">ห้อง {other.room_no} — งานทั้งหมด :</div>
                 <div className="defect-detail-text">{summaryByRoom.get(other.room_no)?.work||'-'}</div>
                 <div className="defect-summary-meta"><b>วันที่งาน/อัพเดท :</b> {summaryByRoom.get(other.room_no)?.dates||'-'}</div>
-                <div className="defect-summary-meta"><b>ดู Work Order :</b>{' '}{canAccessWorkOrder(role)?<Link className="defect-work-order-link" href={'/work-order?room='+encodeURIComponent(other.room_no)}>ดู Work Order →</Link>:'-'}</div>
+                <div className="defect-summary-meta"><b>ดู Work Order :</b>{' '}
+                  {canAccessWorkOrder(role)
+                    ?(workOpenByRoom.has(other.room_no)
+                      ?<Link className="defect-work-order-link" data-has-open-work="true" href={'/work-order?room='+encodeURIComponent(other.room_no)}>ดู Work Order →</Link>
+                      :<button type="button" className="defect-work-order-link" data-has-open-work="false" onClick={()=>window.alert(workOrderReadState==='ready'?'Work Order ไม่มีรายการที่ยังเปิดอยู่\nห้อง '+hotelRoomLabel(other.room_no):'ยังไม่สามารถตรวจสอบ Work Order ได้ กรุณาลองใหม่')}>ดู Work Order →</button>)
+                    :'-'}
+                </div>
               </div>)}
             </td>
             <td className="center"><span className={`state-badge ${statusTone(r)}`}>{statusLabel(r)}</span></td>
