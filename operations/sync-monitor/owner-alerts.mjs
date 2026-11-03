@@ -41,7 +41,7 @@ export function classifyRun(run,proof){
  return {status:proofResult.status,reason:proofResult.reason};
 }
 const clean=(x,n=100)=>String(x??'').replace(/[\u0000-\u001f\u007f]/g,' ').slice(0,n);
-export function lineMessage(run,result,proof){
+export function lineMessage(run,result,proof,verification){
  if(!['PASS','FAIL','UNVERIFIED','HOLD','NO_CHANGE_UNVERIFIED','NO_CHANGE_VERIFIED','OVERDUE'].includes(result?.status))return null;
  const state={PASS:'สำเร็จ (Source→DB→Web ตรงกัน)',
  FAIL:'ล้มเหลว',UNVERIFIED:'รอยืนยันผลบนเว็บ',HOLD:'ยังไม่จบรอบ',
@@ -58,6 +58,11 @@ export function lineMessage(run,result,proof){
   'ผลตรวจ: '+clean(result.reason,60),
   ...metricLines(run,{status:result.status,rows:proof?.web?.rows}),
   'Run ID: '+clean(run.run_key||run.id,65),
+  result.status==='OVERDUE' && verification?.nextRoundDueAt?
+   'รอบตรวจถัดไปที่เลยกำหนด: '+new Date(verification.nextRoundDueAt).toLocaleString('th-TH',{timeZone:'Asia/Bangkok',hour12:false}):'',
+  result.status==='OVERDUE' && verification?.lastCheckReason?
+   'หลักฐานที่ยังขาด: '+clean(verification.lastCheckReason,150):'',
+  result.status==='OVERDUE'?'ให้ตรวจแก้: เปิด 3 Kings Web App และตรวจ Source / Sync Log / Supabase / หน้าเว็บ ตาม Run ID นี้':'',
   result.status==='UNVERIFIED'?'หมายเหตุ: Log success ไม่ใช่ Web PASS':''
  ].filter(Boolean).join('\n');
 }
@@ -76,7 +81,7 @@ export async function deliverOnce(opts={}){
  const key=await sha256('3kings|sync-owner|'+run.sync_type+'|'+runKey);
  if(!hash.test(String(key||'')))return {status:'HOLD',reason:'BAD_DEDUP_KEY'};
  const message=lineMessage(run,policy.status==='OVERDUE'?
-   {status:'OVERDUE',reason:policy.reason}:result,proof);
+   {status:'OVERDUE',reason:policy.reason}:result,proof,verification);
  if(typeof message!=='string'||!message)return {status:'BLOCK',reason:'EMPTY_MESSAGE'};
  const c=await claim({key,kind:'sync_owner_run',scope:'owner',pipeline:run.sync_type,runKey,summary:message.slice(0,300)});
  if(c?.claim_status!=='new')return {status:'DEDUP_OR_PENDING'};
