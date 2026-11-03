@@ -77,10 +77,20 @@ export async function deliverOnce(opts={}){
    return {status:'HOLD',reason:'SENDER_NOT_CONFIGURED'};
  const q=await quota();
  if(q?.allow!==true)return {status:'HOLD',reason:'LINE_QUOTA_BLOCK'};
- const runKey=String(run.run_key||run.id);
+ // For overdue cases, key the alert to the ORIGINAL unresolved changed
+ // run, not a later no-change check. This prevents repeated incident DMs.
+ const runKey=String(policy.status==='OVERDUE' && verification?.originalRunKey?
+   verification.originalRunKey:(run.run_key||run.id));
  const key=await sha256('3kings|sync-owner|'+run.sync_type+'|'+runKey);
  if(!hash.test(String(key||'')))return {status:'HOLD',reason:'BAD_DEDUP_KEY'};
- const message=lineMessage(run,policy.status==='OVERDUE'?
+ const alertRun=policy.status==='OVERDUE' && verification?.originalRun &&
+   typeof verification.originalRun==='object'?
+   {...verification.originalRun,run_key:runKey,sync_type:run.sync_type,
+    source_file:run.source_file}:
+   (policy.status==='OVERDUE' && runKey!==String(run.run_key||run.id)?
+     {...run,run_key:runKey,metrics:{},
+       created_at:verification?.firstDetectedAt||run.created_at}:run);
+ const message=lineMessage(alertRun,policy.status==='OVERDUE'?
    {status:'OVERDUE',reason:policy.reason}:result,proof,verification);
  if(typeof message!=='string'||!message)return {status:'BLOCK',reason:'EMPTY_MESSAGE'};
  const c=await claim({key,kind:'sync_owner_run',scope:'owner',pipeline:run.sync_type,runKey,summary:message.slice(0,300)});
