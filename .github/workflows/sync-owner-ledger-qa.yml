@@ -3,7 +3,7 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - 'supabase/migrations/20261103120000_sync_owner_line_ledger_isolated.sql'
+      - 'supabase/migrations/20261103115147_sync_owner_line_ledger_isolated_20261103.sql'
       - 'tests/sql/sync-owner-line-ledger.sql'
       - '.github/workflows/sync-owner-ledger-qa.yml'
 permissions:
