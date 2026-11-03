@@ -111,7 +111,7 @@ test('new unchanged check must not erase the preceding unresolved changed incide
   run_key:'44444444-4444-4444-8444-444444444444',
   sync_type:'schedule',source_file:'Above Villa Plot6 Construction Progress_Updated_2026-09-21.xlsx',
   message:'Apps Script check completed; source unchanged, sync skipped',
-  created_at:'2026-11-03T13:19:56Z',
+  created_at:'2026-11-03T13:19:40Z',
   metrics:{read:0,written:0}};
  const verification={...pending,pendingUnresolved:true,pendingReconciled:false,
    pipeline:'schedule',sourceFile:run.source_file,
@@ -119,7 +119,7 @@ test('new unchanged check must not erase the preceding unresolved changed incide
    originalRunCreatedAt:'2026-11-03T10:19:51Z',
    firstDetectedAt:'2026-11-03T10:19:00Z'};
  assert.equal(p.decideOwnerAlert(run,o.classifyRun(run),{
-   verification,now:time('2026-11-03T13:19:59Z')}).decision,'WAIT');
+   verification,now:time('2026-11-03T13:19:49Z')}).decision,'WAIT');
  const due=p.decideOwnerAlert(run,o.classifyRun(run),{
    verification,now:time('2026-11-03T13:20:00Z')});
  assert.equal(due.decision,'SEND');
