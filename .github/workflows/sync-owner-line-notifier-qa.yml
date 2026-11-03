@@ -1,0 +1,25 @@
+name: Sync Owner LINE Monitor — Offline QA
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'operations/sync-monitor/owner-alerts.mjs'
+      - 'tests/sync-owner-line-monitor.test.cjs'
+      - '.github/workflows/sync-owner-line-notifier-qa.yml'
+permissions:
+  contents: read
+jobs:
+  offline_monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax QA (no outbound network)
+        run: node --check operations/sync-monitor/owner-alerts.mjs
+      - name: New monitor safety, E2E and idempotency mocks
+        run: node --test tests/sync-owner-line-monitor.test.cjs
+      - name: Existing Daily owner LINE mock regression (no LINE sends)
+        run: node --test tests/line-owner-delivery.test.cjs tests/line-owner-bridge.test.cjs
