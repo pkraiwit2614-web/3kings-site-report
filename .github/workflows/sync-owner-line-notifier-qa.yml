@@ -4,11 +4,13 @@ on:
     branches: [main]
     paths:
       - 'operations/sync-monitor/owner-alerts.mjs'
+      - 'operations/sync-monitor/alert-policy.mjs'
       - 'operations/sync-monitor/pipeline-metrics.mjs'
       - 'operations/sync-monitor/source-catalog.mjs'
       - 'operations/sync-monitor/observation-adapters.mjs'
       - 'operations/sync-monitor/log-collector.mjs'
       - 'tests/sync-owner-line-monitor.test.cjs'
+      - 'tests/sync-owner-line-alert-policy.test.cjs'
       - 'tests/sync-owner-line-metrics.test.cjs'
       - 'tests/sync-owner-line-source-guard.test.cjs'
       - 'tests/sync-owner-line-observation.test.cjs'
@@ -28,11 +30,12 @@ jobs:
       - name: Syntax QA (no outbound network)
         run: |
           node --check operations/sync-monitor/owner-alerts.mjs
+          node --check operations/sync-monitor/alert-policy.mjs
           node --check operations/sync-monitor/pipeline-metrics.mjs
           node --check operations/sync-monitor/source-catalog.mjs
           node --check operations/sync-monitor/observation-adapters.mjs
           node --check operations/sync-monitor/log-collector.mjs
       - name: New monitor safety, E2E and idempotency mocks
-        run: node --test tests/sync-owner-line-monitor.test.cjs tests/sync-owner-line-metrics.test.cjs tests/sync-owner-line-source-guard.test.cjs tests/sync-owner-line-observation.test.cjs tests/sync-owner-line-collector.test.cjs
+        run: node --test tests/sync-owner-line-monitor.test.cjs tests/sync-owner-line-alert-policy.test.cjs tests/sync-owner-line-metrics.test.cjs tests/sync-owner-line-source-guard.test.cjs tests/sync-owner-line-observation.test.cjs tests/sync-owner-line-collector.test.cjs
       - name: Existing Daily owner LINE mock regression (no LINE sends)
         run: node --test tests/line-owner-delivery.test.cjs tests/line-owner-bridge.test.cjs
