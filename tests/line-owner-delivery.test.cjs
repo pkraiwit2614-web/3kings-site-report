@@ -158,3 +158,19 @@ test('LINE webhook HMAC rejects invalid or tampered input; valid signed empty ev
   assert.equal(outbound,0,'receiver-only webhook must never dispatch LINE or make DB requests');
  }finally{global.fetch=originalFetch;}
 });
+
+
+test('LINE AutoPilot triggers at exactly 07:45 Bangkok and blocks sends before 07:45', async() => {
+  const at0745 = fixture();
+  // 00:45 UTC is 07:45 Asia/Bangkok
+  const res0745 = await run(at0745, new Date('2026-10-21T00:45:00Z'));
+  assert.equal(res0745.mode, 'OWNER_BUNDLE_ACCEPTED');
+  assert.equal(at0745.calls.filter(x => x.url.includes('/message/push')).length, 1);
+  assert.equal(at0745.ack[0].p_status, 'delivered');
+
+  const before0745 = fixture();
+  // 00:44 UTC is 07:44 Asia/Bangkok -> must be blocked
+  const resBefore = await run(before0745, new Date('2026-10-21T00:44:00Z'));
+  assert.equal(resBefore.mode, 'OWNER_OFF');
+  assert.equal(before0745.calls.length, 0);
+});
