@@ -817,6 +817,10 @@ async function syncOwnerPushIncident(env,{pipeline,source,runKey,createdAt,statu
   const label=status==='FAIL'?'ซิงก์ล้มเหลวจาก Log':
     'ถึงรอบ Sync ถัดไปแล้ว ยังตรวจผลถึงหน้าเว็บไม่ครบ';
   const summary=('Sync '+pipeline+' '+label).slice(0,290);
+  // Preserve the ability to retry a delivery when LINE quota is exhausted:
+  // do not claim the one-shot ledger until quota has been confirmed.
+  const quota=await dailyLineQuota(env,transport);
+  if(!quota.allow)return {mode:'HOLD_LINE_QUOTA'};
   let row;
   try{
     const result=await syncOwnerDb(env,'line_sync_owner_claim',{
@@ -828,8 +832,6 @@ async function syncOwnerPushIncident(env,{pipeline,source,runKey,createdAt,statu
     return {mode:'DEDUP_OR_IN_FLIGHT',claimStatus:row?.claim_status};
   if(!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(String(row.retry_key)))
     return {mode:'HOLD_BAD_RETRY_KEY'};
-  const quota=await dailyLineQuota(env,transport);
-  if(!quota.allow)return {mode:'HOLD_LINE_QUOTA'};
   const lines=[
     '3 Kings • Sync Monitoring (Owner)',
     'สถานะ: '+label,
@@ -927,10 +929,15 @@ async function syncOwnerRealScheduledTick(env,{enabled,activatedAt,hash,transpor
           p_next_round_due_at:run.createdAt,p_schedule_verified:true
         },transport);
       }catch{stats.hold++;continue;}
+      const original=evidence.runs.find(r=>
+        r.pipeline===run.pipeline&&r.source===run.source&&
+        r.runKey===incident.original_run_key);
       const pushed=await syncOwnerPushIncident(env,{
         pipeline:run.pipeline,source:run.source,runKey:incident.original_run_key,
-        createdAt:incident.first_detected_at,status:'OVERDUE',
-        read:run.read,written:run.written,missing,now
+        createdAt:original?.createdAt||incident.first_detected_at,status:'OVERDUE',
+        // The NEXT run may be NO_CHANGE (0 rows); use original changed run
+        // counts rather than falsely reporting "0" for the old incident.
+        read:original?.read??null,written:original?.written??null,missing,now
       },hash,transport);
       if(pushed.mode==='OWNER_ACCEPTED'||pushed.mode==='DEDUP_OR_IN_FLIGHT'&&
          pushed.claimStatus==='already_sent'){
