@@ -65,3 +65,26 @@ test('Hotel and non-Hotel group counts remain distinct, with no static hard-code
   assert.equal(rows.filter(r=>r.status_group==='Non-Hotel - Incomplete').length,1)
   assert.equal(rows.filter(r=>['Hotel - Incomplete','Non-Hotel - Incomplete'].includes(r.status_group)).length,2)
 })
+
+test('new-only Flow counts exclude five older Hotel open defects and preserve 18 real newly notified rooms',()=>{
+  const oldHotel=Array.from({length:5},(_,i)=>({room_no:'OLD'+i,hotel_participation:'ร่วมโรงแรม',current_status:'Defect ยังไม่เสร็จ / ต้องปิดงาน',status_group:'Hotel - Incomplete'}))
+  const newRooms=Array.from({length:18},(_,i)=>({room_no:'NEW'+i,hotel_participation:i===0?'ร่วมโรงแรม':'ไม่ร่วมโรงแรม',current_status:'เพิ่งได้รับแจ้ง Defect — รอดำเนินการ',status_group:'Non-Hotel - Pending Handover'}))
+  const all=[...oldHotel,...newRooms]
+  const isNew=r=>/^เพิ่งได้รับแจ้ง\s+Defect\b/i.test(r.current_status)
+  assert.equal(all.filter(isNew).length,18)
+  assert.equal(all.filter(r=>r.hotel_participation==='ร่วมโรงแรม'&&isNew(r)).length,1)
+  assert.equal(all.filter(r=>r.hotel_participation==='ร่วมโรงแรม'&&!isNew(r)).length,5)
+  assert.match(flow,/const isNewDefect=/)
+  assert.match(flow,/count:v.newly/)
+  assert.match(flow,/count:v.incomplete-v.newly/)
+  for(const id of ['newly-notified','old-incomplete','hotel-newly-notified','hotel-old-incomplete','hotel-customer-new','hotel-nocustomer-new','nonhotel-customer-new','nonhotel-nocustomer-new'])
+   assert.ok(report.includes("id:'"+id+"'"),id)
+  assert.doesNotMatch(flow,/count:v.incomplete,tone:'danger'/)
+});
+
+test('Defect Report keeps old incomplete room labels distinct from newly notified status',()=>{
+ assert.match(report,/const displayRoomStatus=\(r:RoomRow\)=>/)
+ assert.match(report,/return r\.current_status\|\|'Defect ยังไม่เสร็จ'/)
+ assert.match(report,/\{displayRoomStatus\(r\)\}<\/span>/)
+ assert.match(report,/displayRoomStatus\(other\)/)
+});

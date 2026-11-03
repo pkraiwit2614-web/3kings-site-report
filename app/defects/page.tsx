@@ -35,6 +35,15 @@ type RoomRow={
   source_modified_at:string|null
 }
 
+// Preserve the actual unfinished Hotel/Defect status in the report; an older open
+// defect must not be labelled as a newly notified one merely because it is incomplete.
+const displayRoomStatus=(r:RoomRow)=>{
+ const incomplete=r.status_group==='Hotel - Incomplete'||r.status_group==='Non-Hotel - Incomplete'
+ if(incomplete&&!/^เพิ่งได้รับแจ้ง\s+Defect\b/i.test((r.current_status||'').trim()))
+  return r.current_status||'Defect ยังไม่เสร็จ'
+ return statusLabel(r)
+}
+
 type Category={
   id:string
   label:string
@@ -58,7 +67,17 @@ const categories:Category[]=[
   {id:'hotel-nocustomer',label:'ไม่มีลูกค้า • ร่วมโรงแรม',tone:'hotel',predicate:r=>r.customer_status==='ไม่มีลูกค้า'&&r.hotel_participation==='ร่วมโรงแรม'},
   {id:'nonhotel-customer',label:'มีลูกค้า • ไม่ร่วมโรงแรม',tone:'neutral',predicate:r=>r.customer_status==='มีลูกค้า'&&r.hotel_participation==='ไม่ร่วมโรงแรม'},
   {id:'nonhotel-no-customer',label:'ไม่มีลูกค้า • ไม่ร่วมโรงแรม',tone:'neutral',predicate:r=>r.customer_status==='ไม่มีลูกค้า'&&r.hotel_participation==='ไม่ร่วมโรงแรม'},
-  {id:'status-incomplete',label:'เพิ่งได้รับแจ้ง Defect',tone:'danger',predicate:r=>r.status_group==='Hotel - Incomplete'||r.status_group==='Non-Hotel - Incomplete'},
+  {id:'status-incomplete',label:'Defect ยังไม่เสร็จ (รวมแจ้งใหม่)',tone:'danger',predicate:r=>r.status_group==='Hotel - Incomplete'||r.status_group==='Non-Hotel - Incomplete'},
+  {id:'newly-notified',label:'เพิ่งได้รับแจ้ง Defect (เฉพาะแจ้งใหม่)',tone:'danger',predicate:r=>/^เพิ่งได้รับแจ้ง\s+Defect\b/i.test((r.current_status||'').trim())},
+  {id:'old-incomplete',label:'Defect ค้างเดิม (ไม่ใช่แจ้งใหม่)',tone:'warn',predicate:r=>(r.status_group==='Hotel - Incomplete'||r.status_group==='Non-Hotel - Incomplete')&&!/^เพิ่งได้รับแจ้ง\s+Defect\b/i.test((r.current_status||'').trim())},
+  {id:'hotel-newly-notified',label:'ร่วมโรงแรม • เพิ่งได้รับแจ้ง Defect',tone:'danger',predicate:r=>r.hotel_participation==='ร่วมโรงแรม'&&/^เพิ่งได้รับแจ้ง\s+Defect\b/i.test((r.current_status||'').trim())},
+  {id:'hotel-old-incomplete',label:'ร่วมโรงแรม • Defect ค้างเดิม',tone:'warn',predicate:r=>r.hotel_participation==='ร่วมโรงแรม'&&(r.status_group==='Hotel - Incomplete'||r.status_group==='Non-Hotel - Incomplete')&&!/^เพิ่งได้รับแจ้ง\s+Defect\b/i.test((r.current_status||'').trim())},
+  {id:'hotel-customer-new',label:'มีลูกค้า • ร่วมโรงแรม • เพิ่งได้รับแจ้ง',tone:'danger',predicate:r=>r.customer_status==='มีลูกค้า'&&r.hotel_participation==='ร่วมโรงแรม'&&/^เพิ่งได้รับแจ้ง\s+Defect\b/i.test((r.current_status||'').trim())},
+  {id:'hotel-customer-old-incomplete',label:'มีลูกค้า • ร่วมโรงแรม • Defect ค้างเดิม',tone:'warn',predicate:r=>r.customer_status==='มีลูกค้า'&&r.hotel_participation==='ร่วมโรงแรม'&&(r.status_group==='Hotel - Incomplete'||r.status_group==='Non-Hotel - Incomplete')&&!/^เพิ่งได้รับแจ้ง\s+Defect\b/i.test((r.current_status||'').trim())},
+  {id:'hotel-nocustomer-new',label:'ไม่มีลูกค้า • ร่วมโรงแรม • เพิ่งได้รับแจ้ง',tone:'danger',predicate:r=>r.customer_status==='ไม่มีลูกค้า'&&r.hotel_participation==='ร่วมโรงแรม'&&/^เพิ่งได้รับแจ้ง\s+Defect\b/i.test((r.current_status||'').trim())},
+  {id:'hotel-nocustomer-old-incomplete',label:'ไม่มีลูกค้า • ร่วมโรงแรม • Defect ค้างเดิม',tone:'warn',predicate:r=>r.customer_status==='ไม่มีลูกค้า'&&r.hotel_participation==='ร่วมโรงแรม'&&(r.status_group==='Hotel - Incomplete'||r.status_group==='Non-Hotel - Incomplete')&&!/^เพิ่งได้รับแจ้ง\s+Defect\b/i.test((r.current_status||'').trim())},
+  {id:'nonhotel-customer-new',label:'มีลูกค้า • ไม่ร่วมโรงแรม • เพิ่งได้รับแจ้ง',tone:'danger',predicate:r=>r.customer_status==='มีลูกค้า'&&r.hotel_participation==='ไม่ร่วมโรงแรม'&&/^เพิ่งได้รับแจ้ง\s+Defect\b/i.test((r.current_status||'').trim())},
+  {id:'nonhotel-nocustomer-new',label:'ไม่มีลูกค้า • ไม่ร่วมโรงแรม • เพิ่งได้รับแจ้ง',tone:'danger',predicate:r=>r.customer_status==='ไม่มีลูกค้า'&&r.hotel_participation==='ไม่ร่วมโรงแรม'&&/^เพิ่งได้รับแจ้ง\s+Defect\b/i.test((r.current_status||'').trim())},
   {id:'status-awaiting-hotel',label:DEFECT_AWAITING_ACCEPTANCE_LABEL,tone:'warn',predicate:r=>r.status_group==='Hotel - Awaiting Check'},
   {id:'status-awaiting-acceptance',label:DEFECT_AWAITING_ACCEPTANCE_LABEL,tone:'warn',predicate:isAwaitingAcceptance},
   {id:'status-hotel-checked',label:'Hotel Engineer ตรวจแล้ว',tone:'good',predicate:r=>r.status_group==='Hotel - Checked Complete'&&r.hotel_participation==='ร่วมโรงแรม'},
@@ -335,7 +354,7 @@ export default function DefectDetailPage(){
       if(customerFilter==='NO_CUSTOMER'&&!paired.some(other=>other.customer_status==='ไม่มีลูกค้า'))return false
       if(active&&!paired.some(active.predicate))return false
       if(!needles.length)return true
-      const searchable=paired.flatMap(other=>[other.room_no,other.owner_name,other.customer_status,other.hotel_participation,other.defect_detail,statusLabel(other),other.next_action,other.follow_up]).filter(Boolean).join(' ').toLowerCase()
+      const searchable=paired.flatMap(other=>[other.room_no,other.owner_name,other.customer_status,other.hotel_participation,other.defect_detail,displayRoomStatus(other),other.next_action,other.follow_up]).filter(Boolean).join(' ').toLowerCase()
       return needles.some(needle=>searchable.includes(needle))
     })
     return combineMode?uniqueUnits(matched):matched
@@ -431,7 +450,7 @@ export default function DefectDetailPage(){
                 </div>
               </div>)}
             </td>
-            <td className="center"><span className={`state-badge ${statusTone(r)}`}>{statusLabel(r)}</span></td>
+            <td className="center"><span className={`state-badge ${statusTone(r)}`}>{displayRoomStatus(r)}</span></td>
             <td className="work-plan-cell">{(workPlanContext.get(r.room_no)||[]).map((label,i)=><small key={i}>{label}</small>)}<small>{roomHotelContext.get(r.room_no)||'สถานะโรงแรม: —'}</small><Link href={'/hotel-work-plan?room='+encodeURIComponent(r.room_no)}>ดูแผน</Link>{combineMode&&combinedMembers(r.room_no).filter(other=>other.room_no!==r.room_no).map(other=><div key={other.room_no} className="combine-member-detail"><small>{other.room_no}: {(workPlanContext.get(other.room_no)||[]).join(', ')||'ไม่ระบุแผน'}</small><Link href={'/hotel-work-plan?room='+encodeURIComponent(other.room_no)}>ดูแผน {other.room_no}</Link></div>)}</td>
             <td>{r.next_action||r.follow_up||'-'}{combineMode&&combinedMembers(r.room_no).filter(other=>other.room_no!==r.room_no).map(other=><div key={other.room_no} className="combine-member-detail"><b>{other.room_no}: </b>{other.next_action||other.follow_up||'-'}</div>)}</td>
           </tr>)}
