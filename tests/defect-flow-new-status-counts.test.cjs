@@ -81,3 +81,10 @@ test('new-only Flow counts exclude five older Hotel open defects and preserve 18
    assert.ok(report.includes("id:'"+id+"'"),id)
   assert.doesNotMatch(flow,/count:v.incomplete,tone:'danger'/)
 });
+
+test('Defect Report keeps old incomplete room labels distinct from newly notified status',()=>{
+ assert.match(report,/const displayRoomStatus=\(r:RoomRow\)=>/)
+ assert.match(report,/return r\.current_status\|\|'Defect ยังไม่เสร็จ'/)
+ assert.match(report,/\{displayRoomStatus\(r\)\}<\/span>/)
+ assert.match(report,/displayRoomStatus\(other\)/)
+});
