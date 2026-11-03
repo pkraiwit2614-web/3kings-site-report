@@ -2,7 +2,7 @@ const fs=require('node:fs')
 const assert=require('node:assert/strict')
 const manager=fs.readFileSync('components/GoogleCalendarManager.tsx','utf8')
 const eventsApi=fs.readFileSync('app/api/google-calendar/events/route.ts','utf8')
-const migration=fs.readFileSync('supabase/migrations/20261013220000_shared_calendar_procurement_dates.sql','utf8')
+const migration=fs.readFileSync('supabase/migrations/20261013152531_shared_calendar_procurement_dates_20261013.sql','utf8')
 
 assert.match(manager,/work_calendar_create/)
 assert.match(manager,/work_calendar_update/)
