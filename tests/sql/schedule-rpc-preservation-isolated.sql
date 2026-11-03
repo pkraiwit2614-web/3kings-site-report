@@ -401,7 +401,10 @@ BEGIN
   RAISE NOTICE 'SUCCESS TEST 8: Row ID and timestamp audit history preserved.';
 END $$;
 
-RAISE NOTICE '====================================================================';
-RAISE NOTICE 'FINAL PASS: All isolated tests (Payload 1, 44, 60, 86, 87, Duplicates,';
-RAISE NOTICE 'Rollback, ID preservation, and Full Snapshot Guard) PASSED 100%% GREEN.';
-RAISE NOTICE '====================================================================';
+DO $$
+BEGIN
+  RAISE NOTICE '====================================================================';
+  RAISE NOTICE 'FINAL PASS: All isolated tests (Payload 1, 44, 60, 86, 87, Duplicates,';
+  RAISE NOTICE 'Rollback, ID preservation, and Full Snapshot Guard) PASSED 100%% GREEN.';
+  RAISE NOTICE '====================================================================';
+END $$;
