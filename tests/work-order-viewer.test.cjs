@@ -164,7 +164,7 @@ test('Work Order update header matches Report typography without changing the da
 
 test('inactive historical Work IDs do not leak into dispatch or visible reconciler lists',()=>{
  assert.match(page,/\.eq\('source_active',true\)/)
- assert.doesNotMatch(page,/\.eq\('source_active',false\)/)
+ assert.match(page,/\.eq\('source_active',false\)\.ilike\('work_status','HOLD%'\)/)
  assert.doesNotMatch(page,/reviewLostFromDispatch|reviewNeedsRoomRecheck|wo-reconciliation/)
  assert.match(page,/const eligible=useMemo\(\(\)=>rows\.filter\(r=>\(!finished\(r\.work_status\)\|\|completionConflict\(r\)\)&&ids\(r\.room_group\)\.length>0\),\[rows\]\)/)
  assert.match(page,/const counters:Record<Quick,number>=\{ALL:kpiRows\.ALL\.length/)
@@ -274,4 +274,15 @@ test('status dropdown filters only active unfinished dispatch and keeps HOLD as 
  assert.equal(dispatch.filter(r=>r.work_status==='HOLD').length,0);
  assert.equal(internal.length,2);
  assert.equal(dispatch.filter(r=>r.work_status==='เสร็จสิ้น').length,0);
+})
+
+test('non-active HOLD tracking preserves existing active dispatch and print security',()=>{
+ assert.match(page,/\.eq\('source_active',true\)\.order\('work_id'\)/)
+ assert.match(page,/\.eq\('source_active',false\)\.ilike\('work_status','HOLD%'\)/)
+ assert.match(page,/const inactiveHoldInScope=useMemo/)
+ assert.match(page,/const dispatchEligible=useMemo\(\(\)=>eligible\.filter\(r=>!isHold\(r\)\),\[eligible\]\)/)
+ assert.match(page,/className="panel wo-sheet wo-hold-section wo-unapproved-hold"/)
+ assert.match(css,/\.wo-hold-section\{display:none!important\}/)
+ assert.match(page,/ไม่รวมยอดงานพร้อมแจก \/ ไม่พิมพ์ใบแจกงาน \/ ไม่เปลี่ยนสถานะอนุมัติ/)
+ assert.doesNotMatch(page,/\.insert\(|\.update\(|\.upsert\(|\.delete\(|\.rpc\(/)
 })
