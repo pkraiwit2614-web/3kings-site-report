@@ -41,8 +41,17 @@ export function decideOwnerAlert(run,result,{
    return {decision:'SEND',status:'FAIL',reason:result.reason||'EXPLICIT_FAILURE'};
  // A later unchanged check cannot silently close an older changed run
  // that is still missing authenticated Source-to-Web proof.
- const olderRunUnresolved=verification?.pendingUnresolved===true &&
+ // Pending episodes must be scoped to THIS exact pipeline and Master.
+ // A status from a different source must never trigger a false alert.
+ const hasOldPending=verification?.pendingUnresolved===true &&
    verification?.pendingReconciled!==true;
+ if(hasOldPending && (verification?.pipeline!==run.sync_type ||
+     verification?.sourceFile!==run.source_file ||
+     !stamp(verification?.originalRunCreatedAt) ||
+     typeof verification?.originalRunKey!=='string' ||
+     verification.originalRunKey.length<1))
+   return {decision:'BLOCK',reason:'PENDING_EPISODE_SOURCE_MISMATCH'};
+ const olderRunUnresolved=hasOldPending;
  if(!olderRunUnresolved && isVerifiedNoChange(run,result,noChangeProof))
    return {decision:'SILENT',reason:'NO_SOURCE_DELTA'};
  if(result.status==='PASS' && !olderRunUnresolved)
@@ -54,9 +63,13 @@ export function decideOwnerAlert(run,result,{
    return {decision:'BLOCK',reason:'UNEXPECTED_RUN_STATUS'};
  const deadline=verification?.nextRoundDueAt;
  const checked=verification?.firstCheckAttemptedAt;
+ // On a later cycle, the due slot and first QA check are attached to the
+ // ORIGINAL changed run, not to the new unchanged check's timestamp.
+ const originalCreated=olderRunUnresolved?
+   verification.originalRunCreatedAt:run.created_at;
  if(verification?.scheduleVerified!==true || !stamp(deadline) ||
-   !stamp(checked) || Date.parse(checked)<Date.parse(run.created_at) ||
-   Date.parse(deadline)<=Date.parse(run.created_at))
+   !stamp(checked) || Date.parse(checked)<Date.parse(originalCreated) ||
+   Date.parse(deadline)<=Date.parse(originalCreated))
    return {decision:'WAIT',reason:'NO_VERIFIED_NEXT_ROUND_OR_FIRST_CHECK'};
  if(new Date(now).getTime()<Date.parse(deadline))
    return {decision:'WAIT',reason:'RECHECK_BEFORE_NEXT_ROUND'};
