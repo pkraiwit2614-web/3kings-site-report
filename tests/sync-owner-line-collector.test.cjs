@@ -6,7 +6,7 @@ const {pathToFileURL}=require('node:url');
 const obj=import(pathToFileURL(path.resolve(__dirname,'../operations/sync-monitor/log-collector.mjs')).href);
 const since='2026-11-02T00:00:00Z',until='2026-11-04T00:00:00Z';
 const drive={id:'11111111-1111-4111-8111-111111111111',
- sync_type:'materials',source_file:'Master.xlsx',created_at:'2026-11-03T10:19:51Z',
+ sync_type:'materials',source_file:'ABOVE_MATERIALS_STATUS_Stock_Updated_2026-09-20.xlsx',created_at:'2026-11-03T10:19:51Z',
  status:'success',rows_read:614,rows_written:15};
 const daily={id:45,created_at:'2026-11-03T10:52:00Z',source_file_id:'sheet-id',
  source_rows_read:569,rows_parsed:17,rows_inserted:2,rows_updated:0,
