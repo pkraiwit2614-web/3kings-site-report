@@ -991,11 +991,12 @@ export async function syncOwnerMonitorTick(env,{hash,transport=fetch,now=new Dat
     return {...base,mode:'SYNC_MONITOR_NOT_CONFIGURED'};
   if(typeof hash!=='function')throw Error('SYNC_MONITOR_HASH_REQUIRED');
 
-  const quota=await dailyLineQuota(env,transport);
-  if(!quota.allow||(quota.remaining!==null&&quota.remaining<1))
-    return {...base,mode:'SYNC_MONITOR_QUOTA_BLOCKED'};
-
+  // Quiet scheduled checks must not invoke LINE quota or claim.
+  // Quota is inspected only immediately before a permitted owner push.
   if(testItem){
+    const quota=await dailyLineQuota(env,transport);
+    if(!quota.allow||(quota.remaining!==null&&quota.remaining<1))
+      return {...base,mode:'SYNC_MONITOR_QUOTA_BLOCKED'};
     const pipeline=String(testItem.pipeline||'schedule');
     const runKey=String(testItem.run_key||testItem.id||'manual-test');
     const key=await hash('3kings|sync-owner|'+pipeline+'|'+runKey);
