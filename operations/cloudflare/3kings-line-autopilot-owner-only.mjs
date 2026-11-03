@@ -652,9 +652,332 @@ async function syncOwnerDb(env,rpcName,args,transport=fetch){
   throw Error('SYNC_OWNER_NO_DB_CREDENTIALS');
 }
 
+
+/*
+ * Runtime evidence observer — a single-file Worker companion to the offline
+ * owner monitor. Keeps the deployed Worker self-contained (no runtime bundler
+ * or new OAuth). Scope: READ audit logs, existing private owner-only RPCs,
+ * owner LINE push; NEVER writes source, calls GAS, or changes other routes.
+ *
+ * A source-audit success is NOT authenticated Web E2E success. We wait for
+ * the next actual, distinct, observed sync run before warning about missing
+ * Web proof. An unobserved scheduled run is not fabricated.
+ */
+const SYNC_OWNER_CANONICAL_SOURCES=Object.freeze({
+  defects:['Handover_Defect_Summary_Updated_28-09-2026.xlsx'],
+  materials:['ABOVE_MATERIALS_STATUS_Stock_Updated_2026-09-20.xlsx'],
+  schedule:[
+    'Above Villa Plot6 Construction Progress_Updated_2026-09-21.xlsx',
+    'Above Villa Plot7 Construction Progress_Updated_2026-09-21.xlsx',
+    'Above Villa Plot8 Construction Progress_Updated_2026-09-21.xlsx',
+    'Above Villa Plot9 Construction Progress_Updated_2026-09-21.xlsx'
+  ],
+  photos:['Picture Progress']
+});
+const SYNC_OWNER_SUPPORTED=new Set([
+  'defects','materials','schedule','photos','daily_site_report','express'
+]);
+function syncOwnerAuditDate(x){
+  const n=Date.parse(String(x||''));return Number.isFinite(n)?n:null;
+}
+function syncOwnerIsCanonical(run,env){
+  if(!run||typeof run.pipeline!=='string'||!run.runKey||
+     syncOwnerAuditDate(run.createdAt)===null)return false;
+  if(SYNC_OWNER_CANONICAL_SOURCES[run.pipeline])
+    return SYNC_OWNER_CANONICAL_SOURCES[run.pipeline].includes(run.source);
+  if(run.pipeline==='daily_site_report')
+    return !!env.SYNC_OWNER_DAILY_SOURCE_ID &&
+      env.SYNC_OWNER_DAILY_SOURCE_ID===run.source;
+  if(run.pipeline==='express')return run.source==='Express Register';
+  return false;
+}
+function syncOwnerNormalize(row,table){
+  if(table==='drive_sync_runs')return {
+    pipeline:row.sync_type,source:row.source_file,
+    runKey:String(row.id||''),status:String(row.status||'').toLowerCase(),
+    createdAt:row.created_at,read:row.rows_read,written:row.rows_written,
+    message:String(row.message||'')
+  };
+  if(table==='daily_site_report_sync_audit')return {
+    pipeline:'daily_site_report',source:row.source_file_id,
+    runKey:'daily_site_report:'+String(row.id||''),
+    createdAt:row.created_at,status:
+      [row.rows_parsed,row.rows_verified,row.rows_inserted,row.rows_updated,row.rows_skipped]
+        .every(x=>Number.isSafeInteger(x)&&x>=0) &&
+      row.rows_parsed===row.rows_verified &&
+      row.rows_parsed===row.rows_inserted+row.rows_updated+row.rows_skipped?
+       'success':'error',
+    read:row.source_rows_read,written:row.rows_inserted+row.rows_updated,
+    parsed:row.rows_parsed,skipped:row.rows_skipped,
+    sourceRevision:row.source_revision,message:String(row.notes||'')
+  };
+  if(table==='express_register_runs')return {
+    pipeline:'express',source:'Express Register',
+    runKey:'express:'+String(row.id||''),status:row.state==='complete'?'success':'hold',
+    createdAt:row.completed_at||row.created_at,
+    read:row.document_count,written:null,
+    sourceRevision:row.source_fingerprint,message:String(row.state||'')
+  };
+  return null;
+}
+function syncOwnerNoChange(run,previous){
+  if(run.status!=='success')return false;
+  if(run.pipeline==='schedule')
+    return run.read===0&&run.written===0 &&
+      /^Apps Script check completed; source unchanged, sync skipped$/i.test(run.message.trim());
+  if(run.pipeline==='photos')
+    return run.written===0 &&
+      /photo sync completed/i.test(run.message) &&
+      /\bupserted 0\b/i.test(run.message) &&
+      /\bdeactivated 0\b/i.test(run.message);
+  if(run.pipeline==='defects')
+    return run.written===0&&/\b0 semantic row\(s\) changed\b/i.test(run.message);
+  if(run.pipeline==='materials'){
+    if(run.written!==0||!/materials sync completed/i.test(run.message))return false;
+    const match=run.message.match(/preflight\s+(\[[\s\S]*\])\s*$/i);
+    if(!match)return false;
+    try{
+      const rows=JSON.parse(match[1]);
+      return Array.isArray(rows)&&rows.length===3&&rows.every(r=>
+        r&&r.changed===0&&r.inserted===0&&r.deleted===0&&r.newProjectLinks===0);
+    }catch{return false;}
+  }
+  if(run.pipeline==='daily_site_report')
+    return run.written===0&&run.parsed===run.skipped&&
+      !!run.sourceRevision&&previous?.sourceRevision===run.sourceRevision &&
+      previous.status==='success';
+  if(run.pipeline==='express')
+    return !!run.sourceRevision&&previous?.sourceRevision===run.sourceRevision &&
+      previous.status==='success';
+  return false;
+}
+async function syncOwnerReadEvidence(env,enabled,activatedAt,now,transport){
+  if(!env.SUPABASE_SERVER_KEY)return {status:'HOLD_SERVER_KEY_MISSING',runs:[]};
+  const start=Math.max(syncOwnerAuditDate(activatedAt),now.getTime()-12*3600000);
+  const definitions=[
+    {table:'drive_sync_runs',limit:200,
+     fields:'id,sync_type,source_file,status,created_at,rows_read,rows_written,message',
+     use:['schedule','defects','materials','photos']},
+    {table:'daily_site_report_sync_audit',limit:100,
+     fields:'id,created_at,source_file_id,source_revision,source_rows_read,rows_parsed,rows_inserted,rows_updated,rows_skipped,rows_verified,notes',
+     use:['daily_site_report']},
+    {table:'express_register_runs',limit:100,
+     fields:'id,created_at,completed_at,state,source_fingerprint,document_count',
+     use:['express']}
+  ];
+  const runs=[];
+  for(const def of definitions){
+    if(!def.use.some(x=>enabled.has(x)))continue;
+    const query=new URLSearchParams({
+      select:def.fields,order:'created_at.desc',limit:String(def.limit),
+      created_at:'gte.'+new Date(start).toISOString()
+    });
+    const url=String(env.SUPABASE_URL||'').replace(/\/$/,'')+
+      '/rest/v1/'+def.table+'?'+query.toString();
+    let response,rows;
+    try{
+      response=await transport(url,{method:'GET',headers:supabaseHeaders(env),
+        signal:AbortSignal.timeout(12000)});
+      if(!response?.ok)return {status:'HOLD_LOG_READ_'+def.table+'_'+String(response?.status),runs:[]};
+      rows=await response.json();
+    }catch{return {status:'HOLD_LOG_READ_'+def.table+'_FAILED',runs:[]};}
+    if(!Array.isArray(rows)||rows.length>=def.limit)
+      return {status:'HOLD_LOG_WINDOW_TRUNCATED_'+def.table,runs:[]};
+    for(const row of rows){
+      const run=syncOwnerNormalize(row,def.table);
+      if(run&&enabled.has(run.pipeline)&&syncOwnerIsCanonical(run,env)&&
+         syncOwnerAuditDate(run.createdAt)>=start)
+        runs.push(run);
+    }
+  }
+  runs.sort((a,b)=>syncOwnerAuditDate(a.createdAt)-syncOwnerAuditDate(b.createdAt)||
+    a.runKey.localeCompare(b.runKey));
+  return {status:'READ_COMPLETE',runs};
+}
+async function syncOwnerProbeDatabase(env,pipeline,transport){
+  // A DB probe alone is never represented as authenticated Web parity.
+  const table={
+    defects:'condo_room_status',materials:'materials',schedule:'schedule_tasks',
+    photos:'drive_photo_index',daily_site_report:'daily_reports',
+    express:'express_register_rows'
+  }[pipeline];
+  if(!table)return false;
+  try{
+    const url=env.SUPABASE_URL.replace(/\/$/,'')+'/rest/v1/'+table+
+      '?select=id&limit=1';
+    const response=await transport(url,{method:'GET',headers:supabaseHeaders(env),
+      signal:AbortSignal.timeout(10000)});
+    return response?.ok===true && Array.isArray(await response.json());
+  }catch{return false;}
+}
+async function syncOwnerPushIncident(env,{pipeline,source,runKey,createdAt,status,
+  read,written,missing,now},hash,transport){
+  const key=await hash('3kings|sync-owner|'+pipeline+'|'+runKey);
+  if(!/^[0-9a-f]{64}$/i.test(String(key)))return {mode:'BAD_EVENT_KEY'};
+  const label=status==='FAIL'?'ซิงก์ล้มเหลวจาก Log':
+    'ถึงรอบ Sync ถัดไปแล้ว ยังตรวจผลถึงหน้าเว็บไม่ครบ';
+  const summary=('Sync '+pipeline+' '+label).slice(0,290);
+  let row;
+  try{
+    const result=await syncOwnerDb(env,'line_sync_owner_claim',{
+      p_event_key:key,p_pipeline:pipeline,p_run_key:runKey,p_summary:summary
+    },transport);
+    row=Array.isArray(result)?result[0]:result;
+  }catch{return {mode:'HOLD_CLAIM_FAILED'};}
+  if(row?.claim_status!=='new')
+    return {mode:'DEDUP_OR_IN_FLIGHT',claimStatus:row?.claim_status};
+  if(!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(String(row.retry_key)))
+    return {mode:'HOLD_BAD_RETRY_KEY'};
+  const quota=await dailyLineQuota(env,transport);
+  if(!quota.allow)return {mode:'HOLD_LINE_QUOTA'};
+  const lines=[
+    '3 Kings • Sync Monitoring (Owner)',
+    'สถานะ: '+label,
+    'ระบบ: '+safeText(pipeline,40),
+    'ต้นทาง: '+safeText(source,110),
+    'รอบต้นเหตุ: '+new Date(createdAt).toLocaleString('th-TH',{
+      timeZone:'Asia/Bangkok',hour12:false}),
+    'Run ID: '+safeText(runKey,75),
+    Number.isSafeInteger(read)?'อ่านจาก Source: '+read+' รายการ':'',
+    Number.isSafeInteger(written)?'เขียน DB: '+written+' รายการ':'',
+    status==='FAIL'?'จำนวนรายการผิดพลาด: ไม่ทราบ (อ่านจาก Log)':'',
+    'หลักฐานที่ยังขาด/ผิดพลาด: '+safeText(missing,180),
+    status==='OVERDUE'?'ให้ตรวจแก้: เปิด 3 Kings Web App → ตรวจ Sync Log / Supabase / หน้าเว็บ และ Work Order ที่เกี่ยวข้อง':'',
+    status==='OVERDUE'?'หมายเหตุ: ตรวจไม่ครบ ไม่ใช่หลักฐานว่า Sync ล้มเหลว':''
+  ].filter(Boolean);
+  let http=null;
+  try{
+    const response=await transport('https://api.line.me/v2/bot/message/push',{
+      method:'POST',
+      headers:{authorization:'Bearer '+env.LINE_CHANNEL_ACCESS_TOKEN,
+        'content-type':'application/json','X-Line-Retry-Key':row.retry_key},
+      body:JSON.stringify({to:env.LINE_OWNER_USER_ID,
+        messages:[{type:'text',text:lines.join('\n')}] }),
+      signal:AbortSignal.timeout(12000)
+    });
+    http=response.status;
+  }catch{}
+  // A 409/timeout remains uncertain until LINE delivery is independently
+  // reconciled. Never silently retransmit a potentially accepted push.
+  const delivered=http>=200&&http<300;
+  try{
+    const ack=await syncOwnerDb(env,'line_sync_owner_ack',{
+      p_event_key:key,p_retry_key:row.retry_key,
+      p_status:delivered?'delivered':'uncertain',p_http_status:http
+    },transport);
+    if(ack!==true)return {mode:'HOLD_ACK_UNVERIFIED',http};
+  }catch{return {mode:'HOLD_ACK_FAILED',http};}
+  return {mode:delivered?'OWNER_ACCEPTED':'OWNER_UNCERTAIN',http};
+}
+async function syncOwnerRealScheduledTick(env,{enabled,activatedAt,hash,transport,now}){
+  const evidence=await syncOwnerReadEvidence(env,enabled,activatedAt,now,transport);
+  if(evidence.status!=='READ_COMPLETE')
+    return {mode:evidence.status,delivered:false};
+  let incidents;
+  try{
+    const data=await syncOwnerDb(env,'line_sync_owner_get_pending',{
+      p_pipeline:null},transport);
+    if(!Array.isArray(data))return {mode:'HOLD_PENDING_READ_INVALID',delivered:false};
+    incidents=data;
+  }catch{return {mode:'HOLD_PENDING_READ_FAILED',delivered:false};}
+  const bySource=new Map();
+  for(const x of incidents){
+    if(x&&enabled.has(x.pipeline)&&x.source_file_id)
+      bySource.set(x.pipeline+'|'+x.source_file_id,x);
+  }
+  const previous=new Map();
+  const stats={observed:evidence.runs.length,noChange:0,
+    pendingRecorded:0,waiting:0,overdue:0,failures:0,
+    ownerAccepted:0,hold:0,unsupported:[...enabled].filter(x=>!SYNC_OWNER_SUPPORTED.has(x))};
+  // Never claim the feature is fully PASS based on a successful database GET.
+  for(const run of evidence.runs){
+    const sourceKey=run.pipeline+'|'+run.source;
+    const old=previous.get(sourceKey);
+    previous.set(sourceKey,run);
+    const noChange=syncOwnerNoChange(run,old);
+    const incident=bySource.get(sourceKey);
+    if(run.status==='error'||run.status==='failed'||run.status==='failure'){
+      stats.failures++;
+      const pushed=await syncOwnerPushIncident(env,{
+        pipeline:run.pipeline,source:run.source,runKey:run.runKey,
+        createdAt:run.createdAt,status:'FAIL',read:run.read,written:run.written,
+        missing:safeText(run.message,170)||'Sync Log error',now
+      },hash,transport);
+      if(pushed.mode==='OWNER_ACCEPTED')stats.ownerAccepted++;
+      else if(pushed.mode!=='DEDUP_OR_IN_FLIGHT')stats.hold++;
+      continue;
+    }
+    if(run.status!=='success'){stats.hold++;continue;}
+    if(incident){
+      if(incident.alert_status==='overdue_alerted')continue;
+      if(incident.alert_status!=='pending')continue;
+      if(run.runKey===incident.original_run_key||
+        syncOwnerAuditDate(run.createdAt)<=syncOwnerAuditDate(incident.first_detected_at))
+        {stats.waiting++;continue;}
+      // This distinct canonical row is proof another actual sync/logged run
+      // happened. It does NOT prove GAS timer settings, nor Web parity.
+      const dbRead=await syncOwnerProbeDatabase(env,run.pipeline,transport);
+      const missing=dbRead?'Authenticated Web E2E readback':
+        'Database readback and authenticated Web E2E';
+      try{
+        await syncOwnerDb(env,'line_sync_owner_record_pending',{
+          p_pipeline:run.pipeline,p_source_file_id:run.source,
+          p_original_run_key:incident.original_run_key,
+          p_missing_evidence:missing,
+          p_next_round_due_at:run.createdAt,p_schedule_verified:true
+        },transport);
+      }catch{stats.hold++;continue;}
+      const pushed=await syncOwnerPushIncident(env,{
+        pipeline:run.pipeline,source:run.source,runKey:incident.original_run_key,
+        createdAt:incident.first_detected_at,status:'OVERDUE',
+        read:run.read,written:run.written,missing,now
+      },hash,transport);
+      if(pushed.mode==='OWNER_ACCEPTED'||pushed.mode==='DEDUP_OR_IN_FLIGHT'&&
+         pushed.claimStatus==='already_sent'){
+        // Only set the permanent alerted status after successful/previously
+        // acknowledged owner LINE delivery, not after HTTP error or timeout.
+        try{
+          const marked=await syncOwnerDb(env,'line_sync_owner_mark_overdue',{
+            p_pipeline:run.pipeline,p_original_run_key:incident.original_run_key
+          },transport);
+          if(marked!==true)stats.hold++;
+        }catch{stats.hold++;}
+        if(pushed.mode==='OWNER_ACCEPTED'){stats.overdue++;stats.ownerAccepted++;}
+        bySource.set(sourceKey,{...incident,alert_status:'overdue_alerted'});
+      }else if(pushed.mode!=='DEDUP_OR_IN_FLIGHT')stats.hold++;
+      continue;
+    }
+    if(noChange){stats.noChange++;continue;}
+    // The importer reports a changed DB run, but no authenticated Production
+    // Web proof exists. Inspect DB first, create durable pending, do NOT LINE.
+    const dbRead=await syncOwnerProbeDatabase(env,run.pipeline,transport);
+    const missing=dbRead?'Authenticated Web E2E readback':
+      'Database readback and authenticated Web E2E';
+    try{
+      const rec=await syncOwnerDb(env,'line_sync_owner_record_pending',{
+        p_pipeline:run.pipeline,p_source_file_id:run.source,
+        p_original_run_key:run.runKey,p_missing_evidence:missing,
+        p_next_round_due_at:null,p_schedule_verified:false
+      },transport);
+      if(!Number.isSafeInteger(rec)&&typeof rec!=='number')
+        {stats.hold++;continue;}
+      stats.pendingRecorded++;
+      // DB uses its own observation timestamp; do not treat later log rows
+      // as a verified next clock tick in the SAME observer fetch.
+      bySource.set(sourceKey,{pipeline:run.pipeline,source_file_id:run.source,
+        original_run_key:run.runKey,first_detected_at:now.toISOString(),
+        alert_status:'pending',schedule_verified:false});
+    }catch{stats.hold++;}
+  }
+  return {mode:stats.hold?'SYNC_MONITOR_PARTIAL':'SYNC_MONITOR_OBSERVED',
+    delivered:stats.ownerAccepted>0,...stats};
+}
+
 export async function syncOwnerMonitorTick(env,{hash,transport=fetch,now=new Date(),forcePipeline=null,testItem=null}={}){
   const base={mode:'SYNC_MONITOR_OFF',delivered:false};
-  if(env.SYNC_OWNER_MONITOR_ENABLED!=='true'&&!forcePipeline&&!testItem)return base;
+  if(env.SYNC_OWNER_MONITOR_ENABLED!=='true')return base;
+  if(testItem && env.SYNC_OWNER_LIVE_TEST_ENABLED!=='true')
+    return {...base,mode:'SYNC_MONITOR_LIVE_TEST_DISABLED'};
   if(!env.SUPABASE_URL||!env.LINE_CHANNEL_ACCESS_TOKEN||
      !/^U[0-9a-f]{32}$/i.test(env.LINE_OWNER_USER_ID||'')||
      (!env.SUPABASE_SERVER_KEY&&!env.DAILY_LINE_BRIDGE_TOKEN))
@@ -725,12 +1048,22 @@ export async function syncOwnerMonitorTick(env,{hash,transport=fetch,now=new Dat
   const allowedPipelines=new Set(
     (env.SYNC_OWNER_ENABLED_PIPELINES||'').split(',').map(s=>s.trim().toLowerCase()).filter(Boolean)
   );
-  if(forcePipeline)allowedPipelines.add(forcePipeline.toLowerCase());
-
-  if(allowedPipelines.size===0)
-    return {...base,mode:'NO_PIPELINES_ENABLED'};
-
-  return {...base,mode:'SYNC_MONITOR_PASS',delivered:false,pipelines:[...allowedPipelines]};
+  if(forcePipeline && !allowedPipelines.has(String(forcePipeline).toLowerCase()))
+    return {...base,mode:'PIPELINE_NOT_ENABLED'};
+  if(allowedPipelines.size===0)return {...base,mode:'NO_PIPELINES_ENABLED'};
+  if([...allowedPipelines].some(x=>!SYNC_OWNER_SUPPORTED.has(x)&&
+    !['work_order','hotel_work_plan'].includes(x)))
+    return {...base,mode:'HOLD_UNKNOWN_PIPELINE'};
+  const started=env.SYNC_OWNER_MONITOR_ACTIVATED_AT;
+  const startEpoch=syncOwnerAuditDate(started);
+  const clock=new Date(now);
+  if(startEpoch===null||startEpoch>clock.getTime())
+    return {...base,mode:'HOLD_ACTIVATION_NOT_VERIFIED'};
+  if(!env.SUPABASE_SERVER_KEY)
+    return {...base,mode:'HOLD_SERVICE_ROLE_BINDING_MISSING'};
+  return syncOwnerRealScheduledTick(env,{
+    enabled:allowedPipelines,activatedAt:started,hash,transport,now:clock
+  });
 }
 
 export default {
@@ -743,7 +1076,9 @@ export default {
         enabled:env.SYNC_OWNER_MONITOR_ENABLED==='true',
         enabledPipelines:(env.SYNC_OWNER_ENABLED_PIPELINES||'').split(',').map(s=>s.trim()).filter(Boolean),
         ledger:'line_autopilot.sync_owner_deliveries',
-        pendingLedger:'line_autopilot.sync_owner_pending_incidents'
+        pendingLedger:'line_autopilot.sync_owner_pending_incidents',
+        status:'READ_ONLY_OBSERVER_WITH_PENDING',
+        activatedAtConfigured:syncOwnerAuditDate(env.SYNC_OWNER_MONITOR_ACTIVATED_AT)!==null
       });
     }
     if(url.pathname==='/sync-owner/tick' && request.method==='POST'){
