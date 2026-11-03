@@ -415,7 +415,7 @@ export default function DefectDetailPage(){
                 {canAccessWorkOrder(role)
                   ?(workOpenByRoom.has(r.room_no)
                     ?<Link className="defect-work-order-link" data-has-open-work={workOpenByRoom.has(r.room_no)?'true':'false'} href={'/work-order?room='+encodeURIComponent(r.room_no)}>ดู Work Order →</Link>
-                    :<button type="button" className="defect-work-order-link" data-has-open-work="false" onClick={()=>window.alert(workOrderReadState==='ready'?'ไม่พบ Work Order ที่ยังเปิดอยู่\nห้อง '+hotelRoomLabel(r.room_no):'ยังไม่สามารถตรวจสอบ Work Order ได้ กรุณาลองใหม่')}>ดู Work Order →</button>)
+                    :<button type="button" className="defect-work-order-link" data-has-open-work="false" onClick={()=>window.alert(workOrderReadState==='ready'?'Work Order ไม่มีรายการที่ยังเปิดอยู่\nห้อง '+hotelRoomLabel(r.room_no):'ยังไม่สามารถตรวจสอบ Work Order ได้ กรุณาลองใหม่')}>ดู Work Order →</button>)
                   :'-'}
               </div>
               {combineMode&&combinedMembers(r.room_no).filter(other=>other.room_no!==r.room_no).map(other=><div key={other.room_no} className="combine-member-detail">
@@ -426,7 +426,7 @@ export default function DefectDetailPage(){
                   {canAccessWorkOrder(role)
                     ?(workOpenByRoom.has(other.room_no)
                       ?<Link className="defect-work-order-link" data-has-open-work="true" href={'/work-order?room='+encodeURIComponent(other.room_no)}>ดู Work Order →</Link>
-                      :<button type="button" className="defect-work-order-link" data-has-open-work="false" onClick={()=>window.alert(workOrderReadState==='ready'?'ไม่พบ Work Order ที่ยังเปิดอยู่\nห้อง '+hotelRoomLabel(other.room_no):'ยังไม่สามารถตรวจสอบ Work Order ได้ กรุณาลองใหม่')}>ดู Work Order →</button>)
+                      :<button type="button" className="defect-work-order-link" data-has-open-work="false" onClick={()=>window.alert(workOrderReadState==='ready'?'Work Order ไม่มีรายการที่ยังเปิดอยู่\nห้อง '+hotelRoomLabel(other.room_no):'ยังไม่สามารถตรวจสอบ Work Order ได้ กรุณาลองใหม่')}>ดู Work Order →</button>)
                     :'-'}
                 </div>
               </div>)}
