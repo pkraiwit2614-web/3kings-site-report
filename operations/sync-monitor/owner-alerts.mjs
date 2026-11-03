@@ -1,3 +1,4 @@
+import {metricLines} from './pipeline-metrics.mjs';
 /* 3 Kings owner Sync LINE notifier: isolated, OFF by default.
  * Requires approved sender/ledger injection. Never changes a Sync pipeline. */
 const hash=/^[a-f0-9]{64}$/i;
@@ -18,8 +19,9 @@ export function verifyE2E(proof){
  }))return {status:'FAIL',reason:'STAGES_MISMATCH'};
  return {status:'PASS',reason:'E2E_MATCH'};
 }
+const validRunKey=x=>uid.test(String(x||'')) || /^[a-z][a-z0-9_]{2,32}:[A-Za-z0-9_.:-]{1,160}$/.test(String(x||''));
 export function classifyRun(run,proof){
- if(!run||!uid.test(String(run.id||''))||
+ if(!run||!validRunKey(run.run_key||run.id)||
    !Number.isFinite(Date.parse(String(run.created_at||'')))||
    !String(run.sync_type||'').trim())return {status:'SKIP',reason:'BAD_LOG_ID'};
  const status=String(run.status||'').toLowerCase();
@@ -31,7 +33,7 @@ export function classifyRun(run,proof){
  return {status:proofResult.status,reason:proofResult.reason};
 }
 const clean=(x,n=100)=>String(x??'').replace(/[\u0000-\u001f\u007f]/g,' ').slice(0,n);
-export function lineMessage(run,result){
+export function lineMessage(run,result,proof){
  if(!['PASS','FAIL','UNVERIFIED','HOLD'].includes(result?.status))return null;
  const state={PASS:'สำเร็จ (Source→DB→Web ตรงกัน)',
  FAIL:'ล้มเหลว',UNVERIFIED:'รอยืนยันผลบนเว็บ',HOLD:'ยังไม่จบรอบ'}[result.status];
@@ -43,7 +45,8 @@ export function lineMessage(run,result){
   'ต้นทาง: '+clean(run.source_file,100),
   'เวลา: '+stamp,
   'ผลตรวจ: '+clean(result.reason,60),
-  'Run ID: '+run.id.slice(0,8),
+  ...metricLines(run,{status:result.status,rows:proof?.web?.rows}),
+  'Run ID: '+clean(run.run_key||run.id,65),
   result.status==='UNVERIFIED'?'หมายเหตุ: Log success ไม่ใช่ Web PASS':''
  ].filter(Boolean).join('\n');
 }
@@ -56,10 +59,11 @@ export async function deliverOnce(opts={}){
    return {status:'HOLD',reason:'SENDER_NOT_CONFIGURED'};
  const q=await quota();
  if(q?.allow!==true)return {status:'HOLD',reason:'LINE_QUOTA_BLOCK'};
- const key=await sha256('3kings|sync-owner|'+run.id);
+ const runKey=String(run.run_key||run.id);
+ const key=await sha256('3kings|sync-owner|'+run.sync_type+'|'+runKey);
  if(!hash.test(String(key||'')))return {status:'HOLD',reason:'BAD_DEDUP_KEY'};
- const message=lineMessage(run,result);
- const c=await claim({key,kind:'sync_owner_run',scope:'owner',summary:message.slice(0,300)});
+ const message=lineMessage(run,result,proof);
+ const c=await claim({key,kind:'sync_owner_run',scope:'owner',pipeline:run.sync_type,runKey,summary:message.slice(0,300)});
  if(c?.claim_status!=='new')return {status:'DEDUP_OR_PENDING'};
  if(!uid.test(String(c.retry_key||'')))return {status:'HOLD',reason:'BAD_RETRY_KEY'};
  let http=null;
