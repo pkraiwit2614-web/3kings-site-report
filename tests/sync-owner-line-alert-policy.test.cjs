@@ -56,7 +56,7 @@ test('If still unverified at next CONFIRMED due round, notify once on original k
  const now=time('2026-11-03T13:20:00Z');
  assert.deepEqual(p.decideOwnerAlert(run,o.classifyRun(run),{verification:pending,now}).status,'OVERDUE');
  let delivered=false;const sent=[];
- const opts={enabled:true,run,verification:pending,now,sha256:hash,
+ const opts={enabled:true,run,verification:{...pending,lastCheckReason:'ยังไม่พบ Web Readback หลังล็อกอิน'},now,sha256:hash,
  quota:async()=>({allow:true}),
  claim:async()=>delivered?{claim_status:'already_sent'}:{claim_status:'new',retry_key:retryId},
  push:async({message,recipient})=>{sent.push({message,recipient});delivered=true;return {status:200}},
@@ -68,6 +68,8 @@ test('If still unverified at next CONFIRMED due round, notify once on original k
  assert.equal(sent.length,1);assert.equal(sent[0].recipient,'owner');
  assert.match(sent[0].message,/เกินรอบ Sync ถัดไป/);
  assert.match(sent[0].message,/Run ID:/);
+ assert.match(sent[0].message,/ให้ตรวจแก้: เปิด 3 Kings Web App/);
+ assert.match(sent[0].message,/ยังไม่พบ Web Readback หลังล็อกอิน/);
 });
 test('No verified schedule or no first inspection must not invent an overdue alert',async()=>{
  const [o,p]=await Promise.all([load('owner-alerts'),load('alert-policy')]);
