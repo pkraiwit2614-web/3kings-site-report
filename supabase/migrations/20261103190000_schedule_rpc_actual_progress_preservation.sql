@@ -28,6 +28,7 @@ DECLARE
   v_existing_active_count integer := 0;
   v_expected_min integer := 50;
   v_is_full_snapshot boolean := false;
+  v_matched_existing_count integer := 0;
   v_active_identities text[] := ARRAY[]::text[];
   v_seen_identities text[] := ARRAY[]::text[];
   r jsonb;
@@ -242,16 +243,31 @@ BEGIN
     v_written := v_written + 1;
   END LOOP;
 
-  -- 6. Stale Task Deactivation (Strict Full Snapshot Proof Required)
+  -- Check how many of the project's existing active tasks are present in the incoming payload
+  SELECT count(*)
+  INTO v_matched_existing_count
+  FROM public.schedule_tasks
+  WHERE project_id = v_project_id
+    AND is_active = true
+    AND source_identity = ANY(v_active_identities);
+
+  -- 6. Stale Task Deactivation (Strict Canonical Full Snapshot Proof Required)
   -- Deactivation of unreferenced tasks is ONLY permitted when Full Snapshot is strictly proven:
-  -- A) Explicit directive in source file (e.g. #full_snapshot), OR
-  -- B) Incoming rows count matches or exceeds the project's canonical expected inventory (e.g. 87 for AV-P6)
-  --    AND is not missing an unreasonable number of existing tasks.
-  -- Partial payloads (e.g. 1, 44, 60, 86 rows out of 87) MUST NOT deactivate remaining tasks.
+  -- 1) Incoming row count matches or exceeds the project's canonical expected inventory (e.g. 87 for AV-P6).
+  -- 2) The incoming payload matches the actual canonical Master items already active in the project:
+  --    (v_matched_existing_count >= (v_existing_active_count - 5) AND v_matched_existing_count >= (v_expected_min - 5)).
+  -- 3) Row count or filename text strings (#full_snapshot) ALONE are STRICTLY PROHIBITED from deactivating tasks.
+  -- Partial payloads (1, 44, 60, 86 rows) or payloads with foreign/mismatched source identities
+  -- MUST NOT deactivate existing tasks.
   v_is_full_snapshot := (
-    (p_source_file ILIKE '%#full_snapshot%' OR p_source_file ILIKE '%[full_snapshot]%')
-    OR
-    (v_count >= v_expected_min AND (v_existing_active_count = 0 OR v_count >= (v_existing_active_count - 5)))
+    v_count >= v_expected_min
+    AND (
+      v_existing_active_count = 0
+      OR (
+        v_matched_existing_count >= (v_existing_active_count - 5)
+        AND v_matched_existing_count >= (v_expected_min - 5)
+      )
+    )
   );
 
   IF v_is_full_snapshot THEN
@@ -289,8 +305,10 @@ BEGIN
     'full_snapshot_proven', v_is_full_snapshot,
     'deactivation_applied', (v_deactivated > 0),
     'deactivation_skipped_reason', CASE
-      WHEN NOT v_is_full_snapshot AND v_existing_active_count > v_count THEN
+      WHEN NOT v_is_full_snapshot AND v_count < v_expected_min THEN
         format('full_snapshot_not_proven: incoming count %s < expected inventory %s', v_count, v_expected_min)
+      WHEN NOT v_is_full_snapshot AND v_matched_existing_count < (v_expected_min - 5) THEN
+        format('full_snapshot_not_proven: matched existing active tasks %s < required threshold %s (unmatched or foreign source identities)', v_matched_existing_count, (v_expected_min - 5))
       ELSE NULL
     END
   );

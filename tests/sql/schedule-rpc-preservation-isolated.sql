@@ -259,6 +259,66 @@ BEGIN
 END $$;
 
 -- ====================================================================
+-- TEST 5B: REGRESSION — PAYLOAD 87 ROWS WITH MISMATCHED/FOREIGN SOURCE IDENTITIES
+-- Must NOT deactivate the 87 canonical tasks even though row count is 87!
+-- Full snapshot proof must fail because source identities do not match existing tasks.
+-- ====================================================================
+DO $$
+DECLARE
+  v_foreign_rows jsonb := '[]'::jsonb;
+  v_res jsonb;
+  v_active_canon integer;
+  i integer;
+BEGIN
+  -- Construct 87 rows with foreign/mismatched source identities
+  FOR i IN 1..87 LOOP
+    v_foreign_rows := v_foreign_rows || jsonb_build_array(jsonb_build_object(
+      'source_identity', 'P6-FOREIGN-' || lpad(i::text, 3, '0'),
+      'source_task_no', i::text,
+      'task_name', 'Foreign Task ' || i,
+      'actual_progress', 0.50
+    ));
+  END LOOP;
+
+  v_res := public.drive_sync_apply_schedule(
+    'test-isolated-sync-key',
+    'AV-P6',
+    'payload_87_foreign_identities.xlsx',
+    v_foreign_rows
+  );
+
+  IF (v_res->>'ok')::boolean IS NOT TRUE THEN
+    RAISE EXCEPTION 'TEST 5B FAILED: RPC call failed: %', v_res;
+  END IF;
+
+  -- Assert Full Snapshot NOT proven despite 87 rows!
+  IF (v_res->>'full_snapshot_proven')::boolean IS NOT FALSE THEN
+    RAISE EXCEPTION 'TEST 5B FAILED: 87 foreign rows should NOT prove full snapshot!';
+  END IF;
+
+  -- Assert zero stale rows deactivated
+  IF (v_res->>'cleaned_stale_rows')::integer <> 0 THEN
+    RAISE EXCEPTION 'TEST 5B FAILED: Stale rows were deactivated! Expected 0, got %', (v_res->>'cleaned_stale_rows');
+  END IF;
+
+  -- Assert all 87 original canonical tasks remain active
+  SELECT count(*) INTO v_active_canon
+  FROM public.schedule_tasks
+  WHERE project_id = 'fa7c6969-5ecc-42c0-9e95-c68a733ef357'
+    AND is_active = true
+    AND source_identity LIKE 'P6-ID-%';
+
+  IF v_active_canon <> 87 THEN
+    RAISE EXCEPTION 'TEST 5B FAILED: Original canonical tasks were deactivated! Expected 87 active, got %', v_active_canon;
+  END IF;
+
+  -- Clean up the 87 foreign tasks from test table so subsequent tests run on canonical data
+  DELETE FROM public.schedule_tasks WHERE source_identity LIKE 'P6-FOREIGN-%';
+
+  RAISE NOTICE 'SUCCESS TEST 5B: 87 foreign rows did NOT deactivate original tasks (full snapshot proof safely rejected).';
+END $$;
+
+-- ====================================================================
 -- TEST 6: PAYLOAD 87 ROWS (FULL SNAPSHOT) + NULL/BLANK/GENUINE ZERO
 -- Add a 88th stale task to verify safe deactivation when 87 rows match canonical full snapshot
 -- ====================================================================
