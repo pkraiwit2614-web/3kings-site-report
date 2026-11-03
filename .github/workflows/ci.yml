@@ -46,6 +46,9 @@ jobs:
       - name: Apps Script P1 source comparator offline tests (no network or credentials)
         run: node --test tests/ai-operations-gas-source.test.cjs tests/ai-operations-gas-live.test.cjs
 
+      - name: GPT Materials queue isolated safety and rollback regression
+        run: node --test tests/gpt-materials-sync-queue.test.cjs
+
       - name: Issue 201 SmartSync projection candidate offline QA (no live writes)
         run: node --test tests/ai-operations-smart-sync-projection.test.cjs
 
