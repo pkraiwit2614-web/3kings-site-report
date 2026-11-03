@@ -2,7 +2,7 @@
 CREATE ROLE service_role NOLOGIN BYPASSRLS;
 CREATE ROLE anon NOLOGIN;
 CREATE ROLE authenticated NOLOGIN;
-\i supabase/migrations/20261103120000_sync_owner_line_ledger_isolated.sql
+\i supabase/migrations/20261103115147_sync_owner_line_ledger_isolated_20261103.sql
 
 DO $$
 BEGIN
