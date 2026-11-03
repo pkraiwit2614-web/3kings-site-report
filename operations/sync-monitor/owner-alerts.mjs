@@ -1,4 +1,5 @@
 import {metricLines} from './pipeline-metrics.mjs';
+import {decideOwnerAlert} from './alert-policy.mjs';
 /* 3 Kings owner Sync LINE notifier: isolated, OFF by default.
  * Requires approved sender/ledger injection. Never changes a Sync pipeline. */
 const hash=/^[a-f0-9]{64}$/i;
@@ -41,11 +42,12 @@ export function classifyRun(run,proof){
 }
 const clean=(x,n=100)=>String(x??'').replace(/[\u0000-\u001f\u007f]/g,' ').slice(0,n);
 export function lineMessage(run,result,proof){
- if(!['PASS','FAIL','UNVERIFIED','HOLD','NO_CHANGE_UNVERIFIED','NO_CHANGE_VERIFIED'].includes(result?.status))return null;
+ if(!['PASS','FAIL','UNVERIFIED','HOLD','NO_CHANGE_UNVERIFIED','NO_CHANGE_VERIFIED','OVERDUE'].includes(result?.status))return null;
  const state={PASS:'สำเร็จ (Source→DB→Web ตรงกัน)',
  FAIL:'ล้มเหลว',UNVERIFIED:'รอยืนยันผลบนเว็บ',HOLD:'ยังไม่จบรอบ',
  NO_CHANGE_UNVERIFIED:'ไม่มีข้อมูลเปลี่ยน (ยังไม่ยืนยันบนเว็บ)',
- NO_CHANGE_VERIFIED:'ไม่มีข้อมูลเปลี่ยน (ตรวจถึงเว็บแล้ว)'}[result.status];
+ NO_CHANGE_VERIFIED:'ไม่มีข้อมูลเปลี่ยน (ตรวจถึงเว็บแล้ว)',
+ OVERDUE:'แจ้งเตือนตรวจแก้: เกินรอบ Sync ถัดไปแล้วยังยืนยันผลไม่ได้'}[result.status];
  const stamp=new Date(run.created_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok',hour12:false});
  return [
   '3 Kings • Sync Monitoring',
@@ -60,10 +62,12 @@ export function lineMessage(run,result,proof){
  ].filter(Boolean).join('\n');
 }
 export async function deliverOnce(opts={}){
- const {enabled=false,run,proof,sha256,quota,claim,push,ack}=opts;
+ const {enabled=false,run,proof,sha256,quota,claim,push,ack,
+  noChangeProof,verification,now=new Date()}=opts;
  if(enabled!==true)return {status:'OFF'};
  const result=classifyRun(run,proof);
- if(result.status==='SKIP')return {status:'SKIP'};
+ const policy=decideOwnerAlert(run,result,{noChangeProof,verification,now});
+ if(policy.decision!=='SEND')return {status:policy.decision,reason:policy.reason};
  if([sha256,quota,claim,push,ack].some(x=>typeof x!=='function'))
    return {status:'HOLD',reason:'SENDER_NOT_CONFIGURED'};
  const q=await quota();
@@ -71,7 +75,9 @@ export async function deliverOnce(opts={}){
  const runKey=String(run.run_key||run.id);
  const key=await sha256('3kings|sync-owner|'+run.sync_type+'|'+runKey);
  if(!hash.test(String(key||'')))return {status:'HOLD',reason:'BAD_DEDUP_KEY'};
- const message=lineMessage(run,result,proof);
+ const message=lineMessage(run,policy.status==='OVERDUE'?
+   {status:'OVERDUE',reason:policy.reason}:result,proof);
+ if(typeof message!=='string'||!message)return {status:'BLOCK',reason:'EMPTY_MESSAGE'};
  const c=await claim({key,kind:'sync_owner_run',scope:'owner',pipeline:run.sync_type,runKey,summary:message.slice(0,300)});
  if(c?.claim_status!=='new')return {status:'DEDUP_OR_PENDING'};
  if(!uid.test(String(c.retry_key||'')))return {status:'HOLD',reason:'BAD_RETRY_KEY'};
@@ -81,5 +87,5 @@ export async function deliverOnce(opts={}){
  try{await ack({key,retryKey:c.retry_key,status:delivery,http});}
  catch{return {status:'ACK_UNVERIFIED',http};}
  return {status:delivery==='delivered'?'DELIVERED':'UNCERTAIN',
-   runStatus:result.status,http};
+   runStatus:policy.status,http};
 }
