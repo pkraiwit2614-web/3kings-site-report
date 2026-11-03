@@ -45,8 +45,10 @@ function dateTimeTH(v:string|null|undefined){
 }
 const ids=(group:string):string[]=>[...new Set((group.toUpperCase().match(/[AB]\d{3}/g)||[]).flatMap(room=>hotelRoomMembers(room)))]
 const isCombine=(group:string)=>ids(group).some(room=>hotelRoomMembers(room).length>1)
-const finished=(v:string|null)=>/เสร็จแล้ว|งดแจก|ยกเลิก/.test(v||'')
-const isHold=(r:WorkOrder)=>/HOLD/i.test(r.work_status||'')||/HOLD/i.test(r.qa_status||'')
+const finished=(v:string|null)=>/เสร็จแล้ว|เสร็จสิ้น|งดแจก|ยกเลิก/.test(v||'')
+// A completed label with an explicit unfinished QA note is tracked internally, not dispatched.
+const completionConflict=(r:WorkOrder)=>finished(r.work_status)&&/ยังไม่เสร็จ/.test(r.qa_status||'')
+const isHold=(r:WorkOrder)=>completionConflict(r)||/HOLD/i.test(r.work_status||'')||/HOLD/i.test(r.qa_status||'')
 // Label-only change: the Excel/source work_status is preserved.
 const displayWorkStatus=(v:string|null)=>v||'รอตรวจ'
 function roomSearchText(group:string){
@@ -65,11 +67,15 @@ export default function WorkOrderViewer(){
  const {role}=useAccessRole()
  const permitted=canAccessWorkOrder(role)
  const [rows,setRows]=useState<WorkOrder[]>([])
+ // Secondary staff-only review queue. Inactive HOLD never joins dispatch or print.
+ const [inactiveHoldRows,setInactiveHoldRows]=useState<WorkOrder[]>([])
+ const [inactiveHoldError,setInactiveHoldError]=useState('')
  const [loading,setLoading]=useState(true)
  const [error,setError]=useState('')
  const [quick,setQuick]=useState<Quick>('ALL')
  const [query,setQuery]=useState('')
  const [contractor,setContractor]=useState('ALL')
+ const [statusFilter,setStatusFilter]=useState('ALL')
  // Allow read-only room-scoped navigation from Defect Report and OOO/OOS.
  // Do not change the existing eligible-work-item or permission rules.
  useEffect(()=>{
@@ -79,6 +85,7 @@ export default function WorkOrderViewer(){
   setQuery(requestedRoom)
   setQuick('ALL')
   setContractor('ALL')
+  setStatusFilter('ALL')
  },[])
 
  const reload=useCallback(async()=>{
@@ -86,6 +93,10 @@ export default function WorkOrderViewer(){
   const order=await sb.from('defect_work_order_snapshot').select('work_id,room_group,building,contractor,defect_item,next_action,received_date,due_date,work_status,evidence_url,qa_status,conflict_note,source_sync_note,source_modified_at,imported_at').eq('source_active',true).order('work_id')
   if(order.error)throw new Error(order.error.message||'อ่านข้อมูลไม่สำเร็จ')
   setRows((order.data||[]) as WorkOrder[])
+  const inactive=await sb.from('defect_work_order_snapshot').select('work_id,room_group,building,contractor,defect_item,next_action,received_date,due_date,work_status,evidence_url,qa_status,conflict_note,source_sync_note,source_modified_at,imported_at').eq('source_active',false).ilike('work_status','HOLD%').order('work_id')
+  // If inactive HOLD is unreadable, existing active work remains available.
+  setInactiveHoldRows(inactive.error?[]:(inactive.data||[]) as WorkOrder[])
+  setInactiveHoldError(inactive.error?inactive.error.message:'')
  },[])
  useEffect(()=>{
   let alive=true
@@ -103,30 +114,44 @@ export default function WorkOrderViewer(){
  const daysForRow=(r:WorkOrder)=>elapsedCalendarDays(noticeForRow(r),todayISO)
  // Dispatch is defined by an active, unfinished Work ID, not by room handover state.
  // The read query already restricts this collection to source_active=true.
- const eligible=useMemo(()=>rows.filter(r=>!finished(r.work_status)&&ids(r.room_group).length>0),[rows])
+ const eligible=useMemo(()=>rows.filter(r=>(!finished(r.work_status)||completionConflict(r))&&ids(r.room_group).length>0),[rows])
  // Dispatch/Print dataset excludes HOLD items so contractors never receive unverified work automatically.
  const dispatchEligible=useMemo(()=>eligible.filter(r=>!isHold(r)),[eligible])
  // Tracking dataset preserves all HOLD items for staff follow-up and verification.
  const holdEligible=useMemo(()=>eligible.filter(r=>isHold(r)),[eligible])
  const teams=useMemo(()=>[...new Set(eligible.map(r=>r.contractor))].sort((a,b)=>a.localeCompare(b,'th')),[eligible])
+ // Status choices follow real unfinished dispatch data; completed and HOLD work remain excluded.
+ const statusChoices=useMemo(()=>[...new Set(dispatchEligible.map(r=>displayWorkStatus(r.work_status)))].sort((a,b)=>a.localeCompare(b,'th')),[dispatchEligible])
  // Search and contractor limit the context for every KPI; the selected KPI
  // then selects the rows that appear in the table and on the printed report.
  const inScope=useMemo(()=>{
   const needle=normalize(query)
   return dispatchEligible.filter(r=>{
+   if(statusFilter!=='ALL'&&(statusFilter==='HOLD'||displayWorkStatus(r.work_status)!==statusFilter))return false
    if(contractor!=='ALL'&&r.contractor!==contractor)return false
    if(!needle)return true
    return normalize([r.work_id,r.room_group,roomSearchText(r.room_group),r.defect_item,r.next_action,r.contractor].filter(Boolean).join(' ')).includes(needle)
   })
- },[dispatchEligible,query,contractor])
+ },[dispatchEligible,query,contractor,statusFilter])
  const holdInScope=useMemo(()=>{
   const needle=normalize(query)
   return holdEligible.filter(r=>{
+   if(statusFilter!=='ALL'&&statusFilter!=='HOLD')return false
    if(contractor!=='ALL'&&r.contractor!==contractor)return false
    if(!needle)return true
    return normalize([r.work_id,r.room_group,roomSearchText(r.room_group),r.defect_item,r.next_action,r.contractor].filter(Boolean).join(' ')).includes(needle)
   })
- },[holdEligible,query,contractor])
+ },[holdEligible,query,contractor,statusFilter])
+ // A separate non-active review panel, not a dispatch/print dataset.
+ const inactiveHoldInScope=useMemo(()=>{
+  const needle=normalize(query)
+  return inactiveHoldRows.filter(r=>{
+   if(!isHold(r)||finished(r.work_status)||ids(r.room_group).length===0)return false
+   if(statusFilter!=='ALL'&&statusFilter!=='HOLD')return false
+   if(contractor!=='ALL'&&r.contractor!==contractor)return false
+   return !needle||normalize([r.work_id,r.room_group,roomSearchText(r.room_group),r.defect_item,r.next_action,r.contractor].filter(Boolean).join(' ')).includes(needle)
+  })
+ },[inactiveHoldRows,query,contractor,statusFilter])
  const filtered=useMemo(()=>inScope.filter(r=>{
   if(quick==='A'||quick==='B'){if(r.building!==quick)return false}
   if(quick==='OVERDUE'&&!((daysForRow(r)??0)>7))return false
@@ -141,7 +166,7 @@ export default function WorkOrderViewer(){
  const kpiContractors:Record<Quick,[string,number][]>={ALL:contractorCounts(kpiRows.ALL),A:contractorCounts(kpiRows.A),B:contractorCounts(kpiRows.B),OVERDUE:contractorCounts(kpiRows.OVERDUE)}
  const holdContractors=useMemo(()=>contractorCounts(holdInScope),[holdInScope])
  const labels:Record<Quick,string>={ALL:'งานที่กำลังดำเนินการทั้งหมด',A:'อาคาร A',B:'อาคาร B',OVERDUE:'งานค้างเกิน 7 วัน'}
- const scope=labels[quick]+' • '+(contractor==='ALL'?'ทุกผู้รับเหมา':contractor)+(query?' • ค้นหา '+query:'')
+ const scope=labels[quick]+' • '+(contractor==='ALL'?'ทุกผู้รับเหมา':contractor)+(statusFilter==='ALL'?'':' • สถานะ '+(statusFilter==='HOLD'?'HOLD / รอตรวจสอบ':statusFilter))+(query?' • ค้นหา '+query:'')
  if(!permitted)return <AppShell><section className="panel" role="alert">สิทธิ์ Work Order จำกัดสำหรับทีม 3 Kings ที่ได้รับสิทธิ์ Defect เท่านั้น</section></AppShell>
  return <AppShell>
   <PageHeader title="Above Condo — Work Order" subtitle="รายการงานค้างรายจุด • สำหรับทีม 3 Kings • อ่านอย่างเดียว"
@@ -157,7 +182,7 @@ export default function WorkOrderViewer(){
       {!kpiContractors[kind].length&&<small>ไม่มีงานค้าง</small>}
      </div>
     </button>)}
-    <button type="button" className="wo-kpi wo-kpi-hold" onClick={()=>{document.getElementById('wo-hold-tracking')?.scrollIntoView({behavior:'smooth'})}} aria-label="งาน HOLD สำหรับเจ้าหน้าที่ติดตามภายใน">
+    <button type="button" className="wo-kpi wo-kpi-hold" onClick={()=>{if(statusFilter!=='HOLD')setStatusFilter('HOLD');else document.getElementById('wo-hold-tracking')?.scrollIntoView({behavior:'smooth'})}} aria-label="งาน HOLD สำหรับเจ้าหน้าที่ติดตามภายใน">
      <div className="wo-kpi-head"><span>งาน HOLD / รอตรวจสอบ</span><b>{holdInScope.length}</b></div>
      <small>ติดตามภายใน (ไม่รวมใบแจกงาน)</small>
      <div className="wo-kpi-team-list" aria-label="จำนวนงาน HOLD แยกผู้รับเหมา">
@@ -175,7 +200,14 @@ export default function WorkOrderViewer(){
       <option value="ALL">ทุกผู้รับเหมา</option>{teams.map(t=><option value={t} key={t}>{t}</option>)}
      </select>
     </label>
-    {(query||quick!=='ALL'||contractor!=='ALL')&&<button type="button" className="button" onClick={()=>{setQuery('');setQuick('ALL');setContractor('ALL')}}>ล้างตัวกรอง</button>}
+    <label>สถานะงาน
+     <select aria-label="กรองตามสถานะงาน" value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}>
+      <option value="ALL">ทุกสถานะงานค้าง</option>
+      {statusChoices.map(status=><option value={status} key={status}>{status}</option>)}
+      <option value="HOLD">HOLD / รอตรวจสอบ (ภายใน)</option>
+     </select>
+    </label>
+    {(query||quick!=='ALL'||contractor!=='ALL'||statusFilter!=='ALL')&&<button type="button" className="button" onClick={()=>{setQuery('');setQuick('ALL');setContractor('ALL');setStatusFilter('ALL')}}>ล้างตัวกรอง</button>}
    </section>
    <section className="panel wo-sheet">
     <div className="wo-sheet-title"><h2>รายการสำหรับตรวจและแจกงาน</h2><span>แสดง {filtered.length} รายการ</span></div>
@@ -211,10 +243,31 @@ export default function WorkOrderViewer(){
       <td>{r.defect_item}</td>
       <td>{r.next_action||'รอระบุรายละเอียด'}</td>
       <td><b>{r.contractor}</b></td>
-      <td><span className="wo-hold-badge">HOLD</span><b>{displayWorkStatus(r.work_status)}</b><small>{r.qa_status||'รอตรวจรายการ'}</small></td>
+      <td><span className="wo-hold-badge">HOLD</span><b>{completionConflict(r)?'สถานะขัดแย้ง — รอตรวจสอบ':displayWorkStatus(r.work_status)}</b><small>{r.qa_status||'รอตรวจรายการ'}</small></td>
       <td><small className="wo-conflict">{r.conflict_note||r.qa_status||'รอยืนยันหลักฐาน/ชิ้นส่วน'}</small></td>
       <td className="wo-evidence-col">{r.evidence_url?.startsWith('https://drive.google.com/')?<a target="_blank" rel="noreferrer" href={r.evidence_url}>เปิดภาพ / PDF</a>:<small>รอหลักฐาน</small>}</td>
      </tr>})}
+    </tbody></table></div>
+   </section>}
+   {inactiveHoldError&&<div className="panel wo-error" role="status">ตรวจรายการ HOLD ที่ยังไม่ Active ไม่สำเร็จ: {inactiveHoldError} (งานพร้อมแจกยังแสดงตามเดิม)</div>}
+   {inactiveHoldInScope.length>0&&<section className="panel wo-sheet wo-hold-section wo-unapproved-hold" aria-label="HOLD ที่ยังไม่ Active สำหรับติดตามภายใน">
+    <div className="wo-sheet-title"><h2>HOLD ที่ยังไม่ Active (ติดตามภายในเท่านั้น)</h2>
+     <span>{inactiveHoldInScope.length} รายการ • ไม่รวมยอดงานพร้อมแจก / ไม่พิมพ์ใบแจกงาน / ไม่เปลี่ยนสถานะอนุมัติ</span>
+    </div>
+    <div className="table-wrap wo-table-wrap"><table className="wo-table"><thead><tr>
+     <th>ห้อง / Work ID</th><th>วันที่รับแจ้ง</th><th>รายละเอียด Defect</th><th>สิ่งที่ต้องตรวจสอบ</th><th>ทีม / ผู้รับเหมา</th><th>สถานะ / หลักฐาน</th>
+    </tr></thead><tbody>
+     {inactiveHoldInScope.map(r=><tr key={r.work_id} className="wo-hold-row">
+      <td><b>{groupLabel(r.room_group)}</b><small>{r.work_id}</small></td>
+      <td>{noticeDateTH(r.received_date)}</td>
+      <td>{r.defect_item}</td>
+      <td>{r.next_action||'รอระบุรายละเอียด'}</td>
+      <td>{r.contractor}</td>
+      <td><span className="wo-hold-badge">HOLD — ไม่ Active</span><b>{displayWorkStatus(r.work_status)}</b>
+       <small>{r.qa_status||'รอ QA'}</small><small>ตรวจ Master/Approval ก่อนเปิดใช้งาน</small>
+       {r.evidence_url?.startsWith('https://drive.google.com/')&&<a target="_blank" rel="noreferrer" href={r.evidence_url}>เปิดหลักฐาน</a>}
+      </td>
+     </tr>)}
     </tbody></table></div>
    </section>}
    <p className="wo-screen-scope">ขอบเขต: {scope} • {filtered.length} รายการ</p>

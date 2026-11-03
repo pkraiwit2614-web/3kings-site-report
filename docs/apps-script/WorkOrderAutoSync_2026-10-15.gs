@@ -140,10 +140,20 @@ function workOrderRun20261015_(dryRun,force){
 function workOrderDryRun20261015(){return workOrderRun20261015_(true,true)}
 function workOrderSyncNow20261015(){return workOrderRun20261015_(false,true)}
 function syncWorkOrderHourly20261015(){
-  const now=new Date(),day=Number(Utilities.formatDate(now,WORK_ORDER_AUTO_20261015.TZ,'u'));
-  const hour=Number(Utilities.formatDate(now,WORK_ORDER_AUTO_20261015.TZ,'H'));
-  if(day===7||hour<8||hour>18)return {status:'outside-shift'};
-  return workOrderRun20261015_(false,false);
+  // Preserve the existing Production 24-hour / every-2-hours handler cadence.
+  // Only the approved Master intake is added; no schedule or trigger changes.
+  // Reuse this existing handler/trigger. Approved Master Work IDs are promoted
+  // through their original per-ID gated RPC, never through a second writer.
+  let approved={status:'NOT_INSTALLED'};
+  if(typeof workOrderApprovedAutoPromotion20261102_==='function'){
+    try{approved=workOrderApprovedAutoPromotion20261102_();}
+    catch(e){
+      console.error('WORK_ORDER_APPROVED_AUTO_HOLD '+String(e&&e.message||e));
+      approved={status:'HOLD_ERROR',reason:String(e&&e.message||e).slice(0,150)};
+    }
+  }
+  const legacy=workOrderRun20261015_(false,false);
+  return {...legacy,approved};
 }
 function installWorkOrderTrigger20261015(){
   // Create or replace ONLY this one Work Order trigger; preserve all existing ones.
