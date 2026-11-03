@@ -3,6 +3,7 @@
  * No network, no database writes, no Apps Script calls.
  * Never equate existing DB audit counts to authenticated Web readback.
  */
+import {isCanonicalSyncSource} from './source-catalog.mjs';
 export const PIPELINE_UNITS=Object.freeze({
  defects:'ห้อง',materials:'รายการ',schedule:'รายการงาน',photos:'รูปภาพ',
  work_order:'Work ID',hotel_work_plan:'รายการแผนงาน',
@@ -15,6 +16,8 @@ const str=(x,max=100)=>String(x??'').replace(/[\u0000-\u001f\u007f]/g,' ').slice
 export function fromDriveSyncRun(x){
  if(!x||!['defects','materials','schedule','photos'].includes(x.sync_type))
    throw Error('UNSUPPORTED_DRIVE_SYNC_PIPELINE');
+ if(!isCanonicalSyncSource(x.sync_type,x.source_file))
+   throw Error('NON_CANONICAL_SOURCE');
  return {
    id:String(x.id??''),run_key:String(x.id??''),sync_type:x.sync_type,
    source_system:'drive_sync_runs',source_file:str(x.source_file),
@@ -31,7 +34,12 @@ export function fromDailySiteAudit(x){
    run_key:'daily_site_report:'+x.id,sync_type:'daily_site_report',
    source_system:'daily_site_report_sync_audit',
    source_file:str(x.source_file_id),created_at:x.created_at,
-   status:count(x.rows_verified)===null?'hold':'success',
+   status:(count(x.rows_verified)===null||count(x.rows_parsed)===null||
+     count(x.rows_inserted)===null||count(x.rows_updated)===null||
+     count(x.rows_skipped)===null)?'hold':
+     ((x.rows_verified===x.rows_parsed &&
+       x.rows_parsed===x.rows_inserted+x.rows_updated+x.rows_skipped)?
+       'success':'error'),
    message:str(x.notes,300),metric_unit:'แถวรายงาน',
    metrics:{read:count(x.source_rows_read),parsed:count(x.rows_parsed),
     inserted:count(x.rows_inserted),updated:count(x.rows_updated),
