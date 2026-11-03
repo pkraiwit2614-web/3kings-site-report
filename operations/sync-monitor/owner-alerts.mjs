@@ -1,4 +1,5 @@
 import {metricLines} from './pipeline-metrics.mjs';
+import {evaluateAlertPolicy} from './notification-policy.mjs';
 import {decideOwnerAlert} from './alert-policy.mjs';
 /* 3 Kings owner Sync LINE notifier: isolated, OFF by default.
  * Requires approved sender/ledger injection. Never changes a Sync pipeline. */
@@ -68,22 +69,67 @@ export function lineMessage(run,result,proof,verification){
 }
 export async function deliverOnce(opts={}){
  const {enabled=false,run,proof,sha256,quota,claim,push,ack,
-  noChangeProof,verification,now=new Date()}=opts;
+   pending=null,nextScheduledAt=null,now=new Date().toISOString(),
+   persistPending,resolvePending}=opts;
  if(enabled!==true)return {status:'OFF'};
  const result=classifyRun(run,proof);
- const policy=decideOwnerAlert(run,result,{noChangeProof,verification,now});
- if(policy.decision!=='SEND')return {status:policy.decision,reason:policy.reason};
+ const policy=evaluateAlertPolicy({run,classification:result,pending,nextScheduledAt,now});
+ if(policy.action==='SUPPRESS')return {status:'SUPPRESSED',reason:policy.reason};
+ if(policy.action==='HOLD')return {status:'HOLD',reason:policy.reason};
+ if(policy.action==='WAIT')return {status:'WAITING_VERIFICATION',
+   reason:policy.reason,nextScheduledAt:policy.nextScheduledAt};
+ if(policy.action==='START_PENDING'){
+   // ACK of durable DB receipt is mandatory before a pending run is accepted.
+   if(typeof persistPending!=='function')return {status:'HOLD',reason:'PENDING_STORAGE_NOT_CONFIGURED'};
+   let saved;
+   try{saved=await persistPending({
+     pipeline:run.sync_type,sourceFile:run.source_file,
+     originalRunKey:policy.originalRunKey,nextScheduledAt:policy.nextScheduledAt,
+     reason:result.reason,firstSeenAt:now,
+     metrics:run.metrics||{},createdAt:run.created_at
+   })}catch{return {status:'HOLD',reason:'PENDING_STORAGE_FAILED'}}
+   if(saved?.stored!==true)return {status:'HOLD',reason:'PENDING_STORAGE_UNVERIFIED'};
+   return {status:'WAITING_VERIFICATION',reason:policy.reason,
+     nextScheduledAt:policy.nextScheduledAt};
+ }
+ if(policy.action==='RESOLVE_SILENT'){
+   if(typeof resolvePending!=='function')return {status:'HOLD',reason:'PENDING_RESOLVE_NOT_CONFIGURED'};
+   try{if((await resolvePending({episodeKey:policy.episodeKey,
+       status:'resolved'}))?.resolved!==true)
+      return {status:'HOLD',reason:'PENDING_RESOLVE_UNVERIFIED'};}
+   catch{return {status:'HOLD',reason:'PENDING_RESOLVE_FAILED'};}
+   return {status:'RESOLVED_NO_NOTIFICATION'};
+ }
+ if(!['SEND_VERIFIED','SEND_FAILURE','ESCALATE'].includes(policy.action))
+   return {status:'HOLD',reason:'POLICY_ACTION_UNKNOWN'};
  if([sha256,quota,claim,push,ack].some(x=>typeof x!=='function'))
    return {status:'HOLD',reason:'SENDER_NOT_CONFIGURED'};
  const q=await quota();
  if(q?.allow!==true)return {status:'HOLD',reason:'LINE_QUOTA_BLOCK'};
- const runKey=String(run.run_key||run.id);
+ // An escalation belongs to the ORIGINAL unresolved episode, never to the
+ // subsequent no-change run. This enforces one LINE delivery per incident.
+ const original=pending?.originalRun;
+ const notifyRun=policy.action==='ESCALATE'?{
+   ...(original&&typeof original==='object'?original:{
+     ...run,metrics:{},created_at:pending.firstSeenAt||run.created_at}),
+   id:policy.originalRunKey,run_key:policy.originalRunKey,
+   sync_type:run.sync_type,source_file:run.source_file
+ }:run;
+ const runKey=String(policy.action==='ESCALATE'?
+   policy.originalRunKey:(pending?.originalRunKey||run.run_key||run.id));
  const key=await sha256('3kings|sync-owner|'+run.sync_type+'|'+runKey);
  if(!hash.test(String(key||'')))return {status:'HOLD',reason:'BAD_DEDUP_KEY'};
- const message=lineMessage(run,policy.status==='OVERDUE'?
-   {status:'OVERDUE',reason:policy.reason}:result,proof,verification);
- if(typeof message!=='string'||!message)return {status:'BLOCK',reason:'EMPTY_MESSAGE'};
- const c=await claim({key,kind:'sync_owner_run',scope:'owner',pipeline:run.sync_type,runKey,summary:message.slice(0,300)});
+ const message=policy.action==='ESCALATE'?
+   [lineMessage(notifyRun,{status:'UNVERIFIED',reason:policy.reason}),
+     'ตรวจปลายทางไม่เสร็จภายในรอบ Sync ถัดไป',
+     'เริ่มค้าง: '+clean(policy.firstSeenAt,40),
+     'กำหนดตรวจรอบถัดไป: '+clean(policy.nextScheduledAt,40),
+     'โปรดเข้า Web App โมดูล '+clean(run.sync_type,45)+' เพื่อตรวจสอบและแก้ไข',
+     'ไม่ใช่ผลยืนยันว่า Sync ล้มเหลว'].join('\n'):
+   lineMessage(run,result,proof);
+ if(!message)return {status:'HOLD',reason:'NO_VALID_LINE_MESSAGE'};
+ const c=await claim({key,kind:'sync_owner_run',scope:'owner',
+   pipeline:run.sync_type,runKey,summary:message.slice(0,300)});
  if(c?.claim_status!=='new')return {status:'DEDUP_OR_PENDING'};
  if(!uid.test(String(c.retry_key||'')))return {status:'HOLD',reason:'BAD_RETRY_KEY'};
  let http=null;
@@ -91,6 +137,13 @@ export async function deliverOnce(opts={}){
  const delivery=http===200?'delivered':'uncertain';
  try{await ack({key,retryKey:c.retry_key,status:delivery,http});}
  catch{return {status:'ACK_UNVERIFIED',http};}
+ // Episode completion is a separate readback; no retry of an uncertain LINE
+ // push until the original retry key's delivery status is reconciled.
+ if(delivery==='delivered'&&pending&&typeof resolvePending==='function'){
+   try{await resolvePending({episodeKey:policy.episodeKey||pending.episodeKey,
+     status:policy.action==='ESCALATE'?'alerted':'resolved'});}
+   catch{return {status:'ACKED_PENDING_CLOSE_UNVERIFIED',http};}
+ }
  return {status:delivery==='delivered'?'DELIVERED':'UNCERTAIN',
-   runStatus:policy.status,http};
+   runStatus:policy.action==='ESCALATE'?'OVERDUE_UNVERIFIED':result.status,http};
 }
