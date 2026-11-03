@@ -29,14 +29,23 @@ export function classifyRun(run,proof){
    return {status:'FAIL',reason:'EXPLICIT_LOG_ERROR'};
  if(!['success','succeeded'].includes(status))
    return {status:'HOLD',reason:'NOT_FINAL'};
+ if(run.sync_type==='schedule' && run.metrics?.read===0 &&
+    run.metrics?.written===0 &&
+    /source unchanged, sync skipped/i.test(String(run.message||''))){
+   const p=verifyE2E(proof);
+   return p.status==='PASS'?{status:'NO_CHANGE_VERIFIED',reason:'SOURCE_UNCHANGED_E2E_MATCH'}:
+    {status:'NO_CHANGE_UNVERIFIED',reason:'SOURCE_UNCHANGED_WEB_UNVERIFIED'};
+ }
  const proofResult=verifyE2E(proof);
  return {status:proofResult.status,reason:proofResult.reason};
 }
 const clean=(x,n=100)=>String(x??'').replace(/[\u0000-\u001f\u007f]/g,' ').slice(0,n);
 export function lineMessage(run,result,proof){
- if(!['PASS','FAIL','UNVERIFIED','HOLD'].includes(result?.status))return null;
+ if(!['PASS','FAIL','UNVERIFIED','HOLD','NO_CHANGE_UNVERIFIED','NO_CHANGE_VERIFIED'].includes(result?.status))return null;
  const state={PASS:'สำเร็จ (Source→DB→Web ตรงกัน)',
- FAIL:'ล้มเหลว',UNVERIFIED:'รอยืนยันผลบนเว็บ',HOLD:'ยังไม่จบรอบ'}[result.status];
+ FAIL:'ล้มเหลว',UNVERIFIED:'รอยืนยันผลบนเว็บ',HOLD:'ยังไม่จบรอบ',
+ NO_CHANGE_UNVERIFIED:'ไม่มีข้อมูลเปลี่ยน (ยังไม่ยืนยันบนเว็บ)',
+ NO_CHANGE_VERIFIED:'ไม่มีข้อมูลเปลี่ยน (ตรวจถึงเว็บแล้ว)'}[result.status];
  const stamp=new Date(run.created_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok',hour12:false});
  return [
   '3 Kings • Sync Monitoring',
