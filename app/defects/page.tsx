@@ -35,6 +35,15 @@ type RoomRow={
   source_modified_at:string|null
 }
 
+// Preserve the actual unfinished Hotel/Defect status in the report; an older open
+// defect must not be labelled as a newly notified one merely because it is incomplete.
+const displayRoomStatus=(r:RoomRow)=>{
+ const incomplete=r.status_group==='Hotel - Incomplete'||r.status_group==='Non-Hotel - Incomplete'
+ if(incomplete&&!/^เพิ่งได้รับแจ้ง\s+Defect\b/i.test((r.current_status||'').trim()))
+  return r.current_status||'Defect ยังไม่เสร็จ'
+ return statusLabel(r)
+}
+
 type Category={
   id:string
   label:string
@@ -345,7 +354,7 @@ export default function DefectDetailPage(){
       if(customerFilter==='NO_CUSTOMER'&&!paired.some(other=>other.customer_status==='ไม่มีลูกค้า'))return false
       if(active&&!paired.some(active.predicate))return false
       if(!needles.length)return true
-      const searchable=paired.flatMap(other=>[other.room_no,other.owner_name,other.customer_status,other.hotel_participation,other.defect_detail,statusLabel(other),other.next_action,other.follow_up]).filter(Boolean).join(' ').toLowerCase()
+      const searchable=paired.flatMap(other=>[other.room_no,other.owner_name,other.customer_status,other.hotel_participation,other.defect_detail,displayRoomStatus(other),other.next_action,other.follow_up]).filter(Boolean).join(' ').toLowerCase()
       return needles.some(needle=>searchable.includes(needle))
     })
     return combineMode?uniqueUnits(matched):matched
@@ -441,7 +450,7 @@ export default function DefectDetailPage(){
                 </div>
               </div>)}
             </td>
-            <td className="center"><span className={`state-badge ${statusTone(r)}`}>{statusLabel(r)}</span></td>
+            <td className="center"><span className={`state-badge ${statusTone(r)}`}>{displayRoomStatus(r)}</span></td>
             <td className="work-plan-cell">{(workPlanContext.get(r.room_no)||[]).map((label,i)=><small key={i}>{label}</small>)}<small>{roomHotelContext.get(r.room_no)||'สถานะโรงแรม: —'}</small><Link href={'/hotel-work-plan?room='+encodeURIComponent(r.room_no)}>ดูแผน</Link>{combineMode&&combinedMembers(r.room_no).filter(other=>other.room_no!==r.room_no).map(other=><div key={other.room_no} className="combine-member-detail"><small>{other.room_no}: {(workPlanContext.get(other.room_no)||[]).join(', ')||'ไม่ระบุแผน'}</small><Link href={'/hotel-work-plan?room='+encodeURIComponent(other.room_no)}>ดูแผน {other.room_no}</Link></div>)}</td>
             <td>{r.next_action||r.follow_up||'-'}{combineMode&&combinedMembers(r.room_no).filter(other=>other.room_no!==r.room_no).map(other=><div key={other.room_no} className="combine-member-detail"><b>{other.room_no}: </b>{other.next_action||other.follow_up||'-'}</div>)}</td>
           </tr>)}
