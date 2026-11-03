@@ -123,6 +123,34 @@ BEGIN
     END IF;
   END LOOP;
 
+  v_count := jsonb_array_length(p_rows);
+  v_active_identities := v_seen_identities;
+
+  -- Pre-compute Full Snapshot proof BEFORE any DML writes:
+  -- Check how many of the project's existing active tasks are present in the incoming payload
+  SELECT count(*)
+  INTO v_matched_existing_count
+  FROM public.schedule_tasks
+  WHERE project_id = v_project_id
+    AND is_active = true
+    AND source_identity = ANY(v_seen_identities);
+
+  -- Full Snapshot is strictly proven BEFORE any writes:
+  -- 1) Incoming row count matches or exceeds the project's canonical expected inventory (e.g. 87 for AV-P6).
+  -- 2) The incoming payload matches the actual canonical Master items already active in the project:
+  --    (v_matched_existing_count >= (v_existing_active_count - 5) AND v_matched_existing_count >= (v_expected_min - 5)).
+  -- 3) Row count or filename text strings (#full_snapshot) ALONE are STRICTLY PROHIBITED from deactivating tasks.
+  v_is_full_snapshot := (
+    v_count >= v_expected_min
+    AND (
+      v_existing_active_count = 0
+      OR (
+        v_matched_existing_count >= (v_existing_active_count - 5)
+        AND v_matched_existing_count >= (v_expected_min - 5)
+      )
+    )
+  );
+
   -- 5. Pass 2: Process Rows Transactionally
   FOR r IN SELECT * FROM jsonb_array_elements(p_rows)
   LOOP
@@ -243,33 +271,8 @@ BEGIN
     v_written := v_written + 1;
   END LOOP;
 
-  -- Check how many of the project's existing active tasks are present in the incoming payload
-  SELECT count(*)
-  INTO v_matched_existing_count
-  FROM public.schedule_tasks
-  WHERE project_id = v_project_id
-    AND is_active = true
-    AND source_identity = ANY(v_active_identities);
-
   -- 6. Stale Task Deactivation (Strict Canonical Full Snapshot Proof Required)
-  -- Deactivation of unreferenced tasks is ONLY permitted when Full Snapshot is strictly proven:
-  -- 1) Incoming row count matches or exceeds the project's canonical expected inventory (e.g. 87 for AV-P6).
-  -- 2) The incoming payload matches the actual canonical Master items already active in the project:
-  --    (v_matched_existing_count >= (v_existing_active_count - 5) AND v_matched_existing_count >= (v_expected_min - 5)).
-  -- 3) Row count or filename text strings (#full_snapshot) ALONE are STRICTLY PROHIBITED from deactivating tasks.
-  -- Partial payloads (1, 44, 60, 86 rows) or payloads with foreign/mismatched source identities
-  -- MUST NOT deactivate existing tasks.
-  v_is_full_snapshot := (
-    v_count >= v_expected_min
-    AND (
-      v_existing_active_count = 0
-      OR (
-        v_matched_existing_count >= (v_existing_active_count - 5)
-        AND v_matched_existing_count >= (v_expected_min - 5)
-      )
-    )
-  );
-
+  -- Deactivation of unreferenced tasks is ONLY permitted when Full Snapshot was proven before DML.
   IF v_is_full_snapshot THEN
     UPDATE public.schedule_tasks
     SET is_active = false, updated_at = now()
