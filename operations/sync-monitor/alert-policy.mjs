@@ -39,9 +39,13 @@ export function decideOwnerAlert(run,result,{
    return {decision:'SILENT',reason:'NON_PRODUCTION_RUN'};
  if(result.status==='FAIL')
    return {decision:'SEND',status:'FAIL',reason:result.reason||'EXPLICIT_FAILURE'};
- if(isVerifiedNoChange(run,result,noChangeProof))
+ // A later unchanged check cannot silently close an older changed run
+ // that is still missing authenticated Source-to-Web proof.
+ const olderRunUnresolved=verification?.pendingUnresolved===true &&
+   verification?.pendingReconciled!==true;
+ if(!olderRunUnresolved && isVerifiedNoChange(run,result,noChangeProof))
    return {decision:'SILENT',reason:'NO_SOURCE_DELTA'};
- if(result.status==='PASS')
+ if(result.status==='PASS' && !olderRunUnresolved)
    return {decision:'SEND',status:'PASS',reason:'CHANGED_AND_VERIFIED'};
  // A bare status of NO_CHANGE_UNVERIFIED is not enough to suppress unless
  // an explicit scoped source check or all four no-change proofs exist.
