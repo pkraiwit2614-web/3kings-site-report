@@ -204,3 +204,45 @@ test('manual LINE test cannot bypass the default disabled live-test flag',async(
  assert.equal(out.mode,'SYNC_MONITOR_LIVE_TEST_DISABLED');
  assert.equal(f.calls.length,0);
 });
+
+test('one config secret can enable only allowlisted pipelines; malformed config fails closed',async()=>{
+ const f=fixture([unchanged]);
+ const c={version:1,enabled:true,pipelines:['schedule'],
+  activatedAt:'2026-11-03T12:00:00Z'};
+ const valid={...env,
+  SYNC_OWNER_MONITOR_ENABLED:'false',
+  SYNC_OWNER_MONITOR_CONFIG:JSON.stringify(c)};
+ const out=await tick(f,'2026-11-03T13:20:00Z',valid);
+ assert.equal(out.mode,'SYNC_MONITOR_OBSERVED');
+ assert.equal(out.noChange,1);
+ assert.equal(f.send.length,0);
+ const bad=await tick(f,'2026-11-03T13:20:00Z',{
+   ...env,SYNC_OWNER_MONITOR_CONFIG:'{bad json'});
+ assert.equal(bad.mode,'SYNC_MONITOR_OFF');
+ const unknown=await tick(f,'2026-11-03T13:20:00Z',{
+   ...env,SYNC_OWNER_MONITOR_CONFIG:JSON.stringify({...c,pipelines:['users']})});
+ assert.equal(unknown.mode,'SYNC_MONITOR_OFF');
+});
+test('Daily audit with all parsed/verified rows skipped has no change and sends no LINE',async()=>{
+ const f=fixture([]);
+ const source='1-ZSZXulxaje4vDP1ztvUBXsjlmffjAcDu0w1OHRnpUw';
+ const daily={
+   id:51,created_at:'2026-11-03T12:52:04Z',
+   source_file_id:source,source_revision:'1793668282623',
+   source_rows_read:570,rows_parsed:18,rows_inserted:0,rows_updated:0,
+   rows_skipped:18,rows_verified:18,notes:'all unchanged'
+ };
+ const orig=f.transport;
+ f.transport=async(url,opts)=>{
+   if(String(url).includes('/rest/v1/daily_site_report_sync_audit?'))
+     return {ok:true,status:200,json:async()=>[daily]};
+   return orig(url,opts);
+ };
+ const out=await tick(f,'2026-11-03T13:20:00Z',{
+   ...env,SYNC_OWNER_ENABLED_PIPELINES:'daily_site_report',
+   SYNC_OWNER_DAILY_SOURCE_ID:source});
+ assert.equal(out.mode,'SYNC_MONITOR_OBSERVED');
+ assert.equal(out.noChange,1);
+ assert.equal(f.send.length,0);
+ assert.equal(f.incidents.length,0);
+});
