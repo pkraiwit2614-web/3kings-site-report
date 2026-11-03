@@ -4,7 +4,9 @@ on:
     branches: [main]
     paths:
       - 'supabase/migrations/20261103115147_sync_owner_line_ledger_isolated_20261103.sql'
+      - 'supabase/migrations/20261103210000_sync_owner_pending_incidents.sql'
       - 'tests/sql/sync-owner-line-ledger.sql'
+      - 'tests/sql/sync-owner-pending-ledger.sql'
       - '.github/workflows/sync-owner-ledger-qa.yml'
 permissions:
   contents: read
@@ -35,5 +37,7 @@ jobs:
             sudo apt-get update -qq
             sudo apt-get install -y postgresql-client
           fi
-      - name: New role-isolated ledger SQL acceptance
+      - name: New role-isolated delivery ledger SQL acceptance
         run: psql -h 127.0.0.1 -U postgres -d synconly -v ON_ERROR_STOP=1 -f tests/sql/sync-owner-line-ledger.sql
+      - name: New role-isolated pending incidents ledger SQL acceptance
+        run: psql -h 127.0.0.1 -U postgres -d synconly -v ON_ERROR_STOP=1 -f tests/sql/sync-owner-pending-ledger.sql

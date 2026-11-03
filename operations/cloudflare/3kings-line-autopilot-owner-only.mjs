@@ -635,9 +635,130 @@ export async function eveningOwnerCommandsTick(env,{db,hash,transport=fetch,now=
     delivered:accepted,http};
 }
 
+async function syncOwnerDb(env,rpcName,args,transport=fetch){
+  if(env.SUPABASE_SERVER_KEY){
+    const r=await transport(env.SUPABASE_URL.replace(/\/$/,'')+'/rest/v1/rpc/'+rpcName,{
+      method:'POST',
+      headers:supabaseHeaders(env),
+      body:JSON.stringify(args),
+      signal:AbortSignal.timeout(10000)
+    });
+    if(!r.ok)throw Error('SYNC_OWNER_DB_'+r.status);
+    return await r.json();
+  }
+  if(env.DAILY_LINE_BRIDGE_TOKEN){
+    return await dailyLineRpc(env,'/rest/v1/rpc/'+rpcName,args,transport);
+  }
+  throw Error('SYNC_OWNER_NO_DB_CREDENTIALS');
+}
+
+export async function syncOwnerMonitorTick(env,{hash,transport=fetch,now=new Date(),forcePipeline=null,testItem=null}={}){
+  const base={mode:'SYNC_MONITOR_OFF',delivered:false};
+  if(env.SYNC_OWNER_MONITOR_ENABLED!=='true'&&!forcePipeline&&!testItem)return base;
+  if(!env.SUPABASE_URL||!env.LINE_CHANNEL_ACCESS_TOKEN||
+     !/^U[0-9a-f]{32}$/i.test(env.LINE_OWNER_USER_ID||'')||
+     (!env.SUPABASE_SERVER_KEY&&!env.DAILY_LINE_BRIDGE_TOKEN))
+    return {...base,mode:'SYNC_MONITOR_NOT_CONFIGURED'};
+  if(typeof hash!=='function')throw Error('SYNC_MONITOR_HASH_REQUIRED');
+
+  const quota=await dailyLineQuota(env,transport);
+  if(!quota.allow||(quota.remaining!==null&&quota.remaining<1))
+    return {...base,mode:'SYNC_MONITOR_QUOTA_BLOCKED'};
+
+  if(testItem){
+    const pipeline=String(testItem.pipeline||'schedule');
+    const runKey=String(testItem.run_key||testItem.id||'manual-test');
+    const key=await hash('3kings|sync-owner|'+pipeline+'|'+runKey);
+    if(!validSha(key))return {...base,mode:'BAD_EVENT_KEY'};
+
+    let claim;
+    try{
+      const rows=await syncOwnerDb(env,'line_sync_owner_claim',{
+        p_event_key:key,p_pipeline:pipeline,p_run_key:runKey,
+        p_summary:String(testItem.summary||'3 Kings Sync Monitoring test alert').slice(0,300)
+      },transport);
+      claim=Array.isArray(rows)?rows[0]:rows;
+    }catch(e){return {...base,mode:'CLAIM_FAILED',error:e.message};}
+
+    if(claim?.claim_status!=='new')
+      return {...base,mode:'DEDUP_PREVENTED',claim_status:claim?.claim_status};
+
+    const stamp=new Date(now).toLocaleString('th-TH',{timeZone:'Asia/Bangkok',hour12:false});
+    const message=[
+      '3 Kings • Sync Monitoring (Owner Verified)',
+      'สถานะ: '+(testItem.status==='OVERDUE'?'แจ้งเตือนตรวจแก้ (เกินรอบ Sync ถัดไป)':(testItem.status==='FAIL'?'ล้มเหลว':'ทดสอบระบบตรวจ Sync')),
+      'ระบบ: '+safeText(pipeline,50),
+      'ต้นทาง: '+safeText(testItem.source_file||'Canonical Master',90),
+      'เวลา: '+stamp,
+      'Run ID: '+safeText(runKey,65),
+      testItem.notes?('หมายเหตุ: '+safeText(testItem.notes,200)):''
+    ].filter(Boolean).join('\n');
+
+    let http=null,accepted=false;
+    try{
+      const response=await transport('https://api.line.me/v2/bot/message/push',{
+        method:'POST',
+        headers:{
+          authorization:'Bearer '+env.LINE_CHANNEL_ACCESS_TOKEN,
+          'content-type':'application/json',
+          'X-Line-Retry-Key':claim.retry_key
+        },
+        body:JSON.stringify({to:env.LINE_OWNER_USER_ID,messages:[{type:'text',text:message}]}),
+        signal:AbortSignal.timeout(10000)
+      });
+      http=response.status;
+      accepted=(http>=200&&http<300)||
+        (http===409&&!!response.headers?.get?.('x-line-accepted-request-id'));
+    }catch{console.warn('sync_owner_push_network_uncertain');}
+
+    try{
+      await syncOwnerDb(env,'line_sync_owner_ack',{
+        p_event_key:key,p_retry_key:claim.retry_key,
+        p_status:accepted?'delivered':'uncertain',p_http_status:http
+      },transport);
+    }catch{return {...base,mode:'ACK_FAILED',delivered:accepted,http};}
+
+    return {...base,mode:accepted?'SYNC_OWNER_DELIVERED':'SYNC_OWNER_UNCERTAIN',
+      delivered:accepted,http,event_key:key,retry_key:claim.retry_key};
+  }
+
+  const allowedPipelines=new Set(
+    (env.SYNC_OWNER_ENABLED_PIPELINES||'').split(',').map(s=>s.trim().toLowerCase()).filter(Boolean)
+  );
+  if(forcePipeline)allowedPipelines.add(forcePipeline.toLowerCase());
+
+  if(allowedPipelines.size===0)
+    return {...base,mode:'NO_PIPELINES_ENABLED'};
+
+  return {...base,mode:'SYNC_MONITOR_PASS',delivered:false,pipelines:[...allowedPipelines]};
+}
+
 export default {
   async fetch(request,env){
     const url=new URL(request.url);
+    if(url.pathname==='/sync-owner/health' && request.method==='GET'){
+      return json({
+        service:'3kings-line-autopilot',
+        module:'sync-owner-monitor',
+        enabled:env.SYNC_OWNER_MONITOR_ENABLED==='true',
+        enabledPipelines:(env.SYNC_OWNER_ENABLED_PIPELINES||'').split(',').map(s=>s.trim()).filter(Boolean),
+        ledger:'line_autopilot.sync_owner_deliveries',
+        pendingLedger:'line_autopilot.sync_owner_pending_incidents'
+      });
+    }
+    if(url.pathname==='/sync-owner/tick' && request.method==='POST'){
+      const authHeader=request.headers.get('x-3kings-server-key')||'';
+      if(!env.DAILY_LINE_BRIDGE_TOKEN || authHeader!==env.DAILY_LINE_BRIDGE_TOKEN)
+        return json({error:'unauthorized'},401);
+      let body={};
+      try{body=await request.json()}catch{}
+      const result=await syncOwnerMonitorTick(env,{
+        hash:sha256hex,
+        forcePipeline:body?.pipeline||null,
+        testItem:body?.testItem||null
+      });
+      return json(result);
+    }
     if(url.pathname==='/daily-line/health' && request.method==='GET'){
       const policy=dailyBangkokPolicy();
       if(!env.DAILY_LINE_BRIDGE_TOKEN || !env.SUPABASE_URL)
@@ -730,6 +851,14 @@ export default {
       console.info('daily_owner_report_tick',{mode:r.mode,accepted:r.delivered,
         reportDate:r.reportDate,http:r.http??null});
     }catch{console.warn('daily_owner_report_tick_failed');}
+    // Sync Owner Monitoring: independent from AUTOPILOT_ENABLED
+    if(env.SYNC_OWNER_MONITOR_ENABLED==='true'){
+      try{
+        const outcome=await syncOwnerMonitorTick(env,{hash:sha256hex});
+        console.info('sync_owner_monitor_tick',outcome);
+      }catch{console.error('sync_owner_monitor_tick_failed');}
+    }
+
     if(!isConfigured(env)){
       console.info('line_autopilot_scheduled_blocked',{reason:'not_enabled_or_missing_config'});
       return;

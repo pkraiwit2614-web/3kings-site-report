@@ -9,12 +9,16 @@ on:
       - 'operations/sync-monitor/source-catalog.mjs'
       - 'operations/sync-monitor/observation-adapters.mjs'
       - 'operations/sync-monitor/log-collector.mjs'
+      - 'operations/sync-monitor/pending-tracker.mjs'
+      - 'operations/cloudflare/3kings-line-autopilot-owner-only.mjs'
       - 'tests/sync-owner-line-monitor.test.cjs'
       - 'tests/sync-owner-line-alert-policy.test.cjs'
       - 'tests/sync-owner-line-metrics.test.cjs'
       - 'tests/sync-owner-line-source-guard.test.cjs'
       - 'tests/sync-owner-line-observation.test.cjs'
       - 'tests/sync-owner-line-collector.test.cjs'
+      - 'tests/sync-owner-line-pending-tracker.test.cjs'
+      - 'tests/sync-owner-worker-integration.test.cjs'
       - '.github/workflows/sync-owner-line-notifier-qa.yml'
 permissions:
   contents: read
@@ -35,7 +39,9 @@ jobs:
           node --check operations/sync-monitor/source-catalog.mjs
           node --check operations/sync-monitor/observation-adapters.mjs
           node --check operations/sync-monitor/log-collector.mjs
+          node --check operations/sync-monitor/pending-tracker.mjs
+          node --check operations/cloudflare/3kings-line-autopilot-owner-only.mjs
       - name: New monitor safety, E2E and idempotency mocks
-        run: node --test tests/sync-owner-line-monitor.test.cjs tests/sync-owner-line-alert-policy.test.cjs tests/sync-owner-line-metrics.test.cjs tests/sync-owner-line-source-guard.test.cjs tests/sync-owner-line-observation.test.cjs tests/sync-owner-line-collector.test.cjs
+        run: node --test tests/sync-owner-line-monitor.test.cjs tests/sync-owner-line-alert-policy.test.cjs tests/sync-owner-line-metrics.test.cjs tests/sync-owner-line-source-guard.test.cjs tests/sync-owner-line-observation.test.cjs tests/sync-owner-line-collector.test.cjs tests/sync-owner-line-pending-tracker.test.cjs tests/sync-owner-worker-integration.test.cjs
       - name: Existing Daily owner LINE mock regression (no LINE sends)
         run: node --test tests/line-owner-delivery.test.cjs tests/line-owner-bridge.test.cjs
