@@ -13,6 +13,7 @@ import {flowCombineKey} from '@/lib/flowCombineOne'
 import {DEFECT_AWAITING_ACCEPTANCE_LABEL,statusLabel,statusTone} from '@/lib/defectStatusPresentation'
 import {canonicalDefectStatusGroup} from '@/lib/defectStatusPresentation'
 import {summarizeDefectDetail} from '@/lib/defectDetailSummary'
+import {siteOnlyWork,siteOnlyNextAction} from '@/lib/defectReportDisplay'
 import DefectInputPanel from '@/components/DefectInputPanel'
 import { getSupabase } from '@/lib/supabase'
 import { createLiveLoader, requireSuccessfulReads } from '@/lib/liveLoader'
@@ -321,7 +322,7 @@ export default function DefectDetailPage(){
 
   const active=useMemo(()=>categories.find(c=>c.id===filter)||null,[filter])
   const sourceDate=latestDefectChangeAt
-  const summaryByRoom=useMemo(()=>new Map(rows.map(r=>[r.room_no,summarizeDefectDetail(r.defect_detail)])),[rows])
+  const summaryByRoom=useMemo(()=>new Map(rows.map(r=>{const summary=summarizeDefectDetail(r.defect_detail);return [r.room_no,{...summary,work:siteOnlyWork(r.defect_detail,summary.work)}] as const})),[rows])
   // Combine=1 preserves all Flow รวม categories and changes only room counts.
   // Hotel uses engineer-confirmed 16 pairs, non-hotel uses existing Combine data.
   const scopedRows=rows
@@ -452,7 +453,7 @@ export default function DefectDetailPage(){
             </td>
             <td className="center"><span className={`state-badge ${statusTone(r)}`}>{displayRoomStatus(r)}</span></td>
             <td className="work-plan-cell">{(workPlanContext.get(r.room_no)||[]).map((label,i)=><small key={i}>{label}</small>)}<small>{roomHotelContext.get(r.room_no)||'สถานะโรงแรม: —'}</small><Link href={'/hotel-work-plan?room='+encodeURIComponent(r.room_no)}>ดูแผน</Link>{combineMode&&combinedMembers(r.room_no).filter(other=>other.room_no!==r.room_no).map(other=><div key={other.room_no} className="combine-member-detail"><small>{other.room_no}: {(workPlanContext.get(other.room_no)||[]).join(', ')||'ไม่ระบุแผน'}</small><Link href={'/hotel-work-plan?room='+encodeURIComponent(other.room_no)}>ดูแผน {other.room_no}</Link></div>)}</td>
-            <td>{r.next_action||r.follow_up||'-'}{combineMode&&combinedMembers(r.room_no).filter(other=>other.room_no!==r.room_no).map(other=><div key={other.room_no} className="combine-member-detail"><b>{other.room_no}: </b>{other.next_action||other.follow_up||'-'}</div>)}</td>
+            <td>{siteOnlyNextAction(r.next_action)}{combineMode&&combinedMembers(r.room_no).filter(other=>other.room_no!==r.room_no).map(other=><div key={other.room_no} className="combine-member-detail"><b>{other.room_no}: </b>{siteOnlyNextAction(other.next_action)}</div>)}</td>
           </tr>)}
           {!filtered.length&&<tr><td colSpan={10} className="muted" style={{padding:28,textAlign:'center'}}>ไม่พบห้องตามเงื่อนไข</td></tr>}
         </tbody></table></div>
