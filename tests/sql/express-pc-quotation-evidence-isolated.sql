@@ -1,7 +1,7 @@
 \set ON_ERROR_STOP on
 -- Runs after tests/sql/workorder-express-overrides-isolated.sql on ephemeral PostgreSQL 17.
 -- No Production credentials, Drive IDs, or data writes.
-\i supabase/migrations/20261104112700_express_pc_quotation_evidence.sql
+\i supabase/migrations/20261104113213_express_pc_quotation_evidence.sql
 insert into public.express_quotation_evidence
  (document_group,document_no,quotation_no,quotation_date,supplier,amount_incl_vat,drive_file_id,file_name)
 values ('PR_PC','PC691103001','QT-SYNTH-001','2026-10-24','Synthetic Supplier',5350.00,
