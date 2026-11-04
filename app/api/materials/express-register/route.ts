@@ -20,7 +20,7 @@ const RECONCILED_BATCH={
 
 type ExpressHeader={document_group:string;document_no:string}
 type ExpressItem={document_group:string;document_no:string;line_seq:number;item_code:string|null;description:string|null;quantity:number|null;unit:string|null}
-type ExpressEvidence={document_type:string;document_no:string;drive_file_id:string;file_name:string;file_format:string;evidence_scope:string}
+type ExpressEvidence={document_type:string;document_no:string;drive_file_id:string;file_name:string;file_format:string;evidence_scope:string;quotation_no?:string}
 
 /** Read-only, user-JWT/RLS-bound Express historical register; never a procurement write route. */
 export async function GET(request:NextRequest){
@@ -117,6 +117,23 @@ export async function GET(request:NextRequest){
      const group=/^(?:PO|PL)$/.test(doc.document_type)?'PO_PL':'PR_PC'
      const list=evidenceByDocument.get(key(group,doc.document_no))
      if(list&&doc.document_no.startsWith(doc.document_type))list.push(doc)
+    }
+    // Separate, exact-number quotation mapping. Never imply that PC is a signed PL.
+    // Preserve the existing procurement evidence table and original Express rows.
+    const pcNumbers=[...new Set(selected.filter(row=>row.document_group==='PR_PC'&&
+     row.document_no.startsWith('PC')).map(row=>row.document_no))]
+    if(pcNumbers.length){
+     const {data:quotations,error:quotationError}=await client.from('express_quotation_evidence')
+      .select('document_group,document_no,quotation_no,drive_file_id,file_name')
+      .in('document_no',pcNumbers)
+     if(quotationError||!quotations)return {itemsByDocument,evidenceByDocument,error:'REGISTER_QUOTATION_EVIDENCE_UNAVAILABLE'}
+     for(const quotation of quotations){
+      const list=evidenceByDocument.get(key(quotation.document_group,quotation.document_no))
+      if(list&&quotation.document_group==='PR_PC'&&quotation.document_no.startsWith('PC'))
+       list.push({document_type:'QT',document_no:quotation.document_no,
+        drive_file_id:quotation.drive_file_id,file_name:quotation.file_name,
+        file_format:'JPEG',evidence_scope:'individual',quotation_no:quotation.quotation_no})
+     }
     }
    }
    return {itemsByDocument,evidenceByDocument,error:null}

@@ -4,7 +4,7 @@ import {getSupabase} from '@/lib/supabase'
 import {expressDocumentType,expressHeaderWorkSummary} from '@/lib/expressRegisterDisplay'
 
 type ExpressItem={line_seq:number;item_code:string|null;description:string|null;quantity:number|null;unit:string|null}
-type ExpressEvidence={document_type:string;document_no:string;drive_file_id:string;file_name:string;file_format:string;evidence_scope:string}
+type ExpressEvidence={document_type:string;document_no:string;drive_file_id:string;file_name:string;file_format:string;evidence_scope:string;quotation_no?:string}
 type DocumentRow={
  document_group:'PO_PL'|'PR_PC';document_no:string;document_date:string|null;
  supplier:string|null;plot_codes:string[];qa_status:string;grand_total:number|null;
@@ -147,7 +147,7 @@ export default function ExpressRegisterSection({projectCode='',query='',procurem
          const url=evidenceUrl(item.drive_file_id)
          return url?<div key={item.document_type+'|'+item.document_no+'|'+item.drive_file_id}>
           <a href={url} target="_blank" rel="noopener noreferrer" title={item.file_name}>
-           {item.evidence_scope==='bundle'?'ไฟล์หลักฐานรวม':(evidenceLabel[item.document_type]||'หลักฐาน')+' '+item.document_no}
+           {item.document_type==='QT'?'ใบเสนอราคา '+(item.quotation_no||''):item.evidence_scope==='bundle'?'ไฟล์หลักฐานรวม':(evidenceLabel[item.document_type]||'หลักฐาน')+' '+item.document_no}
           </a></div>:null
         })}
         {row.has_verified_project_override&&confirmedDriveSource(row.project_evidence_url)&&

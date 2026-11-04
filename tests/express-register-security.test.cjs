@@ -148,6 +148,26 @@ test('Express work scope renders from the verified header when a detail line is 
  assert.match(ui,/row\.items\.slice\(2\)/)
 })
 
+test('PC quotation evidence is exact-linked, RLS-isolated, and never an approved PL',()=>{
+ const api=read('app/api/materials/express-register/route.ts')
+ const ui=read('components/ExpressRegisterSection.tsx')
+ const sql=read('supabase/migrations/20261104113213_express_pc_quotation_evidence.sql')
+ assert.match(api,/\.from\('express_quotation_evidence'\)/)
+ assert.match(api,/\.in\('document_no',pcNumbers\)/)
+ assert.match(api,/document_type:'QT'/)
+ assert.match(api,/quotation_no:quotation\.quotation_no/)
+ assert.match(api,/REGISTER_QUOTATION_EVIDENCE_UNAVAILABLE/)
+ assert.match(ui,/item\.document_type==='QT'\?'ใบเสนอราคา '/)
+ assert.match(ui,/item\.quotation_no/)
+ assert.match(sql,/create table if not exists public\.express_quotation_evidence/)
+ assert.match(sql,/enable row level security/)
+ assert.match(sql,/revoke all on public\.express_quotation_evidence from PUBLIC,anon,authenticated/)
+ assert.match(sql,/grant select on public\.express_quotation_evidence to authenticated/)
+ assert.match(sql,/private\.matrix_allowed\('procurement'::text,'view'::text/)
+ assert.doesNotMatch(sql,/insert into|update public\.procurement_items|alter table public\.procurement_evidence_links/i)
+ assert.doesNotMatch(api,/\.insert\(|\.upsert\(|\.update\(|\.delete\(/)
+})
+
 test('Master reconciliation is as-of, batch-fingerprint scoped and never a future-run blanket approval',()=>{
  const api=read('app/api/materials/express-register/route.ts')
  const ui=read('components/ExpressRegisterSection.tsx')
