@@ -9,6 +9,7 @@ export const dynamic='force-dynamic'
 const HEADERS={'cache-control':'private, no-store'}
 const respond=(data:unknown,status:number)=>NextResponse.json(data,{status,headers:HEADERS})
 const SELECT='document_group,document_no,document_date,supplier,plot_codes,qa_status,grand_total,source_file,has_verified_project_override,project_evidence_url'
+const PROCUREMENT_SELECT='document_group,document_no,document_date,supplier,plot_codes,qa_status,grand_total,source_file,has_verified_project_override,project_evidence_url,search_text'
 
 /** Read-only, user-JWT/RLS-bound Express historical register; never a procurement write route. */
 export async function GET(request:NextRequest){
@@ -31,13 +32,16 @@ export async function GET(request:NextRequest){
   .select('role,active').eq('user_id',user.id).maybeSingle()
  if(profileError||!profile?.active)return respond({error:'FORBIDDEN'},403)
  const role=resolveAccessRole(profile.role,user.id)
+ // Procurement-only history uses the existing procurement VIEW grant.
+ const procurementView=request.nextUrl.searchParams.get('view')==='procurement'
  try{
   const matrix=await readPermissionSnapshot(client)
   const materials=role&&matrix.rows?.find(p=>p.role===role&&p.module==='materials')
   const procurement=role&&matrix.rows?.find(p=>p.role===role&&p.module==='procurement')
-  // Procurement history can include vendor rates: require BOTH existing view grants.
-  if(!materials||materials.level==='none'||!procurement||procurement.level==='none'||
-   !canAccessPath(role,'/materials',matrix)||!canAccessPath(role,'/procurement',matrix))
+  // Procurement view requires procurement permission. The unchanged Materials
+  // view retains both grants; JWT and database RLS still apply to both.
+  if(!procurement||procurement.level==='none'||!canAccessPath(role,'/procurement',matrix)||
+   (!procurementView&&(!materials||materials.level==='none'||!canAccessPath(role,'/materials',matrix))))
    return respond({error:'FORBIDDEN'},403)
  }catch{return respond({error:'PERMISSION_CHECK_UNAVAILABLE'},503)}
 
@@ -45,7 +49,6 @@ export async function GET(request:NextRequest){
  const pageText=params.get('page')||'0',group=params.get('group')||''
  const plot=params.get('plot')||'',q=(params.get('q')||'').trim()
  const view=params.get('view')||'',from=params.get('from')||'',to=params.get('to')||''
- const procurementView=view==='procurement'
  const validDate=(value:string)=>!value||(/^\d{4}-\d{2}-\d{2}$/.test(value)&&expressDateISO(value)===value)
  if((view!==''&&!procurementView)||!validDate(from)||!validDate(to)||
    (from&&to&&from>to)||(!procurementView&&(from||to))||
@@ -88,10 +91,10 @@ export async function GET(request:NextRequest){
    document_group:string;document_no:string;document_date:string|null;
    supplier:string|null;plot_codes:string[];qa_status:string;grand_total:number|null;
    source_file:string|null;has_verified_project_override?:boolean;
-   project_evidence_url?:string|null
+   project_evidence_url?:string|null;search_text?:string|null
   }>=[]
   for(let offset=0;offset<MAX_HEADERS;offset+=FETCH_CHUNK){
-   let headerQuery=client.from('express_register_effective_rows').select(SELECT)
+   let headerQuery=client.from('express_register_effective_rows').select(PROCUREMENT_SELECT)
     .eq('batch_id',latest.id).eq('line_seq',0)
    if(group)headerQuery=headerQuery.eq('document_group',group)
    if(plot)headerQuery=headerQuery.contains('plot_codes',[plot])
