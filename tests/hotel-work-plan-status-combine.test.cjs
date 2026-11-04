@@ -50,7 +50,7 @@ test('Combine writes are atomic, revision checked, audited and keep other module
  assert.doesNotMatch(sql,/source_room\s*=|source_row\s*=|source_synced_day\s*=/i)
  assert.match(report,/<th>Work Plan \/ Hotel Status<\/th><th>ต้องทำต่อ<\/th>/)
  const workPlanCell=report.indexOf('<td className="work-plan-cell">')
- const nextActionCell=report.indexOf('<td>{siteOnlyNextAction(r.next_action)}')
+ const nextActionCell=report.indexOf('<td>{siteOnlyNextAction(r.next_action||r.follow_up)}')
  assert.ok(workPlanCell>=0&&nextActionCell>workPlanCell,'Work Plan/Hotel Status column precedes remaining work, including Combine member details')
  assert.match(css,/\.defect-table th:nth-child\(9\)/)
 })
