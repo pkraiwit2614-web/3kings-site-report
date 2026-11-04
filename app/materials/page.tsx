@@ -307,7 +307,7 @@ export default function MaterialsPage(){
               <td><b>{x.item_name}</b><small>{x.quantity_unit||'ยังไม่ระบุปริมาณ/หน่วย'}</small></td>
               <td>{[x.brand,x.model_spec].filter(Boolean).join(' / ')||'-'}</td>
               <td><StatusBadge value={x.status}/>{x.__override_updated_at&&<small>Web App update</small>}{canManage&&<button type="button" className="button material-web-edit-button" style={{display:'block',marginTop:5}} onClick={()=>setEditTarget({type:'material',item:x})}>แก้ไข</button>}</td>
-              <td>{related?<>{related.po_no&&<small><b>สั่งแล้ว (มีเลขใบสั่ง)</b></small>}<b>{related.procurement_status||'-'}</b><small>{related.current_status||'-'}</small>{(related.po_no||related.pr_no)&&<div style={{marginTop:5}}><ProcurementEvidenceLinks prNo={related.pr_no} poNo={related.po_no} evidenceRows={evidenceRows}/></div>}{related.payment_status&&<small>ชำระเงิน: {related.payment_status}</small>}{related.expected_delivery_text&&<small>กำหนดส่ง: {related.expected_delivery_text}</small>}</>:<span className="muted">ยังไม่มีรายการจัดซื้อที่จับคู่ได้แน่นอน</span>}</td>
+              <td>{related?<>{related.po_no&&<small><b>สั่งแล้ว (มีเลขใบสั่ง)</b></small>}<b>{related.procurement_status||'-'}</b><small>{related.current_status||'-'}</small>{(related.po_no||related.pr_no)&&<div style={{marginTop:5}}><ProcurementEvidenceLinks prNo={related.pr_no} poNo={related.po_no} itemName={related.item_name} conditionNote={related.condition_note} evidenceRows={evidenceRows}/></div>}{related.payment_status&&<small>ชำระเงิน: {related.payment_status}</small>}{related.expected_delivery_text&&<small>กำหนดส่ง: {related.expected_delivery_text}</small>}</>:<span className="muted">ยังไม่มีรายการจัดซื้อที่จับคู่ได้แน่นอน</span>}</td>
               <td><ReadableDetail parts={[...detail,related?.condition_note]}/>{related?.source_updated_at&&<small>ทะเบียนจัดซื้ออัปเดต {dateTH(related.source_updated_at)}</small>}</td>
               <td>{x.contact_name||x.contact_phone||related?.vendor?<><b>{x.contact_name||related?.vendor||'-'}</b><small>{x.contact_phone||''}</small></>:'-'}</td>
             </tr>
@@ -336,7 +336,7 @@ export default function MaterialsPage(){
           </thead>
           <tbody>{filteredProcurement.map(x=><tr key={x.id}>
             <td><b>{procurementPlotText(x)}</b></td>
-            <td><ProcurementEvidenceLinks prNo={x.pr_no} poNo={x.po_no} evidenceRows={evidenceRows}/></td>
+            <td><ProcurementEvidenceLinks prNo={x.pr_no} poNo={x.po_no} itemName={x.item_name} conditionNote={x.condition_note} evidenceRows={evidenceRows}/></td>
             <td>{x.vendor||'ยังไม่ระบุ'}</td>
             <td><b>{x.item_name||'-'}</b></td>
             <td>{x.po_no&&<small><b>สั่งแล้ว (มีเลขใบสั่ง)</b></small>}{x.payment_status||x.procurement_status||'-'}</td>
