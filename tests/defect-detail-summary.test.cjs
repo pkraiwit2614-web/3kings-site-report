@@ -197,3 +197,8 @@ test('system sync and duplicate-link spans preserve the site action next to them
  assert.equal(siteOnlyNextAction('เชื่อม Work Order DF-A999-01 เพื่อป้องกันรายการซ้ำ, นัดลูกค้าตรวจรับ'),
  'นัดลูกค้าตรวจรับ')
 })
+
+test('system history between sentences leaves complete site clauses without orphan punctuation',()=>{
+ const raw='เครื่องหมายถูกไม่ใช่หลักฐานตรวจรับ/After ยืนยันการปิด จึงคงสถานะ เพิ่งได้รับแจ้ง Defect และ Work ID DF-A999-01..04 โดยไม่สร้างซ้ำ. DF-A999-01 ถึง -03 ยังคงรอดำเนินการ/รอตรวจผลจริง; DF-A999-04 คง HOLD ตรวจตำแหน่งคราบกาว #9 เทียบ #6.'
+ assert.equal(siteOnlyNextAction(raw),'เครื่องหมายถูกไม่ใช่หลักฐานตรวจรับ/After ยืนยันการปิด; ยังคงรอดำเนินการ/รอตรวจผลจริง; คง HOLD ตรวจตำแหน่งคราบกาว #9 เทียบ #6')
+})

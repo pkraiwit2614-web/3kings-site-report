@@ -6,7 +6,7 @@ export function compactNextAction(value: string | null | undefined): string {
   const work = String.raw`DF-[AB]\d+-\d+[A-Z]?(?:(?:\.\.|\s*ถึง\s*)(?:DF-[AB]\d+-|-)?\d+[A-Z]?)?`
   const result: string[] = []
   // Delimit clauses, not words. Dots inside names, identifiers and URLs are preserved.
-  for (const part of original.split(/\s*[;|\n]+\s*|\.\s+(?=[\u0E00-\u0E7F])/u)) {
+  for (const part of original.split(/\s*[;|\n]+\s*|\.\s+(?=[\u0E00-\u0E7F]|DF-[AB]\d)/u)) {
     let text = part
       .replace(new RegExp(String.raw`เชื่อม Work Order\s+${work}\s+เพื่อป้องกันรายการซ้ำ`, 'gi'), '')
       .replace(/Sync สำเร็จ|ฐานข้อมูลอัปเดตแล้ว/gi, '')
