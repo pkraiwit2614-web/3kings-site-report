@@ -23,7 +23,7 @@ test('explicit errors, unknown statuses and invalid logs are not success',async(
  assert.equal(x.classifyRun(run('error')).status,'FAIL');
  assert.equal(x.classifyRun(run('dry-run')).status,'HOLD');
  assert.equal(x.classifyRun({...run(),id:'bad'}).status,'SKIP');
- assert.match(x.lineMessage(run(),x.classifyRun(run())),/Log success ไม่ใช่ Web PASS/);
+ assert.match(x.lineMessage(run(),x.classifyRun(run())),/สิ่งที่ต้องดำเนินการต่อ:/);
 });
 test('OFF means zero external calls',async()=>{
  const x=await m;let count=0;
