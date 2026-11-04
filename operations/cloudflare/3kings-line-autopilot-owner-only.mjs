@@ -882,15 +882,16 @@ async function syncOwnerReadEvidence(env,enabled,activatedAt,now,transport){
 }
 async function syncOwnerProbeDatabase(env,pipeline,transport){
   // A DB probe alone is never represented as authenticated Web parity.
-  const table={
-    defects:'condo_room_status',materials:'materials',schedule:'schedule_tasks',
-    photos:'drive_photo_index',daily_site_report:'daily_reports',
-    express:'express_register_rows'
+  const target={
+    defects:['condo_room_status','room_no'],
+    materials:['materials','id'],schedule:['schedule_tasks','id'],
+    photos:['drive_photo_index','id'],daily_site_report:['daily_reports','id'],
+    express:['express_register_rows','batch_id']
   }[pipeline];
-  if(!table)return false;
+  if(!target)return false;
   try{
-    const url=env.SUPABASE_URL.replace(/\/$/,'')+'/rest/v1/'+table+
-      '?select=id&limit=1';
+    const url=env.SUPABASE_URL.replace(/\/$/,'')+'/rest/v1/'+target[0]+
+      '?select='+target[1]+'&limit=1';
     const response=await transport(url,{method:'GET',headers:supabaseHeaders(env),
       signal:AbortSignal.timeout(10000)});
     return response?.ok===true && Array.isArray(await response.json());
