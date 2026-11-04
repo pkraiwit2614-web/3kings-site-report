@@ -782,6 +782,11 @@ function syncOwnerNormalize(row,table){
 }
 function syncOwnerNoChange(run,previous){
   if(run.status!=='success')return false;
+  // Existing GAS uses this exact explicit unchanged marker for several
+  // pipelines, not only Schedule. Never create Pending for such a run.
+  if(run.read===0&&run.written===0&&
+    /^Apps Script check completed; source unchanged, sync skipped$/i.test(
+      String(run.message||'').trim()))return true;
   if(run.pipeline==='schedule')
     return run.read===0&&run.written===0 &&
       /^Apps Script check completed; source unchanged, sync skipped$/i.test(run.message.trim());
