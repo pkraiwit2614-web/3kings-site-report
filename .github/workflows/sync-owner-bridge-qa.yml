@@ -1,0 +1,40 @@
+name: Sync Owner Edge Bridge — Security QA
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'operations/sync-monitor/edge-bridge/index.ts'
+      - 'operations/cloudflare/3kings-line-autopilot-owner-only.mjs'
+      - '.github/workflows/sync-owner-bridge-qa.yml'
+permissions:
+  contents: read
+jobs:
+  bridge_security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Typecheck isolated Edge function
+        run: deno check operations/sync-monitor/edge-bridge/index.ts
+      - name: Anonymous requests denied (isolated, no real secrets)
+        run: |
+          deno run --allow-net --allow-env operations/sync-monitor/edge-bridge/index.ts > /tmp/sync-owner-edge-qa.log 2>&1 &
+          PID=$!
+          trap 'kill "$PID" 2>/dev/null || true' EXIT
+          sleep 2
+          STATUS=$(curl -sS -o /tmp/unauth-response.json -w '%{http_code}' \
+            -X POST http://127.0.0.1:8000/ \
+            -H 'Content-Type: application/json' \
+            -d '{"method":"GET","path":"/rest/v1/drive_sync_runs?select=id"}')
+          test "$STATUS" = "401"
+          grep -q 'unauthorized' /tmp/unauth-response.json
+          STATUS=$(curl -sS -o /tmp/badtoken-response.json -w '%{http_code}' \
+            -X POST http://127.0.0.1:8000/ \
+            -H 'Content-Type: application/json' \
+            -H 'x-3kings-owner-sync-key: malicious-test-key' \
+            -d '{"method":"GET","path":"/rest/v1/drive_sync_runs?select=id"}')
+          test "$STATUS" = "401"
+          grep -q 'unauthorized' /tmp/badtoken-response.json

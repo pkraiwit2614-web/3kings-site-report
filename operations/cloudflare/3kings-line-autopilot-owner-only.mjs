@@ -635,9 +635,609 @@ export async function eveningOwnerCommandsTick(env,{db,hash,transport=fetch,now=
     delivered:accepted,http};
 }
 
+/**
+ * Monitor-only authenticated Supabase bridge. The existing
+ * SUPABASE_SERVER_KEY binding is an sb_publishable key, confirmed by
+ * real edge request logs (HTTP 401 on protected Sync reads). Do NOT
+ * replace the binding: other Daily/AutoPilot routes still own it.
+ * This proxy is only used by syncOwnerMonitorTick; it does not intercept
+ * legacy Daily requests or LINE API calls.
+ */
+function syncOwnerBridgeTransport(env,downstream=fetch){
+  const token=env.SYNC_OWNER_BRIDGE_TOKEN;
+  if(!token)return downstream;
+  const origin=String(env.SUPABASE_URL||'').replace(/\/$/,'');
+  return (target,options={})=>{
+    if(typeof target!=='string'||!target.startsWith(origin+'/rest/v1/'))
+      return downstream(target,options);
+    const parsed=new URL(target);
+    if(parsed.origin!==new URL(origin).origin)
+      throw Error('SYNC_OWNER_BRIDGE_ORIGIN_BLOCKED');
+    let args;
+    try{args=options.body===undefined?undefined:JSON.parse(options.body);}
+    catch{throw Error('SYNC_OWNER_BRIDGE_JSON_BLOCKED');}
+    const method=options.method||'GET';
+    if(!['GET','POST'].includes(method))
+      throw Error('SYNC_OWNER_BRIDGE_METHOD_BLOCKED');
+    return downstream(origin+'/functions/v1/kings_sync_owner_bridge',{
+      method:'POST',
+      headers:{'x-3kings-owner-sync-key':token,
+        'content-type':'application/json'},
+      body:JSON.stringify({method,path:parsed.pathname+parsed.search,args}),
+      signal:options.signal
+    });
+  };
+}
+
+async function syncOwnerDb(env,rpcName,args,transport=fetch){
+  if(env.SUPABASE_SERVER_KEY){
+    const r=await transport(env.SUPABASE_URL.replace(/\/$/,'')+'/rest/v1/rpc/'+rpcName,{
+      method:'POST',
+      headers:supabaseHeaders(env),
+      body:JSON.stringify(args),
+      signal:AbortSignal.timeout(10000)
+    });
+    if(!r.ok)throw Error('SYNC_OWNER_DB_'+r.status);
+    return await r.json();
+  }
+  if(env.DAILY_LINE_BRIDGE_TOKEN){
+    return await dailyLineRpc(env,'/rest/v1/rpc/'+rpcName,args,transport);
+  }
+  throw Error('SYNC_OWNER_NO_DB_CREDENTIALS');
+}
+
+
+/*
+ * Runtime evidence observer — a single-file Worker companion to the offline
+ * owner monitor. Keeps the deployed Worker self-contained (no runtime bundler
+ * or new OAuth). Scope: READ audit logs, existing private owner-only RPCs,
+ * owner LINE push; NEVER writes source, calls GAS, or changes other routes.
+ *
+ * A source-audit success is NOT authenticated Web E2E success. We wait for
+ * the next actual, distinct, observed sync run before warning about missing
+ * Web proof. An unobserved scheduled run is not fabricated.
+ */
+
+/** Optional one-secret configuration; preserves all ten existing Worker bindings. */
+function syncOwnerConfiguredEnv(env){
+  const raw=env?.SYNC_OWNER_MONITOR_CONFIG;
+  if(raw===undefined||raw===null||raw==='')return env;
+  let c;
+  try{c=JSON.parse(raw);}catch{
+    return Object.assign(Object.create(env),{SYNC_OWNER_MONITOR_ENABLED:'false'});
+  }
+  const known=new Set(['schedule','defects','materials','photos',
+    'daily_site_report','express','work_order','hotel_work_plan']);
+  if(!c || c.version!==1 || typeof c.enabled!=='boolean'||
+    !Array.isArray(c.pipelines)||
+    c.pipelines.some(x=>typeof x!=='string'||!known.has(x))||
+    c.pipelines.length>8 || new Set(c.pipelines).size!==c.pipelines.length||
+    typeof c.activatedAt!=='string'){
+    return Object.assign(Object.create(env),{SYNC_OWNER_MONITOR_ENABLED:'false'});
+  }
+  return Object.assign(Object.create(env),{
+    SYNC_OWNER_MONITOR_ENABLED:c.enabled?'true':'false',
+    SYNC_OWNER_ENABLED_PIPELINES:c.pipelines.join(','),
+    SYNC_OWNER_MONITOR_ACTIVATED_AT:c.activatedAt,
+    SYNC_OWNER_DAILY_SOURCE_ID:typeof c.dailySourceId==='string'?c.dailySourceId:'',
+    SYNC_OWNER_LIVE_TEST_ENABLED:c.liveTestEnabled===true?'true':'false'
+  });
+}
+const SYNC_OWNER_CANONICAL_SOURCES=Object.freeze({
+  defects:['Handover_Defect_Summary_Updated_28-09-2026.xlsx'],
+  materials:['ABOVE_MATERIALS_STATUS_Stock_Updated_2026-09-20.xlsx'],
+  schedule:[
+    'Above Villa Plot6 Construction Progress_Updated_2026-09-21.xlsx',
+    'Above Villa Plot7 Construction Progress_Updated_2026-09-21.xlsx',
+    'Above Villa Plot8 Construction Progress_Updated_2026-09-21.xlsx',
+    'Above Villa Plot9 Construction Progress_Updated_2026-09-21.xlsx'
+  ],
+  photos:['Picture Progress']
+});
+const SYNC_OWNER_SUPPORTED=new Set([
+  'defects','materials','schedule','photos','daily_site_report','express'
+]);
+function syncOwnerAuditDate(x){
+  const n=Date.parse(String(x||''));return Number.isFinite(n)?n:null;
+}
+function syncOwnerIsCanonical(run,env){
+  if(!run||typeof run.pipeline!=='string'||!run.runKey||
+     syncOwnerAuditDate(run.createdAt)===null)return false;
+  if(SYNC_OWNER_CANONICAL_SOURCES[run.pipeline])
+    return SYNC_OWNER_CANONICAL_SOURCES[run.pipeline].includes(run.source);
+  if(run.pipeline==='daily_site_report')
+    return !!env.SYNC_OWNER_DAILY_SOURCE_ID &&
+      env.SYNC_OWNER_DAILY_SOURCE_ID===run.source;
+  if(run.pipeline==='express')return run.source==='Express Register';
+  return false;
+}
+function syncOwnerNormalize(row,table){
+  if(table==='drive_sync_runs')return {
+    pipeline:row.sync_type,source:row.source_file,
+    runKey:String(row.id||''),status:String(row.status||'').toLowerCase(),
+    createdAt:row.created_at,read:row.rows_read,written:row.rows_written,
+    message:String(row.message||'')
+  };
+  if(table==='daily_site_report_sync_audit')return {
+    pipeline:'daily_site_report',source:row.source_file_id,
+    runKey:'daily_site_report:'+String(row.id||''),
+    createdAt:row.created_at,status:
+      [row.rows_parsed,row.rows_verified,row.rows_inserted,row.rows_updated,row.rows_skipped]
+        .every(x=>Number.isSafeInteger(x)&&x>=0) &&
+      row.rows_parsed===row.rows_verified &&
+      row.rows_parsed===row.rows_inserted+row.rows_updated+row.rows_skipped?
+       'success':'error',
+    read:row.source_rows_read,written:row.rows_inserted+row.rows_updated,
+    parsed:row.rows_parsed,skipped:row.rows_skipped,
+    sourceRevision:row.source_revision,message:String(row.notes||'')
+  };
+  if(table==='express_register_runs')return {
+    pipeline:'express',source:'Express Register',
+    runKey:'express:'+String(row.id||''),status:row.state==='complete'?'success':'hold',
+    createdAt:row.completed_at||row.created_at,
+    read:row.document_count,written:null,
+    sourceRevision:row.source_fingerprint,message:String(row.state||'')
+  };
+  return null;
+}
+function syncOwnerNoChange(run,previous){
+  if(run.status!=='success')return false;
+  // Existing GAS uses this exact explicit unchanged marker for several
+  // pipelines, not only Schedule. Never create Pending for such a run.
+  if(run.read===0&&run.written===0&&
+    /^Apps Script check completed; source unchanged, sync skipped$/i.test(
+      String(run.message||'').trim()))return true;
+  if(run.pipeline==='schedule')
+    return run.read===0&&run.written===0 &&
+      /^Apps Script check completed; source unchanged, sync skipped$/i.test(run.message.trim());
+  if(run.pipeline==='photos')
+    return run.written===0 &&
+      /photo sync completed/i.test(run.message) &&
+      /\bupserted 0\b/i.test(run.message) &&
+      /\bdeactivated 0\b/i.test(run.message);
+  if(run.pipeline==='defects')
+    return run.written===0&&/\b0 semantic row\(s\) changed\b/i.test(run.message);
+  if(run.pipeline==='materials'){
+    if(run.written!==0||!/materials sync completed/i.test(run.message))return false;
+    const match=run.message.match(/preflight\s+(\[[\s\S]*\])\s*$/i);
+    if(!match)return false;
+    try{
+      const rows=JSON.parse(match[1]);
+      return Array.isArray(rows)&&rows.length===3&&rows.every(r=>
+        r&&r.changed===0&&r.inserted===0&&r.deleted===0&&r.newProjectLinks===0);
+    }catch{return false;}
+  }
+  if(run.pipeline==='daily_site_report')
+    // Native audit confirms every parsed row is verified and skipped (no
+    // inserts/updates). That is stronger no-delta proof than a file timestamp.
+    return run.written===0&&Number.isSafeInteger(run.parsed)&&
+      run.parsed>=0&&run.parsed===run.skipped;
+  if(run.pipeline==='express')
+    return !!run.sourceRevision&&previous?.sourceRevision===run.sourceRevision &&
+      previous.status==='success';
+  return false;
+}
+async function syncOwnerReadEvidence(env,enabled,activatedAt,now,transport){
+  if(!env.SUPABASE_SERVER_KEY)return {status:'HOLD_SERVER_KEY_MISSING',runs:[]};
+  const start=Math.max(syncOwnerAuditDate(activatedAt),now.getTime()-12*3600000);
+  const definitions=[
+    {table:'drive_sync_runs',limit:200,
+     fields:'id,sync_type,source_file,status,created_at,rows_read,rows_written,message',
+     use:['schedule','defects','materials','photos']},
+    {table:'daily_site_report_sync_audit',limit:100,
+     fields:'id,created_at,source_file_id,source_revision,source_rows_read,rows_parsed,rows_inserted,rows_updated,rows_skipped,rows_verified,notes',
+     use:['daily_site_report']},
+    {table:'express_register_runs',limit:100,
+     fields:'id,created_at,completed_at,state,source_fingerprint,document_count',
+     use:['express']}
+  ];
+  const runs=[];
+  for(const def of definitions){
+    if(!def.use.some(x=>enabled.has(x)))continue;
+    const query=new URLSearchParams({
+      select:def.fields,order:'created_at.desc',limit:String(def.limit),
+      created_at:'gte.'+new Date(start).toISOString()
+    });
+    const url=String(env.SUPABASE_URL||'').replace(/\/$/,'')+
+      '/rest/v1/'+def.table+'?'+query.toString();
+    let response,rows;
+    try{
+      response=await transport(url,{method:'GET',headers:supabaseHeaders(env),
+        signal:AbortSignal.timeout(12000)});
+      if(!response?.ok)return {status:'HOLD_LOG_READ_'+def.table+'_'+String(response?.status),runs:[]};
+      rows=await response.json();
+    }catch{return {status:'HOLD_LOG_READ_'+def.table+'_FAILED',runs:[]};}
+    if(!Array.isArray(rows)||rows.length>=def.limit)
+      return {status:'HOLD_LOG_WINDOW_TRUNCATED_'+def.table,runs:[]};
+    for(const row of rows){
+      const run=syncOwnerNormalize(row,def.table);
+      if(run&&enabled.has(run.pipeline)&&syncOwnerIsCanonical(run,env)&&
+         syncOwnerAuditDate(run.createdAt)>=start)
+        runs.push(run);
+    }
+  }
+  runs.sort((a,b)=>syncOwnerAuditDate(a.createdAt)-syncOwnerAuditDate(b.createdAt)||
+    a.runKey.localeCompare(b.runKey));
+  const baseline=[];
+  // Express registry may re-run an unchanged snapshot days after a previous
+  // completed import. Compare to the last pre-activation source fingerprint.
+  // A missing baseline is UNKNOWN, never automatically "NO_CHANGE".
+  if(enabled.has('express')){
+    const q=new URLSearchParams({select:'id,created_at,completed_at,state,source_fingerprint,document_count',
+      order:'created_at.desc',limit:'1',
+      created_at:'lt.'+new Date(syncOwnerAuditDate(activatedAt)).toISOString()});
+    try{
+      const response=await transport(env.SUPABASE_URL.replace(/\/$/,'')+
+        '/rest/v1/express_register_runs?'+q.toString(),{
+        method:'GET',headers:supabaseHeaders(env),
+        signal:AbortSignal.timeout(12000)});
+      if(!response?.ok)return {status:'HOLD_EXPRESS_BASELINE_READ_FAILED',runs:[]};
+      const rows=await response.json();
+      if(!Array.isArray(rows)||rows.length>1)
+        return {status:'HOLD_EXPRESS_BASELINE_INVALID',runs:[]};
+      if(rows[0])baseline.push(syncOwnerNormalize(rows[0],'express_register_runs'));
+    }catch{return {status:'HOLD_EXPRESS_BASELINE_UNAVAILABLE',runs:[]};}
+  }
+  return {status:'READ_COMPLETE',runs,baseline};
+}
+async function syncOwnerProbeDatabase(env,pipeline,transport){
+  // A DB probe alone is never represented as authenticated Web parity.
+  const target={
+    defects:['condo_room_status','room_no'],
+    materials:['materials','id'],schedule:['schedule_tasks','id'],
+    photos:['drive_photo_index','id'],daily_site_report:['daily_reports','id'],
+    express:['express_register_rows','batch_id']
+  }[pipeline];
+  if(!target)return false;
+  try{
+    const url=env.SUPABASE_URL.replace(/\/$/,'')+'/rest/v1/'+target[0]+
+      '?select='+target[1]+'&limit=1';
+    const response=await transport(url,{method:'GET',headers:supabaseHeaders(env),
+      signal:AbortSignal.timeout(10000)});
+    return response?.ok===true && Array.isArray(await response.json());
+  }catch{return false;}
+}
+export async function syncOwnerPushIncident(env,{pipeline,source,runKey,createdAt,status,
+  read,written,missing,now},hash,transport){
+  const key=await hash('3kings|sync-owner|'+pipeline+'|'+runKey);
+  if(!/^[0-9a-f]{64}$/i.test(String(key)))return {mode:'BAD_EVENT_KEY'};
+  const label=status==='FAIL'?'ซิงก์ล้มเหลวจาก Log':
+    'ถึงรอบ Sync ถัดไปแล้ว ยังตรวจผลถึงหน้าเว็บไม่ครบ';
+  const summary=('Sync '+pipeline+' '+label).slice(0,290);
+  // Preserve the ability to retry a delivery when LINE quota is exhausted:
+  // do not claim the one-shot ledger until quota has been confirmed.
+  const quota=await dailyLineQuota(env,transport);
+  if(!quota.allow)return {mode:'HOLD_LINE_QUOTA'};
+  let row;
+  try{
+    const result=await syncOwnerDb(env,'line_sync_owner_claim',{
+      p_event_key:key,p_pipeline:pipeline,p_run_key:runKey,p_summary:summary
+    },transport);
+    row=Array.isArray(result)?result[0]:result;
+  }catch{return {mode:'HOLD_CLAIM_FAILED'};}
+  if(row?.claim_status!=='new')
+    return {mode:'DEDUP_OR_IN_FLIGHT',claimStatus:row?.claim_status};
+  if(!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(String(row.retry_key)))
+    return {mode:'HOLD_BAD_RETRY_KEY'};
+  const pipelineMap = {
+    photos:'Photos',photo:'Photos',
+    defects:'Defects',defect:'Defects',
+    materials:'Materials',procurement:'Procurement',
+    schedule:'Villa Schedule',
+    daily_site_report:'Daily Site Report',
+    express:'Express',
+    work_order:'Work Order',
+    hotel_work_plan:'Hotel Work Plan'
+  };
+  const pipelineLabel = safeText(pipelineMap[pipeline] || pipeline, 50);
+  const statusLabel = status === 'FAIL' ? 'พบข้อผิดพลาดในการ Sync' : 'ยังตรวจผลหน้าเว็บไม่ครบ';
+  const thaiStamp = new Date(createdAt).toLocaleString('th-TH', {
+    timeZone: 'Asia/Bangkok',
+    day: '2-digit',
+    month: '2-digit',
+    year: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).replace(',', '').trim() + ' น.';
+
+  const issueText = status === 'FAIL'
+    ? 'ปัญหา: ' + safeText(missing || 'Sync Log ระบุข้อผิดพลาด', 150)
+    : (missing ? 'ปัญหา: ' + safeText(missing, 150) : 'ปัญหา: ยังไม่ยืนยันข้อมูลบนเว็บหลังล็อกอิน');
+
+  const actionText = 'สิ่งที่ต้องดำเนินการต่อ: ตรวจสอบและแก้ไข Sync ของ ' + pipelineLabel +
+    ' ให้ข้อมูลตรงกับ Master และหน้าเว็บ พร้อมยืนยันผลจริงตาม SOP โดยห้ามกระทบระบบอื่น';
+
+  const lines = [
+    '3 Kings | Sync Alert',
+    pipelineLabel + ' — ' + statusLabel,
+    'รอบ Sync: ' + thaiStamp,
+    issueText,
+    actionText
+  ];
+  let http=null;
+  try{
+    const response=await transport('https://api.line.me/v2/bot/message/push',{
+      method:'POST',
+      headers:{authorization:'Bearer '+env.LINE_CHANNEL_ACCESS_TOKEN,
+        'content-type':'application/json','X-Line-Retry-Key':row.retry_key},
+      body:JSON.stringify({to:env.LINE_OWNER_USER_ID,
+        messages:[{type:'text',text:lines.join('\n\n')}] }),
+      signal:AbortSignal.timeout(12000)
+    });
+    http=response.status;
+  }catch{}
+  // A 409/timeout remains uncertain until LINE delivery is independently
+  // reconciled. Never silently retransmit a potentially accepted push.
+  const delivered=http>=200&&http<300;
+  try{
+    const ack=await syncOwnerDb(env,'line_sync_owner_ack',{
+      p_event_key:key,p_retry_key:row.retry_key,
+      p_status:delivered?'delivered':'uncertain',p_http_status:http
+    },transport);
+    if(ack!==true)return {mode:'HOLD_ACK_UNVERIFIED',http};
+  }catch{return {mode:'HOLD_ACK_FAILED',http};}
+  return {mode:delivered?'OWNER_ACCEPTED':'OWNER_UNCERTAIN',http};
+}
+async function syncOwnerRealScheduledTick(env,{enabled,activatedAt,hash,transport,now}){
+  const evidence=await syncOwnerReadEvidence(env,enabled,activatedAt,now,transport);
+  if(evidence.status!=='READ_COMPLETE')
+    return {mode:evidence.status,delivered:false};
+  let incidents;
+  try{
+    const data=await syncOwnerDb(env,'line_sync_owner_get_pending',{
+      p_pipeline:null},transport);
+    if(!Array.isArray(data))return {mode:'HOLD_PENDING_READ_INVALID',delivered:false};
+    incidents=data;
+  }catch{return {mode:'HOLD_PENDING_READ_FAILED',delivered:false};}
+  const bySource=new Map();
+  for(const x of incidents){
+    if(x&&enabled.has(x.pipeline)&&x.source_file_id)
+      bySource.set(x.pipeline+'|'+x.source_file_id,x);
+  }
+  const previous=new Map();
+  for(const old of evidence.baseline||[])
+    if(old&&old.source)previous.set(old.pipeline+'|'+old.source,old);
+  const stats={observed:evidence.runs.length,noChange:0,
+    pendingRecorded:0,waiting:0,overdue:0,failures:0,
+    ownerAccepted:0,hold:0,unsupported:[...enabled].filter(x=>!SYNC_OWNER_SUPPORTED.has(x))};
+  // Never claim the feature is fully PASS based on a successful database GET.
+  for(const run of evidence.runs){
+    const sourceKey=run.pipeline+'|'+run.source;
+    const old=previous.get(sourceKey);
+    previous.set(sourceKey,run);
+    const noChange=syncOwnerNoChange(run,old);
+    const incident=bySource.get(sourceKey);
+    if(run.status==='error'||run.status==='failed'||run.status==='failure'){
+      stats.failures++;
+      const pushed=await syncOwnerPushIncident(env,{
+        pipeline:run.pipeline,source:run.source,runKey:run.runKey,
+        createdAt:run.createdAt,status:'FAIL',read:run.read,written:run.written,
+        missing:safeText(run.message,170)||'Sync Log error',now
+      },hash,transport);
+      if(pushed.mode==='OWNER_ACCEPTED')stats.ownerAccepted++;
+      else if(pushed.mode!=='DEDUP_OR_IN_FLIGHT')stats.hold++;
+      continue;
+    }
+    if(run.status!=='success'){stats.hold++;continue;}
+    if(incident){
+      if(incident.alert_status==='overdue_alerted')continue;
+      if(incident.alert_status!=='pending')continue;
+      if(run.runKey===incident.original_run_key||
+        syncOwnerAuditDate(run.createdAt)<=syncOwnerAuditDate(incident.first_detected_at))
+        {stats.waiting++;continue;}
+      // This distinct canonical row is proof another actual sync/logged run
+      // happened. It does NOT prove GAS timer settings, nor Web parity.
+      const dbRead=await syncOwnerProbeDatabase(env,run.pipeline,transport);
+      const missing=dbRead?'Authenticated Web E2E readback':
+        'Database readback and authenticated Web E2E';
+      try{
+        await syncOwnerDb(env,'line_sync_owner_record_pending',{
+          p_pipeline:run.pipeline,p_source_file_id:run.source,
+          p_original_run_key:incident.original_run_key,
+          p_missing_evidence:missing,
+          p_next_round_due_at:run.createdAt,p_schedule_verified:true
+        },transport);
+      }catch{stats.hold++;continue;}
+      const original=evidence.runs.find(r=>
+        r.pipeline===run.pipeline&&r.source===run.source&&
+        r.runKey===incident.original_run_key);
+      const pushed=await syncOwnerPushIncident(env,{
+        pipeline:run.pipeline,source:run.source,runKey:incident.original_run_key,
+        createdAt:original?.createdAt||incident.first_detected_at,status:'OVERDUE',
+        // The NEXT run may be NO_CHANGE (0 rows); use original changed run
+        // counts rather than falsely reporting "0" for the old incident.
+        read:original?.read??null,written:original?.written??null,missing,now
+      },hash,transport);
+      if(pushed.mode==='OWNER_ACCEPTED'||pushed.mode==='DEDUP_OR_IN_FLIGHT'&&
+         pushed.claimStatus==='already_sent'){
+        // Only set the permanent alerted status after successful/previously
+        // acknowledged owner LINE delivery, not after HTTP error or timeout.
+        try{
+          const marked=await syncOwnerDb(env,'line_sync_owner_mark_overdue',{
+            p_pipeline:run.pipeline,p_original_run_key:incident.original_run_key
+          },transport);
+          if(marked!==true)stats.hold++;
+        }catch{stats.hold++;}
+        if(pushed.mode==='OWNER_ACCEPTED'){stats.overdue++;stats.ownerAccepted++;}
+        bySource.set(sourceKey,{...incident,alert_status:'overdue_alerted'});
+      }else if(pushed.mode!=='DEDUP_OR_IN_FLIGHT')stats.hold++;
+      continue;
+    }
+    if(noChange){stats.noChange++;continue;}
+    // The importer reports a changed DB run, but no authenticated Production
+    // Web proof exists. Inspect DB first, create durable pending, do NOT LINE.
+    const dbRead=await syncOwnerProbeDatabase(env,run.pipeline,transport);
+    const missing=dbRead?'Authenticated Web E2E readback':
+      'Database readback and authenticated Web E2E';
+    try{
+      const rec=await syncOwnerDb(env,'line_sync_owner_record_pending',{
+        p_pipeline:run.pipeline,p_source_file_id:run.source,
+        p_original_run_key:run.runKey,p_missing_evidence:missing,
+        p_next_round_due_at:null,p_schedule_verified:false
+      },transport);
+      if(!Number.isSafeInteger(rec)&&typeof rec!=='number')
+        {stats.hold++;continue;}
+      stats.pendingRecorded++;
+      // DB uses its own observation timestamp; do not treat later log rows
+      // as a verified next clock tick in the SAME observer fetch.
+      bySource.set(sourceKey,{pipeline:run.pipeline,source_file_id:run.source,
+        original_run_key:run.runKey,first_detected_at:now.toISOString(),
+        alert_status:'pending',schedule_verified:false});
+    }catch{stats.hold++;}
+  }
+  return {mode:stats.hold||stats.unsupported.length?'SYNC_MONITOR_PARTIAL':
+    'SYNC_MONITOR_OBSERVED',delivered:stats.ownerAccepted>0,...stats};
+}
+
+export async function syncOwnerMonitorTick(env,{hash,transport=fetch,now=new Date(),forcePipeline=null,testItem=null}={}){
+  env=syncOwnerConfiguredEnv(env);
+  const base={mode:'SYNC_MONITOR_OFF',delivered:false};
+  if(env.SYNC_OWNER_MONITOR_ENABLED!=='true')return base;
+  if(testItem && env.SYNC_OWNER_LIVE_TEST_ENABLED!=='true')
+    return {...base,mode:'SYNC_MONITOR_LIVE_TEST_DISABLED'};
+  if(!env.SUPABASE_URL||!env.LINE_CHANNEL_ACCESS_TOKEN||
+     !/^U[0-9a-f]{32}$/i.test(env.LINE_OWNER_USER_ID||'')||
+     (!env.SUPABASE_SERVER_KEY&&!env.DAILY_LINE_BRIDGE_TOKEN))
+    return {...base,mode:'SYNC_MONITOR_NOT_CONFIGURED'};
+  if(typeof hash!=='function')throw Error('SYNC_MONITOR_HASH_REQUIRED');
+  // Wrap only this independent monitor invocation with the private bridge.
+  transport=syncOwnerBridgeTransport(env,transport);
+
+  // Quiet scheduled checks must not invoke LINE quota or claim.
+  // Quota is inspected only immediately before a permitted owner push.
+  if(testItem){
+    const quota=await dailyLineQuota(env,transport);
+    if(!quota.allow||(quota.remaining!==null&&quota.remaining<1))
+      return {...base,mode:'SYNC_MONITOR_QUOTA_BLOCKED'};
+    const pipeline=String(testItem.pipeline||'schedule');
+    const runKey=String(testItem.run_key||testItem.id||'manual-test');
+    const key=await hash('3kings|sync-owner|'+pipeline+'|'+runKey);
+    if(!validSha(key))return {...base,mode:'BAD_EVENT_KEY'};
+
+    let claim;
+    try{
+      const rows=await syncOwnerDb(env,'line_sync_owner_claim',{
+        p_event_key:key,p_pipeline:pipeline,p_run_key:runKey,
+        p_summary:String(testItem.summary||'3 Kings Sync Monitoring test alert').slice(0,300)
+      },transport);
+      claim=Array.isArray(rows)?rows[0]:rows;
+    }catch(e){return {...base,mode:'CLAIM_FAILED',error:e.message};}
+
+    if(claim?.claim_status!=='new')
+      return {...base,mode:'DEDUP_PREVENTED',claim_status:claim?.claim_status};
+
+    const pipelineMap = {
+      photos:'Photos',photo:'Photos',
+      defects:'Defects',defect:'Defects',
+      materials:'Materials',procurement:'Procurement',
+      schedule:'Villa Schedule',
+      daily_site_report:'Daily Site Report',
+      express:'Express',
+      work_order:'Work Order',
+      hotel_work_plan:'Hotel Work Plan'
+    };
+    const pipelineLabel = safeText(pipelineMap[pipeline] || pipeline, 50);
+    const statusLabel = testItem.status === 'FAIL' ? 'พบข้อผิดพลาดในการ Sync' : (testItem.status === 'PASS' ? 'สำเร็จ (Source→DB→Web ตรงกัน)' : 'ยังตรวจผลหน้าเว็บไม่ครบ');
+    const thaiStamp = new Date(now).toLocaleString('th-TH', {
+      timeZone: 'Asia/Bangkok',
+      day: '2-digit',
+      month: '2-digit',
+      year: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).replace(',', '').trim() + ' น.';
+    const issueText = testItem.notes ? 'ปัญหา: ' + safeText(testItem.notes, 150) : (testItem.status === 'FAIL' ? 'ปัญหา: Sync Log ระบุข้อผิดพลาด' : 'ปัญหา: ยังไม่ยืนยันข้อมูลบนเว็บหลังล็อกอิน');
+    const actionText = 'สิ่งที่ต้องดำเนินการต่อ: ตรวจสอบและแก้ไข Sync ของ ' + pipelineLabel +
+      ' ให้ข้อมูลตรงกับ Master และหน้าเว็บ พร้อมยืนยันผลจริงตาม SOP โดยห้ามกระทบระบบอื่น';
+    const message = [
+      '3 Kings | Sync Alert',
+      pipelineLabel + ' — ' + statusLabel,
+      'รอบ Sync: ' + thaiStamp,
+      issueText,
+      actionText
+    ].join('\n\n');
+
+    let http=null,accepted=false;
+    try{
+      const response=await transport('https://api.line.me/v2/bot/message/push',{
+        method:'POST',
+        headers:{
+          authorization:'Bearer '+env.LINE_CHANNEL_ACCESS_TOKEN,
+          'content-type':'application/json',
+          'X-Line-Retry-Key':claim.retry_key
+        },
+        body:JSON.stringify({to:env.LINE_OWNER_USER_ID,messages:[{type:'text',text:message}]}),
+        signal:AbortSignal.timeout(10000)
+      });
+      http=response.status;
+      accepted=(http>=200&&http<300)||
+        (http===409&&!!response.headers?.get?.('x-line-accepted-request-id'));
+    }catch{console.warn('sync_owner_push_network_uncertain');}
+
+    try{
+      await syncOwnerDb(env,'line_sync_owner_ack',{
+        p_event_key:key,p_retry_key:claim.retry_key,
+        p_status:accepted?'delivered':'uncertain',p_http_status:http
+      },transport);
+    }catch{return {...base,mode:'ACK_FAILED',delivered:accepted,http};}
+
+    return {...base,mode:accepted?'SYNC_OWNER_DELIVERED':'SYNC_OWNER_UNCERTAIN',
+      delivered:accepted,http,event_key:key,retry_key:claim.retry_key};
+  }
+
+  const allowedPipelines=new Set(
+    (env.SYNC_OWNER_ENABLED_PIPELINES||'').split(',').map(s=>s.trim().toLowerCase()).filter(Boolean)
+  );
+  if(forcePipeline && !allowedPipelines.has(String(forcePipeline).toLowerCase()))
+    return {...base,mode:'PIPELINE_NOT_ENABLED'};
+  if(allowedPipelines.size===0)return {...base,mode:'NO_PIPELINES_ENABLED'};
+  if([...allowedPipelines].some(x=>!SYNC_OWNER_SUPPORTED.has(x)&&
+    !['work_order','hotel_work_plan'].includes(x)))
+    return {...base,mode:'HOLD_UNKNOWN_PIPELINE'};
+  const started=env.SYNC_OWNER_MONITOR_ACTIVATED_AT;
+  const startEpoch=syncOwnerAuditDate(started);
+  const clock=new Date(now);
+  if(startEpoch===null||startEpoch>clock.getTime())
+    return {...base,mode:'HOLD_ACTIVATION_NOT_VERIFIED'};
+  if(!env.SUPABASE_SERVER_KEY)
+    return {...base,mode:'HOLD_SERVICE_ROLE_BINDING_MISSING'};
+  return syncOwnerRealScheduledTick(env,{
+    enabled:allowedPipelines,activatedAt:started,hash,transport,now:clock
+  });
+}
+
 export default {
   async fetch(request,env){
     const url=new URL(request.url);
+    if(url.pathname==='/sync-owner/health' && request.method==='GET'){
+      env=syncOwnerConfiguredEnv(env);
+      return json({
+        service:'3kings-line-autopilot',
+        module:'sync-owner-monitor',
+        enabled:env.SYNC_OWNER_MONITOR_ENABLED==='true',
+        enabledPipelines:(env.SYNC_OWNER_ENABLED_PIPELINES||'').split(',').map(s=>s.trim()).filter(Boolean),
+        ledger:'line_autopilot.sync_owner_deliveries',
+        pendingLedger:'line_autopilot.sync_owner_pending_incidents',
+        status:'READ_ONLY_OBSERVER_WITH_PENDING',
+        activatedAtConfigured:syncOwnerAuditDate(env.SYNC_OWNER_MONITOR_ACTIVATED_AT)!==null,
+        bridgeConfigured:Boolean(env.SYNC_OWNER_BRIDGE_TOKEN)
+      });
+    }
+    if(url.pathname==='/sync-owner/tick' && request.method==='POST'){
+      const authHeader=request.headers.get('x-3kings-server-key')||'';
+      if(!env.DAILY_LINE_BRIDGE_TOKEN || authHeader!==env.DAILY_LINE_BRIDGE_TOKEN)
+        return json({error:'unauthorized'},401);
+      let body={};
+      try{body=await request.json()}catch{}
+      const result=await syncOwnerMonitorTick(env,{
+        hash:sha256hex,
+        forcePipeline:body?.pipeline||null,
+        testItem:body?.testItem||null
+      });
+      return json(result);
+    }
     if(url.pathname==='/daily-line/health' && request.method==='GET'){
       const policy=dailyBangkokPolicy();
       if(!env.DAILY_LINE_BRIDGE_TOKEN || !env.SUPABASE_URL)
@@ -730,6 +1330,15 @@ export default {
       console.info('daily_owner_report_tick',{mode:r.mode,accepted:r.delivered,
         reportDate:r.reportDate,http:r.http??null});
     }catch{console.warn('daily_owner_report_tick_failed');}
+    // Sync Owner Monitoring: independent from AUTOPILOT_ENABLED
+    const monitorEnv=syncOwnerConfiguredEnv(env);
+    if(monitorEnv.SYNC_OWNER_MONITOR_ENABLED==='true'){
+      try{
+        const outcome=await syncOwnerMonitorTick(monitorEnv,{hash:sha256hex});
+        console.info('sync_owner_monitor_tick',outcome);
+      }catch{console.error('sync_owner_monitor_tick_failed');}
+    }
+
     if(!isConfigured(env)){
       console.info('line_autopilot_scheduled_blocked',{reason:'not_enabled_or_missing_config'});
       return;

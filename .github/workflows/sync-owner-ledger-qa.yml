@@ -1,0 +1,44 @@
+name: Sync Owner Ledger — Isolated PostgreSQL QA
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/20261103115147_sync_owner_line_ledger_isolated_20261103.sql'
+      - 'supabase/migrations/20261103210000_sync_owner_pending_incidents.sql'
+      - 'supabase/migrations/20261104070000_sync_owner_active_source_unique.sql'
+      - 'tests/sql/sync-owner-line-ledger.sql'
+      - 'tests/sql/sync-owner-pending-ledger.sql'
+      - '.github/workflows/sync-owner-ledger-qa.yml'
+permissions:
+  contents: read
+jobs:
+  ledger_qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_DB: synconly
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d synconly"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      PGPASSWORD: testpassword
+    steps:
+      - uses: actions/checkout@v4
+      - name: PostgreSQL client
+        run: |
+          if ! command -v psql >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y postgresql-client
+          fi
+      - name: New role-isolated delivery ledger SQL acceptance
+        run: psql -h 127.0.0.1 -U postgres -d synconly -v ON_ERROR_STOP=1 -f tests/sql/sync-owner-line-ledger.sql
+      - name: New role-isolated pending incidents ledger SQL acceptance
+        run: psql -h 127.0.0.1 -U postgres -d synconly -v ON_ERROR_STOP=1 -f tests/sql/sync-owner-pending-ledger.sql
