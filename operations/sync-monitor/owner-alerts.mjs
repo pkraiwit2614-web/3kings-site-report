@@ -41,29 +41,26 @@ export function classifyRun(run,proof){
  return {status:proofResult.status,reason:proofResult.reason};
 }
 const clean=(x,n=100)=>String(x??'').replace(/[\u0000-\u001f\u007f]/g,' ').slice(0,n);
+const labels={photos:'Photos',photo:'Photos',defects:'Defects',defect:'Defects',materials:'Materials',procurement:'Procurement',schedule:'Villa Schedule',daily_site_report:'Daily Site Report',express:'Express',work_order:'Work Order',hotel_work_plan:'Hotel Work Plan'};
+const thaiTime=x=>new Date(x).toLocaleString('th-TH',{timeZone:'Asia/Bangkok',day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
 export function lineMessage(run,result,proof,verification){
  if(!['PASS','FAIL','UNVERIFIED','HOLD','NO_CHANGE_UNVERIFIED','NO_CHANGE_VERIFIED','OVERDUE'].includes(result?.status))return null;
- const state={PASS:'สำเร็จ (Source→DB→Web ตรงกัน)',
- FAIL:'ล้มเหลว',UNVERIFIED:'รอยืนยันผลบนเว็บ',HOLD:'ยังไม่จบรอบ',
- NO_CHANGE_UNVERIFIED:'ไม่มีข้อมูลเปลี่ยน (ยังไม่ยืนยันบนเว็บ)',
- NO_CHANGE_VERIFIED:'ไม่มีข้อมูลเปลี่ยน (ตรวจถึงเว็บแล้ว)',
- OVERDUE:'แจ้งเตือนตรวจแก้: เกินรอบ Sync ถัดไปแล้วยังยืนยันผลไม่ได้'}[result.status];
- const stamp=new Date(run.created_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok',hour12:false});
+ const pipeline=clean(labels[run.sync_type]||run.sync_type,50);
+ const status={PASS:'ตรวจข้อมูลถึงหน้าเว็บแล้ว',FAIL:'พบข้อผิดพลาดในการ Sync',UNVERIFIED:'ยังตรวจผลหน้าเว็บไม่ครบ',HOLD:'รอบ Sync ยังไม่เสร็จ',NO_CHANGE_UNVERIFIED:'ไม่มีข้อมูลเปลี่ยน',NO_CHANGE_VERIFIED:'ไม่มีข้อมูลเปลี่ยน',OVERDUE:'ถึงรอบ Sync ถัดไปแล้ว ยังตรวจผลหน้าเว็บไม่ครบ'}[result.status];
+ const issue=result.status==='OVERDUE'&&verification?.lastCheckReason?
+   'ยังขาด: '+clean(verification.lastCheckReason,100):
+   result.status==='FAIL'?'ปัญหา: '+clean(result.reason,100):
+   result.status==='PASS'?'ผลตรวจ: Source, DB และเว็บตรงกัน':
+   'ปัญหา: ยังไม่ยืนยันข้อมูลบนเว็บหลังล็อกอิน';
+ const action='สิ่งที่ต้องดำเนินการต่อ: ตรวจสอบและแก้ไข Sync ของ '+pipeline+
+   ' ให้ข้อมูลตรงกับ Master และหน้าเว็บ พร้อมยืนยันผลจริงตาม SOP โดยห้ามกระทบระบบอื่น';
  return [
-  '3 Kings • Sync Monitoring',
-  'สถานะ: '+state,
-  'ระบบ: '+clean(run.sync_type,50),
-  'ต้นทาง: '+clean(run.source_file,100),
-  'เวลา: '+stamp,
-  'ผลตรวจ: '+clean(result.reason,60),
-  ...metricLines(run,{status:result.status,rows:proof?.web?.rows}),
-  'Run ID: '+clean(run.run_key||run.id,65),
-  result.status==='OVERDUE' && verification?.nextRoundDueAt?
-   'รอบตรวจถัดไปที่เลยกำหนด: '+new Date(verification.nextRoundDueAt).toLocaleString('th-TH',{timeZone:'Asia/Bangkok',hour12:false}):'',
-  result.status==='OVERDUE' && verification?.lastCheckReason?
-   'หลักฐานที่ยังขาด: '+clean(verification.lastCheckReason,150):'',
-  result.status==='OVERDUE'?'ให้ตรวจแก้: เปิด 3 Kings Web App และตรวจ Source / Sync Log / Supabase / หน้าเว็บ ตาม Run ID นี้':'',
-  result.status==='UNVERIFIED'?'หมายเหตุ: Log success ไม่ใช่ Web PASS':''
+  '3 Kings | Sync Alert',
+  pipeline+' — '+status,
+  'รอบ Sync: '+thaiTime(run.created_at)+' น.',
+  issue,
+  action,
+  result.status==='OVERDUE'||result.status==='UNVERIFIED'?'หมายเหตุ: ยังไม่ยืนยันว่า Sync ล้มเหลว':''
  ].filter(Boolean).join('\n');
 }
 export async function deliverOnce(opts={}){
