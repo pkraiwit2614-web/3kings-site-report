@@ -1,3 +1,4 @@
+/// <reference lib="deno.ns" />
 // 3 Kings — isolated Owner Sync Monitoring service-role bridge.
 // New function only. Never touches existing Daily LINE, triggers or masters.
 // verify_jwt=false is safe ONLY because every data route checks 384-bit
