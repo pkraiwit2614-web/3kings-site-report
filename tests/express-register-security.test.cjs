@@ -56,15 +56,12 @@ test('isolated migration preserves existing procurement and secures incomplete b
 
 
 test('procurement-only Express history: correct Thai dates, document kind and newest-first sorting',()=>{
- const ts=require('typescript')
+ const {stripTypeScriptTypes}=require('node:module')
  const vm=require('node:vm')
  const source=read('lib/expressRegisterDisplay.ts')
- const compiled=ts.transpileModule(source,{compilerOptions:{
-  target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS
- }}).outputText
- const sandbox={exports:{}}
- vm.runInNewContext(compiled,sandbox)
- const {expressDateISO,compareExpressDocumentsNewestFirst,expressDocumentType}=sandbox.exports
+ const executable=stripTypeScriptTypes(source,{mode:'strip'}).replace(/\bexport function/g,'function')
+ const {expressDateISO,compareExpressDocumentsNewestFirst,expressDocumentType}=
+  vm.runInNewContext(executable+';({expressDateISO,compareExpressDocumentsNewestFirst,expressDocumentType})')
  assert.equal(expressDateISO('31/10/69'),'2026-10-31')
  assert.equal(expressDateISO('24/06/68'),'2025-06-24')
  assert.equal(expressDateISO('02/11/2569'),'2026-11-02')
