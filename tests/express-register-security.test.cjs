@@ -99,4 +99,7 @@ test('procurement-only Express history: correct Thai dates, document kind and ne
  assert.match(api,/request\.nextUrl\.searchParams\.get\('view'\)==='procurement'/)
  assert.match(api,/expressDateISO\(row.document_date\)/)
  assert.match(api,/REGISTER_DETAILS_UNAVAILABLE/)
+ assert.match(api,/PROCUREMENT_SELECT/)
+ assert.match(component,/row.search_text/)
+ assert.match(component,/ต้นฉบับไม่ระบุรายละเอียดงาน/)
 })
