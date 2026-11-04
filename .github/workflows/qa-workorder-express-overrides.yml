@@ -7,6 +7,8 @@ on:
       - 'tests/sql/workorder-express-overrides-isolated.sql'
       - 'tests/express-override-consumer.test.cjs'
       - 'tests/e2e/local-stack/supabase/seed.sql'
+      - 'supabase/migrations/20261104112700_express_pc_quotation_evidence.sql'
+      - 'tests/sql/express-pc-quotation-evidence-isolated.sql'
       - 'app/api/materials/express-register/route.ts'
       - 'components/ExpressRegisterSection.tsx'
       - '.github/workflows/qa-workorder-express-overrides.yml'
@@ -39,6 +41,10 @@ jobs:
         env:
           PGPASSWORD: isolated-only
         run: psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5432 -U postgres -d isolated_qa -f tests/sql/workorder-express-overrides-isolated.sql
+      - name: Verify isolated PC quotation evidence and unchanged Express rows
+        env:
+          PGPASSWORD: isolated-only
+        run: psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5432 -U postgres -d isolated_qa -f tests/sql/express-pc-quotation-evidence-isolated.sql
       - name: Record release limitation
         run: |
           echo "ISOLATED_SQL_QA only. Production migration, live GAS mapping,"
