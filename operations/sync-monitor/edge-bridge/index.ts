@@ -1,15 +1,17 @@
-/// <reference lib="deno.ns" />
 // 3 Kings — isolated Owner Sync Monitoring service-role bridge.
 // New function only. Never touches existing Daily LINE, triggers or masters.
 // verify_jwt=false is safe ONLY because every data route checks 384-bit
 // independently stored Cloudflare secret, by constant-time SHA-256 digest.
 // SHA digest is public; plaintext secret must never enter Git or API logs.
+type DenoRuntime = {env:{get:(name:string)=>string|undefined};
+  serve:(handler:(req:Request)=>Promise<Response>)=>unknown};
+const edgeRuntime=(globalThis as unknown as {Deno:DenoRuntime}).Deno;
 const TOKEN_HASH = "4fcf3fde73d075045b1b7014ace8583de64ff255a67e9d8951f5c5a099cadbf9";
-const ENDPOINT = (Deno.env.get("SUPABASE_URL") || "").replace(/\/$/, "");
-const legacy = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+const ENDPOINT = (edgeRuntime.env.get("SUPABASE_URL") || "").replace(/\/$/, "");
+const legacy = edgeRuntime.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 let modern = "";
 try {
-  const value = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") || "{}");
+  const value = JSON.parse(edgeRuntime.env.get("SUPABASE_SECRET_KEYS") || "{}");
   modern = typeof value.default === "string" ? value.default : "";
 } catch {}
 const SERVICE_KEY = legacy || modern;
@@ -106,7 +108,7 @@ function allowedRpc(name:string,args:unknown):boolean{
     return false;
   return true;
 }
-Deno.serve(async(req:Request)=>{
+edgeRuntime.serve(async(req:Request)=>{
   if(req.method==="GET"&&new URL(req.url).pathname.endsWith("/health"))
     return json({service:"kings_sync_owner_bridge",ready:Boolean(ENDPOINT&&SERVICE_KEY),
       mode:"owner-only"});
@@ -154,3 +156,4 @@ Deno.serve(async(req:Request)=>{
         "x-content-type-options":"nosniff"}});
   }catch{return json({error:"service_unavailable"},502);}
 });
+export {};
