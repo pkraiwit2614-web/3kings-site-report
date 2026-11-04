@@ -220,7 +220,7 @@ function hotelStatusItems(data:ReturnType<typeof buildingCounts>,building:'A'|'B
   const hotelCustomer:StatusItem[]=[
     {label:'Hotel Checked',lines:['Hotel Engineer','ตรวจแล้ว'],count:data.customerHotelChecked,tone:'good',href:defectHref({filter:'hotel-customer-checked',building})},
     ...(data.customerHotelHandover>0?[{label:'Customer Accepted',lines:['ลูกค้าตรวจรับเรียบร้อยแล้ว'],count:data.customerHotelHandover,tone:'good' as Tone,href:defectHref({filter:'hotel-customer',building,q:'ลูกค้าตรวจรับเรียบร้อยแล้ว'})}]:[]),
-    ...(data.customerHotelRoomInspection>0?[{label:'Awaiting Room',lines:['ยังไม่ตรวจห้อง','ยังไม่มี Defect'],count:data.customerHotelRoomInspection,tone:'warn',roomNos:hotelCustomerRooms(r=>r.status_group===GROUP.roomInspection) as Tone,href:defectHref({filter:'hotel-customer',building,q:'ยังไม่ตรวจห้อง'})}]:[]),
+    ...(data.customerHotelRoomInspection>0?[{label:'Awaiting Room',lines:['ยังไม่ตรวจห้อง','ยังไม่มี Defect'],count:data.customerHotelRoomInspection,tone:'warn' as Tone,roomNos:hotelCustomerRooms(r=>r.status_group===GROUP.roomInspection),href:defectHref({filter:'hotel-customer',building,q:'ยังไม่ตรวจห้อง'})}]:[]),
     {label:'Awaiting Acceptance',lines:awaitingAcceptanceLines,count:data.customerHotelPending+data.customerHotelAwaiting,tone:'warn',roomNos:hotelCustomerRooms(r=>r.status_group===GROUP.pending||r.status_group===GROUP.awaiting),href:defectHref({filter:'hotel-customer-awaiting-receive',building})},
     {label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:data.customerHotelNew,tone:'danger',roomNos:hotelCustomerRooms(isNewDefect),href:defectHref({filter:'hotel-customer-new',building})},
   ]
@@ -246,11 +246,11 @@ function BuildingFlow({top,building,data,combineMode=false}:{top:number;building
   const nonHotelCustomer:StatusItem[]=[
     {label:'Customer Accepted',lines:['ลูกค้าตรวจรับเรียบร้อยแล้ว'],count:data.customerNonHandover,tone:'good',href:link(defectHref({filter:'nonhotel-customer-complete',building}))},
     {label:'Awaiting Acceptance',lines:awaitingAcceptanceLines,count:data.customerNonPending+data.customerNonChecked,tone:'warn',roomNos:data.roomList('มีลูกค้า','ไม่ร่วมโรงแรม',r=>r.status_group===GROUP.pending||r.status_group===GROUP.checked),href:link(defectHref({filter:'nonhotel-customer-awaiting-receive',building}))},
-    ...(data.customerNonNew>0?[{label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:data.customerNonNew,tone:'danger',roomNos:data.roomList('มีลูกค้า','ไม่ร่วมโรงแรม',isNewDefect) as Tone,href:link(defectHref({filter:'nonhotel-customer-new',building}))}]:[]),
+    ...(data.customerNonNew>0?[{label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:data.customerNonNew,tone:'danger' as Tone,roomNos:data.roomList('มีลูกค้า','ไม่ร่วมโรงแรม',isNewDefect),href:link(defectHref({filter:'nonhotel-customer-new',building}))}]:[]),
   ]
   const nonHotelNoCustomer:StatusItem[]=[
     ...(data.noNonAwaitingSale>0?[{label:'Awaiting Sale',lines:['Awaiting Sale','ยังไม่มีลูกค้า'],count:data.noNonAwaitingSale,tone:'neutral' as Tone,href:link(defectHref({filter:'nonhotel-nosale',building}))}]:[]),
-    ...(data.noNonNew>0?[{label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:data.noNonNew,tone:'danger',roomNos:data.roomList('ไม่มีลูกค้า','ไม่ร่วมโรงแรม',isNewDefect) as Tone,href:link(defectHref({filter:'nonhotel-nocustomer-new',building}))}]:[]),
+    ...(data.noNonNew>0?[{label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:data.noNonNew,tone:'danger' as Tone,roomNos:data.roomList('ไม่มีลูกค้า','ไม่ร่วมโรงแรม',isNewDefect),href:link(defectHref({filter:'nonhotel-nocustomer-new',building}))}]:[]),
     ...(!data.noNonAwaitingSale&&!data.noNonIncomplete?[{label:'Clear',lines:['ไม่มีห้องคงค้าง'],count:0,tone:'good' as Tone}]:[]),
   ]
   return <g>
