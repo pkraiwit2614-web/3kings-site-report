@@ -50,7 +50,7 @@ test('scope stays presentation-only: canonical values, print, search and editing
  assert.doesNotMatch(page,/<b>จำนวนงาน:/,'count is source metadata, no redundant count shown in Report')
  assert.match(page,/other\.defect_detail/)
  assert.match(page,/\.defect-detail \.defect-detail-text\.is-collapsed/)
- assert.match(page,/r\.next_action\|\|r\.follow_up/)
+ assert.match(page,/siteOnlyNextAction\(r\.next_action\|\|r\.follow_up\)/)
  assert.doesNotMatch(page,/update\(\{\s*defect_detail:/)
 })
 
@@ -124,4 +124,81 @@ test('Flow deep link reaches rendered report table, Work Order missing popup is 
  assert.match(printCss,/@media print/)
  assert.match(printCss,/\.defect-table th:nth-child\(10\),\.defect-table td:nth-child\(10\)\{display:none!important\}/)
  assert.doesNotMatch(printCss,/\.defect-table th:nth-child\(9\),\.defect-table td:nth-child\(9\)\{display:none/)
+})
+
+
+
+const displayRaw=fs.readFileSync(path.join(__dirname,'../lib/defectReportDisplay.ts'),'utf8')
+const displayJs=ts.transpileModule(displayRaw,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText
+const displayMod={exports:{}}
+new Function('module','exports',displayJs)(displayMod,displayMod.exports)
+const {siteOnlyNextAction}=displayMod.exports
+
+
+test('next action retains real new Defect counts, dates and practical follow-up',()=>{
+ const raw='รับแจ้ง Warranty Defect 12 จุด 02/11/2026; เปิด Work ID DF-A512-01 ถึง 12; ติดตามแก้ไข/After และนัดลูกค้าตรวจซ้ำ (ไม่เปลี่ยน Pending Handover)'
+ const shown=siteOnlyNextAction(raw)
+ assert.match(shown,/12 จุด 02\/11\/2026/)
+ assert.match(shown,/ติดตามแก้ไข\/After และนัดลูกค้าตรวจซ้ำ/)
+ assert.doesNotMatch(shown,/Work ID|DF-A512|Pending Handover/)
+})
+
+test('next action hides Work ID, Doc identifiers and duplicate HOLD matching commentary',()=>{
+ const raw='รับ Defect ลูกค้าตรวจใหม่ Doc.135 วันที่ 03/11/2026 จำนวน 16 จุด; ติดตาม Work ID DF-A401-17 ถึง 32 (รายการ 12 HOLD รอเทียบงานเดิม); คง 7 งานเก่าที่ปิดแล้ว (01,08,09), งานค้าง Doc.69; รอเก็บ After/ลูกค้าตรวจส่งมอบ'
+ const shown=siteOnlyNextAction(raw)
+ assert.match(shown,/16 จุด/)
+ assert.match(shown,/รอเก็บ After\/ลูกค้าตรวจส่งมอบ/)
+ assert.doesNotMatch(shown,/Doc\.|Work ID|DF-A401|HOLD|รอเทียบงานเดิม|งานค้าง Doc/)
+ const a311='รับแจ้ง Defect ใหม่ 28/10/2026 จากรายงาน Inspection 26/10/2026 (Doc.265) รวม 9 จุด; 8 Work ID ใหม่ DF-A311-02 ถึง 09; จุดลามิเนต #2 ผูกตรวจเทียบกับ DF-A311-01 เดิม (HOLD ไม่เปิดงานซ้ำ); รอยืนยันสิทธิ์เข้าห้อง/ทีม/วันเข้าซ่อมและหลักฐานหลังแก้'
+ assert.equal(siteOnlyNextAction(a311),'รับแจ้ง Defect ใหม่ 28/10/2026 จากรายงาน Inspection 26/10/2026 รวม 9 จุด; รอยืนยันสิทธิ์เข้าห้อง/ทีม/วันเข้าซ่อมและหลักฐานหลังแก้')
+})
+
+test('remaining work uses canonical field only; Combine, status and work links still present',()=>{
+ const page=fs.readFileSync(path.join(__dirname,'../app/defects/page.tsx'),'utf8')
+ assert.match(page,/siteOnlyNextAction\(r\.next_action\|\|r\.follow_up\)/)
+ assert.match(page,/siteOnlyNextAction\(other\.next_action\|\|other\.follow_up\)/)
+ assert.match(page,/r\.room_no,summarizeDefectDetail\(r\.defect_detail\)/)
+ assert.match(page,/workOpenByRoom\.has\(r\.room_no\)/)
+ assert.match(page,/displayRoomStatus\(r\)/)
+ assert.doesNotMatch(page,/\.update\(\{\s*next_action:/)
+})
+
+test('mixed administrative HOLD never discards repairs or appointments in the same clause',()=>{
+ assert.equal(siteOnlyNextAction('รายการ 12 HOLD รอเทียบงานเดิม, นัดช่างซ่อมประตู 05/11/2026 โดยคุณเอ'),
+ 'นัดช่างซ่อมประตู 05/11/2026 โดยคุณเอ')
+ assert.equal(siteOnlyNextAction('ติดตาม Work ID DF-A999-01; รออนุมัติเข้าห้อง/นัดลูกค้า/เก็บ After'),
+ 'รออนุมัติเข้าห้อง/นัดลูกค้า/เก็บ After')
+ assert.equal(siteOnlyNextAction('ผูกตรวจเทียบกับ DF-A999-01 เดิม (HOLD ไม่เปิดงานซ้ำ), รอเก็บภาพ After'),
+ 'รอเก็บภาพ After')
+})
+test('operational HOLD and uncertain wording remain verbatim',()=>{
+ for(const raw of ['งาน #08-#09 HOLD รอยืนยันช่าง','รออนุมัติซ่อม/รอยืนยันชิ้นส่วน; ผู้รับผิดชอบ พี่ปู',
+ 'Combine A901+A902 นัดเข้าห้อง 05/11/2026','HOLD ตรวจหน้างานกับคุณเอก่อนอนุมัติ',
+ 'ตรวจตำแหน่งคราบกาว #9 เทียบ #6']){
+   assert.equal(siteOnlyNextAction(raw),raw)
+ }
+})
+test('document removal never rewrites intake, names, dates or counts',()=>{
+ assert.equal(siteOnlyNextAction('04/11/2026 รับ PDF A999 Art House Doc ID.219 จำนวน 9 รายการ; นัดช่าง'),
+ '04/11/2026 รับ PDF A999 Art House จำนวน 9 รายการ; นัดช่าง')
+ assert.equal(siteOnlyNextAction('รับแจ้ง Doc. Id. 219 วันที่ 03/11/2026; เปิด Work ID DF-A999-01 ถึง DF-A999-09 รอแก้/After'),
+ 'รับแจ้ง วันที่ 03/11/2026; รอแก้/After')
+ assert.equal(siteOnlyNextAction('รับ Defect 23 จุด (ทีมเอ 23 จุด, อนุมัติ Work Order 8 รายการ DF-A999-01..17 ส่วนที่เหลือ 15 จุด HOLD); นัดตรวจ'),
+ 'รับ Defect 23 จุด (ทีมเอ 23 จุด); นัดตรวจ')
+})
+test('empty source keeps original placeholder and no fabricated replacement',()=>{
+ assert.equal(siteOnlyNextAction(null),'-')
+ assert.equal(siteOnlyNextAction(''),'-')
+})
+
+test('system sync and duplicate-link spans preserve the site action next to them',()=>{
+ assert.equal(siteOnlyNextAction('Sync สำเร็จ, นัดช่างเข้าห้อง; ฐานข้อมูลอัปเดตแล้ว, รอเก็บ After'),
+ 'นัดช่างเข้าห้อง; รอเก็บ After')
+ assert.equal(siteOnlyNextAction('เชื่อม Work Order DF-A999-01 เพื่อป้องกันรายการซ้ำ, นัดลูกค้าตรวจรับ'),
+ 'นัดลูกค้าตรวจรับ')
+})
+
+test('system history between sentences leaves complete site clauses without orphan punctuation',()=>{
+ const raw='เครื่องหมายถูกไม่ใช่หลักฐานตรวจรับ/After ยืนยันการปิด จึงคงสถานะ เพิ่งได้รับแจ้ง Defect และ Work ID DF-A999-01..04 โดยไม่สร้างซ้ำ. DF-A999-01 ถึง -03 ยังคงรอดำเนินการ/รอตรวจผลจริง; DF-A999-04 คง HOLD ตรวจตำแหน่งคราบกาว #9 เทียบ #6.'
+ assert.equal(siteOnlyNextAction(raw),'เครื่องหมายถูกไม่ใช่หลักฐานตรวจรับ/After ยืนยันการปิด; ยังคงรอดำเนินการ/รอตรวจผลจริง; คง HOLD ตรวจตำแหน่งคราบกาว #9 เทียบ #6')
 })

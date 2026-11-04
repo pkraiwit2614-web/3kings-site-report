@@ -43,6 +43,6 @@ test('Defect print CSS and column rendering unchanged',()=>{
   assert.match(page,/<td className="defect-detail">/)
   assert.match(page,/statusTone\(r\)/)
   assert.match(page,/hotelRoomLabel\(r\.room_no\)/)
-  assert.match(page,/r\.next_action\|\|r\.follow_up/)
+  assert.match(page,/siteOnlyNextAction\(r\.next_action\|\|r\.follow_up\)/)
   assert.match(page,/@media print\{/)
 })
