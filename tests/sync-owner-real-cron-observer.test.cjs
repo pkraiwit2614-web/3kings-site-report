@@ -150,9 +150,11 @@ test('real scheduled tick: changed run records pending, next observed unchanged 
  assert.equal(next.incidents[0].next_round_due_at,unchanged.created_at);
  assert.equal(next.deliveries.size,1);
  assert.equal(next.send[0].to,env.LINE_OWNER_USER_ID);
- assert.match(next.send[0].messages[0].text,/ถึงรอบ Sync ถัดไป/);
- assert.match(next.send[0].messages[0].text,/เขียน DB: 87/);
- assert.doesNotMatch(next.send[0].messages[0].text,/เขียน DB: 0/);
+ assert.match(next.send[0].messages[0].text, /3 Kings \| Sync Alert/);
+ assert.match(next.send[0].messages[0].text, /Villa Schedule — ยังตรวจผลหน้าเว็บไม่ครบ/);
+ assert.match(next.send[0].messages[0].text, /รอบ Sync:/);
+ assert.match(next.send[0].messages[0].text, /ปัญหา: (ยังไม่ยืนยันข้อมูลบนเว็บหลังล็อกอิน|Authenticated Web)/);
+ assert.match(next.send[0].messages[0].text, /สิ่งที่ต้องดำเนินการต่อ: ตรวจสอบและแก้ไข Sync ของ Villa Schedule ให้ข้อมูลตรงกับ Master และหน้าเว็บ พร้อมยืนยันผลจริงตาม SOP โดยห้ามกระทบระบบอื่น/);
  // Reprocessing the same real logs must not notify twice.
  out=await tick(next,'2026-11-03T14:00:00Z');
  assert.equal(next.send.length,1);
@@ -165,8 +167,10 @@ test('explicit error from canonical Master is immediately owner-alerted with unk
  assert.equal(result.failures,1);
  assert.equal(result.ownerAccepted,1);
  assert.equal(f.send.length,1);
- assert.match(f.send[0].messages[0].text,/Log/);
- assert.match(f.send[0].messages[0].text,/ไม่ทราบ/);
+ assert.match(f.send[0].messages[0].text, /3 Kings \| Sync Alert/);
+ assert.match(f.send[0].messages[0].text, /Villa Schedule — พบข้อผิดพลาดในการ Sync/);
+ assert.match(f.send[0].messages[0].text, /ปัญหา: Apps Script sync error: failed validation/);
+ assert.match(f.send[0].messages[0].text, /สิ่งที่ต้องดำเนินการต่อ: ตรวจสอบและแก้ไข Sync ของ Villa Schedule ให้ข้อมูลตรงกับ Master และหน้าเว็บ พร้อมยืนยันผลจริงตาม SOP โดยห้ามกระทบระบบอื่น/);
  assert.equal(f.incidents.length,0);
 });
 test('noncanonical test.xlsx failure is never sent as a Master failure',async()=>{

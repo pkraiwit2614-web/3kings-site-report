@@ -897,7 +897,7 @@ async function syncOwnerProbeDatabase(env,pipeline,transport){
     return response?.ok===true && Array.isArray(await response.json());
   }catch{return false;}
 }
-async function syncOwnerPushIncident(env,{pipeline,source,runKey,createdAt,status,
+export async function syncOwnerPushIncident(env,{pipeline,source,runKey,createdAt,status,
   read,written,missing,now},hash,transport){
   const key=await hash('3kings|sync-owner|'+pipeline+'|'+runKey);
   if(!/^[0-9a-f]{64}$/i.test(String(key)))return {mode:'BAD_EVENT_KEY'};
@@ -919,21 +919,42 @@ async function syncOwnerPushIncident(env,{pipeline,source,runKey,createdAt,statu
     return {mode:'DEDUP_OR_IN_FLIGHT',claimStatus:row?.claim_status};
   if(!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(String(row.retry_key)))
     return {mode:'HOLD_BAD_RETRY_KEY'};
-  const lines=[
-    '3 Kings • Sync Monitoring (Owner)',
-    'สถานะ: '+label,
-    'ระบบ: '+safeText(pipeline,40),
-    'ต้นทาง: '+safeText(source,110),
-    'รอบต้นเหตุ: '+new Date(createdAt).toLocaleString('th-TH',{
-      timeZone:'Asia/Bangkok',hour12:false}),
-    'Run ID: '+safeText(runKey,75),
-    Number.isSafeInteger(read)?'อ่านจาก Source: '+read+' รายการ':'',
-    Number.isSafeInteger(written)?'เขียน DB: '+written+' รายการ':'',
-    status==='FAIL'?'จำนวนรายการผิดพลาด: ไม่ทราบ (อ่านจาก Log)':'',
-    'หลักฐานที่ยังขาด/ผิดพลาด: '+safeText(missing,180),
-    status==='OVERDUE'?'ให้ตรวจแก้: เปิด 3 Kings Web App → ตรวจ Sync Log / Supabase / หน้าเว็บ และ Work Order ที่เกี่ยวข้อง':'',
-    status==='OVERDUE'?'หมายเหตุ: ตรวจไม่ครบ ไม่ใช่หลักฐานว่า Sync ล้มเหลว':''
-  ].filter(Boolean);
+  const pipelineMap = {
+    photos:'Photos',photo:'Photos',
+    defects:'Defects',defect:'Defects',
+    materials:'Materials',procurement:'Procurement',
+    schedule:'Villa Schedule',
+    daily_site_report:'Daily Site Report',
+    express:'Express',
+    work_order:'Work Order',
+    hotel_work_plan:'Hotel Work Plan'
+  };
+  const pipelineLabel = safeText(pipelineMap[pipeline] || pipeline, 50);
+  const statusLabel = status === 'FAIL' ? 'พบข้อผิดพลาดในการ Sync' : 'ยังตรวจผลหน้าเว็บไม่ครบ';
+  const thaiStamp = new Date(createdAt).toLocaleString('th-TH', {
+    timeZone: 'Asia/Bangkok',
+    day: '2-digit',
+    month: '2-digit',
+    year: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).replace(',', '').trim() + ' น.';
+
+  const issueText = status === 'FAIL'
+    ? 'ปัญหา: ' + safeText(missing || 'Sync Log ระบุข้อผิดพลาด', 150)
+    : (missing ? 'ปัญหา: ' + safeText(missing, 150) : 'ปัญหา: ยังไม่ยืนยันข้อมูลบนเว็บหลังล็อกอิน');
+
+  const actionText = 'สิ่งที่ต้องดำเนินการต่อ: ตรวจสอบและแก้ไข Sync ของ ' + pipelineLabel +
+    ' ให้ข้อมูลตรงกับ Master และหน้าเว็บ พร้อมยืนยันผลจริงตาม SOP โดยห้ามกระทบระบบอื่น';
+
+  const lines = [
+    '3 Kings | Sync Alert',
+    pipelineLabel + ' — ' + statusLabel,
+    'รอบ Sync: ' + thaiStamp,
+    issueText,
+    actionText
+  ];
   let http=null;
   try{
     const response=await transport('https://api.line.me/v2/bot/message/push',{
@@ -941,7 +962,7 @@ async function syncOwnerPushIncident(env,{pipeline,source,runKey,createdAt,statu
       headers:{authorization:'Bearer '+env.LINE_CHANNEL_ACCESS_TOKEN,
         'content-type':'application/json','X-Line-Retry-Key':row.retry_key},
       body:JSON.stringify({to:env.LINE_OWNER_USER_ID,
-        messages:[{type:'text',text:lines.join('\n')}] }),
+        messages:[{type:'text',text:lines.join('\n\n')}] }),
       signal:AbortSignal.timeout(12000)
     });
     http=response.status;
@@ -1106,16 +1127,37 @@ export async function syncOwnerMonitorTick(env,{hash,transport=fetch,now=new Dat
     if(claim?.claim_status!=='new')
       return {...base,mode:'DEDUP_PREVENTED',claim_status:claim?.claim_status};
 
-    const stamp=new Date(now).toLocaleString('th-TH',{timeZone:'Asia/Bangkok',hour12:false});
-    const message=[
-      '3 Kings • Sync Monitoring (Owner Verified)',
-      'สถานะ: '+(testItem.status==='OVERDUE'?'แจ้งเตือนตรวจแก้ (เกินรอบ Sync ถัดไป)':(testItem.status==='FAIL'?'ล้มเหลว':'ทดสอบระบบตรวจ Sync')),
-      'ระบบ: '+safeText(pipeline,50),
-      'ต้นทาง: '+safeText(testItem.source_file||'Canonical Master',90),
-      'เวลา: '+stamp,
-      'Run ID: '+safeText(runKey,65),
-      testItem.notes?('หมายเหตุ: '+safeText(testItem.notes,200)):''
-    ].filter(Boolean).join('\n');
+    const pipelineMap = {
+      photos:'Photos',photo:'Photos',
+      defects:'Defects',defect:'Defects',
+      materials:'Materials',procurement:'Procurement',
+      schedule:'Villa Schedule',
+      daily_site_report:'Daily Site Report',
+      express:'Express',
+      work_order:'Work Order',
+      hotel_work_plan:'Hotel Work Plan'
+    };
+    const pipelineLabel = safeText(pipelineMap[pipeline] || pipeline, 50);
+    const statusLabel = testItem.status === 'FAIL' ? 'พบข้อผิดพลาดในการ Sync' : (testItem.status === 'PASS' ? 'สำเร็จ (Source→DB→Web ตรงกัน)' : 'ยังตรวจผลหน้าเว็บไม่ครบ');
+    const thaiStamp = new Date(now).toLocaleString('th-TH', {
+      timeZone: 'Asia/Bangkok',
+      day: '2-digit',
+      month: '2-digit',
+      year: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).replace(',', '').trim() + ' น.';
+    const issueText = testItem.notes ? 'ปัญหา: ' + safeText(testItem.notes, 150) : (testItem.status === 'FAIL' ? 'ปัญหา: Sync Log ระบุข้อผิดพลาด' : 'ปัญหา: ยังไม่ยืนยันข้อมูลบนเว็บหลังล็อกอิน');
+    const actionText = 'สิ่งที่ต้องดำเนินการต่อ: ตรวจสอบและแก้ไข Sync ของ ' + pipelineLabel +
+      ' ให้ข้อมูลตรงกับ Master และหน้าเว็บ พร้อมยืนยันผลจริงตาม SOP โดยห้ามกระทบระบบอื่น';
+    const message = [
+      '3 Kings | Sync Alert',
+      pipelineLabel + ' — ' + statusLabel,
+      'รอบ Sync: ' + thaiStamp,
+      issueText,
+      actionText
+    ].join('\n\n');
 
     let http=null,accepted=false;
     try{

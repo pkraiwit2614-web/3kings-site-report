@@ -93,8 +93,11 @@ test('syncOwnerMonitorTick: single testItem sends to Owner, claims ledger, and a
   assert.ok(pushCall);
   const pushBody = JSON.parse(pushCall.opts.body);
   assert.equal(pushBody.to, defaultEnv.LINE_OWNER_USER_ID);
-  assert.match(pushBody.messages[0].text, /3 Kings • Sync Monitoring/);
-  assert.match(pushBody.messages[0].text, /Run ID: schedule:verified-test-001/);
+  assert.match(pushBody.messages[0].text, /3 Kings \| Sync Alert/);
+  assert.match(pushBody.messages[0].text, /Villa Schedule — สำเร็จ/);
+  assert.match(pushBody.messages[0].text, /รอบ Sync:/);
+  assert.match(pushBody.messages[0].text, /ปัญหา: Initial owner sync test/);
+  assert.match(pushBody.messages[0].text, /สิ่งที่ต้องดำเนินการต่อ: ตรวจสอบและแก้ไข Sync ของ Villa Schedule/);
 
   // Check ACK
   const ackCall = f.calls.find(c => c.url.includes('/line_sync_owner_ack'));
@@ -146,4 +149,33 @@ test('worker fetch: /sync-owner/tick requires authorized bridge token', async ()
   });
   const res = await worker.fetch(reqUnauthorized, defaultEnv);
   assert.equal(res.status, 401);
+});
+
+test('syncOwnerPushIncident: formats approved target format matching user specification', async () => {
+  const { syncOwnerPushIncident } = await workerPromise;
+  const f = makeFixture();
+  const res = await syncOwnerPushIncident(defaultEnv, {
+    pipeline: 'photos',
+    source: 'Picture Progress',
+    runKey: 'photos:unverified-web-001',
+    createdAt: '2026-11-04T01:04:00Z',
+    status: 'UNVERIFIED',
+    missing: 'ยังไม่ยืนยันข้อมูลบนเว็บหลังล็อกอิน',
+    now: new Date('2026-11-04T01:04:00Z')
+  }, sha256, f.transport);
+
+  assert.equal(res.mode, 'OWNER_ACCEPTED');
+
+  const pushCall = f.calls.find(c => c.url.includes('/message/push'));
+  assert.ok(pushCall);
+  const pushBody = JSON.parse(pushCall.opts.body);
+  const expectedMsg = [
+    '3 Kings | Sync Alert',
+    'Photos — ยังตรวจผลหน้าเว็บไม่ครบ',
+    'รอบ Sync: 04/11/69 08:04 น.',
+    'ปัญหา: ยังไม่ยืนยันข้อมูลบนเว็บหลังล็อกอิน',
+    'สิ่งที่ต้องดำเนินการต่อ: ตรวจสอบและแก้ไข Sync ของ Photos ให้ข้อมูลตรงกับ Master และหน้าเว็บ พร้อมยืนยันผลจริงตาม SOP โดยห้ามกระทบระบบอื่น'
+  ].join('\n\n');
+
+  assert.equal(pushBody.messages[0].text, expectedMsg);
 });

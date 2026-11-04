@@ -61,7 +61,7 @@ export function lineMessage(run,result,proof,verification){
   issue,
   action,
   result.status==='OVERDUE'||result.status==='UNVERIFIED'?'หมายเหตุ: ยังไม่ยืนยันว่า Sync ล้มเหลว':''
- ].filter(Boolean).join('\n');
+ ].filter(Boolean).join('\n\n');
 }
 export async function deliverOnce(opts={}){
  const {enabled=false,run,proof,sha256,quota,claim,push,ack,
