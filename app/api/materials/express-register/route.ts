@@ -9,6 +9,7 @@ export const dynamic='force-dynamic'
 const HEADERS={'cache-control':'private, no-store'}
 const respond=(data:unknown,status:number)=>NextResponse.json(data,{status,headers:HEADERS})
 const SELECT='document_group,document_no,document_date,supplier,plot_codes,qa_status,grand_total,source_file,has_verified_project_override,project_evidence_url'
+const PROCUREMENT_SELECT=SELECT+',search_text'
 
 /** Read-only, user-JWT/RLS-bound Express historical register; never a procurement write route. */
 export async function GET(request:NextRequest){
@@ -90,10 +91,10 @@ export async function GET(request:NextRequest){
    document_group:string;document_no:string;document_date:string|null;
    supplier:string|null;plot_codes:string[];qa_status:string;grand_total:number|null;
    source_file:string|null;has_verified_project_override?:boolean;
-   project_evidence_url?:string|null
+   project_evidence_url?:string|null;search_text?:string|null
   }>=[]
   for(let offset=0;offset<MAX_HEADERS;offset+=FETCH_CHUNK){
-   let headerQuery=client.from('express_register_effective_rows').select(SELECT)
+   let headerQuery=client.from('express_register_effective_rows').select(PROCUREMENT_SELECT)
     .eq('batch_id',latest.id).eq('line_seq',0)
    if(group)headerQuery=headerQuery.eq('document_group',group)
    if(plot)headerQuery=headerQuery.contains('plot_codes',[plot])
