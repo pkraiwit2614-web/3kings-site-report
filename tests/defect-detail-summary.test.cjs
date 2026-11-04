@@ -127,33 +127,43 @@ test('Flow deep link reaches rendered report table, Work Order missing popup is 
 })
 
 
+
 const displayRaw=fs.readFileSync(path.join(__dirname,'../lib/defectReportDisplay.ts'),'utf8')
 const displayJs=ts.transpileModule(displayRaw,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText
 const displayMod={exports:{}}
 new Function('module','exports',displayJs)(displayMod,displayMod.exports)
 const {siteOnlyWork,siteOnlyNextAction}=displayMod.exports
 
-test('report work removes document headers and preserves every numbered site defect',()=>{
- const raw='A404 • Doc ID 167 • PDF 28/10/2026 • Defect ใหม่ 2 รายการ; คงสถานะ Pending Handover\\n#01 [PFur] Bedroom 1 | Door not straight\\n#02 [MEP] Bathroom | Faucet leaking'
- assert.equal(siteOnlyWork(raw,'A404 • Doc ID 167'), '#01 [PFur] Bedroom 1 | Door not straight\n#02 [MEP] Bathroom | Faucet leaking')
+test('report preserves original work-details summary verbatim',()=>{
+ const summary='#01 [PFur] Kitchen | Door needs adjustment\n#02 [3 Kings] Bathroom | Drain damaged'
+ assert.equal(siteOnlyWork('PDF Doc.167; system update',summary),summary)
+ assert.equal(siteOnlyWork('[อัปเดต] เก็บสีผนัง','เก็บสีผนัง'),'เก็บสีผนัง')
 })
-test('work recorded in an update is shown without combine/status metadata',()=>{
- assert.equal(siteOnlyWork('[อัปเดต 21/10/2026] ได้รับแจ้ง Defect ใหม่ 21/10/2026: เก็บสีผนัง, สีฝ้า; รวมสถานะกับห้อง Combine A222; คงสถานะ Pending Handover','ไม่ระบุรายการงานที่ยืนยัน'),'เก็บสีผนัง, สีฝ้า')
+
+test('next action retains real new Defect counts, dates and practical follow-up',()=>{
+ const raw='รับแจ้ง Warranty Defect 12 จุด 02/11/2026; เปิด Work ID DF-A512-01 ถึง 12; ติดตามแก้ไข/After และนัดลูกค้าตรวจซ้ำ (ไม่เปลี่ยน Pending Handover)'
+ const shown=siteOnlyNextAction(raw)
+ assert.match(shown,/12 จุด 02\/11\/2026/)
+ assert.match(shown,/ติดตามแก้ไข\/After และนัดลูกค้าตรวจซ้ำ/)
+ assert.doesNotMatch(shown,/Work ID|DF-A512|Pending Handover/)
 })
-test('next action contains only actual tasks, never confirmations, IDs or source-system updates',()=>{
- assert.equal(siteOnlyNextAction('ผู้ใช้ยืนยันว่างานแก้ Defect ทุกรายการเสร็จแล้ววันที่ 04/11/2026; รอลูกค้าตรวจรับ; คงสถานะ Pending Handover (ไม่ได้ยืนยันส่งมอบลูกค้า)'), 'รอลูกค้าตรวจรับ')
- assert.equal(siteOnlyNextAction('รับแจ้ง Warranty Defect 12 จุด 02/11/2026; เปิด Work ID DF-A512-01 ถึง 12; ติดตามแก้ไข/After และนัดลูกค้าตรวจซ้ำ (ไม่เปลี่ยน Pending Handover)'), 'ติดตามแก้ไข/After และนัดลูกค้าตรวจซ้ำ')
- assert.equal(siteOnlyNextAction('เหลือกระจกแตก 1 รายการ; มีใบขอจ้าง PC00000 จากร้าน; รออนุมัติ/ยืนยันสั่งจ้าง (ยังไม่ยืนยัน PO หรือซ่อมเสร็จ)'), 'เหลือกระจกแตก 1 รายการ; รออนุมัติ/ยืนยันสั่งจ้าง')
- assert.equal(siteOnlyNextAction('ปิดงาน/พร้อมคืนพื้นที่ (เฉพาะสถานะ Defect ตามไฟล์ล่าสุด)'), '—')
- assert.equal(siteOnlyNextAction('Hotel Engineer ตรวจแล้วตามรายการโรงแรม; เก็บประวัติการตรวจรับ'), '—')
+
+test('next action hides Work ID, Doc identifiers and duplicate HOLD matching commentary',()=>{
+ const raw='รับ Defect ลูกค้าตรวจใหม่ Doc.135 วันที่ 03/11/2026 จำนวน 16 จุด; ติดตาม Work ID DF-A401-17 ถึง 32 (รายการ 12 HOLD รอเทียบงานเดิม); คง 7 งานเก่าที่ปิดแล้ว (01,08,09), งานค้าง Doc.69; รอเก็บ After/ลูกค้าตรวจส่งมอบ'
+ const shown=siteOnlyNextAction(raw)
+ assert.match(shown,/16 จุด/)
+ assert.match(shown,/รอเก็บ After\/ลูกค้าตรวจส่งมอบ/)
+ assert.doesNotMatch(shown,/Doc\.|Work ID|DF-A401|HOLD|รอเทียบงานเดิม|งานค้าง Doc/)
+ const a311='รับแจ้ง Defect ใหม่ 28/10/2026 จากรายงาน Inspection 26/10/2026 (Doc.265) รวม 9 จุด; 8 Work ID ใหม่ DF-A311-02 ถึง 09; จุดลามิเนต #2 ผูกตรวจเทียบกับ DF-A311-01 เดิม (HOLD ไม่เปิดงานซ้ำ); รอยืนยันสิทธิ์เข้าห้อง/ทีม/วันเข้าซ่อมและหลักฐานหลังแก้'
+ assert.equal(siteOnlyNextAction(a311),'รับแจ้ง Defect ใหม่ 28/10/2026 จากรายงาน Inspection 26/10/2026 รวม 9 จุด; รอยืนยันสิทธิ์เข้าห้อง/ทีม/วันเข้าซ่อมและหลักฐานหลังแก้')
 })
-test('report UI does not replace canonical data, Work Order links, search or room status',()=>{
- const source=fs.readFileSync(path.join(__dirname,'../app/defects/page.tsx'),'utf8')
- assert.match(source,/siteOnlyWork\(r\.defect_detail,summary\.work\)/)
- assert.match(source,/siteOnlyNextAction\(r\.next_action\)/)
- assert.match(source,/siteOnlyNextAction\(other\.next_action\)/)
- assert.match(source,/other\.defect_detail/)
- assert.match(source,/r\.next_action,other\.follow_up|r\.next_action,other\.defect_detail|displayRoomStatus\(other\)/)
- assert.match(source,/workOpenByRoom\.has\(r\.room_no\)/)
- assert.doesNotMatch(source,/\.update\(\{\s*next_action:/)
+
+test('remaining work uses canonical field only; Combine, status and work links still present',()=>{
+ const page=fs.readFileSync(path.join(__dirname,'../app/defects/page.tsx'),'utf8')
+ assert.match(page,/siteOnlyNextAction\(r\.next_action\)/)
+ assert.match(page,/siteOnlyNextAction\(other\.next_action\)/)
+ assert.match(page,/siteOnlyWork\(r\.defect_detail,summary\.work\)/)
+ assert.match(page,/workOpenByRoom\.has\(r\.room_no\)/)
+ assert.match(page,/displayRoomStatus\(r\)/)
+ assert.doesNotMatch(page,/\.update\(\{\s*next_action:/)
 })
