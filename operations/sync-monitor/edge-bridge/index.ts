@@ -27,9 +27,9 @@ const columns: Record<string,string> = {
   drive_sync_runs: "id,sync_type,source_file,status,created_at,rows_read,rows_written,message",
   daily_site_report_sync_audit: "id,created_at,source_file_id,source_revision,source_rows_read,rows_parsed,rows_inserted,rows_updated,rows_skipped,rows_verified,notes",
   express_register_runs: "id,created_at,completed_at,state,source_fingerprint,document_count",
-  condo_room_status: "id", materials: "id",
+  condo_room_status: "room_no", materials: "id",
   schedule_tasks: "id", drive_photo_index: "id",
-  daily_reports: "id", express_register_rows: "id"
+  daily_reports: "id", express_register_rows: "batch_id"
 };
 const rpcKeys: Record<string,string[]> = {
   line_sync_owner_get_pending: ["p_pipeline"],
