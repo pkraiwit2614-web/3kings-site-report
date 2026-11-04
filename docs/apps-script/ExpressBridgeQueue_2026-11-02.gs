@@ -222,10 +222,13 @@ function processExpressBridgeQueue20261102() {
     x.requests.getRange(rowNo, 14).setValue('SOURCE_MASTER_DB_AUTH_WEB_READBACK_REQUIRED');
     return { status: 'WAIT_QA', action: action, resultCode: code, requestId: requestId };
   } catch (err) {
+    const rawCode=String(err&&err.message||err).match(/^([A-Z][A-Z0-9_]{4,90})/);
+    const safeCode=rawCode?rawCode[1]:'UNCLASSIFIED_ERROR';
     x.requests.getRange(rowNo, 7).setValue('ERROR');
     x.requests.getRange(rowNo, 9).setValue(new Date().toISOString());
-    x.requests.getRange(rowNo, 12).setValue('REVIEW_GAS_EXECUTION_STACK_NO_AUTO_RETRY');
+    x.requests.getRange(rowNo, 12).setValue(
+      'REVIEW_GAS_EXECUTION_STACK_NO_AUTO_RETRY;CODE='+safeCode);
     console.error('EXPRESS_QUEUE_EXECUTION_FAILED', String(err));
-    return { status: 'ERROR', requestId: requestId };
+    return { status: 'ERROR', requestId: requestId, errorCode: safeCode };
   }
 }
