@@ -246,7 +246,7 @@ export default function ProcurementPage(){
           <thead style={{position:'sticky',top:0,zIndex:12,background:'var(--surface)'}}><tr><th>Site / Plot</th><th>PO / PR</th><th>ผู้ขาย / ผู้รับเหมา</th><th>รายการ</th><th>สถานะ PO / ชำระ</th><th style={{width:180,minWidth:180,maxWidth:180}}>ขั้นตอนปัจจุบัน</th><th>กำหนดส่ง / เข้าหน้างาน</th><th>รายละเอียด / สิ่งที่ต้องตาม</th><th>อัปเดตข้อมูล</th></tr></thead>
           <tbody>{filteredRows.map(x=>{const linkedProjects=procurementProjectsFor(x);return <tr key={x.id}>
             <td><b>{linkedProjects.map(p=>p.code).join(' / ')||'ไม่ระบุ Plot'}</b><small>{linkedProjects.map(p=>p.name).filter(Boolean).join(' / ')}</small></td>
-            <td><ProcurementEvidenceLinks prNo={x.pr_no} poNo={x.po_no} evidenceRows={evidenceRows}/></td>
+            <td><ProcurementEvidenceLinks prNo={x.pr_no} poNo={x.po_no} itemName={x.item_name} conditionNote={x.condition_note} evidenceRows={evidenceRows}/></td>
             <td>{x.vendor||'ยังไม่ระบุ'}</td>
             <td><b>{x.item_name}</b></td>
             <td>{x.po_no&&<small><b>สั่งแล้ว (มีเลขใบสั่ง)</b></small>}{x.payment_status||x.procurement_status||'-'}</td>
