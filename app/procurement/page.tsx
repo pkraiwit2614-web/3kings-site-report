@@ -7,6 +7,7 @@ import PageHeader from '@/components/PageHeader'
 import StatusBadge from '@/components/StatusBadge'
 import ReadableDetail from '@/components/ReadableDetail'
 import ProcurementEvidenceLinks from '@/components/ProcurementEvidenceLinks'
+import ExpressRegisterSection from '@/components/ExpressRegisterSection'
 import type {ProcurementEvidenceRow} from '@/lib/procurementEvidence'
 import { getSupabase } from '@/lib/supabase'
 import { createLiveLoader, requireSuccessfulReads } from '@/lib/liveLoader'
@@ -259,6 +260,9 @@ export default function ProcurementPage(){
         {!filteredRows.length&&<p className="muted" style={{padding:16}}>ไม่พบรายการตามคำค้นหรือ Filter ที่เลือก</p>}
       </div>
     </div>
+    {/* Reuse the existing read-only Express history reader with the procurement search. */}
+    <ExpressRegisterSection projectCode={projectById.get(siteFilter)?.code||''} query={needle}/>
+
     <p className="muted small" style={{marginTop:8}}>พิมพ์ชื่อวัสดุหรือเลข PO เพื่อดูรายการที่เกี่ยวข้องได้ทันที • ใช้ Filter Plot/หน้างานและ “เฉพาะติดค้าง / ต้องตาม” ร่วมกับการค้นหาได้ • ขั้นตอนปัจจุบันและรายละเอียดใช้สำหรับตามต่อกับจัดซื้อ บัญชี ร้านค้า หรือผู้รับเหมา</p>
   </AppShell>
 }
