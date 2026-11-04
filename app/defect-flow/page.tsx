@@ -215,19 +215,20 @@ function buildingCounts(rows:FlowRow[],building:'A'|'B'){
 
 function hotelStatusItems(data:ReturnType<typeof buildingCounts>,building:'A'|'B',customer:boolean):StatusItem[]{
   // The Hotel Flow must reuse the exact status boxes from the hotel branches of Flow รวม.
-  const roomList=(match:(r:FlowRow)=>boolean)=>data.roomList(customer?'มีลูกค้า':'ไม่มีลูกค้า','ร่วมโรงแรม',match)
+  const hotelCustomerRooms=(match:(r:FlowRow)=>boolean)=>data.roomList('มีลูกค้า','ร่วมโรงแรม',match)
+  const hotelNoCustomerRooms=(match:(r:FlowRow)=>boolean)=>data.roomList('ไม่มีลูกค้า','ร่วมโรงแรม',match)
   const hotelCustomer:StatusItem[]=[
     {label:'Hotel Checked',lines:['Hotel Engineer','ตรวจแล้ว'],count:data.customerHotelChecked,tone:'good',href:defectHref({filter:'hotel-customer-checked',building})},
     ...(data.customerHotelHandover>0?[{label:'Customer Accepted',lines:['ลูกค้าตรวจรับเรียบร้อยแล้ว'],count:data.customerHotelHandover,tone:'good' as Tone,href:defectHref({filter:'hotel-customer',building,q:'ลูกค้าตรวจรับเรียบร้อยแล้ว'})}]:[]),
-    ...(data.customerHotelRoomInspection>0?[{label:'Awaiting Room',lines:['ยังไม่ตรวจห้อง','ยังไม่มี Defect'],count:data.customerHotelRoomInspection,tone:'warn',roomNos:roomList(r=>r.status_group===GROUP.roomInspection) as Tone,href:defectHref({filter:'hotel-customer',building,q:'ยังไม่ตรวจห้อง'})}]:[]),
-    {label:'Awaiting Acceptance',lines:awaitingAcceptanceLines,count:data.customerHotelPending+data.customerHotelAwaiting,tone:'warn',roomNos:roomList(r=>r.status_group===GROUP.pending||r.status_group===GROUP.awaiting),href:defectHref({filter:'hotel-customer-awaiting-receive',building})},
-    {label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:data.customerHotelNew,tone:'danger',roomNos:roomList(isNewDefect),href:defectHref({filter:'hotel-customer-new',building})},
+    ...(data.customerHotelRoomInspection>0?[{label:'Awaiting Room',lines:['ยังไม่ตรวจห้อง','ยังไม่มี Defect'],count:data.customerHotelRoomInspection,tone:'warn',roomNos:hotelCustomerRooms(r=>r.status_group===GROUP.roomInspection) as Tone,href:defectHref({filter:'hotel-customer',building,q:'ยังไม่ตรวจห้อง'})}]:[]),
+    {label:'Awaiting Acceptance',lines:awaitingAcceptanceLines,count:data.customerHotelPending+data.customerHotelAwaiting,tone:'warn',roomNos:hotelCustomerRooms(r=>r.status_group===GROUP.pending||r.status_group===GROUP.awaiting),href:defectHref({filter:'hotel-customer-awaiting-receive',building})},
+    {label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:data.customerHotelNew,tone:'danger',roomNos:hotelCustomerRooms(isNewDefect),href:defectHref({filter:'hotel-customer-new',building})},
   ]
   const hotelNoCustomer:StatusItem[]=[
     {label:'Hotel Checked',lines:['Hotel Engineer','ตรวจแล้ว'],count:data.noHotelChecked,tone:'good',href:defectHref({filter:'hotel-nocustomer-checked',building})},
     ...(data.noHotelHandover>0?[{label:'Customer Accepted',lines:['ลูกค้าตรวจรับเรียบร้อยแล้ว'],count:data.noHotelHandover,tone:'good' as Tone,href:defectHref({filter:'hotel-nocustomer',building,q:'ลูกค้าตรวจรับเรียบร้อยแล้ว'})}]:[]),
-    {label:'Awaiting Acceptance',lines:awaitingAcceptanceLines,count:data.noHotelAwaiting+data.noHotelPending,tone:'warn',roomNos:roomList(r=>r.status_group===GROUP.awaiting||r.status_group===GROUP.pending),href:defectHref({filter:'hotel-nocustomer-awaiting-receive',building})},
-    {label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:data.noHotelNew,tone:'danger',roomNos:roomList(isNewDefect),href:defectHref({filter:'hotel-nocustomer-new',building})},
+    {label:'Awaiting Acceptance',lines:awaitingAcceptanceLines,count:data.noHotelAwaiting+data.noHotelPending,tone:'warn',roomNos:hotelNoCustomerRooms(r=>r.status_group===GROUP.awaiting||r.status_group===GROUP.pending),href:defectHref({filter:'hotel-nocustomer-awaiting-receive',building})},
+    {label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:data.noHotelNew,tone:'danger',roomNos:hotelNoCustomerRooms(isNewDefect),href:defectHref({filter:'hotel-nocustomer-new',building})},
   ]
   return customer?hotelCustomer:hotelNoCustomer
 }
