@@ -8,8 +8,12 @@ export const runtime='nodejs'
 export const dynamic='force-dynamic'
 const HEADERS={'cache-control':'private, no-store'}
 const respond=(data:unknown,status:number)=>NextResponse.json(data,{status,headers:HEADERS})
-const SELECT='document_group,document_no,document_date,supplier,plot_codes,qa_status,grand_total,source_file,has_verified_project_override,project_evidence_url'
-const PROCUREMENT_SELECT='document_group,document_no,document_date,supplier,plot_codes,qa_status,grand_total,source_file,has_verified_project_override,project_evidence_url,search_text'
+const SELECT='document_group,document_no,document_date,supplier,plot_codes,qa_status,grand_total,source_file,source_url,has_verified_project_override,project_evidence_url,search_text'
+const PROCUREMENT_SELECT=SELECT
+
+type ExpressHeader={document_group:string;document_no:string}
+type ExpressItem={document_group:string;document_no:string;line_seq:number;item_code:string|null;description:string|null;quantity:number|null;unit:string|null}
+type ExpressEvidence={document_type:string;document_no:string;drive_file_id:string;file_name:string;file_format:string;evidence_scope:string}
 
 /** Read-only, user-JWT/RLS-bound Express historical register; never a procurement write route. */
 export async function GET(request:NextRequest){
@@ -64,6 +68,46 @@ export async function GET(request:NextRequest){
    .eq('state','complete').order('completed_at',{ascending:false}).limit(1).maybeSingle()
   if(runError)return respond({error:'REGISTER_NOT_READY'},503)
   if(!latest)return respond({status:'no_import',documents:[],total:0,page,hasMore:false,latest:null},200)
+  // Read related line descriptions and signed-file evidence ONLY for the selected page.
+  // Keep original Express values/statuses and legacy Materials/Procurement tables read-only.
+  const hydrate=async(selected:ExpressHeader[])=>{
+   const itemsByDocument=new Map<string,ExpressItem[]>()
+   const evidenceByDocument=new Map<string,ExpressEvidence[]>()
+   const key=(group:string,no:string)=>group+'|'+no
+   for(const row of selected){
+    itemsByDocument.set(key(row.document_group,row.document_no),[])
+    evidenceByDocument.set(key(row.document_group,row.document_no),[])
+   }
+   // Bounded RLS reads; a missing detail is an error, not a false "no items" claim.
+   for(let index=0;index<selected.length;index+=8){
+    const selectedBatch=selected.slice(index,index+8)
+    const {data,error}=await client.from('express_register_effective_rows')
+     .select('document_group,document_no,line_seq,item_code,description,quantity,unit')
+     .eq('batch_id',latest.id).gt('line_seq',0)
+     .in('document_no',selectedBatch.map(row=>row.document_no))
+     .order('document_no').order('line_seq').range(0,999)
+    if(error||!data||data.length>=1000)
+     return {itemsByDocument,evidenceByDocument,error:'REGISTER_DETAILS_UNAVAILABLE'}
+    for(const item of data){
+     const list=itemsByDocument.get(key(item.document_group,item.document_no))
+     if(list)list.push(item)
+    }
+   }
+   if(selected.length){
+    // Evidence links have exact document identity and existing procurement RLS.
+    // Never infer that a quotation/PO belongs to a PC from the vendor name alone.
+    const {data,error}=await client.from('procurement_evidence_links')
+     .select('document_type,document_no,drive_file_id,file_name,file_format,evidence_scope')
+     .in('document_no',[...new Set(selected.map(row=>row.document_no))])
+    if(error||!data)return {itemsByDocument,evidenceByDocument,error:'REGISTER_EVIDENCE_UNAVAILABLE'}
+    for(const doc of data){
+     const group=/^(?:PO|PL)$/.test(doc.document_type)?'PO_PL':'PR_PC'
+     const list=evidenceByDocument.get(key(group,doc.document_no))
+     if(list&&doc.document_no.startsWith(doc.document_type))list.push(doc)
+    }
+   }
+   return {itemsByDocument,evidenceByDocument,error:null}
+  }
   // Security-invoker view resolves approved evidence mappings without changing raw Express batch rows.
   // If migration is absent, fail closed instead of silently displaying stale source mapping.
   if(!procurementView){
@@ -76,11 +120,16 @@ export async function GET(request:NextRequest){
      .order('document_no').range(page*limit,page*limit+limit-1)
     if(rowError)return respond({error:'REGISTER_READ_FAILED'},503)
     const total=count??0
+    const enriched=await hydrate(rows||[])
+    if(enriched.error)return respond({error:enriched.error},503)
     return respond({status:'read_only',latest:{
      completedAt:latest.completed_at,sourceFiles:latest.source_files,
      documentCount:latest.document_count,lineCount:latest.line_count,
      skippedCanceled:latest.canceled_count,reviewCount:latest.review_count},
-     documents:rows||[],page,pageSize:limit,total,hasMore:(page+1)*limit<total,
+     documents:(rows||[]).map(row=>({...row,
+      items:enriched.itemsByDocument.get(row.document_group+'|'+row.document_no)||[],
+      evidence:enriched.evidenceByDocument.get(row.document_group+'|'+row.document_no)||[]})),
+     page,pageSize:limit,total,hasMore:(page+1)*limit<total,
      note:'Express source-only QA register. PO is not received; PR is not ordered.'},200)
   }
 
@@ -91,7 +140,7 @@ export async function GET(request:NextRequest){
    document_group:string;document_no:string;document_date:string|null;
    supplier:string|null;plot_codes:string[];qa_status:string;grand_total:number|null;
    source_file:string|null;has_verified_project_override?:boolean;
-   project_evidence_url?:string|null;search_text?:string|null
+   project_evidence_url?:string|null;search_text?:string|null;source_url?:string|null
   }>=[]
   for(let offset=0;offset<MAX_HEADERS;offset+=FETCH_CHUNK){
    let headerQuery=client.from('express_register_effective_rows').select(PROCUREMENT_SELECT)
@@ -114,30 +163,15 @@ export async function GET(request:NextRequest){
   }).sort(compareExpressDocumentsNewestFirst)
   const total=matching.length
   const selected=matching.slice(page*limit,(page+1)*limit)
-  type Detail={document_group:string;document_no:string;line_seq:number;
-   item_code:string|null;description:string|null;quantity:number|null;unit:string|null}
-  const itemsByDocument=new Map<string,Detail[]>()
-  const key=(group:string,no:string)=>group+'|'+no
-  for(const row of selected)itemsByDocument.set(key(row.document_group,row.document_no),[])
-  // Cap lookup batches below the source-observed maximum, and fail closed if truncated.
-  for(let index=0;index<selected.length;index+=8){
-   const selectedBatch=selected.slice(index,index+8)
-   const {data,error}=await client.from('express_register_effective_rows')
-    .select('document_group,document_no,line_seq,item_code,description,quantity,unit')
-    .eq('batch_id',latest.id).gt('line_seq',0)
-    .in('document_no',selectedBatch.map(row=>row.document_no))
-    .order('document_no').order('line_seq').range(0,999)
-   if(error||!data||data.length>=1000)return respond({error:'REGISTER_DETAILS_UNAVAILABLE'},503)
-   for(const item of data){
-    const list=itemsByDocument.get(key(item.document_group,item.document_no))
-    if(list)list.push(item)
-   }
-  }
+  const enriched=await hydrate(selected)
+  if(enriched.error)return respond({error:enriched.error},503)
   return respond({status:'read_only',latest:{
    completedAt:latest.completed_at,sourceFiles:latest.source_files,
    documentCount:latest.document_count,lineCount:latest.line_count,
    skippedCanceled:latest.canceled_count,reviewCount:latest.review_count},
-   documents:selected.map(row=>({...row,items:itemsByDocument.get(key(row.document_group,row.document_no))||[]})),
+   documents:selected.map(row=>({...row,
+    items:enriched.itemsByDocument.get(row.document_group+'|'+row.document_no)||[],
+    evidence:enriched.evidenceByDocument.get(row.document_group+'|'+row.document_no)||[]})),
    page,pageSize:limit,total,hasMore:(page+1)*limit<total,
    note:'Express source-only QA register. Document type is derived from PO/PL/PR/PC prefix.'},200)
  }catch{return respond({error:'REGISTER_READ_FAILED'},503)}
