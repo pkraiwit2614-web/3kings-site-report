@@ -24,8 +24,8 @@ test('schedule 0/0 unchanged is explicitly no-change, not end-to-end success',as
  const run=m.fromDriveSyncRun(base);
  const status=o.classifyRun(run);
  assert.equal(status.status,'NO_CHANGE_UNVERIFIED');
- assert.match(o.lineMessage(run,status),/ไม่มีข้อมูลเปลี่ยน \(ยังไม่ยืนยันบนเว็บ\)/);
- assert.match(o.lineMessage(run,status),/ยืนยันหน้าเว็บ: ยังไม่มีหลักฐาน E2E ครบ/);
+ assert.match(o.lineMessage(run,status),/ไม่มีข้อมูลเปลี่ยน/);
+ assert.match(o.lineMessage(run,status),/ยังไม่ยืนยันข้อมูลบนเว็บหลังล็อกอิน/);
 });
 test('Daily parsed/import discrepancy is explicit failure, not successful import',async()=>{
  const [m,o]=await Promise.all([load('pipeline-metrics'),load('owner-alerts')]);
