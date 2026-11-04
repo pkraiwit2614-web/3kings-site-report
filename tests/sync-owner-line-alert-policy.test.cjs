@@ -66,9 +66,9 @@ test('If still unverified at next CONFIRMED due round, notify once on original k
  assert.equal(first.runStatus,'OVERDUE');
  assert.equal(second.status,'DEDUP_OR_PENDING');
  assert.equal(sent.length,1);assert.equal(sent[0].recipient,'owner');
- assert.match(sent[0].message,/เกินรอบ Sync ถัดไป/);
- assert.match(sent[0].message,/Run ID:/);
- assert.match(sent[0].message,/ให้ตรวจแก้: เปิด 3 Kings Web App/);
+ assert.match(sent[0].message,/ถึงรอบ Sync ถัดไป/);
+ assert.match(sent[0].message,/รอบ Sync:/);
+ assert.match(sent[0].message,/สิ่งที่ต้องดำเนินการต่อ:/);
  assert.match(sent[0].message,/ยังไม่พบ Web Readback หลังล็อกอิน/);
 });
 test('No verified schedule or no first inspection must not invent an overdue alert',async()=>{
