@@ -245,7 +245,7 @@ export default function ProcurementPage(){
     <ExpressRegisterSection projectCode={projectById.get(siteFilter)?.code||''} query={needle} procurementView/>
 
     <h2 id="procurement-main-register-title" style={{margin:'22px 0 10px',fontSize:20,fontWeight:800,lineHeight:1.3,color:'var(--navy)'}}>ทะเบียนรายการจัดซื้อ/จัดจ้างหลัก</h2>
-    <div className="panel" aria-labelledby="procurement-main-register-title" style={{padding:0,overflow:'hidden'}}>
+    <div className="panel" style={{padding:0,overflow:'hidden'}}>
       <div className="table-wrap" style={{maxHeight:'calc(100vh - 205px)',overflow:'auto'}}>
         <table style={{minWidth:1450}}>
           <thead style={{position:'sticky',top:0,zIndex:12,background:'var(--surface)'}}><tr><th>Site / Plot</th><th>PO / PR</th><th>ผู้ขาย / ผู้รับเหมา</th><th>รายการ</th><th>สถานะ PO / ชำระ</th><th style={{width:180,minWidth:180,maxWidth:180}}>ขั้นตอนปัจจุบัน</th><th>กำหนดส่ง / เข้าหน้างาน</th><th>รายละเอียด / สิ่งที่ต้องตาม</th><th>อัปเดตข้อมูล</th></tr></thead>
