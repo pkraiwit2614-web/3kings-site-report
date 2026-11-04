@@ -31,13 +31,16 @@ export async function GET(request:NextRequest){
   .select('role,active').eq('user_id',user.id).maybeSingle()
  if(profileError||!profile?.active)return respond({error:'FORBIDDEN'},403)
  const role=resolveAccessRole(profile.role,user.id)
+ // Procurement-only history uses the existing procurement VIEW grant.
+ const procurementView=request.nextUrl.searchParams.get('view')==='procurement'
  try{
   const matrix=await readPermissionSnapshot(client)
   const materials=role&&matrix.rows?.find(p=>p.role===role&&p.module==='materials')
   const procurement=role&&matrix.rows?.find(p=>p.role===role&&p.module==='procurement')
-  // Procurement history can include vendor rates: require BOTH existing view grants.
-  if(!materials||materials.level==='none'||!procurement||procurement.level==='none'||
-   !canAccessPath(role,'/materials',matrix)||!canAccessPath(role,'/procurement',matrix))
+  // Procurement view requires procurement permission. The unchanged Materials
+  // view retains both grants; JWT and database RLS still apply to both.
+  if(!procurement||procurement.level==='none'||!canAccessPath(role,'/procurement',matrix)||
+   (!procurementView&&(!materials||materials.level==='none'||!canAccessPath(role,'/materials',matrix))))
    return respond({error:'FORBIDDEN'},403)
  }catch{return respond({error:'PERMISSION_CHECK_UNAVAILABLE'},503)}
 
@@ -45,7 +48,6 @@ export async function GET(request:NextRequest){
  const pageText=params.get('page')||'0',group=params.get('group')||''
  const plot=params.get('plot')||'',q=(params.get('q')||'').trim()
  const view=params.get('view')||'',from=params.get('from')||'',to=params.get('to')||''
- const procurementView=view==='procurement'
  const validDate=(value:string)=>!value||(/^\d{4}-\d{2}-\d{2}$/.test(value)&&expressDateISO(value)===value)
  if((view!==''&&!procurementView)||!validDate(from)||!validDate(to)||
    (from&&to&&from>to)||(!procurementView&&(from||to))||
