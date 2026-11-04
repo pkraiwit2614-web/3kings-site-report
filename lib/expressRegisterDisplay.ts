@@ -35,3 +35,32 @@ export function expressDocumentType(documentNo:string):string {
   default: return 'ไม่ระบุประเภท'
  }
 }
+
+/**
+ * Work scope already indexed on the Express header. Show only the text before
+ * parsed item codes, removing supplier and plot tokens. Presentation only.
+ * If the header format differs, fail closed rather than guessing a work scope.
+ */
+export function expressHeaderWorkSummary(
+ searchText:string|null|undefined,
+ documentNo:string,
+ supplier:string|null|undefined,
+ plotCodes:readonly string[],
+ itemCodes:readonly (string|null)[]
+):string {
+ const indexed=(searchText||'').trim()
+ if(!indexed.startsWith(documentNo+' '))return ''
+ let scope=indexed.slice(documentNo.length).trim()
+ if(supplier){
+  if(!scope.startsWith(supplier))return ''
+  scope=scope.slice(supplier.length).trim()
+ }
+ const firstItemOffset=itemCodes.reduce((earliest,code)=>{
+  if(!code)return earliest
+  const pos=scope.indexOf(code)
+  return pos>=0?Math.min(earliest,pos):earliest
+ },scope.length)
+ scope=scope.slice(0,firstItemOffset)
+ for(const plot of plotCodes)if(plot)scope=scope.split(plot).join(' ')
+ return scope.replace(/\s+/g,' ').trim()
+}

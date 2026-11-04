@@ -127,6 +127,27 @@ test('Express documents expose scoped details and actual evidence without invent
  assert.doesNotMatch(ui,/VERIFIED_MASTER|MASTER_CONFIRMED/)
 })
 
+test('Express work scope renders from the verified header when a detail line is blank',()=>{
+ const {stripTypeScriptTypes}=require('node:module')
+ const vm=require('node:vm')
+ const source=read('lib/expressRegisterDisplay.ts')
+ const executable=stripTypeScriptTypes(source,{mode:'strip'}).replace(/\bexport function/g,'function')
+ const {expressHeaderWorkSummary}=vm.runInNewContext(executable+';({expressHeaderWorkSummary})')
+ const supplier='ทองทวีมุกดามาศอลูมินั่ม จำกัด /AP-0010'
+ const header='PC691103001 '+supplier+' งานแก้ไขบานประตูทางเข้าเป็นรอย Villa Plot 10 AV-P10 D5122-04 งานถอดประตู'
+ assert.equal(expressHeaderWorkSummary(header,'PC691103001',supplier,['AV-P10'],['D5122-04']),
+  'งานแก้ไขบานประตูทางเข้าเป็นรอย Villa Plot 10')
+ const other='PC680924001 ร้านเครื่องจักร เครื่องจักร ยกวัสดุหลังคา ร้านอาหาร D5122-01 '
+ assert.equal(expressHeaderWorkSummary(other,'PC680924001','ร้านเครื่องจักร',[],['D5122-01']),
+  'เครื่องจักร ยกวัสดุหลังคา ร้านอาหาร')
+ assert.equal(expressHeaderWorkSummary('unrelated text','PC691103001',supplier,['AV-P10'],['D5122-04']),'')
+ assert.equal(expressHeaderWorkSummary(header,'PC691103001','different supplier',['AV-P10'],['D5122-04']),'')
+ const ui=read('components/ExpressRegisterSection.tsx')
+ assert.match(ui,/expressHeaderWorkSummary\(row\.search_text/)
+ assert.match(ui,/row\.items\.slice\(0,2\)/)
+ assert.match(ui,/row\.items\.slice\(2\)/)
+})
+
 test('Master reconciliation is as-of, batch-fingerprint scoped and never a future-run blanket approval',()=>{
  const api=read('app/api/materials/express-register/route.ts')
  const ui=read('components/ExpressRegisterSection.tsx')
