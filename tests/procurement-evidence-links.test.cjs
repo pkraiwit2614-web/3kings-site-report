@@ -37,3 +37,18 @@ assert.doesNotMatch(migration,/grant (insert|update|delete|all) on public\.procu
 assert.doesNotMatch(migration,/insert into public\.procurement_evidence_links/i,
   'No private Drive file IDs in public SQL migration')
 console.log('Procurement evidence gate: PASS — exact match, auth-bound optional read, no write/status changes')
+
+
+// Link evidence without changing procurement data, permissions or existing sync.
+for (const source of [procurement,materials]) {
+  assert.match(source,/conditionNote=\{/)
+  assert.match(source,/itemName=\{/)
+}
+assert.match(ui,/procurementAttachedEvidence\(conditionNote\)/)
+assert.match(ui,/associatedProcurementPlNumbers\(itemName, conditionNote\)/)
+assert.match(ui,/documentLabels\[type\]/)
+assert.match(ui,/item\.evidence_scope === 'bundle'/)
+assert.match(logic,/drive\/folders\//)
+assert.match(logic,/แยกจาก\|ต่างจาก\|คนละ/)
+assert.doesNotMatch(ui,/\.from\(/)
+console.log('Procurement evidence scoped URL rendering: PASS')
