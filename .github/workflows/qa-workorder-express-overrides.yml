@@ -7,7 +7,7 @@ on:
       - 'tests/sql/workorder-express-overrides-isolated.sql'
       - 'tests/express-override-consumer.test.cjs'
       - 'tests/e2e/local-stack/supabase/seed.sql'
-      - 'supabase/migrations/20261104112700_express_pc_quotation_evidence.sql'
+      - 'supabase/migrations/20261104113213_express_pc_quotation_evidence.sql'
       - 'tests/sql/express-pc-quotation-evidence-isolated.sql'
       - 'app/api/materials/express-register/route.ts'
       - 'components/ExpressRegisterSection.tsx'
