@@ -17,11 +17,34 @@ const EB_MASTER_WRITE = Object.freeze({
  maxBytes:20000000,
  paths:['xl/worksheets/sheet12.xml','xl/worksheets/sheet13.xml'],
 });
+/**
+ * One-time, fail-closed recovery for the verified 19->21 Express source update.
+ * Restores ONLY the legacy register XML checkpoint when its previous
+ * production write completed but checkpoint recording did not.
+ * No Master/Supabase mutation here; never bypasses the existing writer gate.
+ */
+function EB_masterReconcileVerifiedCheckpoint20261104_(prop, current, srcHash, sources) {
+ const previousMasterSha='855e7e99e96a9734c44e221ccbaba0adcaa5c165b2b5b25ba356959439c209d5';
+ const previousSource='6747a66b88622e300f45251120fccd4073d0b30a3556aba41732292ec5f1f0fa';
+ const currentSource='9d196d0eeb7f461771b20c1800d14bad05f40ba3c0705e89323c936e3aa5ca15';
+ if(srcHash!==previousMasterSha || sources.length!==21 ||
+    EB_dbFingerprint_(sources)!==currentSource)
+   throw Error('MASTER_REGISTER_MANUAL_EDIT_OR_STATE_MISSING_HOLD');
+ const previousDB=expressQueueDBComplete20261102_(previousSource);
+ if(!previousDB || previousDB.document_count!==3768 || previousDB.line_count!==13288)
+   throw Error('EXPRESS_CHECKPOINT_PREVIOUS_DB_PROOF_MISSING_HOLD');
+ EB_qaVerifyFolderUnchanged_(sources);
+ prop.setProperty(EB_MASTER_WRITE.prop,current);
+ if(prop.getProperty(EB_MASTER_WRITE.prop)!==current)
+   throw Error('EXPRESS_CHECKPOINT_READBACK_FAILED_HOLD');
+ console.log('EXPRESS_MASTER_CHECKPOINT_VERIFIED_19_TO_21_SOURCE_RECONCILED');
+}
 function EB_masterMakePayload_(isWrite, prepareQA) {
  const file=DriveApp.getFileById(EB_MASTER_WRITE.original);
  if(file.getId()!==EB_MASTER_WRITE.original||file.getName()!==EB_MASTER_WRITE.expectedName||
     file.getMimeType()!=='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
    throw Error('MASTER_FILE_IDENTITY_HOLD');
+ const sourceRevision=String(file.getLastUpdated().getTime());
  const srcBlob=file.getBlob(),srcBytes=srcBlob.getBytes(),srcHash=EB_qaHash_(srcBytes);
  if(srcBytes.length>EB_MASTER_WRITE.maxBytes)throw Error('MASTER_SIZE_HOLD');
  const before=expressBridgeAppendQAParts_(srcBlob),p=before.map;
@@ -63,14 +86,17 @@ function EB_masterMakePayload_(isWrite, prepareQA) {
   const current=EB_MASTER_WRITE.paths.map(x=>EB_qaHashText_(p[x].getDataAsString('UTF-8'))).join('|');
   if(current===wanted)return {status:'NO_CHANGE',first:false,file:file,sources:sources,
    originalHash:srcHash,wanted:wanted,documents:map.documents,lines:map.lines,sourceReview:merged.counts.held,unassigned:merged.docs.filter(x=>!x.plot.length).length,skippedCanceled:merged.skippedCanceled};
-  if(prop.getProperty(EB_MASTER_WRITE.prop)!==current)throw Error('MASTER_REGISTER_MANUAL_EDIT_OR_STATE_MISSING_HOLD');
+  if(prop.getProperty(EB_MASTER_WRITE.prop)!==current) {
+   if(!isWrite)throw Error('MASTER_REGISTER_MANUAL_EDIT_OR_STATE_MISSING_HOLD');
+   EB_masterReconcileVerifiedCheckpoint20261104_(prop,current,srcHash,sources);
+  }
   const patch=new Map(EB_MASTER_WRITE.paths.map((s,i)=>[s,xml[i]]));
   zip=Utilities.zip(before.list.map(part=>patch.has(part.getName())?
     Utilities.newBlob(patch.get(part.getName()),'text/xml',part.getName()):part),'Express_Master_Register_Update.xlsx');
   EB_qaOnlyTwoWorksheetsChanged_(before,expressBridgeAppendQAParts_(zip));
  }
  if(zip.getBytes().length>EB_MASTER_WRITE.maxBytes)throw Error('MASTER_PATCH_SIZE_HOLD');
- return {status:'DELTA_READY',first:first,file:file,sourceBlob:srcBlob,originalHash:srcHash,
+ return {status:'DELTA_READY',first:first,file:file,sourceBlob:srcBlob,originalHash:srcHash,sourceRevision:sourceRevision,
   candidate:zip,sources:sources,wanted:wanted,xml:xml,documents:map.documents,lines:map.lines,
   sourceReview:merged.counts.held,unassigned:merged.docs.filter(x=>!x.plot.length).length,skippedCanceled:merged.skippedCanceled};
 }
@@ -152,9 +178,8 @@ function expressBridgeMasterImportOnce20261022(){
    if(EB_qaHash_(backup.getBlob().getBytes())!==state.originalHash)throw Error('MASTER_BACKUP_READBACK_HOLD');
    backupId=backup.getId();
   }
-  const r=UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files/'+encodeURIComponent(EB_MASTER_WRITE.original)+'?uploadType=media&fields=id',{
-   method:'patch',contentType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-   headers:{Authorization:'Bearer '+ScriptApp.getOAuthToken()},payload:state.candidate.getBytes(),muteHttpExceptions:true});
+  const r=gwOwnedDrivePatch_('MATERIALS_PROCUREMENT',EB_MASTER_WRITE.original,state.sourceRevision,state.candidate.getBytes(),
+   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','GAS_EXPRESS_MASTER');
   if(r.getResponseCode()<200||r.getResponseCode()>299)throw Error('MASTER_DRIVE_WRITE_HTTP_'+r.getResponseCode());
   const result=JSON.parse(r.getContentText());if(result.id!==EB_MASTER_WRITE.original)throw Error('MASTER_ID_CHANGED');
   // Roll back a failed post-write readback only when no intervening human edit occurred.
@@ -171,12 +196,11 @@ function expressBridgeMasterImportOnce20261022(){
    });
    EB_qaVerifyFolderUnchanged_(state.sources);
   }catch(readbackError){
-   const live=DriveApp.getFileById(EB_MASTER_WRITE.original),liveSha=EB_qaHash_(live.getBlob().getBytes());
+   const live=DriveApp.getFileById(EB_MASTER_WRITE.original),rollbackRevision=String(live.getLastUpdated().getTime()),liveSha=EB_qaHash_(live.getBlob().getBytes());
    const candidateSha=EB_qaHash_(state.candidate.getBytes());
    if(liveSha!==candidateSha)throw Error('MASTER_READBACK_FAILED_INTERVENING_EDIT_DO_NOT_ROLLBACK: '+readbackError);
-   const rollback=UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files/'+encodeURIComponent(EB_MASTER_WRITE.original)+'?uploadType=media&fields=id',{
-    method:'patch',contentType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    headers:{Authorization:'Bearer '+ScriptApp.getOAuthToken()},payload:state.sourceBlob.getBytes(),muteHttpExceptions:true});
+   const rollback=gwOwnedDrivePatch_('MATERIALS_PROCUREMENT',EB_MASTER_WRITE.original,rollbackRevision,state.sourceBlob.getBytes(),
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','GAS_EXPRESS_ROLLBACK');
    if(rollback.getResponseCode()<200||rollback.getResponseCode()>299||
       EB_qaHash_(DriveApp.getFileById(EB_MASTER_WRITE.original).getBlob().getBytes())!==state.originalHash)
       throw Error('MASTER_READBACK_FAILED_ROLLBACK_FAILED_OWNER_ACTION_REQUIRED');
