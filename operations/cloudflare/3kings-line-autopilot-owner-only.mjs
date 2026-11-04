@@ -635,6 +635,40 @@ export async function eveningOwnerCommandsTick(env,{db,hash,transport=fetch,now=
     delivered:accepted,http};
 }
 
+/**
+ * Monitor-only authenticated Supabase bridge. The existing
+ * SUPABASE_SERVER_KEY binding is an sb_publishable key, confirmed by
+ * real edge request logs (HTTP 401 on protected Sync reads). Do NOT
+ * replace the binding: other Daily/AutoPilot routes still own it.
+ * This proxy is only used by syncOwnerMonitorTick; it does not intercept
+ * legacy Daily requests or LINE API calls.
+ */
+function syncOwnerBridgeTransport(env,downstream=fetch){
+  const token=env.SYNC_OWNER_BRIDGE_TOKEN;
+  if(!token)return downstream;
+  const origin=String(env.SUPABASE_URL||'').replace(/\/$/,'');
+  return (target,options={})=>{
+    if(typeof target!=='string'||!target.startsWith(origin+'/rest/v1/'))
+      return downstream(target,options);
+    const parsed=new URL(target);
+    if(parsed.origin!==new URL(origin).origin)
+      throw Error('SYNC_OWNER_BRIDGE_ORIGIN_BLOCKED');
+    let args;
+    try{args=options.body===undefined?undefined:JSON.parse(options.body);}
+    catch{throw Error('SYNC_OWNER_BRIDGE_JSON_BLOCKED');}
+    const method=options.method||'GET';
+    if(!['GET','POST'].includes(method))
+      throw Error('SYNC_OWNER_BRIDGE_METHOD_BLOCKED');
+    return downstream(origin+'/functions/v1/kings_sync_owner_bridge',{
+      method:'POST',
+      headers:{'x-3kings-owner-sync-key':token,
+        'content-type':'application/json'},
+      body:JSON.stringify({method,path:parsed.pathname+parsed.search,args}),
+      signal:options.signal
+    });
+  };
+}
+
 async function syncOwnerDb(env,rpcName,args,transport=fetch){
   if(env.SUPABASE_SERVER_KEY){
     const r=await transport(env.SUPABASE_URL.replace(/\/$/,'')+'/rest/v1/rpc/'+rpcName,{
@@ -1040,6 +1074,8 @@ export async function syncOwnerMonitorTick(env,{hash,transport=fetch,now=new Dat
      (!env.SUPABASE_SERVER_KEY&&!env.DAILY_LINE_BRIDGE_TOKEN))
     return {...base,mode:'SYNC_MONITOR_NOT_CONFIGURED'};
   if(typeof hash!=='function')throw Error('SYNC_MONITOR_HASH_REQUIRED');
+  // Wrap only this independent monitor invocation with the private bridge.
+  transport=syncOwnerBridgeTransport(env,transport);
 
   // Quiet scheduled checks must not invoke LINE quota or claim.
   // Quota is inspected only immediately before a permitted owner push.
@@ -1137,7 +1173,8 @@ export default {
         ledger:'line_autopilot.sync_owner_deliveries',
         pendingLedger:'line_autopilot.sync_owner_pending_incidents',
         status:'READ_ONLY_OBSERVER_WITH_PENDING',
-        activatedAtConfigured:syncOwnerAuditDate(env.SYNC_OWNER_MONITOR_ACTIVATED_AT)!==null
+        activatedAtConfigured:syncOwnerAuditDate(env.SYNC_OWNER_MONITOR_ACTIVATED_AT)!==null,
+        bridgeConfigured:Boolean(env.SYNC_OWNER_BRIDGE_TOKEN)
       });
     }
     if(url.pathname==='/sync-owner/tick' && request.method==='POST'){
