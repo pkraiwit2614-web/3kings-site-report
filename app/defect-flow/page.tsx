@@ -20,10 +20,11 @@ type FlowRow={
   current_status:string|null
   status_group:string|null
   synced_at:string|null
+  display_room?:string // Presentation-only label for Combine pairs; never written to Supabase.
 }
 
 type Tone='good'|'warn'|'danger'|'neutral'
-type StatusItem={label:string;lines:string[];count:number;tone:Tone;href?:string}
+type StatusItem={label:string;lines:string[];count:number;tone:Tone;href?:string;roomNos?:string[]}
 const awaitingAcceptanceLines=DEFECT_AWAITING_ACCEPTANCE_LABEL.replace(' • ',' •\n').split('\n')
 
 const GROUP={
@@ -101,18 +102,41 @@ function withCombineHref(href:string|undefined,combineMode:boolean){
   return path+(path.includes('?')?'&':'?')+'combine=1#report-results'
 }
 
+// Keep the existing 58px card and SVG font. Only yellow/red cards get a
+// compact room strip; the exact, unabridged names remain in the SVG title.
+function roomPreview(rooms:string[],width:number){
+  if(!rooms.length)return '— ไม่มี —'
+  const limit=Math.max(18,Math.floor((width-64)/8.2))
+  let shown:string[]=[]
+  for(const room of rooms){
+    const next=[...shown,room]
+    const rest=rooms.length-next.length
+    const candidate='ห้อง: '+next.join(', ')+(rest?' • +'+rest+' ห้อง':'')
+    if(candidate.length>limit&&shown.length>0)break
+    shown=next
+  }
+  const rest=rooms.length-shown.length
+  return 'ห้อง: '+shown.join(', ')+(rest?' • +'+rest+' ห้อง':'')
+}
+
 function SvgStatusCard({x,y,w,item}:{x:number;y:number;w:number;item:StatusItem}){
   const c=toneColor(item.tone)
+  const showRooms=(item.tone==='warn'||item.tone==='danger')&&item.roomNos!==undefined
   const card=<g>
+    {showRooms&&<title>{'เลขห้องทั้งหมด ('+item.roomNos!.length+'): '+(item.roomNos!.join(', ')||'ไม่มี')}</title>}
     <rect x={x} y={y} width={w} height={58} rx={12} fill={c.soft} stroke={c.main} strokeWidth={2}/>
     <rect x={x} y={y} width={8} height={58} rx={8} fill={c.main}/>
     <text x={x+18} y={y+19} fontSize={13} fontWeight={800} fill={COLORS.text}>
       {item.lines.map((line,i)=><tspan key={line+i} x={x+18} dy={i===0?0:15}>{line}</tspan>)}
     </text>
-    <text x={x+w-18} y={y+34} textAnchor="end" fontSize={24} fontWeight={900} fill={c.main}>{item.count}</text>
-    <text x={x+w-18} y={y+48} textAnchor="end" fontSize={10} fontWeight={700} fill={COLORS.muted}>ห้อง</text>
+    <text x={x+w-18} y={y+(showRooms?26:34)} textAnchor="end" fontSize={24} fontWeight={900} fill={c.main}>{item.count}</text>
+    <text x={x+w-18} y={y+(showRooms?35:48)} textAnchor="end" fontSize={10} fontWeight={700} fill={COLORS.muted}>ห้อง</text>
+    {showRooms&&<g>
+      <rect x={x+14} y={y+37} width={w-28} height={18} rx={8} fill="#ffffff" fillOpacity={0.9} stroke={c.main} strokeOpacity={0.35} strokeWidth={1}/>
+      <text x={x+23} y={y+50} fontSize={10.5} fontWeight={800} fill={COLORS.text}>{roomPreview(item.roomNos!,w)}</text>
+    </g>}
   </g>
-  return item.href?<a href={item.href} className="flow-link" aria-label={`เปิดรายละเอียด ${item.lines.join(' ')} ${item.count} ห้อง`}>{card}</a>:card
+  return item.href?<a href={item.href} className="flow-link" aria-label={'เปิดรายละเอียด '+item.lines.join(' ')+' '+item.count+' ห้อง'+(showRooms?' เลขห้อง: '+item.roomNos!.join(', '):'')}>{card}</a>:card
 }
 
 function SvgBranchCard({x,y,w=230,label,count,kind,href}:{x:number;y:number;w?:number;label:string;count:number;kind:'hotel'|'nonhotel';href?:string}){
@@ -154,7 +178,10 @@ function buildingCounts(rows:FlowRow[],building:'A'|'B'){
   const noHotel=by('ไม่มีลูกค้า','ร่วมโรงแรม')
   const noNon=by('ไม่มีลูกค้า','ไม่ร่วมโรงแรม')
   const newCount=(customer:string,hotel:string)=>by(customer,hotel).filter(isNewDefect).length
+  // Derive the labels from the exact same normalized rows used by the counters.
+  const roomList=(customer:string,hotel:string,match:(r:FlowRow)=>boolean)=>by(customer,hotel).filter(match).map(r=>r.display_room||r.room_no).sort((a,b)=>a.localeCompare(b,'en',{numeric:true}))
   return {
+    roomList,
     total:list.length,
     customer:customerHotel.length+customerNon.length,
     noCustomer:noHotel.length+noNon.length,
@@ -188,18 +215,19 @@ function buildingCounts(rows:FlowRow[],building:'A'|'B'){
 
 function hotelStatusItems(data:ReturnType<typeof buildingCounts>,building:'A'|'B',customer:boolean):StatusItem[]{
   // The Hotel Flow must reuse the exact status boxes from the hotel branches of Flow รวม.
+  const roomList=(match:(r:FlowRow)=>boolean)=>data.roomList(customer?'มีลูกค้า':'ไม่มีลูกค้า','ร่วมโรงแรม',match)
   const hotelCustomer:StatusItem[]=[
     {label:'Hotel Checked',lines:['Hotel Engineer','ตรวจแล้ว'],count:data.customerHotelChecked,tone:'good',href:defectHref({filter:'hotel-customer-checked',building})},
     ...(data.customerHotelHandover>0?[{label:'Customer Accepted',lines:['ลูกค้าตรวจรับเรียบร้อยแล้ว'],count:data.customerHotelHandover,tone:'good' as Tone,href:defectHref({filter:'hotel-customer',building,q:'ลูกค้าตรวจรับเรียบร้อยแล้ว'})}]:[]),
-    ...(data.customerHotelRoomInspection>0?[{label:'Awaiting Room',lines:['ยังไม่ตรวจห้อง','ยังไม่มี Defect'],count:data.customerHotelRoomInspection,tone:'warn' as Tone,href:defectHref({filter:'hotel-customer',building,q:'ยังไม่ตรวจห้อง'})}]:[]),
-    {label:'Awaiting Acceptance',lines:awaitingAcceptanceLines,count:data.customerHotelPending+data.customerHotelAwaiting,tone:'warn',href:defectHref({filter:'hotel-customer-awaiting-receive',building})},
-    {label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:data.customerHotelNew,tone:'danger',href:defectHref({filter:'hotel-customer-new',building})},
+    ...(data.customerHotelRoomInspection>0?[{label:'Awaiting Room',lines:['ยังไม่ตรวจห้อง','ยังไม่มี Defect'],count:data.customerHotelRoomInspection,tone:'warn',roomNos:roomList(r=>r.status_group===GROUP.roomInspection) as Tone,href:defectHref({filter:'hotel-customer',building,q:'ยังไม่ตรวจห้อง'})}]:[]),
+    {label:'Awaiting Acceptance',lines:awaitingAcceptanceLines,count:data.customerHotelPending+data.customerHotelAwaiting,tone:'warn',roomNos:roomList(r=>r.status_group===GROUP.pending||r.status_group===GROUP.awaiting),href:defectHref({filter:'hotel-customer-awaiting-receive',building})},
+    {label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:data.customerHotelNew,tone:'danger',roomNos:roomList(isNewDefect),href:defectHref({filter:'hotel-customer-new',building})},
   ]
   const hotelNoCustomer:StatusItem[]=[
     {label:'Hotel Checked',lines:['Hotel Engineer','ตรวจแล้ว'],count:data.noHotelChecked,tone:'good',href:defectHref({filter:'hotel-nocustomer-checked',building})},
     ...(data.noHotelHandover>0?[{label:'Customer Accepted',lines:['ลูกค้าตรวจรับเรียบร้อยแล้ว'],count:data.noHotelHandover,tone:'good' as Tone,href:defectHref({filter:'hotel-nocustomer',building,q:'ลูกค้าตรวจรับเรียบร้อยแล้ว'})}]:[]),
-    {label:'Awaiting Acceptance',lines:awaitingAcceptanceLines,count:data.noHotelAwaiting+data.noHotelPending,tone:'warn',href:defectHref({filter:'hotel-nocustomer-awaiting-receive',building})},
-    {label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:data.noHotelNew,tone:'danger',href:defectHref({filter:'hotel-nocustomer-new',building})},
+    {label:'Awaiting Acceptance',lines:awaitingAcceptanceLines,count:data.noHotelAwaiting+data.noHotelPending,tone:'warn',roomNos:roomList(r=>r.status_group===GROUP.awaiting||r.status_group===GROUP.pending),href:defectHref({filter:'hotel-nocustomer-awaiting-receive',building})},
+    {label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:data.noHotelNew,tone:'danger',roomNos:roomList(isNewDefect),href:defectHref({filter:'hotel-nocustomer-new',building})},
   ]
   return customer?hotelCustomer:hotelNoCustomer
 }
@@ -216,12 +244,12 @@ function BuildingFlow({top,building,data,combineMode=false}:{top:number;building
   const hotelNoCustomer=hotelStatusItems(data,building,false).map(item=>({...item,href:link(item.href)}))
   const nonHotelCustomer:StatusItem[]=[
     {label:'Customer Accepted',lines:['ลูกค้าตรวจรับเรียบร้อยแล้ว'],count:data.customerNonHandover,tone:'good',href:link(defectHref({filter:'nonhotel-customer-complete',building}))},
-    {label:'Awaiting Acceptance',lines:awaitingAcceptanceLines,count:data.customerNonPending+data.customerNonChecked,tone:'warn',href:link(defectHref({filter:'nonhotel-customer-awaiting-receive',building}))},
-    ...(data.customerNonNew>0?[{label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:data.customerNonNew,tone:'danger' as Tone,href:link(defectHref({filter:'nonhotel-customer-new',building}))}]:[]),
+    {label:'Awaiting Acceptance',lines:awaitingAcceptanceLines,count:data.customerNonPending+data.customerNonChecked,tone:'warn',roomNos:data.roomList('มีลูกค้า','ไม่ร่วมโรงแรม',r=>r.status_group===GROUP.pending||r.status_group===GROUP.checked),href:link(defectHref({filter:'nonhotel-customer-awaiting-receive',building}))},
+    ...(data.customerNonNew>0?[{label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:data.customerNonNew,tone:'danger',roomNos:data.roomList('มีลูกค้า','ไม่ร่วมโรงแรม',isNewDefect) as Tone,href:link(defectHref({filter:'nonhotel-customer-new',building}))}]:[]),
   ]
   const nonHotelNoCustomer:StatusItem[]=[
     ...(data.noNonAwaitingSale>0?[{label:'Awaiting Sale',lines:['Awaiting Sale','ยังไม่มีลูกค้า'],count:data.noNonAwaitingSale,tone:'neutral' as Tone,href:link(defectHref({filter:'nonhotel-nosale',building}))}]:[]),
-    ...(data.noNonNew>0?[{label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:data.noNonNew,tone:'danger' as Tone,href:link(defectHref({filter:'nonhotel-nocustomer-new',building}))}]:[]),
+    ...(data.noNonNew>0?[{label:'New Defect',lines:['เพิ่งได้รับแจ้ง defect','และกำลังดำเนินการ'],count:data.noNonNew,tone:'danger',roomNos:data.roomList('ไม่มีลูกค้า','ไม่ร่วมโรงแรม',isNewDefect) as Tone,href:link(defectHref({filter:'nonhotel-nocustomer-new',building}))}]:[]),
     ...(!data.noNonAwaitingSale&&!data.noNonIncomplete?[{label:'Clear',lines:['ไม่มีห้องคงค้าง'],count:0,tone:'good' as Tone}]:[]),
   ]
   return <g>
@@ -402,6 +430,7 @@ export default function DefectFlowPage(){
     const statusConflict=members.some(r=>r.status_group!==first.status_group)
     const customerConflict=members.some(r=>r.customer_status!==first.customer_status)
     return {...first,
+      display_room:members.map(r=>r.room_no).sort((a,b)=>a.localeCompare(b,'en',{numeric:true})).join('/'),
       status_group:statusConflict?null:first.status_group,
       customer_status:customerConflict?'รอตรวจสอบ':first.customer_status,
     }
