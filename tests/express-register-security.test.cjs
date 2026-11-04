@@ -151,7 +151,7 @@ test('Express work scope renders from the verified header when a detail line is 
 test('PC quotation evidence is exact-linked, RLS-isolated, and never an approved PL',()=>{
  const api=read('app/api/materials/express-register/route.ts')
  const ui=read('components/ExpressRegisterSection.tsx')
- const sql=read('supabase/migrations/20261104112700_express_pc_quotation_evidence.sql')
+ const sql=read('supabase/migrations/20261104113213_express_pc_quotation_evidence.sql')
  assert.match(api,/\.from\('express_quotation_evidence'\)/)
  assert.match(api,/\.in\('document_no',pcNumbers\)/)
  assert.match(api,/document_type:'QT'/)
