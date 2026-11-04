@@ -18,7 +18,8 @@ test('live authenticated Express registry consumes only evidence-gated view',()=
 test('existing Materials registry displays approved project evidence only',()=>{
  const ui=read('components/ExpressRegisterSection.tsx')
  assert.match(ui,/VERIFIED_PROJECT_OVERRIDE:'ยืนยันโครงการจากเอกสารต้นฉบับ'/)
- assert.match(ui,/row\.has_verified_project_override&&row\.project_evidence_url\?\.startsWith/)
+ assert.match(ui,/row\.has_verified_project_override&&confirmedDriveSource\(row\.project_evidence_url\)/)
+ assert.match(ui,/function confirmedDriveSource\(/)
  assert.match(ui,/rel="noopener noreferrer"/)
  assert.match(ui,/ยังไม่ระบุ/)
 })
