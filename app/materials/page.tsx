@@ -318,7 +318,9 @@ export default function MaterialsPage(){
     </section>
 
     <ExpressPoSection projectCode={projectById.get(project)?.code||''} query={needle}/>
-    <ExpressRegisterSection projectCode={projectById.get(project)?.code||''} query={needle} procurementView/>
+    <div className={styles.expressFontMatch}>
+      <ExpressRegisterSection projectCode={projectById.get(project)?.code||''} query={needle} procurementView/>
+    </div>
 
     {(needle||project)&&<section aria-labelledby="material-procurement-title" style={{marginTop:24}}>
       <div style={{display:'flex',justifyContent:'space-between',gap:12,alignItems:'end',flexWrap:'wrap',marginBottom:10}}>
