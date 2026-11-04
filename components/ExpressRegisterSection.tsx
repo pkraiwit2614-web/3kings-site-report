@@ -8,7 +8,7 @@ type DocumentRow={
  document_group:'PO_PL'|'PR_PC';document_no:string;document_date:string|null;
  supplier:string|null;plot_codes:string[];qa_status:string;grand_total:number|null;
  has_verified_project_override?:boolean;project_evidence_url?:string|null;
- source_file:string|null;items?:ExpressItem[]
+ source_file:string|null;search_text?:string|null;items?:ExpressItem[]
 }
 type RegistryData={
  status:'read_only'|'no_import';documents:DocumentRow[];
@@ -116,7 +116,7 @@ export default function ExpressRegisterSection({projectCode='',query='',procurem
          {row.items.length>2&&<details><summary className="small">ดูอีก {row.items.length-2} รายการ</summary>
           {row.items.slice(2).map((item,index)=><div key={item.line_seq}>{index+3}. {lineSummary(item)}</div>)}
          </details>}
-        </div>:<small className="muted">ไม่พบรายละเอียดในต้นฉบับ</small>}
+        </div>:<small className="muted">{(row.search_text||'').replace(row.document_no,'').replace(row.supplier||'','').trim()||'ต้นฉบับไม่ระบุรายละเอียดงาน'}</small>}
        </td>}
        <td>{row.supplier||'-'}</td>
        <td>{row.plot_codes?.join(', ')||'ยังไม่ระบุ'}</td>
