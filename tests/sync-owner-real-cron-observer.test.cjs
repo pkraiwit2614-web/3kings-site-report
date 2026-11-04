@@ -305,3 +305,17 @@ test('monitor private Edge bridge intercepts ONLY protected Supabase reads and R
  assert.ok(calls.some(x=>x.path.startsWith('/rest/v1/drive_sync_runs?')));
  assert.ok(calls.some(x=>x.path==='/rest/v1/rpc/line_sync_owner_record_pending'));
 });
+
+test('real Materials GAS unchanged marker is silent (no false Pending)',async()=>{
+ const materials={...unchanged,
+   sync_type:'materials',
+   source_file:'ABOVE_MATERIALS_STATUS_Stock_Updated_2026-09-20.xlsx'};
+ const f=fixture([materials]);
+ const out=await tick(f,'2026-11-03T13:20:00Z',{
+   ...env,SYNC_OWNER_ENABLED_PIPELINES:'materials'
+ });
+ assert.equal(out.noChange,1);
+ assert.equal(out.pendingRecorded,0);
+ assert.equal(f.incidents.length,0);
+ assert.equal(f.send.length,0);
+});
