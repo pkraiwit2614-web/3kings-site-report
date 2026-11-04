@@ -261,7 +261,7 @@ export default function ProcurementPage(){
       </div>
     </div>
     {/* Reuse the existing read-only Express history reader with the procurement search. */}
-    <ExpressRegisterSection projectCode={projectById.get(siteFilter)?.code||''} query={needle}/>
+    <ExpressRegisterSection projectCode={projectById.get(siteFilter)?.code||''} query={needle} procurementView/>
 
     <p className="muted small" style={{marginTop:8}}>พิมพ์ชื่อวัสดุหรือเลข PO เพื่อดูรายการที่เกี่ยวข้องได้ทันที • ใช้ Filter Plot/หน้างานและ “เฉพาะติดค้าง / ต้องตาม” ร่วมกับการค้นหาได้ • ขั้นตอนปัจจุบันและรายละเอียดใช้สำหรับตามต่อกับจัดซื้อ บัญชี ร้านค้า หรือผู้รับเหมา</p>
   </AppShell>
