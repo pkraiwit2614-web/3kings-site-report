@@ -37,3 +37,45 @@ assert.doesNotMatch(migration,/grant (insert|update|delete|all) on public\.procu
 assert.doesNotMatch(migration,/insert into public\.procurement_evidence_links/i,
   'No private Drive file IDs in public SQL migration')
 console.log('Procurement evidence gate: PASS — exact match, auth-bound optional read, no write/status changes')
+
+
+// Link evidence without changing procurement data, permissions or existing sync.
+for (const source of [procurement,materials]) {
+  assert.match(source,/conditionNote=\{/)
+  assert.match(source,/itemName=\{/)
+}
+assert.match(ui,/procurementAttachedEvidence\(conditionNote\)/)
+assert.match(ui,/associatedProcurementPlNumbers\(itemName, conditionNote\)/)
+assert.match(ui,/documentLabels\[type\]/)
+assert.match(ui,/item\.evidence_scope === 'bundle'/)
+assert.match(logic,/drive\/folders\//)
+assert.match(logic,/แยกจาก\|ต่างจาก\|คนละ/)
+assert.doesNotMatch(ui,/\.from\(/)
+console.log('Procurement evidence scoped URL rendering: PASS')
+
+
+// Synthetic runtime cases validate URL allowlisting and avoid linking another
+// contractor's PL from a comparison note. No live Drive IDs are committed.
+const vm=require('node:vm')
+const ts=require('typescript')
+const transpiled=ts.transpileModule(logic,{compilerOptions:{
+  target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS,
+}}).outputText
+const helperModule={exports:{}}
+vm.runInNewContext(transpiled,{exports:helperModule.exports,module:helperModule,Set,encodeURIComponent})
+const parsed=helperModule.exports
+const sampleId='AbCdEf01234567'
+const note='PC signed https://drive.google.com/file/d/'+sampleId+'/view • '+
+  'Express PL https://drive.google.com/file/d/'+sampleId+'/view • '+
+  'แฟ้มงาน https://drive.google.com/drive/folders/QwErTy12345678'
+const attachments=parsed.procurementAttachedEvidence(note)
+assert.equal(attachments.length,2,'Repeated evidence URL must not duplicate')
+assert.equal(attachments[0].url,'https://drive.google.com/file/d/'+sampleId+'/view')
+assert.equal(attachments[1].label,'โฟลเดอร์หลักฐาน')
+assert.equal(parsed.procurementAttachedEvidence('https://evil.example/file/d/'+sampleId+'/view').length,0)
+assert.equal(parsed.associatedProcurementPlNumbers('งานอื่น','แยกจาก PL0000966 ค่าแรงสระ P6/P7').length,0)
+assert.equal(String(parsed.associatedProcurementPlNumbers('งานโรยตัว',
+  'PSQ69100034 / PC691028002 / PL0000989 • ยังไม่ยืนยันรับงาน')),'PL0000989')
+assert.equal(String(parsed.associatedProcurementPlNumbers('งานกระจก',
+  'PL0000988 ใน Express: https://drive.google.com/file/d/'+sampleId+'/view')),'PL0000988')
+console.log('Procurement evidence synthetic runtime tests: PASS')
