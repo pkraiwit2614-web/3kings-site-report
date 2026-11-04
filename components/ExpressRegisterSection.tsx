@@ -1,7 +1,7 @@
 'use client'
 import {useEffect,useState} from 'react'
 import {getSupabase} from '@/lib/supabase'
-import {expressDocumentType} from '@/lib/expressRegisterDisplay'
+import {expressDocumentType,expressHeaderWorkSummary} from '@/lib/expressRegisterDisplay'
 
 type ExpressItem={line_seq:number;item_code:string|null;description:string|null;quantity:number|null;unit:string|null}
 type ExpressEvidence={document_type:string;document_no:string;drive_file_id:string;file_name:string;file_format:string;evidence_scope:string}
@@ -126,6 +126,8 @@ export default function ExpressRegisterSection({projectCode='',query='',procurem
        <td style={{minWidth:290,maxWidth:520,whiteSpace:'normal'}}>
         <b>{expressDocumentType(row.document_no)}</b>
         {row.items?.length?<div className="small">
+         {expressHeaderWorkSummary(row.search_text,row.document_no,row.supplier,row.plot_codes||[],row.items.map(item=>item.item_code))&&
+          <div className="small" style={{marginTop:4}}>{expressHeaderWorkSummary(row.search_text,row.document_no,row.supplier,row.plot_codes||[],row.items.map(item=>item.item_code))}</div>}
          {row.items.slice(0,2).map((item,index)=><div key={item.line_seq}>{index+1}. {lineSummary(item)}</div>)}
          {row.items.length>2&&<details><summary className="small">ดูอีก {row.items.length-2} รายการ</summary>
           {row.items.slice(2).map((item,index)=><div key={item.line_seq}>{index+3}. {lineSummary(item)}</div>)}
