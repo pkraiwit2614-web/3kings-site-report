@@ -70,6 +70,8 @@ export default function ExpressRegisterSection({projectCode='',query='',procurem
   })()
   return ()=>{active=false;abort.abort()}
  },[group,page,projectCode,query,dateFrom,dateTo,procurementView])
+ // Pin TH cells individually so header stays visible inside scroll container.
+ const stickyHeaderCellStyle=procurementView?{position:'sticky' as const,top:0,zIndex:6,background:'var(--surface)'}:undefined
  if(state==='off')return null
  return <section aria-labelledby="express-register-title" style={{marginTop:24}}>
   <div style={{display:'flex',justifyContent:'space-between',gap:12,alignItems:'end',flexWrap:'wrap',marginBottom:10}}>
@@ -103,7 +105,7 @@ export default function ExpressRegisterSection({projectCode='',query='',procurem
     </p>
     <div className="table-wrap" style={procurementView?{overflow:'auto',maxHeight:620}:{overflowX:'auto'}}>
      <table className="materials-print-table" style={{minWidth:procurementView?1120:780}}>
-      <thead style={procurementView?{position:'sticky',top:0,zIndex:5,background:'var(--surface)'}:undefined}><tr><th>ประเภท</th><th>เลขเอกสาร</th><th>วันที่เอกสาร</th>{procurementView&&<th>ซื้อ / จ้าง และรายละเอียดรายการ</th>}<th>ผู้ขาย / ผู้ขอ</th><th>Plot ที่อ้างอิง</th><th>ยอดเอกสาร</th><th>ผลตรวจ Source</th></tr></thead>
+      <thead><tr><th style={stickyHeaderCellStyle}>ประเภท</th><th style={stickyHeaderCellStyle}>เลขเอกสาร</th><th style={stickyHeaderCellStyle}>วันที่เอกสาร</th>{procurementView&&<th style={stickyHeaderCellStyle}>ซื้อ / จ้าง และรายละเอียดรายการ</th>}<th style={stickyHeaderCellStyle}>ผู้ขาย / ผู้ขอ</th><th style={stickyHeaderCellStyle}>Plot ที่อ้างอิง</th><th style={stickyHeaderCellStyle}>ยอดเอกสาร</th><th style={stickyHeaderCellStyle}>ผลตรวจ Source</th></tr></thead>
       <tbody>{(result?.documents||[]).map(row=><tr key={row.document_group+'|'+row.document_no}>
        <td>{row.document_group==='PO_PL'?'PO / PL':'PR / PC'}</td>
        <td><b>{row.document_no}</b></td><td>{row.document_date||'-'}</td>
