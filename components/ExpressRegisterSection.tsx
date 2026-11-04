@@ -4,11 +4,12 @@ import {getSupabase} from '@/lib/supabase'
 import {expressDocumentType} from '@/lib/expressRegisterDisplay'
 
 type ExpressItem={line_seq:number;item_code:string|null;description:string|null;quantity:number|null;unit:string|null}
+type ExpressEvidence={document_type:string;document_no:string;drive_file_id:string;file_name:string;file_format:string;evidence_scope:string}
 type DocumentRow={
  document_group:'PO_PL'|'PR_PC';document_no:string;document_date:string|null;
  supplier:string|null;plot_codes:string[];qa_status:string;grand_total:number|null;
  has_verified_project_override?:boolean;project_evidence_url?:string|null;
- source_file:string|null;search_text?:string|null;items?:ExpressItem[]
+ source_file:string|null;source_url?:string|null;search_text?:string|null;items?:ExpressItem[];evidence?:ExpressEvidence[]
 }
 type RegistryData={
  status:'read_only'|'no_import';documents:DocumentRow[];
@@ -26,6 +27,13 @@ const qaLabel:Record<string,string>={
  HOLD_MULTI_PLOT:'รอตรวจการแบ่งหลาย Plot',
  SOURCE_LINE_REVIEW:'ตรวจรายละเอียดต้นฉบับ',
 }
+function confirmedDriveSource(url:string|null|undefined):string|null {
+ return /^https:\/\/drive\.google\.com\/file\/d\/[A-Za-z0-9_-]{12,}\/view$/.test(url||'')?url!:null
+}
+function evidenceUrl(id:string):string|null {
+ return /^[A-Za-z0-9_-]{12,}$/.test(id)?'https://drive.google.com/file/d/'+encodeURIComponent(id)+'/view':null
+}
+const evidenceLabel:Record<string,string>={PL:'ใบสั่งจ้าง',PO:'ใบสั่งซื้อ',PR:'ใบขอซื้อ',PC:'ใบขอจ้าง'}
 function lineSummary(item:ExpressItem){
  const description=item.description?.trim()||item.item_code?.trim()||'ไม่ระบุรายละเอียด'
  const quantity=item.quantity===null?'':Number(item.quantity).toLocaleString('th-TH')
@@ -104,12 +112,12 @@ export default function ExpressRegisterSection({projectCode='',query='',procurem
      {' '}• ยังต้องตรวจต้นฉบับ {result?.latest?.reviewCount||0} เอกสาร
     </p>
     <div className="table-wrap" style={procurementView?{overflow:'auto',maxHeight:620}:{overflowX:'auto'}}>
-     <table className="materials-print-table" style={{minWidth:procurementView?1120:780}}>
-      <thead><tr><th style={stickyHeaderCellStyle}>ประเภท</th><th style={stickyHeaderCellStyle}>เลขเอกสาร</th><th style={stickyHeaderCellStyle}>วันที่เอกสาร</th>{procurementView&&<th style={stickyHeaderCellStyle}>ซื้อ / จ้าง และรายละเอียดรายการ</th>}<th style={stickyHeaderCellStyle}>ผู้ขาย / ผู้ขอ</th><th style={stickyHeaderCellStyle}>Plot ที่อ้างอิง</th><th style={stickyHeaderCellStyle}>ยอดเอกสาร</th><th style={stickyHeaderCellStyle}>ผลตรวจ Source</th></tr></thead>
+     <table className="materials-print-table" style={{minWidth:procurementView?1220:1120}}>
+      <thead><tr><th style={stickyHeaderCellStyle}>ประเภท</th><th style={stickyHeaderCellStyle}>เลขเอกสาร</th><th style={stickyHeaderCellStyle}>วันที่เอกสาร</th><th style={stickyHeaderCellStyle}>ซื้อ / จ้าง และรายละเอียดรายการ</th><th style={stickyHeaderCellStyle}>ผู้ขาย / ผู้ขอ</th><th style={stickyHeaderCellStyle}>Plot ที่อ้างอิง</th><th style={stickyHeaderCellStyle}>ยอดเอกสาร</th><th style={stickyHeaderCellStyle}>ผลตรวจ Source / หลักฐาน</th></tr></thead>
       <tbody>{(result?.documents||[]).map(row=><tr key={row.document_group+'|'+row.document_no}>
        <td>{row.document_group==='PO_PL'?'PO / PL':'PR / PC'}</td>
        <td><b>{row.document_no}</b></td><td>{row.document_date||'-'}</td>
-       {procurementView&&<td style={{minWidth:290,maxWidth:520,whiteSpace:'normal'}}>
+       <td style={{minWidth:290,maxWidth:520,whiteSpace:'normal'}}>
         <b>{expressDocumentType(row.document_no)}</b>
         {row.items?.length?<div className="small">
          {row.items.slice(0,2).map((item,index)=><div key={item.line_seq}>{index+1}. {lineSummary(item)}</div>)}
@@ -117,13 +125,23 @@ export default function ExpressRegisterSection({projectCode='',query='',procurem
           {row.items.slice(2).map((item,index)=><div key={item.line_seq}>{index+3}. {lineSummary(item)}</div>)}
          </details>}
         </div>:<small className="muted">{(row.search_text||'').replace(row.document_no,'').replace(row.supplier||'','').trim()||'ต้นฉบับไม่ระบุรายละเอียดงาน'}</small>}
-       </td>}
+       </td>
        <td>{row.supplier||'-'}</td>
        <td>{row.plot_codes?.join(', ')||'ยังไม่ระบุ'}</td>
        <td style={{textAlign:'right',whiteSpace:'nowrap'}}>{amount(row.grand_total)}</td>
-       <td>{qaLabel[row.qa_status]||row.qa_status}
-        {row.has_verified_project_override&&row.project_evidence_url?.startsWith('https://drive.google.com/file/d/')&&
-         <small><a href={row.project_evidence_url} target="_blank" rel="noopener noreferrer">หลักฐานการระบุโครงการ</a></small>}
+       <td style={{minWidth:180}}>
+        <div>{qaLabel[row.qa_status]||row.qa_status}</div>
+        {confirmedDriveSource(row.source_url)&&
+         <div><a href={confirmedDriveSource(row.source_url)!} target="_blank" rel="noopener noreferrer" title={row.source_file||'Express source'}>ต้นฉบับ Express (CSV)</a></div>}
+        {row.evidence?.map(item=>{
+         const url=evidenceUrl(item.drive_file_id)
+         return url?<div key={item.document_type+'|'+item.document_no+'|'+item.drive_file_id}>
+          <a href={url} target="_blank" rel="noopener noreferrer" title={item.file_name}>
+           {item.evidence_scope==='bundle'?'ไฟล์หลักฐานรวม':(evidenceLabel[item.document_type]||'หลักฐาน')+' '+item.document_no}
+          </a></div>:null
+        })}
+        {row.has_verified_project_override&&confirmedDriveSource(row.project_evidence_url)&&
+         <div><a href={confirmedDriveSource(row.project_evidence_url)!} target="_blank" rel="noopener noreferrer">หลักฐานการระบุโครงการ</a></div>}
        </td>
       </tr>)}</tbody>
      </table>
