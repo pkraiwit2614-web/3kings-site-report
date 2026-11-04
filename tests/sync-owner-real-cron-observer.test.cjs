@@ -273,3 +273,35 @@ test('Express unchanged source fingerprint compared with last completed registry
  assert.equal(f.incidents.length,0);
  assert.equal(f.send.length,0);
 });
+
+test('monitor private Edge bridge intercepts ONLY protected Supabase reads and RPC, not LINE',async()=>{
+ const f=fixture([changed]);
+ const calls=[];
+ const basic=f.transport;
+ const proxy=async(url,opts={})=>{
+   if(String(url).endsWith('/functions/v1/kings_sync_owner_bridge')){
+     const req=JSON.parse(opts.body);
+     calls.push({path:req.path,method:req.method,
+       tokenPresent:opts.headers?.['x-3kings-owner-sync-key']==='unit-test-private'});
+     assert.ok(req.path.startsWith('/rest/v1/'));
+     assert.ok(!JSON.stringify(opts).includes('LINE_CHANNEL_ACCESS_TOKEN'));
+     return basic(env.SUPABASE_URL+req.path,{
+       method:req.method,
+       ...(req.args===undefined?{}:{body:JSON.stringify(req.args)})
+     });
+   }
+   return basic(url,opts);
+ };
+ const {syncOwnerMonitorTick}=await worker;
+ const res=await syncOwnerMonitorTick({
+   ...env,SYNC_OWNER_BRIDGE_TOKEN:'unit-test-private'
+ },{hash,transport:proxy,now:new Date('2026-11-03T12:15:00Z')});
+ assert.equal(res.mode,'SYNC_MONITOR_OBSERVED');
+ assert.equal(res.pendingRecorded,1);
+ assert.equal(f.incidents.length,1);
+ assert.equal(f.send.length,0);
+ assert.ok(calls.length>=3);
+ assert.ok(calls.every(x=>x.tokenPresent));
+ assert.ok(calls.some(x=>x.path.startsWith('/rest/v1/drive_sync_runs?')));
+ assert.ok(calls.some(x=>x.path==='/rest/v1/rpc/line_sync_owner_record_pending'));
+});
