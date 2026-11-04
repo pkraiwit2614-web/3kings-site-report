@@ -10,6 +10,13 @@ const HEADERS={'cache-control':'private, no-store'}
 const respond=(data:unknown,status:number)=>NextResponse.json(data,{status,headers:HEADERS})
 const SELECT='document_group,document_no,document_date,supplier,plot_codes,qa_status,grand_total,source_file,source_url,has_verified_project_override,project_evidence_url,search_text'
 const PROCUREMENT_SELECT=SELECT
+// Independently checked against existing Excel Master on 2026-11-04.
+// A future Express import is NOT automatically verified.
+const RECONCILED_BATCH={
+ id:'932a7527-0d24-4011-baf1-f88dac2fd977',
+ sourceFingerprint:'6747a66b88622e300f45251120fccd4073d0b30a3556aba41732292ec5f1f0fa',
+ documentCount:3768,lineCount:13288,asOf:'2026-11-04'
+}
 
 type ExpressHeader={document_group:string;document_no:string}
 type ExpressItem={document_group:string;document_no:string;line_seq:number;item_code:string|null;description:string|null;quantity:number|null;unit:string|null}
@@ -64,10 +71,16 @@ export async function GET(request:NextRequest){
  try{
   // Fail closed if the isolated migration is not present or no completed batch exists.
   const {data:latest,error:runError}=await client.from('express_register_runs')
-   .select('id,completed_at,source_files,document_count,line_count,canceled_count,review_count')
+   .select('id,completed_at,source_fingerprint,source_files,document_count,line_count,canceled_count,review_count')
    .eq('state','complete').order('completed_at',{ascending:false}).limit(1).maybeSingle()
   if(runError)return respond({error:'REGISTER_NOT_READY'},503)
-  if(!latest)return respond({status:'no_import',documents:[],total:0,page,hasMore:false,latest:null},200)
+  if(!latest)return respond({status:'no_import',documents:[],total:0,page,hasMore:false,latest:null,masterQa:{verified:false,asOf:null}},200)
+  const masterQa=latest.id===RECONCILED_BATCH.id &&
+   latest.source_fingerprint===RECONCILED_BATCH.sourceFingerprint &&
+   latest.document_count===RECONCILED_BATCH.documentCount &&
+   latest.line_count===RECONCILED_BATCH.lineCount
+    ? {verified:true,asOf:RECONCILED_BATCH.asOf}
+    : {verified:false,asOf:null}
   // Read related line descriptions and signed-file evidence ONLY for the selected page.
   // Keep original Express values/statuses and legacy Materials/Procurement tables read-only.
   const hydrate=async(selected:ExpressHeader[])=>{
@@ -122,7 +135,7 @@ export async function GET(request:NextRequest){
     const total=count??0
     const enriched=await hydrate(rows||[])
     if(enriched.error)return respond({error:enriched.error},503)
-    return respond({status:'read_only',latest:{
+    return respond({status:'read_only',masterQa,latest:{
      completedAt:latest.completed_at,sourceFiles:latest.source_files,
      documentCount:latest.document_count,lineCount:latest.line_count,
      skippedCanceled:latest.canceled_count,reviewCount:latest.review_count},
@@ -165,7 +178,7 @@ export async function GET(request:NextRequest){
   const selected=matching.slice(page*limit,(page+1)*limit)
   const enriched=await hydrate(selected)
   if(enriched.error)return respond({error:enriched.error},503)
-  return respond({status:'read_only',latest:{
+  return respond({status:'read_only',masterQa,latest:{
    completedAt:latest.completed_at,sourceFiles:latest.source_files,
    documentCount:latest.document_count,lineCount:latest.line_count,
    skippedCanceled:latest.canceled_count,reviewCount:latest.review_count},

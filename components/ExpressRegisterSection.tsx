@@ -13,6 +13,7 @@ type DocumentRow={
 }
 type RegistryData={
  status:'read_only'|'no_import';documents:DocumentRow[];
+ masterQa?:{verified:boolean;asOf:string|null};
  latest:{completedAt:string;sourceFiles:number;documentCount:number;lineCount:number;
   skippedCanceled:number;reviewCount:number}|null;
  total:number;page:number;pageSize?:number;hasMore:boolean
@@ -111,6 +112,11 @@ export default function ExpressRegisterSection({projectCode='',query='',procurem
      {' '}• ต้นฉบับทั้งหมด {result?.latest?.documentCount||0} เอกสาร / {result?.latest?.lineCount||0} บรรทัด
      {' '}• ยังต้องตรวจต้นฉบับ {result?.latest?.reviewCount||0} เอกสาร
     </p>
+    {result?.masterQa?.verified&&<p className="small">
+     <b>ตรวจข้อมูลตรงกับ Master ณ {result.masterQa.asOf}</b>
+     {' '}• 3,768 เอกสาร / 13,288 รายการ
+     {' '}• ยืนยันความตรงกันของข้อมูล ไม่ใช่ยืนยันการอนุมัติ/การรับของ/Plot
+    </p>}
     <div className="table-wrap" style={procurementView?{overflow:'auto',maxHeight:620}:{overflowX:'auto'}}>
      <table className="materials-print-table" style={{minWidth:procurementView?1220:1120}}>
       <thead><tr><th style={stickyHeaderCellStyle}>ประเภท</th><th style={stickyHeaderCellStyle}>เลขเอกสาร</th><th style={stickyHeaderCellStyle}>วันที่เอกสาร</th><th style={stickyHeaderCellStyle}>ซื้อ / จ้าง และรายละเอียดรายการ</th><th style={stickyHeaderCellStyle}>ผู้ขาย / ผู้ขอ</th><th style={stickyHeaderCellStyle}>Plot ที่อ้างอิง</th><th style={stickyHeaderCellStyle}>ยอดเอกสาร</th><th style={stickyHeaderCellStyle}>ผลตรวจ Source / หลักฐาน</th></tr></thead>
@@ -130,7 +136,9 @@ export default function ExpressRegisterSection({projectCode='',query='',procurem
        <td>{row.plot_codes?.join(', ')||'ยังไม่ระบุ'}</td>
        <td style={{textAlign:'right',whiteSpace:'nowrap'}}>{amount(row.grand_total)}</td>
        <td style={{minWidth:180}}>
-        <div>{qaLabel[row.qa_status]||row.qa_status}</div>
+        <div>{row.qa_status==='VERIFIED_SOURCE_ONLY'&&result?.masterQa?.verified
+         ? 'อ่านต้นฉบับผ่าน' : (qaLabel[row.qa_status]||row.qa_status)}</div>
+        {result?.masterQa?.verified&&<div className="small">Master: ตรวจตรง ณ {result.masterQa.asOf}</div>}
         {confirmedDriveSource(row.source_url)&&
          <div><a href={confirmedDriveSource(row.source_url)!} target="_blank" rel="noopener noreferrer" title={row.source_file||'Express source'}>ต้นฉบับ Express (CSV)</a></div>}
         {row.evidence?.map(item=>{
