@@ -244,6 +244,7 @@ export default function ProcurementPage(){
     {/* Keep the Express register visible immediately below the procurement filters. */}
     <ExpressRegisterSection projectCode={projectById.get(siteFilter)?.code||''} query={needle} procurementView/>
 
+    <h2 id="procurement-main-register-title" style={{margin:'22px 0 10px',fontSize:20,fontWeight:800,lineHeight:1.3,color:'var(--navy)'}}>ทะเบียนรายการจัดซื้อ/จัดจ้างหลัก</h2>
     <div className="panel" style={{padding:0,overflow:'hidden'}}>
       <div className="table-wrap" style={{maxHeight:'calc(100vh - 205px)',overflow:'auto'}}>
         <table style={{minWidth:1450}}>

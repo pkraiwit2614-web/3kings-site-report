@@ -80,7 +80,7 @@ export default function ExpressRegisterSection({projectCode='',query='',procurem
   return ()=>{active=false;abort.abort()}
  },[group,page,projectCode,query,dateFrom,dateTo,procurementView])
  // Pin TH cells individually so header stays visible inside scroll container.
- const stickyHeaderCellStyle=procurementView?{position:'sticky' as const,top:0,zIndex:6,background:'var(--surface)'}:undefined
+ const stickyHeaderCellStyle={position:'sticky' as const,top:0,zIndex:16,background:'#173f6a',color:'#fff'}
  if(state==='off')return null
  return <section aria-labelledby="express-register-title" style={{marginTop:24}}>
   <div style={{display:'flex',justifyContent:'space-between',gap:12,alignItems:'end',flexWrap:'wrap',marginBottom:10}}>

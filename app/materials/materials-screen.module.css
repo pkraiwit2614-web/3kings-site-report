@@ -113,6 +113,27 @@
   .statusSection :global(.materials-status-print-table) thead tr:last-child th:nth-child(7){width:22%}
   .statusSection :global(.materials-status-print-table) thead tr:last-child th:nth-child(8){width:7%}
 }
+/* Express register typography on /materials matches Materials Status only. */
+@media screen{
+  .expressFontMatch h2{
+    font-size:20px;
+    font-weight:800;
+    line-height:1.3;
+    letter-spacing:-.02em;
+    color:var(--navy);
+  }
+  .expressFontMatch :global(.materials-print-table) thead th{
+    font-size:11.5px;
+    line-height:1.3;
+  }
+  .expressFontMatch :global(.materials-print-table) tbody td{
+    font-size:12px;
+    line-height:1.45;
+  }
+  .expressFontMatch :global(.materials-print-table) tbody td :global(.small){
+    font-size:11px;
+  }
+}
 @media screen and (max-width:680px){
   .headerActions{justify-content:flex-start}
   .latestUpdate{align-items:flex-start}
