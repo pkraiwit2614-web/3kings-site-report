@@ -63,6 +63,7 @@ control.queue_state='LIVE_APPROVED';control.worker_active='TRUE';control.auto_en
 assert.equal(run('expressBridgeAutoTick20261102().status'),'HOLD_BASELINE_MISSING');
 props.set('EXPRESS_AUTO_VERIFIED_DB_FINGERPRINT_20261102','a'.repeat(64));
 props.set('EXPRESS_AUTO_LAST_SOURCE_SIGNATURE_20261102','sigA');
+assert.equal(run('expressBridgeAutoTick20261102().status'),'WAIT_SOURCE_STABLE');
 assert.equal(run('expressBridgeAutoTick20261102().status'),'ENQUEUED');
 assert.equal(rows[1][1],'EXPRESS_MASTER_IMPORT');
 assert.equal(rows.length,2);
@@ -76,6 +77,7 @@ assert.equal(props.get('EXPRESS_AUTO_VERIFIED_DB_FINGERPRINT_20261102'),currentF
 assert.equal(run('expressBridgeAutoTick20261102().status'),'NO_CHANGE');
 assert.equal(rows.length,3);
 currentFP='c'.repeat(64);signature='sigC';
+assert.equal(run('expressBridgeAutoTick20261102().status'),'WAIT_SOURCE_STABLE');
 assert.equal(run('expressBridgeAutoTick20261102().status'),'ENQUEUED');
 assert.equal(rows.length,4);
 rows[3][6]='RUNNING';
