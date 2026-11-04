@@ -9,7 +9,7 @@ export const dynamic='force-dynamic'
 const HEADERS={'cache-control':'private, no-store'}
 const respond=(data:unknown,status:number)=>NextResponse.json(data,{status,headers:HEADERS})
 const SELECT='document_group,document_no,document_date,supplier,plot_codes,qa_status,grand_total,source_file,has_verified_project_override,project_evidence_url'
-const PROCUREMENT_SELECT=SELECT+',search_text'
+const PROCUREMENT_SELECT='document_group,document_no,document_date,supplier,plot_codes,qa_status,grand_total,source_file,has_verified_project_override,project_evidence_url,search_text'
 
 /** Read-only, user-JWT/RLS-bound Express historical register; never a procurement write route. */
 export async function GET(request:NextRequest){
