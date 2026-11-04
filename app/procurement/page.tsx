@@ -241,6 +241,9 @@ export default function ProcurementPage(){
       </div>
     </section>
 
+    {/* Keep the Express register visible immediately below the procurement filters. */}
+    <ExpressRegisterSection projectCode={projectById.get(siteFilter)?.code||''} query={needle} procurementView/>
+
     <div className="panel" style={{padding:0,overflow:'hidden'}}>
       <div className="table-wrap" style={{maxHeight:'calc(100vh - 205px)',overflow:'auto'}}>
         <table style={{minWidth:1450}}>
@@ -260,8 +263,6 @@ export default function ProcurementPage(){
         {!filteredRows.length&&<p className="muted" style={{padding:16}}>ไม่พบรายการตามคำค้นหรือ Filter ที่เลือก</p>}
       </div>
     </div>
-    {/* Reuse the existing read-only Express history reader with the procurement search. */}
-    <ExpressRegisterSection projectCode={projectById.get(siteFilter)?.code||''} query={needle} procurementView/>
 
     <p className="muted small" style={{marginTop:8}}>พิมพ์ชื่อวัสดุหรือเลข PO เพื่อดูรายการที่เกี่ยวข้องได้ทันที • ใช้ Filter Plot/หน้างานและ “เฉพาะติดค้าง / ต้องตาม” ร่วมกับการค้นหาได้ • ขั้นตอนปัจจุบันและรายละเอียดใช้สำหรับตามต่อกับจัดซื้อ บัญชี ร้านค้า หรือผู้รับเหมา</p>
   </AppShell>
