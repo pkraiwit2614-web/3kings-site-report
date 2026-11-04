@@ -44,3 +44,21 @@ SELECT r.*,
 FROM public.express_register_rows r;
 REVOKE ALL ON public.express_register_effective_rows FROM PUBLIC, anon;
 GRANT SELECT ON public.express_register_effective_rows TO authenticated,service_role;
+
+-- Synthetic local-only counterpart of the existing production evidence table.
+CREATE TABLE IF NOT EXISTS public.procurement_evidence_links (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+ document_type text NOT NULL CHECK (document_type IN ('PR','PO','PL')),
+ document_no text NOT NULL,
+ drive_file_id text NOT NULL,
+ file_name text NOT NULL,
+ file_format text NOT NULL,
+ evidence_scope text NOT NULL
+);
+ALTER TABLE public.procurement_evidence_links ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.procurement_evidence_links FROM PUBLIC,anon,authenticated;
+GRANT SELECT ON public.procurement_evidence_links TO authenticated;
+DROP POLICY IF EXISTS procurement_evidence_links_view ON public.procurement_evidence_links;
+CREATE POLICY procurement_evidence_links_view ON public.procurement_evidence_links
+ FOR SELECT TO authenticated USING
+ (private.matrix_allowed('procurement'::text,'view'::text,(SELECT private.is_active_user())));
