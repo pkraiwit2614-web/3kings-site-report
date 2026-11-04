@@ -25,7 +25,7 @@ test('Drive materials: source read and DB written counts are not Web QA',async()
  assert.equal(r.metrics.read,614);
  assert.equal(r.metrics.written,15);
  assert.equal(res.status,'UNVERIFIED');
- const msg=o.lineMessage(r,res);
+ const msg=m.metricLines(r,{status:res.status}).join('\n');
  assert.match(msg,/อ่านจากต้นทางในรอบนี้: 614 รายการ/);
  assert.match(msg,/เขียน DB ในรอบนี้: 15 รายการ/);
  assert.match(msg,/ยืนยันหน้าเว็บ: ยังไม่มีหลักฐาน E2E ครบ/);
@@ -36,7 +36,7 @@ test('Daily importer: 17 DB-verified does not mean 17 Web-verified',async()=>{
  const r=m.fromDailySiteAudit(daily()),res=o.classifyRun(r);
  assert.equal(r.run_key,'daily_site_report:45');
  assert.equal(res.status,'UNVERIFIED');
- const msg=o.lineMessage(r,res);
+ const msg=m.metricLines(r,{status:res.status}).join('\n');
  assert.match(msg,/ประมวลผล: 17 แถวรายงาน/);
  assert.match(msg,/เพิ่มใหม่: 2 แถวรายงาน/);
  assert.match(msg,/ข้ามเพราะมีอยู่\/ไม่เปลี่ยน: 15 แถวรายงาน/);
@@ -47,7 +47,7 @@ test('Express: documents and lines retain distinct units; DB complete != Web PAS
  const [m,o]=await imports();
  const r=m.fromExpressRegister(express());
  assert.equal(o.classifyRun(r).status,'UNVERIFIED');
- const msg=o.lineMessage(r,o.classifyRun(r));
+ const msg=m.metricLines(r,{status:o.classifyRun(r).status}).join('\n');
  assert.match(msg,/เอกสาร: 3758 เอกสาร/);
  assert.match(msg,/บรรทัดรายการ: 13256 บรรทัด/);
  assert.match(msg,/รายการรอตรวจ: 273 รายการ/);
@@ -67,7 +67,7 @@ test('zero writes are displayed as zero, not inferred error or full E2E PASS',as
  const a=drive();a.sync_type='schedule';a.source_file='Above Villa Plot6 Construction Progress_Updated_2026-09-21.xlsx';a.rows_read=0;a.rows_written=0;
  const r=m.fromDriveSyncRun(a);
  assert.equal(o.classifyRun(r).status,'UNVERIFIED');
- assert.match(o.lineMessage(r,o.classifyRun(r)),/เขียน DB ในรอบนี้: 0 รายการงาน/);
+ assert.match(m.metricLines(r,{status:o.classifyRun(r).status}).join('\n'),/เขียน DB ในรอบนี้: 0 รายการงาน/);
 });
 test('verified Web count only appears with explicit four-stage matching E2E proof',async()=>{
  const [m,o]=await imports();
@@ -76,11 +76,11 @@ test('verified Web count only appears with explicit four-stage matching E2E proo
  const proof={source:{...stage},parser:{...stage},database:{...stage},
  web:{...stage,authenticated:true}};
  assert.equal(o.classifyRun(r,proof).status,'PASS');
- assert.match(o.lineMessage(r,o.classifyRun(r,proof),proof),
+ assert.match(m.metricLines(r,{status:'PASS',rows:proof.web.rows}).join('\n'),
     /ตรวจยืนยันความตรงกันบนเว็บ: 614 รายการ \(ทั้งชุด\)/);
 });
 test('explicit Sync error with unknown error row count never assumes one failed row',async()=>{
  const [m,o]=await imports();const x=drive();x.status='error';
- const r=m.fromDriveSyncRun(x);const msg=o.lineMessage(r,o.classifyRun(r));
+ const r=m.fromDriveSyncRun(x);const msg=m.metricLines(r,{status:o.classifyRun(r).status}).join('\n');
  assert.match(msg,/จำนวนรายการผิดพลาด: ไม่ทราบ/);
 });
