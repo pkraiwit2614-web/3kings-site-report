@@ -3,20 +3,25 @@ on:
   push:
     branches:
       - fix/express-auto-source-race-diagnostics-20261104
+      - fix/express-verified-checkpoint-repair-20261104
     paths:
+      - 'docs/apps-script/ExpressBridgeMasterImporter_2026-10-22.gs'
       - 'docs/apps-script/ExpressBridgeQueue_2026-11-02.gs'
       - 'docs/apps-script/ExpressBridgeAutoScheduler_2026-11-02.gs'
       - 'scripts/test-express-auto-scheduler.cjs'
       - 'scripts/test-express-auto-scheduler-recovery.cjs'
+      - 'scripts/test-express-master-checkpoint-recovery.cjs'
       - 'scripts/test-express-queue-error-code.cjs'
       - '.github/workflows/express-queue-isolated-qa.yml'
   pull_request:
     paths:
+      - 'docs/apps-script/ExpressBridgeMasterImporter_2026-10-22.gs'
       - 'docs/apps-script/ExpressBridgeQueue_2026-11-02.gs'
       - 'docs/apps-script/ExpressBridgeAutoScheduler_2026-11-02.gs'
       - 'scripts/test-express-bridge-queue.cjs'
       - 'scripts/test-express-auto-scheduler.cjs'
       - 'scripts/test-express-auto-scheduler-recovery.cjs'
+      - 'scripts/test-express-master-checkpoint-recovery.cjs'
       - 'scripts/test-express-queue-error-code.cjs'
       - '.github/workflows/express-queue-isolated-qa.yml'
   workflow_dispatch:
@@ -38,6 +43,7 @@ jobs:
           node --check scripts/test-express-auto-scheduler.cjs
           node --check scripts/test-express-auto-scheduler-recovery.cjs
           node --check scripts/test-express-queue-error-code.cjs
+          node --check scripts/test-express-master-checkpoint-recovery.cjs
       - name: Express queue scoped unit tests
         run: node scripts/test-express-bridge-queue.cjs
       - name: Express auto scheduler state machine regression
@@ -46,3 +52,5 @@ jobs:
         run: node scripts/test-express-auto-scheduler-recovery.cjs
       - name: Safe source of execution error diagnosis
         run: node scripts/test-express-queue-error-code.cjs
+      - name: Exact-master checkpoint repair fail-closed test
+        run: node scripts/test-express-master-checkpoint-recovery.cjs
