@@ -96,7 +96,7 @@ test('procurement-only Express history: correct Thai dates, document kind and ne
  assert.ok(expressPosition>=0&&expressPosition<procurementTablePosition)
  assert.match(component,/type="date"/)
  assert.match(component,/row.items.slice\(2\)/)
- assert.match(api,/view==='procurement'/)
+ assert.match(api,/request\.nextUrl\.searchParams\.get\('view'\)==='procurement'/)
  assert.match(api,/expressDateISO\(row.document_date\)/)
  assert.match(api,/REGISTER_DETAILS_UNAVAILABLE/)
 })
