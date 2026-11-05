@@ -48,7 +48,7 @@ test('Flow and Report both project the current status, and their New Defect link
   for(const id of ['status-incomplete','nonhotel-customer-incomplete','nonhotel-nocustomer-incomplete']){
     assert.ok(report.includes("id:'"+id+"'"),'missing Report link target '+id)
   }
-  for(const f of ['nonhotel-customer-new','nonhotel-nocustomer-new'])
+  for(const f of ['nonhotel-customer-incomplete','nonhotel-nocustomer-incomplete'])
     assert.ok(flow.includes("filter:'"+f+"'"),'missing Flow link '+f)
   assert.match(flow,/customerNonIncomplete:status\(/)
   assert.match(flow,/noNonIncomplete:status\(/)
@@ -66,7 +66,7 @@ test('Hotel and non-Hotel group counts remain distinct, with no static hard-code
   assert.equal(rows.filter(r=>['Hotel - Incomplete','Non-Hotel - Incomplete'].includes(r.status_group)).length,2)
 })
 
-test('new-only Flow counts exclude five older Hotel open defects and preserve 18 real newly notified rooms',()=>{
+test('newly notified subset remains distinct while unfinished totals include older work',()=>{
   const oldHotel=Array.from({length:5},(_,i)=>({room_no:'OLD'+i,hotel_participation:'ร่วมโรงแรม',current_status:'Defect ยังไม่เสร็จ / ต้องปิดงาน',status_group:'Hotel - Incomplete'}))
   const newRooms=Array.from({length:18},(_,i)=>({room_no:'NEW'+i,hotel_participation:i===0?'ร่วมโรงแรม':'ไม่ร่วมโรงแรม',current_status:'เพิ่งได้รับแจ้ง Defect — รอดำเนินการ',status_group:'Non-Hotel - Pending Handover'}))
   const all=[...oldHotel,...newRooms]
@@ -75,11 +75,12 @@ test('new-only Flow counts exclude five older Hotel open defects and preserve 18
   assert.equal(all.filter(r=>r.hotel_participation==='ร่วมโรงแรม'&&isNew(r)).length,1)
   assert.equal(all.filter(r=>r.hotel_participation==='ร่วมโรงแรม'&&!isNew(r)).length,5)
   assert.match(flow,/const isNewDefect=/)
-  assert.match(flow,/count:v.newly/)
+  assert.match(flow,/count:v.incomplete/)
+  assert.match(flow,/แจ้งใหม่ \$\{v.newly\}/)
   assert.doesNotMatch(flow,/label:'Open Defect'/)
   for(const id of ['newly-notified','old-incomplete','hotel-newly-notified','hotel-old-incomplete','hotel-customer-new','hotel-nocustomer-new','nonhotel-customer-new','nonhotel-nocustomer-new'])
    assert.ok(report.includes("id:'"+id+"'"),id)
-  assert.doesNotMatch(flow,/count:v.incomplete,tone:'danger'/)
+  assert.match(flow,/filter:hotelOnly\?'hotel-status-incomplete':'status-incomplete'/)
   assert.doesNotMatch(flow,/Defect ค้างเดิม/)
 });
 
