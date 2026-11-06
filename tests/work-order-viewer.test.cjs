@@ -11,7 +11,7 @@ const migration=read('supabase/migrations/20261015121500_defect_work_order_reado
 
 test('read-only dispatch loads active Work IDs and only excludes finished work, irrespective of room status',()=>{
  assert.match(page,/from\('defect_work_order_snapshot'\)\.select/)
- assert.doesNotMatch(page,/from\('condo_room_status'\)\.select/)
+ assert.match(page,/from\('condo_room_status'\)\.select\('room_no,current_status'\)/)
  assert.match(page,/rows\.filter\(r=>\(!finished\(r\.work_status\)\|\|completionConflict\(r\)\)&&ids\(r\.room_group\)\.length>0\)/)
  assert.doesNotMatch(page,/members\.every\(room=>roomMap\.get\(room\)==='Hotel - Incomplete'\)/)
  assert.match(page,/finished\(r\.work_status\)/)
@@ -285,4 +285,23 @@ test('non-active HOLD tracking preserves existing active dispatch and print secu
  assert.match(css,/\.wo-hold-section\{display:none!important\}/)
  assert.match(page,/ไม่รวมยอดงานพร้อมแจก \/ ไม่พิมพ์ใบแจกงาน \/ ไม่เปลี่ยนสถานะอนุมัติ/)
  assert.doesNotMatch(page,/\.insert\(|\.update\(|\.upsert\(|\.delete\(|\.rpc\(/)
+})
+
+
+test('repair-complete room Master removes stale active Work IDs from all Work Order displays without deleting history',()=>{
+ assert.match(page,/repairedAwaitingInspection/)
+ assert.match(page,/\^Defect เสร็จแล้ว/)
+ assert.match(page,/รอ Hotel ตรวจ/)
+ assert.match(page,/master\.error/)
+ assert.match(page,/members\.every\(room=>completed\.has\(room\)\)/)
+ assert.match(page,/setRows\(\(\(order\.data\|\|\[\]\) as WorkOrder\[\]\)\.filter\(stillDispatchable\)\)/)
+ assert.match(page,/setInactiveHoldRows\(inactive\.error\?\[\]:/)
+ // No direct DB write, snapshot deletion, permission or historical Work ID manipulation.
+ assert.doesNotMatch(page,/\.update\(|\.delete\(|\.upsert\(|\.rpc\(/)
+ const done=new Set(['A207','A301','A327','A416','A512','A612'])
+ const eligible=group=>{const members=group.match(new RegExp('[AB][0-9]{3}','g'))||[];return !members.length||!members.every(room=>done.has(room))}
+ for(const room of done)assert.equal(eligible(room),false,room)
+ assert.equal(eligible('A212'),true,'do not mask unrelated stale Work Orders')
+ assert.equal(eligible('A207+A301'),false,'atomic completed Combine group')
+ assert.equal(eligible('A207+A401'),true,'partial Combine must remain visible')
 })

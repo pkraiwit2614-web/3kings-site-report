@@ -49,6 +49,10 @@ const finished=(v:string|null)=>/เสร็จแล้ว|เสร็จส�
 // A completed label with an explicit unfinished QA note is tracked internally, not dispatched.
 const completionConflict=(r:WorkOrder)=>finished(r.work_status)&&/ยังไม่เสร็จ/.test(r.qa_status||'')
 const isHold=(r:WorkOrder)=>completionConflict(r)||/HOLD/i.test(r.work_status||'')||/HOLD/i.test(r.qa_status||'')
+// A room explicitly confirmed repair-complete is not dispatchable while awaiting
+// customer/Hotel inspection. Preserve its original Work IDs in the database/history.
+const repairedAwaitingInspection=(status:string|null|undefined)=>
+ /^Defect เสร็จแล้ว\s*\/\s*(?:รอตรวจ|รอ Hotel ตรวจ)$/.test((status||'').trim())
 // Label-only change: the Excel/source work_status is preserved.
 const displayWorkStatus=(v:string|null)=>v||'รอตรวจ'
 function roomSearchText(group:string){
@@ -92,10 +96,19 @@ export default function WorkOrderViewer(){
   const sb=getSupabase()
   const order=await sb.from('defect_work_order_snapshot').select('work_id,room_group,building,contractor,defect_item,next_action,received_date,due_date,work_status,evidence_url,qa_status,conflict_note,source_sync_note,source_modified_at,imported_at').eq('source_active',true).order('work_id')
   if(order.error)throw new Error(order.error.message||'อ่านข้อมูลไม่สำเร็จ')
-  setRows((order.data||[]) as WorkOrder[])
+  // Use the same canonical room Master as Defect Flow. A confirmed completed
+  // repair is excluded from ALL/print/HOLD, without deleting its Work ID history.
+  const master=await sb.from('condo_room_status').select('room_no,current_status')
+  if(master.error)throw new Error(master.error.message||'อ่านสถานะ Defect Master ไม่สำเร็จ')
+  const completed=new Set((master.data||[]).filter(r=>repairedAwaitingInspection(r.current_status)).map(r=>r.room_no))
+  const stillDispatchable=(r:WorkOrder)=>{
+   const members=ids(r.room_group)
+   return !members.length||!members.every(room=>completed.has(room))
+  }
+  setRows(((order.data||[]) as WorkOrder[]).filter(stillDispatchable))
   const inactive=await sb.from('defect_work_order_snapshot').select('work_id,room_group,building,contractor,defect_item,next_action,received_date,due_date,work_status,evidence_url,qa_status,conflict_note,source_sync_note,source_modified_at,imported_at').eq('source_active',false).ilike('work_status','HOLD%').order('work_id')
   // If inactive HOLD is unreadable, existing active work remains available.
-  setInactiveHoldRows(inactive.error?[]:(inactive.data||[]) as WorkOrder[])
+  setInactiveHoldRows(inactive.error?[]:((inactive.data||[]) as WorkOrder[]).filter(stillDispatchable))
   setInactiveHoldError(inactive.error?inactive.error.message:'')
  },[])
  useEffect(()=>{
