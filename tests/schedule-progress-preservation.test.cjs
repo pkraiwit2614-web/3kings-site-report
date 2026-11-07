@@ -39,6 +39,10 @@ async function runTests() {
   assert.doesNotMatch(scheduleUi, /ScheduleEditPanel|schedule_save_web_override/, 'Retired web editor must not be mounted or callable from Schedule UI');
   assert.match(scheduleUi, /from\\('v_schedule_tasks'\\)/, 'Schedule UI must keep its read-only data source');
   assert.match(route, /drive_sync_apply_schedule/, 'Existing Excel to Schedule RPC must remain available');
+  const retirementSql = fs.readFileSync(path.join(__dirname, '../supabase/migrations/20261107234000_retire_schedule_web_editor.sql'), 'utf8');
+  assert.match(retirementSql, /DROP FUNCTION IF EXISTS public\\.schedule_save_web_override/, 'Only obsolete web writer is decommissioned');
+  assert.doesNotMatch(retirementSql, /DROP (?:TABLE|VIEW)/i, 'Existing read-model and historical data must not be deleted');
+  assert.doesNotMatch(retirementSql, /DROP FUNCTION.*drive_sync_apply_schedule/i, 'Forward Schedule import must not be dropped');
   console.log('Testing pct() edge cases...');
   assert.equal(api.pct(null), null);
   assert.equal(api.pct(''), null);
