@@ -49,7 +49,7 @@ test('Combine writes are atomic, revision checked, audited and keep other module
  assert.doesNotMatch(sql,/UPDATE public\.condo_room_status|UPDATE public\.hotel_room_availability|DELETE FROM public\.|DROP TABLE/i)
  assert.doesNotMatch(sql,/source_room\s*=|source_row\s*=|source_synced_day\s*=/i)
  assert.doesNotMatch(report,/Work Plan \/ Hotel Status|work-plan-cell|hotel_work_plan_rooms|hotel_room_availability/)
- assert.match(report,/<th>สถานะ<\/th><th>ต้องทำต่อ<\/th>/)
+ assert.match(report,/<th className="center">สถานะ<\/th><th>ต้องทำต่อ<\/th>/)
  assert.match(report,/<td>{siteOnlyNextAction\(r.next_action\|\|r.follow_up\)}/)
  assert.match(css,/nth-child\(9\).*display:none!important/)
  assert.doesNotMatch(css,/nth-child\(10\).*display:none!important/)
