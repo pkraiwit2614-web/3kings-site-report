@@ -98,7 +98,7 @@ jobs:
         run: node --test tests/work-order-viewer.test.cjs tests/defect-report-work-order-links.test.cjs
 
       - name: Work Order sticky header, Combine and Excel sync safety
-        run: node --test tests/work-order-auto-sync.test.cjs
+        run: node --test tests/work-order-auto-sync.test.cjs tests/work-order-master-completed-37.test.cjs
       - name: Approved Work Order Master auto-sync, HOLD and Combine regression
         run: node --test tests/work-order-approved-auto-promotion.test.cjs
 
