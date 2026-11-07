@@ -1,0 +1,48 @@
+name: QA Work Order Master Completed 37 (isolated PostgreSQL)
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/20261107023500_work_order_master_completed_37_guarded_sync.sql'
+      - 'docs/apps-script/WorkOrderMasterCompletedSync_20261107.gs'
+      - 'docs/apps-script/WorkOrderAutoSync_2026-10-15.gs'
+      - 'tests/work-order-master-completed-37.test.cjs'
+      - 'tests/sql/workorder-master-completed-37-*.sql'
+      - '.github/workflows/qa-workorder-master-completed-37.yml'
+permissions:
+  contents: read
+jobs:
+  sql-completion-isolated:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: isolated-test-only
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: isolated-test-only
+      PGDATABASE: postgres
+    steps:
+      - name: Checkout scoped source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Execute isolated schema, exact migration and regression assertions
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 -f tests/sql/workorder-master-completed-37-fixture.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261107023500_work_order_master_completed_37_guarded_sync.sql
+          psql -v ON_ERROR_STOP=1 -f tests/sql/workorder-master-completed-37-qa.sql
+      - name: Node source/handler guard regressions
+        run: node --test tests/work-order-master-completed-37.test.cjs
