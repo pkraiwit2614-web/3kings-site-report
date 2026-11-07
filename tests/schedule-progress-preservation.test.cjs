@@ -34,6 +34,11 @@ function request(query) {
 }
 
 async function runTests() {
+  console.log('Testing Schedule page stays read-only while forward sync remains available...');
+  const scheduleUi = fs.readFileSync(path.join(__dirname, '../components/SchedulePlanActualV41.tsx'), 'utf8');
+  assert.doesNotMatch(scheduleUi, /ScheduleEditPanel|schedule_save_web_override/, 'Retired web editor must not be mounted or callable from Schedule UI');
+  assert.match(scheduleUi, /from\\('v_schedule_tasks'\\)/, 'Schedule UI must keep its read-only data source');
+  assert.match(route, /drive_sync_apply_schedule/, 'Existing Excel to Schedule RPC must remain available');
   console.log('Testing pct() edge cases...');
   assert.equal(api.pct(null), null);
   assert.equal(api.pct(''), null);
