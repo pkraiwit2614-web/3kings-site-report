@@ -81,7 +81,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const nav = useMemo<NavItem[]>(() => {
     if(!presentationRole)return []
     const candidates=presentationRole==='owner'?[...standardNav,['/users','System & Access'] as NavItem]:standardNav
-    return candidates.filter(([href])=>canAccessPath(presentationRole,href))
+    return candidates.filter(([href])=>href!=='/calendar'&&canAccessPath(presentationRole,href))
   }, [presentationRole,permissionRevision])
   const mobileOrderedNav = useMemo<NavItem[]>(() => {
     const priority = MOBILE_PRIORITY_PATHS.flatMap((href) => {
