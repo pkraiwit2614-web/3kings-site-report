@@ -2,7 +2,7 @@
 import {useEffect,useState} from 'react'
 import {getSupabase} from '@/lib/supabase'
 import {applyPermissionSnapshot,loadPermissions} from '@/lib/permissionClient'
-import {moduleForPath,canEditHotel,canEditWorkPlan,type PermissionSnapshot,type PermissionRow} from '@/lib/accessControl'
+import {moduleForPath,type PermissionSnapshot,type PermissionRow} from '@/lib/accessControl'
 import {
   canAccessPath,
   canEditCalendar,
@@ -37,9 +37,6 @@ export const MATRIX_SECTIONS: readonly PermissionSection[] = [
   {label: 'Schedule / Plan vs Actual', path: '/schedule', canManage: canEditSchedule},
   {label: 'Site Operations', path: '/reports', canManage: canEditSiteOperations},
   {label: 'Defect Report / Flow', path: '/defect-flow', canManage: canEditDefect},
-  {label: 'Hotel Work Plan', path: '/hotel-work-plan', canManage: canEditWorkPlan},
-  {label: 'Room Status | OOO/OOS', path: '/hotel-room-status',
-    canManage: canEditHotel},
   {label: 'วัสดุ / เครื่องมือ', path: '/materials', canManage: canManageMaterialsTools},
   {label: 'Procurement', path: '/procurement', canManage: canEditProcurement},
   {label: 'Contact Book', path: '/contact-book', canManage: (role) => role === 'owner' || role === 'purchase'},
