@@ -46,7 +46,6 @@ type EventDraft={
 
 const STORAGE_SELECTION='3kings:google-calendar:selected'
 const STORAGE_MODE='3kings:google-calendar:mode'
-const STORAGE_DEFECT_PLAN_INTRO='3kings:work-plan-defect-calendar:v1'
 const MAX_MONTH_EVENTS=3
 
 function todayBangkok(){
@@ -128,11 +127,12 @@ export function GoogleCalendarManager(){
   const {role,userId,ready}=useAccessRole()
   const editable=canEditCalendar(role)
   const canLinkProcurement=canEditProcurement(role)
-  const canViewDefectPlan=role!==null&&canAccessPath(role,'/hotel-work-plan')
+  // The hotel Work Plan module is retired; the managed projection stays disabled.
+  const canViewDefectPlan=false
   const [connection,setConnection]=useState<ConnectionState>('checking')
   const [ownerSetupRequired,setOwnerSetupRequired]=useState(false)
   const [appToken,setAppToken]=useState('')
-  const [selected,setSelected]=useState<string[]>(()=>[...WORK_CALENDARS.map(row=>row.id),DEFECT_WORK_PLAN_CALENDAR.id])
+  const [selected,setSelected]=useState<string[]>(()=>WORK_CALENDARS.map(row=>row.id))
   const [mode,setMode]=useState<CalendarMode>('MONTH')
   const [focusDate,setFocusDate]=useState(todayBangkok())
   const [events,setEvents]=useState<WorkEvent[]>([])
@@ -221,19 +221,10 @@ export function GoogleCalendarManager(){
         const parsed=JSON.parse(savedSelection)
         if(Array.isArray(parsed)){
           const allowed=parsed.filter((value):value is string=>typeof value==='string'&&value.length<=250)
-          setSelected(!window.localStorage.getItem(STORAGE_DEFECT_PLAN_INTRO)
-            ?[...new Set([...allowed,DEFECT_WORK_PLAN_CALENDAR.id])]:allowed)
+          const active=allowed.filter(value=>value!==DEFECT_WORK_PLAN_CALENDAR.id)
+          setSelected(active.length?active:WORK_CALENDARS.map(row=>row.id))
         }
       }
-      window.localStorage.setItem(STORAGE_DEFECT_PLAN_INTRO,'1')
-       const params=new URLSearchParams(window.location.search)
-       if(params.get('view')==='work-plan-defect'){
-         setSelected([DEFECT_WORK_PLAN_CALENDAR.id])
-         const chosen=params.get('date')
-         if(chosen&&/^\d{4}-\d{2}-\d{2}$/.test(chosen))setFocusDate(chosen)
-         setMode('MONTH')
-         return
-       }
        const savedMode=window.localStorage.getItem(STORAGE_MODE)
       if(savedMode==='MONTH'||savedMode==='WEEK'||savedMode==='AGENDA')setMode(savedMode)
     }catch{}
@@ -599,7 +590,7 @@ export function GoogleCalendarManager(){
             </div>
           </div>}
         </>}
-        <p>Source: Google Calendar / Web App / Work Plan Defect (อ่านอย่างเดียว)</p>
+        <p>Source: Google Calendar / Web App</p>
       </aside>
 
       <main className="panel gcal-stage">
