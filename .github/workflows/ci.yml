@@ -61,6 +61,9 @@ jobs:
       - name: Flow PNG font parity regression
         run: node --test tests/flow-export-png-font.test.cjs tests/defect-flow-card-room-labels.test.cjs tests/defect-flow-reconciliation.test.cjs
 
+      - name: Isolated Hotel-only GAS trigger retirement safety
+        run: node --test tests/hotel-module-gas-retirement.test.cjs
+
       - name: Retired Hotel modules boundary and no-impact regression
         run: node --test tests/hotel-module-retirement.test.cjs
 
