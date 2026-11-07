@@ -44,8 +44,8 @@ export default function DashboardMaterialsStatus(){
         const [p,m,checked,imported]=await Promise.all([
           s.from('projects').select('id,code,name,active,sort_order').eq('active',true).order('sort_order').abortSignal(signal),
           s.from('materials').select('id,project_id,status').abortSignal(signal),
-          s.from('drive_sync_runs').select('created_at,status,rows_written').eq('sync_type','materials').order('created_at',{ascending:false}).limit(1).maybeSingle().abortSignal(signal),
-          s.from('drive_sync_runs').select('created_at').eq('status','success').eq('sync_type','materials').gt('rows_written',0).order('created_at',{ascending:false}).limit(1).maybeSingle().abortSignal(signal),
+          s.from('drive_sync_runs').select('created_at,status,rows_written').eq('sync_type','materials').order('created_at',{ascending:false}).limit(1).abortSignal(signal).maybeSingle(),
+          s.from('drive_sync_runs').select('created_at').eq('status','success').eq('sync_type','materials').gt('rows_written',0).order('created_at',{ascending:false}).limit(1).abortSignal(signal).maybeSingle(),
         ])
         requireSuccessfulReads([p,m,checked,imported])
         if(!alive||signal.aborted)return
