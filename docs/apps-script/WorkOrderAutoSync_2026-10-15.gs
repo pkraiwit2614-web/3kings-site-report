@@ -152,8 +152,18 @@ function syncWorkOrderHourly20261015(){
       approved={status:'HOLD_ERROR',reason:String(e&&e.message||e).slice(0,150)};
     }
   }
+  // Exact owner-confirmed completion bridge on the SAME existing handler and
+  // SAME XLSX/credentials. Failure is isolated from unrelated legacy imports.
+  let completed={status:'NOT_INSTALLED'};
+  if(typeof workOrderMasterCompletedSync20261107_==='function'){
+    try{completed=workOrderMasterCompletedSync20261107_(false);}
+    catch(e){
+      console.error('WORK_ORDER_MASTER_COMPLETED_HOLD '+String(e&&e.message||e).slice(0,180));
+      completed={status:'HOLD_ERROR',reason:String(e&&e.message||e).slice(0,150)};
+    }
+  }
   const legacy=workOrderRun20261015_(false,false);
-  return {...legacy,approved};
+  return {...legacy,approved,completed};
 }
 function installWorkOrderTrigger20261015(){
   // Create or replace ONLY this one Work Order trigger; preserve all existing ones.
