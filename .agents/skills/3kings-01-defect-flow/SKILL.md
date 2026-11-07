@@ -22,7 +22,7 @@ Defect Excel master, condo_room_status, hotel evidence, Work Order/Work Plan.
 1. Resolve this command's row in the live SOP index and open the current SOP; follow its full ordered instructions.
 2. Fetch and reconcile current source data, scope, identities and evidence; identify out-of-scope dependencies.
 3. Enforce mode `authorized_write`: Validate explicit authorization for affected records and target. Use minimal write + readback; don't broaden scope.
-4. Verified room or Combine-group changes; compare Flow, Report, Work Order, Work Plan; validate 7-day rules and Excel↔Web readback.
+4. Verified room or Combine-group changes; compare Flow, Report and Work Order; validate 7-day rules and Excel↔Web readback. Retired Hotel Work Plan/OOO/OOS are not active Defect QA gates.
 5. No inferred closures; room status separate from OOO/OOS; confirm group membership and Good01-05 aliases; never change hotel status from a Defect update.
 6. Perform operation only within explicit authorization and when safeguards pass. Validate changed targets by independent readback; for `read_only`, verify evidence without modifying source.
 7. Report source version/time, specific results, unmatched/untested data, side effects, QA and exact remaining blockers.
@@ -58,3 +58,7 @@ These skills are agent guidance, **not** a server-side authorization, authentica
 - **Mode:** authorized_write (only the user-scoped records; inspection-only messages remain read-only).
 - **Risk-proportionate workflow:** Data/document/read-only operations must NOT require Git branch, CI or new Vercel Preview. Reuse verified source snapshots/checks within the same command; pause conflicting records only; readback targeted outputs and report PASS/FAIL/PENDING accurately.
 - **Subordinate helpers:** Superpowers/Task Observer optional process helpers must not block the user-facing task or repeat SOP/source loads; six project safety rules and RBAC/RLS are unchanged.
+
+
+## Retirement compatibility — 07/11/2026
+The live SOP index/addendum supersedes any legacy instructions to read or sync Hotel OOO/OOS, Work Plan or Work Calendar. Keep canonical Defect/Hotel Defect/Combine and Work Order QA unchanged. Never write retired sources or close Defect/Work IDs from stale Hotel status. This document-only clarification does not prove the Production triggers have been stopped.
