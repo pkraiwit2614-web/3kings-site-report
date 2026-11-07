@@ -52,3 +52,51 @@ test('Hotel footer, branch counts and room total reconcile for physical and Comb
   assert.equal(cards.reduce((n,c)=>n+c.count,0),rows.length)
  }
 })
+
+test('Dashboard Condo Summary uses canonical Flow status counts for all 263 physical rooms without data mutation',()=>{
+ const dashboardSource=fs.readFileSync(path.join(__dirname,'../components/DashboardCondoDefectSummary.tsx'),'utf8')
+ const dashboardPure=dashboardSource.slice(0,dashboardSource.indexOf('export default function DashboardCondoDefectSummary')).replace(/^import .*\r?\n/gm,'')
+ const dashboardJs=ts.transpileModule(dashboardPure,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,jsx:ts.JsxEmit.React}}).outputText
+ const {rowsForStatus,finalStatuses}=new Function('DEFECT_AWAITING_ACCEPTANCE_LABEL',dashboardJs+';return {rowsForStatus,finalStatuses}')('Defect เสร็จแล้ว • รอลูกค้า / Hotel ตรวจรับ')
+ const presentationSource=fs.readFileSync(path.join(__dirname,'../lib/defectStatusPresentation.ts'),'utf8')
+ const presentationJs=ts.transpileModule(presentationSource,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText
+ const mod={exports:{}}
+ new Function('module','exports',presentationJs)(mod,mod.exports)
+ const {canonicalDefectStatusGroup}=mod.exports
+ let seq=0
+ const make=(count,group,hotel,current='')=>Array.from({length:count},()=>({
+   room_no:'QA'+(++seq),building:'A',customer_status:'มีลูกค้า',
+   hotel_participation:hotel,current_status:current,status_group:group,synced_at:null,
+ }))
+ // Reproduce the categories present in the production 263-room snapshot, including
+ // historical handover/pending states reopened by nine newly reported defects.
+ const raw=[
+   ...make(131,'Hotel - Checked Complete','ร่วมโรงแรม'),
+   ...make(67,'Non-Hotel - Handover Complete','ไม่ร่วมโรงแรม'),
+   ...make(40,'Non-Hotel - Pending Handover','ไม่ร่วมโรงแรม'),
+   ...make(1,'Non-Hotel - Pending Handover','ร่วมโรงแรม'),
+   ...make(13,'Hotel - Awaiting Check','ร่วมโรงแรม'),
+   ...make(1,'Hotel - Completed / Awaiting Hotel Inspection','ร่วมโรงแรม'),
+   ...make(1,'Hotel - Incomplete','ร่วมโรงแรม','Defect ยังไม่เสร็จ'),
+   ...make(6,'Non-Hotel - Pending Handover','ไม่ร่วมโรงแรม','เพิ่งได้รับแจ้ง Defect 07/11/2026'),
+   ...make(2,'Non-Hotel - Handover Complete','ไม่ร่วมโรงแรม','เพิ่งได้รับแจ้ง Defect 07/11/2026'),
+   ...make(1,'Handover Complete','ไม่ร่วมโรงแรม','เพิ่งได้รับแจ้ง Defect 07/11/2026'),
+ ]
+ const original=JSON.stringify(raw)
+ const projected=raw.map(r=>({...r,status_group:canonicalDefectStatusGroup(r.status_group,r.hotel_participation,r.current_status)}))
+ const byKey=Object.fromEntries(finalStatuses.map(s=>[s.key,rowsForStatus(projected,s).length]))
+ assert.deepEqual(byKey,{
+   'status-handover-complete':67,
+   'status-awaiting-hotel':14,
+   'status-incomplete':10,
+   'status-hotel-checked':131,
+   'status-pending-handover':41,
+ })
+ assert.equal(Object.values(byKey).reduce((sum,n)=>sum+n,0),263)
+ assert.equal(byKey['status-awaiting-hotel']+byKey['status-pending-handover'],55)
+ assert.equal(byKey['status-incomplete'],projected.filter(r=>r.status_group==='Hotel - Incomplete'||r.status_group==='Non-Hotel - Incomplete').length)
+ assert.equal(JSON.stringify(raw),original,'Dashboard normalization must not overwrite source statuses')
+ assert.match(dashboardSource,/canonicalDefectStatusGroup\(row\.status_group,row\.hotel_participation,row\.current_status\)/)
+ assert.match(dashboardSource,/select\('room_no,building,customer_status,hotel_participation,current_status,status_group,synced_at'\)/)
+ assert.doesNotMatch(dashboardSource,/\.from\('condo_room_status'\)\.(update|insert|upsert|delete)\(/)
+})
