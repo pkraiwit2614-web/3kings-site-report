@@ -122,8 +122,8 @@ test('Flow deep link reaches rendered report table, Work Order missing popup is 
  assert.match(report,/data-has-open-work=\{workOpenByRoom\.has\(r\.room_no\)\?'true':'false'\}/)
  assert.match(report,/r\.defect_detail\?\.trim\(\)/)
  assert.match(printCss,/@media print/)
- assert.match(printCss,/\.defect-table th:nth-child\(10\),\.defect-table td:nth-child\(10\)\{display:none!important\}/)
- assert.doesNotMatch(printCss,/\.defect-table th:nth-child\(9\),\.defect-table td:nth-child\(9\)\{display:none/)
+ assert.match(printCss,/\.defect-table th:nth-child\(9\),\.defect-table td:nth-child\(9\)\{display:none!important\}/)
+ assert.doesNotMatch(printCss,/\.defect-table th:nth-child\(10\),\.defect-table td:nth-child\(10\)\{display:none/)
 })
 
 

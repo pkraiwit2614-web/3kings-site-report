@@ -17,12 +17,11 @@ test('Hotel Work Plan seed preserves every source schedule entry and GOOD aliase
  assert.doesNotMatch(sql,/UPDATE public\.condo_room_status|DELETE FROM public\.condo_room_status/i)
  assert.doesNotMatch(sql,/UPDATE public\.hotel_room_availability|DELETE FROM public\.hotel_room_availability/i)
 })
-test('tab order, visibility, and scoped editor access remain consistent',()=>{
+test('retired Hotel tabs are gone while historical scoped access definitions are preserved',()=>{
  const matches=[...tabs.matchAll(/<Link href="\/(defect-flow|defects|hotel-work-plan|hotel-room-status)" className/g)].map(x=>x[1])
- assert.deepEqual(matches,['defect-flow','defects','hotel-work-plan','hotel-room-status'])
+ assert.deepEqual(matches,['defect-flow','defects'])
  assert.match(tabs,/>Defect Flow<\/Link>/)
- assert.match(tabs,/>Work Plan<\/Link>/)
- assert.match(tabs,/>Status \| OOO\/OOS<\/Link>/)
+ assert.doesNotMatch(tabs,/href="\/hotel-work-plan"|href="\/hotel-room-status"/)
  assert.match(access,/value==='\/hotel-work-plan'/)
  assert.match(work,/canEditWorkPlan\(role\)/)
  assert.match(sql,/p\.role='defect_editor'/)
@@ -40,9 +39,7 @@ test('Work Plan edits are revision checked, audited, and do not set Defect or OO
  assert.match(work,/RSE/)
  assert.match(work,/ขอพงษ์/)
  assert.match(work,/หมู่ 8/)
- assert.match(defect,/hotel_room_availability/)
- assert.match(defect,/hotel_work_plan_rooms/)
- assert.match(defect,/Work Plan \/ Hotel Status/)
+ assert.doesNotMatch(defect,/hotel_room_availability|hotel_work_plan_rooms|Work Plan \/ Hotel Status/)
 })
 
 test('Work Plan prints with the shared report tools and keeps Excel links private',()=>{

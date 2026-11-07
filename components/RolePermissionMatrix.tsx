@@ -2,7 +2,7 @@
 import {useEffect,useState} from 'react'
 import {getSupabase} from '@/lib/supabase'
 import {applyPermissionSnapshot,loadPermissions} from '@/lib/permissionClient'
-import {moduleForPath,canEditHotel,canEditWorkPlan,type PermissionSnapshot,type PermissionRow} from '@/lib/accessControl'
+import {moduleForPath,type PermissionSnapshot,type PermissionRow} from '@/lib/accessControl'
 import {
   canAccessPath,
   canEditCalendar,
@@ -37,9 +37,6 @@ export const MATRIX_SECTIONS: readonly PermissionSection[] = [
   {label: 'Schedule / Plan vs Actual', path: '/schedule', canManage: canEditSchedule},
   {label: 'Site Operations', path: '/reports', canManage: canEditSiteOperations},
   {label: 'Defect Report / Flow', path: '/defect-flow', canManage: canEditDefect},
-  {label: 'Hotel Work Plan', path: '/hotel-work-plan', canManage: canEditWorkPlan},
-  {label: 'Room Status | OOO/OOS', path: '/hotel-room-status',
-    canManage: canEditHotel},
   {label: 'วัสดุ / เครื่องมือ', path: '/materials', canManage: canManageMaterialsTools},
   {label: 'Procurement', path: '/procurement', canManage: canEditProcurement},
   {label: 'Contact Book', path: '/contact-book', canManage: (role) => role === 'owner' || role === 'purchase'},
@@ -99,7 +96,7 @@ export default function RolePermissionMatrix() {
         <h2 id="permission-matrix-title">Role Permission Matrix</h2>
         <p>แก้ไขได้เฉพาะ Owner • เลือกสิทธิ์ ตรวจรายการเปลี่ยนแปลง แล้วกดยืนยันบันทึก</p>
       </div>
-      <span className="permission-matrix-count">7 Roles · 15 Modules</span>
+      <span className="permission-matrix-count">7 Roles · {MATRIX_SECTIONS.length} Sections</span>
     </div>
 
     <div className="permission-matrix-legend" aria-label="คำอธิบายสถานะสิทธิ์">

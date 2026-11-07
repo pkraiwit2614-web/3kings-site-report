@@ -5,7 +5,6 @@ import Link from 'next/link'
 import AppShell from '@/components/AppShell'
 import PageHeader from '@/components/PageHeader'
 import { getSupabase } from '@/lib/supabase'
-import HotelRoomReconciliationPanel from '@/components/HotelRoomReconciliationPanel'
 
 function dateTimeTH(value:string|null|undefined){
   if(!value) return '-'
@@ -127,7 +126,6 @@ export default function DataHealthPage(){
   return <AppShell>
     <PageHeader title="Data Health" subtitle="ตรวจความสดและความพร้อมของข้อมูลก่อนใช้ Dashboard / Executive Presentation" action={<Link href="/" className="button">← Dashboard</Link>} />
 
-    <HotelRoomReconciliationPanel />
 
     <div className="notice small" style={{marginBottom:14}}>
       เกณฑ์ใช้งาน: Schedule ตรวจทุกชั่วโมงแบบ source-change detection • Defect ควรใช้ metadata check ถี่กว่าชุดอื่นและเขียนฐานข้อมูลเฉพาะเมื่อ Source เปลี่ยน • Picture Progress เป็นข้อมูลหนัก ควรสแกนเป็นรอบห่างกว่า Schedule/Defect

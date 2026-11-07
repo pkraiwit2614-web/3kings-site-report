@@ -45,9 +45,8 @@
   .defect-table th:nth-child(6),.defect-table td:nth-child(6){width:7%}
   .defect-table th:nth-child(7),.defect-table td:nth-child(7){width:32%}
   .defect-table th:nth-child(8),.defect-table td:nth-child(8){width:12.5%}
-  .defect-table th:nth-child(9),.defect-table td:nth-child(9){width:14%}
-  /* Print ONLY: omit the tenth (ต้องทำต่อ) column from Defect Report. */
-  .defect-table th:nth-child(10),.defect-table td:nth-child(10){display:none!important}
+  /* Print ONLY: the retired Hotel Work Plan column is gone; keep Next Action excluded. */
+  .defect-table th:nth-child(9),.defect-table td:nth-child(9){display:none!important}
 
   .defect-detail{min-width:0!important;max-width:none!important;line-height:1.25!important}
 

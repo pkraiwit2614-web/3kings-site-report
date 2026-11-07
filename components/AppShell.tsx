@@ -61,7 +61,7 @@ function roleLabel(role:AccessRole|null){
 
 function navIsActive(path:string,href:string){
   if(href==='/materials') return path==='/materials'||path==='/procurement'
-  if(href==='/defect-flow') return path==='/defect-flow'||path==='/defects'||path.startsWith('/defects/')||path==='/work-order'||path==='/hotel-work-plan'||path==='/hotel-room-status'
+  if(href==='/defect-flow') return path==='/defect-flow'||path==='/defects'||path.startsWith('/defects/')||path==='/work-order'
   if(href==='/reports/labour') return path==='/reports/labour'
   if(href==='/reports') return path==='/reports'||(path.startsWith('/reports/')&&path!=='/reports/labour')
   return path===href
@@ -81,13 +81,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const nav = useMemo<NavItem[]>(() => {
     if(!presentationRole)return []
     const candidates=presentationRole==='owner'?[...standardNav,['/users','System & Access'] as NavItem]:standardNav
-    return candidates.map(([href,label]):NavItem=>{
-      if(href==='/defect-flow'&&!canAccessPath(presentationRole,href)){
-        const available=['/hotel-work-plan','/hotel-room-status'].find(p=>canAccessPath(presentationRole,p))
-        if(available)return [available,label]
-      }
-      return [href,label]
-    }).filter(([href])=>canAccessPath(presentationRole,href))
+    return candidates.filter(([href])=>canAccessPath(presentationRole,href))
   }, [presentationRole,permissionRevision])
   const mobileOrderedNav = useMemo<NavItem[]>(() => {
     const priority = MOBILE_PRIORITY_PATHS.flatMap((href) => {
@@ -225,7 +219,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   const extraActive = extraNav.some(([href]) => navIsActive(path,href))
   const isMaterialsProcurementSection = path==='/materials'||path==='/procurement'
-  const isDefectSection = path==='/defect-flow'||path==='/defects'||path.startsWith('/defects/')||path==='/work-order'||path==='/hotel-work-plan'||path==='/hotel-room-status'
+  const isDefectSection = path==='/defect-flow'||path==='/defects'||path.startsWith('/defects/')||path==='/work-order'
   const isSiteOperationsSection = path==='/reports'||path==='/reports/labour'
   const isOwnerToolsSection = actualRole==='owner'&&(path==='/users'||path==='/photo-mapping'||path==='/data-health')
 
@@ -250,8 +244,6 @@ export default function AppShell({ children }: { children: ReactNode }) {
         {presentationRole&&canAccessPath(presentationRole,'/defect-flow')&&<Link href="/defect-flow" className={path==='/defect-flow'?'active':''}>Defect Flow</Link>}
         {presentationRole&&canAccessPath(presentationRole,'/defects')&&<Link href="/defects" className={path==='/defects'?'active':''}>Defect Report</Link>}
         {presentationRole&&canAccessWorkOrder(presentationRole)&&<Link href="/work-order" className={path==='/work-order'?'active':''}>Work Order</Link>}
-        {presentationRole&&canAccessPath(presentationRole,'/hotel-work-plan')&&<Link href="/hotel-work-plan" className={path==='/hotel-work-plan'?'active':''}>Work Plan</Link>}
-        {presentationRole&&canAccessPath(presentationRole,'/hotel-room-status')&&<Link href="/hotel-room-status" className={path==='/hotel-room-status'?'active':''}>Status | OOO/OOS</Link>}
       </nav>}
       {isSiteOperationsSection&&<nav className="defect-section-tabs" aria-label="Site Operations navigation">
         <Link href="/reports" className={path==='/reports'?'active':''}>Site Operations</Link>
