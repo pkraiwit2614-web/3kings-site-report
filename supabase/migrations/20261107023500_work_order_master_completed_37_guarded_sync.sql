@@ -236,10 +236,10 @@ BEGIN
         NULL,after_row);
     END IF;
   END LOOP;
-  SELECT count(*) INTO existing_count FROM public.defect_work_order_snapshot w
-    WHERE w.room_group=ANY(ARRAY['A207','A301','A327','A416','A512','A612'])
-    AND w.work_id IN (SELECT x->>'work_id' FROM jsonb_array_elements(p_rows) x)
-    AND w.work_status='เสร็จแล้ว — งดแจก (รอตรวจรับ)';
+  SELECT count(*) INTO existing_count FROM public.defect_work_order_snapshot AS snap
+    WHERE snap.room_group=ANY(ARRAY['A207','A301','A327','A416','A512','A612'])
+    AND snap.work_id IN (SELECT x->>'work_id' FROM jsonb_array_elements(p_rows) x)
+    AND snap.work_status='เสร็จแล้ว — งดแจก (รอตรวจรับ)';
   IF existing_count <> 37 THEN
     RAISE EXCEPTION 'COMPLETED_MASTER_READBACK_MISMATCH' USING ERRCODE='check_violation';
   END IF;
