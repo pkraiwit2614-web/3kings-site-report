@@ -3,12 +3,14 @@
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
-import {DEFECT_AWAITING_ACCEPTANCE_LABEL} from '@/lib/defectStatusPresentation'
+import {DEFECT_AWAITING_ACCEPTANCE_LABEL,canonicalDefectStatusGroup} from '@/lib/defectStatusPresentation'
 
 type Row={
   room_no:string
   building:string
   customer_status:string
+  hotel_participation:string
+  current_status:string|null
   status_group:string|null
   synced_at:string|null
 }
@@ -29,6 +31,18 @@ const finalStatuses:FinalStatus[]=[
   {key:'status-hotel-checked',label:'Hotel ตรวจแล้ว',note:'ปิดสถานะ Defect',tone:'good',group:'Hotel - Checked Complete'},
   {key:'status-pending-handover',label:DEFECT_AWAITING_ACCEPTANCE_LABEL,note:'รอลูกค้าเข้าตรวจรับ',tone:'warn',group:'Non-Hotel - Pending Handover'},
 ]
+
+// Use the same canonical, physical-room status buckets as Defect Flow (Flow รวม).
+// No source/writeback mutations: this is a dashboard-only read model.
+function rowsForStatus(rows:Row[],status:FinalStatus):Row[]{
+  if(status.key==='status-incomplete')
+    return rows.filter(r=>r.status_group==='Hotel - Incomplete'||r.status_group==='Non-Hotel - Incomplete')
+  if(status.key==='status-hotel-checked')
+    return rows.filter(r=>r.status_group===status.group&&r.hotel_participation==='ร่วมโรงแรม')
+  if(status.key==='status-pending-handover')
+    return rows.filter(r=>r.status_group===status.group||(r.status_group==='Hotel - Checked Complete'&&r.hotel_participation==='ไม่ร่วมโรงแรม'))
+  return rows.filter(r=>r.status_group===status.group)
+}
 
 function dateTimeTH(value:string|null|undefined){
   if(!value)return '-'
@@ -51,9 +65,9 @@ export default function DashboardCondoDefectSummary(){
     let alive=true
     const supabase=getSupabase()
     const load=async()=>{
-      const {data}=await supabase.from('condo_room_status').select('room_no,building,customer_status,status_group,synced_at').order('room_no')
+      const {data}=await supabase.from('condo_room_status').select('room_no,building,customer_status,hotel_participation,current_status,status_group,synced_at').order('room_no')
       if(!alive)return
-      setRows((data||[]) as Row[])
+      setRows(((data||[]) as Row[]).map(row=>({...row,status_group:canonicalDefectStatusGroup(row.status_group,row.hotel_participation,row.current_status)})))
       setLoading(false)
     }
     void load()
@@ -70,9 +84,9 @@ export default function DashboardCondoDefectSummary(){
   }),[rows])
 
   const sourceDate=useMemo(()=>latestDate(rows),[rows])
-  const coverage=useMemo(()=>finalStatuses.reduce((sum,s)=>sum+rows.filter(r=>r.status_group===s.group).length,0),[rows])
+  const coverage=useMemo(()=>finalStatuses.reduce((sum,s)=>sum+rowsForStatus(rows,s).length,0),[rows])
   const toneTotals=useMemo(()=>{
-    const count=(tone:FinalStatus['tone'])=>finalStatuses.filter(s=>s.tone===tone).reduce((sum,s)=>sum+rows.filter(r=>r.status_group===s.group).length,0)
+    const count=(tone:FinalStatus['tone'])=>finalStatuses.filter(s=>s.tone===tone).reduce((sum,s)=>sum+rowsForStatus(rows,s).length,0)
     return {danger:count('danger'),warn:count('warn'),good:count('good')}
   },[rows])
 
@@ -116,7 +130,7 @@ export default function DashboardCondoDefectSummary(){
 
         <div className="status-grid">
           {finalStatuses.map(s=>{
-            const list=rows.filter(r=>r.status_group===s.group)
+            const list=rowsForStatus(rows,s)
             const a=list.filter(r=>r.building==='A').length
             const b=list.filter(r=>r.building==='B').length
             const customer=list.filter(r=>r.customer_status==='มีลูกค้า').length
