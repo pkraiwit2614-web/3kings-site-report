@@ -1,3 +1,5 @@
+CREATE ROLE anon NOLOGIN;
+CREATE ROLE authenticated NOLOGIN;
 CREATE SCHEMA IF NOT EXISTS private;
 CREATE OR REPLACE FUNCTION private.drive_sync_key_valid(p text) RETURNS boolean
 LANGUAGE sql IMMUTABLE AS $$ SELECT p='isolated-fixture-only' $$;
