@@ -3,11 +3,15 @@ name: 3kings-12-work-calendar
 description: "3 Kings Construction shortcut 'อัปเดตปฏิทินงาน'. Write only the specific verified records/files explicitly requested; never treat this as blanket permission."
 ---
 
+## Retirement gate — 07/11/2026 (overrides historical instructions below)
+
+**STATUS: RETIRED FOR NEW ACTIONS (DOCUMENT ONLY; RUNTIME PENDING).** The live Google Drive SOP_INDEX row 12 and full SOP 12 document were amended 07/11/2026 to retire Work Calendar instructions. The shortcut is no longer authorized to create/update any Calendar event, activate a GAS trigger, or execute Calendar sync. Historical procedures below are retained solely for audit. Do not use them as executable instructions. Preserve old calendar IDs/events, source files, all shared jobs (especially shift scheduler/Defect/Materials/Procurement), and the original code. A live production/runtime retirement must be separately verified before claiming DONE.
+
 # 12 — อัปเดตปฏิทินงาน
 
 **Shortcut:** `อัปเดตปฏิทินงาน`  
 **SOP title (resolve via live Drive index):** `SOP_12_Work_Calendar_v2.0_Consolidated_2026-10-20`  
-**Mode:** `authorized_write`
+**Mode:** `retired_reference_only`
 
 ## Before any action
 
