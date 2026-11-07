@@ -4,7 +4,6 @@ DECLARE
   r jsonb;
   v_before jsonb;
   v_after jsonb;
-  room text;
 BEGIN
   SELECT to_jsonb(t) INTO v_before
   FROM public.defect_work_order_snapshot t WHERE work_id='DF-B312-02';
