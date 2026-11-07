@@ -96,7 +96,7 @@ export default function RolePermissionMatrix() {
         <h2 id="permission-matrix-title">Role Permission Matrix</h2>
         <p>แก้ไขได้เฉพาะ Owner • เลือกสิทธิ์ ตรวจรายการเปลี่ยนแปลง แล้วกดยืนยันบันทึก</p>
       </div>
-      <span className="permission-matrix-count">7 Roles · 15 Modules</span>
+      <span className="permission-matrix-count">7 Roles · {MATRIX_SECTIONS.length} Sections</span>
     </div>
 
     <div className="permission-matrix-legend" aria-label="คำอธิบายสถานะสิทธิ์">
