@@ -65,7 +65,7 @@ jobs:
         run: node --test tests/hotel-module-gas-retirement.test.cjs
 
       - name: Retired Hotel modules boundary and no-impact regression
-        run: node --test tests/hotel-module-retirement.test.cjs
+        run: node --test tests/hotel-module-retirement.test.cjs tests/calendar-ui-retirement-20261107.test.cjs
 
       - name: Hotel Work Plan bidirectional Excel safety
         run: node --test tests/hotel-work-plan-excel-bidirectional.test.cjs
