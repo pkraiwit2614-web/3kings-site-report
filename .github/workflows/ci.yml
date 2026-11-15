@@ -105,6 +105,9 @@ jobs:
 
       - name: Work Order sticky header, Combine and Excel sync safety
         run: node --test tests/work-order-auto-sync.test.cjs tests/work-order-master-completed-37.test.cjs
+
+      - name: Contractor Quality isolated historical dashboard, permission and read-only regressions
+        run: node --test tests/contractor-quality-readonly.test.cjs
       - name: Approved Work Order Master auto-sync, HOLD and Combine regression
         run: node --test tests/work-order-approved-auto-promotion.test.cjs
 
