@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import {DEFECT_AWAITING_ACCEPTANCE_LABEL,canonicalDefectStatusGroup} from '@/lib/defectStatusPresentation'
+import DashboardExecutiveInsight from '@/components/DashboardExecutiveInsight'
 
 type Row={
   room_no:string
@@ -150,6 +151,10 @@ export default function DashboardCondoDefectSummary(){
       </div>
 
       <div className={`coverage ${coverage===summary.total?'complete':'attention'}`}><span>Coverage Check</span><b>{coverage} / {summary.total} ห้อง</b><small>{coverage===summary.total?'ครบทุกห้องในสถานะปลายทาง 1 กลุ่ม':'มีห้องที่ต้องตรวจสอบการจัดกลุ่มสถานะ'}</small></div>
+      <DashboardExecutiveInsight
+        summary={coverage!==summary.total?`ต้องตรวจสอบการจัดกลุ่มสถานะ ${Math.abs(summary.total-coverage)} ห้อง`:`Condo ยังไม่เสร็จ ${toneTotals.danger} ห้อง`}
+        action={coverage===summary.total&&toneTotals.warn>0?`รอตรวจ / รอส่งมอบ ${toneTotals.warn} ห้อง`:''}
+        tone={coverage!==summary.total||toneTotals.danger>0?'danger':'info'}/>
     </>}
 
     <style jsx>{`
