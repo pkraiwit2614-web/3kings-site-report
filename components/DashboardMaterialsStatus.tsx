@@ -166,7 +166,7 @@ export default function DashboardMaterialsStatus(){
         </div>}
         <DashboardExecutiveInsight
           summary={loadError||latestSyncStatus==='error'?'ยังไม่สามารถยืนยันสถานะวัสดุล่าสุด':totals.pending>0?`วัสดุยังไม่สั่ง ${totals.pending} รายการ`:'ไม่มีรายการวัสดุที่ระบุว่ายังไม่สั่ง'}
-          action={!loadError&&latestSyncStatus!=='error'?(stats[0]?.pending>0?`${stats[0].project.code} รอสั่งสูงสุด ${stats[0].pending} รายการ`:unlinkedCounts.pending>0?`ยังไม่ผูก Plot ${unlinkedCounts.pending} รายการ`:''):''}
+          action={!loadError&&latestSyncStatus!=='error'?((stats.length>0&&stats[0].pending>0)?`${stats[0].project.code} รอสั่งสูงสุด ${stats[0].pending} รายการ`:unlinkedCounts.pending>0?`ยังไม่ผูก Plot ${unlinkedCounts.pending} รายการ`:''):''}
           tone={totals.pending>0||loadError||latestSyncStatus==='error'?'warning':'info'}/>
       </>}
       <style jsx>{`
