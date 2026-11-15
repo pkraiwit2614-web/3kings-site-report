@@ -61,7 +61,7 @@ function roleLabel(role:AccessRole|null){
 
 function navIsActive(path:string,href:string){
   if(href==='/materials') return path==='/materials'||path==='/procurement'
-  if(href==='/defect-flow') return path==='/defect-flow'||path==='/defects'||path.startsWith('/defects/')||path==='/work-order'
+  if(href==='/defect-flow') return path==='/defect-flow'||path==='/defects'||path.startsWith('/defects/')||path==='/work-order'||path==='/contractor-quality'
   if(href==='/reports/labour') return path==='/reports/labour'
   if(href==='/reports') return path==='/reports'||(path.startsWith('/reports/')&&path!=='/reports/labour')
   return path===href
@@ -219,7 +219,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   const extraActive = extraNav.some(([href]) => navIsActive(path,href))
   const isMaterialsProcurementSection = path==='/materials'||path==='/procurement'
-  const isDefectSection = path==='/defect-flow'||path==='/defects'||path.startsWith('/defects/')||path==='/work-order'
+  const isDefectSection = path==='/defect-flow'||path==='/defects'||path.startsWith('/defects/')||path==='/work-order'||path==='/contractor-quality'
   const isSiteOperationsSection = path==='/reports'||path==='/reports/labour'
   const isOwnerToolsSection = actualRole==='owner'&&(path==='/users'||path==='/photo-mapping'||path==='/data-health')
 
@@ -244,6 +244,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         {presentationRole&&canAccessPath(presentationRole,'/defect-flow')&&<Link href="/defect-flow" className={path==='/defect-flow'?'active':''}>Defect Flow</Link>}
         {presentationRole&&canAccessPath(presentationRole,'/defects')&&<Link href="/defects" className={path==='/defects'?'active':''}>Defect Report</Link>}
         {presentationRole&&canAccessWorkOrder(presentationRole)&&<Link href="/work-order" className={path==='/work-order'?'active':''}>Work Order</Link>}
+        {presentationRole&&canAccessWorkOrder(presentationRole)&&<Link href="/contractor-quality" className={path==='/contractor-quality'?'active':''}>Contractor Quality</Link>}
       </nav>}
       {isSiteOperationsSection&&<nav className="defect-section-tabs" aria-label="Site Operations navigation">
         <Link href="/reports" className={path==='/reports'?'active':''}>Site Operations</Link>
