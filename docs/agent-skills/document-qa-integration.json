@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "updated_on": "2026-11-15",
+  "source_authority": "Live Drive 00-SOP_INDEX GLOBAL-WRITER addendum and relevant ACTIVE module SOP",
+  "auto_route": {
+    "on": "ordinary_document_create_edit_export",
+    "formats": [
+      "xlsx",
+      "pdf",
+      "pptx",
+      "png"
+    ],
+    "agent_skill": ".agents/skills/3kings-document-qa/SKILL.md",
+    "precondition": "live_sop_gate_passed",
+    "requires_separate_user_qa_prompt": false
+  },
+  "gates": [
+    "DATA_QA",
+    "STRUCTURE_QA",
+    "VISUAL_QA",
+    "DRIVE_READBACK"
+  ],
+  "verified_scope": "Isolated real-file copies (4/4), 10/10 synthetic regression, 12/12 gate negative cases, 4/4 Drive readback byte matches",
+  "execution": "agent_guidance_only_no_server_hook",
+  "prohibited_changes": [
+    "application_runtime",
+    "CI",
+    "Supabase",
+    "Vercel",
+    "GAS",
+    "LINE",
+    "Defect",
+    "Materials",
+    "DailyReport",
+    "Payroll",
+    "Calendar",
+    "RBAC_RLS",
+    "ExcelSync"
+  ],
+  "pilot_location_by_name": "3Kings Construction/AI Operations/Document QA Pilot (Isolated)/3Kings_Document_QA_Pilot_v1.2_4Gate_E2E_20261115.zip",
+  "note": "An agent must have actual file/render/connector tools to invoke executable. Missing capability is HOLD, not PASS. Repository guidance does not auto-install in ChatGPT chats."
+}
