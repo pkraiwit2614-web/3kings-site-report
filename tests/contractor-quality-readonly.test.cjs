@@ -17,7 +17,8 @@ test('Contractor Quality follows existing Defect navigation immediately after Wo
 })
 
 test('Existing Work Order authorization and defect role matrix apply to quality route',()=>{
- assert.match(access,/cleanPath\(path\)==='\/work-order'\|\|cleanPath\(path\)==='\/contractor-quality'\)return canAccessWorkOrder\(role,snapshot\)/)
+ assert.match(access,/if\(cleanPath\(path\)==='\/work-order'\)return canAccessWorkOrder\(role,snapshot\)/)
+ assert.match(access,/if\(cleanPath\(path\)==='\/contractor-quality'\)return canAccessWorkOrder\(role,snapshot\)/)
  assert.match(access,/p==='\/contractor-quality'\)return 'defect'/)
  assert.match(page,/const permitted=canAccessWorkOrder\(role\)/)
  assert.match(page,/if\(!permitted\)return/)
