@@ -21,7 +21,6 @@ type DefectItem={work_id:string;room_group:string;building:string;contractor:str
  work_status:string|null;evidence_url:string|null;provisional:boolean}
 type VendorMetric={name:string;total:number;rooms:number;pending:number}
 const VENDORS=['Pre Fur.','RSE','หมู่ 8','ขอพงษ์','ทองทวี'] as const
-const MASTER_ID='18P3OFYtOLsslCtDujlSQVf9IQSuplKcx'
 const actions:Record<string,string>={
  'Pre Fur.':'ตรวจ Defect เฟอร์นิเจอร์ในห้องที่มีรายการสูง และทบทวนขั้นตอนตรวจรับ/ปรับตั้งบานก่อนส่งมอบ',
  'RSE':'ตรวจสอบ Defect งานระบบอาคาร B พร้อมหลักฐานการทดสอบและตรวจรับระบบ',
@@ -226,16 +225,7 @@ export default function ContractorQualityPage(){
        <li>เพิ่มปริมาณงานและความรุนแรง Defect ก่อนตัดสินใจต่อสัญญา</li>
       </ol>
      </section>
-     <section className="quality-panel">
-      <h2>ความครบถ้วนของข้อมูล</h2>
-      <div className="quality-health-row"><span>ประวัติ Master ที่ยืนยันแล้ว</span><b>{derived.allVerified.length}</b></div>
-      <div className="quality-health-row"><span>อยู่ใน Master แต่ยังไม่อยู่ใน Work Order DB</span><b>{derived.sourceOnly.length}</b></div>
-      <div className="quality-health-row"><span>อยู่เฉพาะฐาน DB เดิม (ยังไม่ยืนยัน)</span><b>{derived.pendingDbOnly.length}</b></div>
-      <div className="quality-health-row"><span>ชื่อทีมไม่ตรงกันระหว่าง Master / DB</span><b>{derived.mismatched.length}</b></div>
-      <div className="quality-health-row"><span>Work ID ใหม่จาก Work Order Sync รอตรวจ Master</span><b>{derived.pending.length}</b></div>
-      <p className="quality-health-note">ยอด Defect สะสมอ่านจาก Master History ไม่ใช้ตัวกรอง Active/HOLD ของใบแจกงาน และไม่ลดลงเมื่องานปิดแล้ว หาก Master เปลี่ยนแต่ประวัติยังไม่อัปเดต ต้องแสดงสถานะข้อมูลค้าง ไม่รายงานว่า Sync ครบ</p>
-      <a href={'https://drive.google.com/file/d/'+MASTER_ID+'/view'} target="_blank" rel="noopener noreferrer">ตรวจสอบ Excel Master ต้นทาง</a>
-     </section>
+
     </div>
    </>}
   </div>

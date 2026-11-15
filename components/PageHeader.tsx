@@ -4,6 +4,7 @@ import PrintButton from '@/components/PrintButton'
 const printableTitles=new Set([
   'Above Condo — Defect Report',
   'Above Condo — Work Order',
+  'Contractor Quality',
   'วัสดุ เครื่องมือและผู้รับเหมา',
   'Schedule / Plan vs Actual',
   'การจัดซื้อ/จัดจ้าง',

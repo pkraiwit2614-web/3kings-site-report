@@ -299,6 +299,19 @@ jobs:
           exit 1
       - name: Test real Viewer login, UI, API and PostgreSQL RLS
         run: node tests/e2e/local-viewer-browser.mjs
+      - name: Contractor Quality real-browser Print Preview (synthetic local data only)
+        run: node tests/e2e/contractor-quality-print-preview.mjs
+      - name: Archive Contractor Quality screen and A4 landscape print preview
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contractor-quality-print-preview
+          path: |
+            tests/e2e/artifacts/contractor-quality-screen.png
+            tests/e2e/artifacts/contractor-quality-print.png
+            tests/e2e/artifacts/contractor-quality-print.pdf
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Evidence summary without credentials or business data
         if: success()
         run: |
