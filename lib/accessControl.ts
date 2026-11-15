@@ -31,7 +31,7 @@ export function resolveAccessRole(profileRole:string|undefined|null,userId:strin
 
 export function canAccessPath(role:AccessRole,path:string,snapshot?:PermissionSnapshot|null){
   if(cleanPath(path)==='/no-access')return true
-  if(cleanPath(path)==='/work-order')return canAccessWorkOrder(role,snapshot)
+  if(cleanPath(path)==='/work-order'||cleanPath(path)==='/contractor-quality')return canAccessWorkOrder(role,snapshot)
   const module=moduleForPath(path)
   if(module==='contact_book'){
     const source=snapshot===undefined?(typeof window!=='undefined'?browserPermissions:null):snapshot
@@ -116,7 +116,7 @@ export function moduleForPath(path:string):string|null{
   const p=cleanPath(path)
   if(p==='/reports/labour'||p.startsWith('/reports/labour/'))return 'payroll'
   if(p==='/users')return path.includes('tab=activity')?'activity':'users'
-  if(p==='/defects'||p.startsWith('/defects/')||p==='/defect-flow'||p==='/work-order')return 'defect'
+  if(p==='/defects'||p.startsWith('/defects/')||p==='/defect-flow'||p==='/work-order'||p==='/contractor-quality')return 'defect'
   if(p==='/hotel-room-status')return 'hotel'
   if(p==='/hotel-work-plan')return 'workplan'
   if(p==='/')return 'dashboard'
