@@ -31,7 +31,8 @@ export function resolveAccessRole(profileRole:string|undefined|null,userId:strin
 
 export function canAccessPath(role:AccessRole,path:string,snapshot?:PermissionSnapshot|null){
   if(cleanPath(path)==='/no-access')return true
-  if(cleanPath(path)==='/work-order'||cleanPath(path)==='/contractor-quality')return canAccessWorkOrder(role,snapshot)
+  if(cleanPath(path)==='/work-order')return canAccessWorkOrder(role,snapshot)
+  if(cleanPath(path)==='/contractor-quality')return canAccessWorkOrder(role,snapshot)
   const module=moduleForPath(path)
   if(module==='contact_book'){
     const source=snapshot===undefined?(typeof window!=='undefined'?browserPermissions:null):snapshot
