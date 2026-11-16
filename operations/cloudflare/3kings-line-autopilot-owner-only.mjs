@@ -997,6 +997,9 @@ export async function syncOwnerPushIncident(env,{pipeline,source,runKey,createdA
  */
 async function syncOwnerContinuityTick(env,{enabled,runs,hash,transport,now}){
   const stats={missingRunAlerts:0,recoveryLogAlerts:0,ownerAccepted:0,hold:0};
+  // Existing production monitor is managed by its dedicated config secret.
+  // Legacy standalone tests/callers do not opt in to continuity alerts.
+  if(!env.SYNC_OWNER_MONITOR_CONFIG)return stats;
   const time=Object.fromEntries(new Intl.DateTimeFormat('en-US',{
     timeZone:'Asia/Bangkok',weekday:'short',year:'numeric',month:'2-digit',
     day:'2-digit',hour:'2-digit',hourCycle:'h23'
@@ -1033,14 +1036,15 @@ async function syncOwnerContinuityTick(env,{enabled,runs,hash,transport,now}){
         stale.push('Work Order snapshot '+(last===null?'ไม่มีเวลา Import':
           'Import ล่าสุด '+new Date(last).toISOString()));
     }else{
-      for(const source of sources){
-        const matching=runs.filter(r=>r.pipeline===pipeline&&r.source===source);
-        const newest=matching.length?
-          syncOwnerAuditDate(matching[matching.length-1].createdAt):null;
-        if(newest===null||nowEpoch-newest>thresholds[pipeline]*3600000)
-          stale.push(source+' '+(newest===null?'ไม่มี Sync Log ในหน้าต่างตรวจ':
-            'Log ล่าสุด '+new Date(newest).toISOString()));
-      }
+      // Schedule tracks multiple Plot files, but this alert is pipeline-level.
+      // Do not report an entire pipeline missing while an approved Plot
+      // has just produced a real log; per-Plot QA stays in SOP 13.
+      const matching=runs.filter(r=>r.pipeline===pipeline&&sources.includes(r.source));
+      const newest=matching.length?
+        syncOwnerAuditDate(matching[matching.length-1].createdAt):null;
+      if(newest===null||nowEpoch-newest>thresholds[pipeline]*3600000)
+        stale.push(pipeline+' '+(newest===null?'ไม่มี Sync Log ในหน้าต่างตรวจ':
+          'Log ล่าสุด '+new Date(newest).toISOString()));
     }
     if(!stale.length)continue;
     const result=await syncOwnerPushIncident(env,{
