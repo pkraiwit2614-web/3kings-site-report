@@ -327,7 +327,7 @@ test('real Materials GAS unchanged marker is silent (no false Pending)',async()=
 
 test('continuity watchdog warns about absent canonical Defect logs once, without pretending trigger failure',async()=>{
  const f=fixture([]);
- const enabled={...env,SYNC_OWNER_ENABLED_PIPELINES:'defects'};
+ const enabled={...env,SYNC_OWNER_MONITOR_CONFIG:JSON.stringify({version:1,enabled:true,pipelines:['defects'],activatedAt:'2026-11-03T12:00:00Z'})};
  const r=await tick(f,'2026-11-16T12:00:00Z',enabled);
  assert.equal(r.missingRunAlerts,1);
  assert.equal(f.send.length,1);
@@ -348,11 +348,11 @@ test('continuity watchdog records recovery after failure as LOG ONLY, no E2E PAS
    rows_written:0,rows_read:0,
    message:'Apps Script check completed; source unchanged, sync skipped'};
  const f=fixture([old,newer]);
- const result=await tick(f,'2026-11-16T12:00:00Z');
+ const result=await tick(f,'2026-11-16T12:00:00Z',{...env,SYNC_OWNER_MONITOR_CONFIG:JSON.stringify({version:1,enabled:true,pipelines:['schedule'],activatedAt:'2026-11-03T12:00:00Z'})});
  assert.equal(result.recoveryLogAlerts,1);
  assert.equal(f.send.length,2); // original failure + recovery-not-E2E
  assert.ok(f.send.some(x=>x.messages[0].text.includes('เว็บยังไม่ยืนยัน')));
- const again=await tick(f,'2026-11-16T13:00:00Z');
+ const again=await tick(f,'2026-11-16T13:00:00Z',{...env,SYNC_OWNER_MONITOR_CONFIG:JSON.stringify({version:1,enabled:true,pipelines:['schedule'],activatedAt:'2026-11-03T12:00:00Z'})});
  assert.equal(again.ownerAccepted,0);
  assert.equal(f.send.length,2);
 });
