@@ -323,3 +323,36 @@ test('real Materials GAS unchanged marker is silent (no false Pending)',async()=
  assert.equal(f.incidents.length,0);
  assert.equal(f.send.length,0);
 });
+
+
+test('continuity watchdog warns about absent canonical Defect logs once, without pretending trigger failure',async()=>{
+ const f=fixture([]);
+ const enabled={...env,SYNC_OWNER_MONITOR_CONFIG:JSON.stringify({version:1,enabled:true,pipelines:['defects'],activatedAt:'2026-11-03T12:00:00Z'})};
+ const r=await tick(f,'2026-11-16T12:00:00Z',enabled);
+ assert.equal(r.missingRunAlerts,1);
+ assert.equal(f.send.length,1);
+ assert.match(f.send[0].messages[0].text,/ไม่พบหลักฐานรอบ Sync ตามกำหนด/);
+ assert.match(f.send[0].messages[0].text,/ไม่ยืนยันว่า Sync ล้มเหลว/);
+ const next=await tick(f,'2026-11-16T13:00:00Z',enabled);
+ assert.equal(next.missingRunAlerts,0);
+ assert.equal(f.send.length,1);
+ assert.equal(f.deliveries.size,1);
+});
+
+test('continuity watchdog records recovery after failure as LOG ONLY, no E2E PASS',async()=>{
+ const old={...changed,id:'33333333-3333-4333-8333-333333333333',
+   status:'error',created_at:'2026-11-16T10:00:00Z',
+   message:'Apps Script sync error: transient upstream'};
+ const newer={...changed,id:'44444444-4444-4444-8444-444444444444',
+   created_at:'2026-11-16T11:00:00Z',
+   rows_written:0,rows_read:0,
+   message:'Apps Script check completed; source unchanged, sync skipped'};
+ const f=fixture([old,newer]);
+ const result=await tick(f,'2026-11-16T12:00:00Z',{...env,SYNC_OWNER_MONITOR_CONFIG:JSON.stringify({version:1,enabled:true,pipelines:['schedule'],activatedAt:'2026-11-03T12:00:00Z'})});
+ assert.equal(result.recoveryLogAlerts,1);
+ assert.equal(f.send.length,2); // original failure + recovery-not-E2E
+ assert.ok(f.send.some(x=>x.messages[0].text.includes('เว็บยังไม่ยืนยัน')));
+ const again=await tick(f,'2026-11-16T13:00:00Z',{...env,SYNC_OWNER_MONITOR_CONFIG:JSON.stringify({version:1,enabled:true,pipelines:['schedule'],activatedAt:'2026-11-03T12:00:00Z'})});
+ assert.equal(again.ownerAccepted,0);
+ assert.equal(f.send.length,2);
+});

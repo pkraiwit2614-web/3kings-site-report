@@ -902,6 +902,8 @@ export async function syncOwnerPushIncident(env,{pipeline,source,runKey,createdA
   const key=await hash('3kings|sync-owner|'+pipeline+'|'+runKey);
   if(!/^[0-9a-f]{64}$/i.test(String(key)))return {mode:'BAD_EVENT_KEY'};
   const label=status==='FAIL'?'ซิงก์ล้มเหลวจาก Log':
+    status==='MISSING_RUN'?'ไม่พบหลักฐานการรันตามรอบ':
+    status==='RECOVERY_LOG_ONLY'?'มี Sync Log สำเร็จหลัง Error แต่ยังไม่ได้พิสูจน์เว็บ':
     'ถึงรอบ Sync ถัดไปแล้ว ยังตรวจผลถึงหน้าเว็บไม่ครบ';
   const summary=('Sync '+pipeline+' '+label).slice(0,290);
   // Preserve the ability to retry a delivery when LINE quota is exhausted:
@@ -930,7 +932,10 @@ export async function syncOwnerPushIncident(env,{pipeline,source,runKey,createdA
     hotel_work_plan:'Hotel Work Plan'
   };
   const pipelineLabel = safeText(pipelineMap[pipeline] || pipeline, 50);
-  const statusLabel = status === 'FAIL' ? 'พบข้อผิดพลาดในการ Sync' : 'ยังตรวจผลหน้าเว็บไม่ครบ';
+  const statusLabel = status === 'FAIL' ? 'พบข้อผิดพลาดในการ Sync' :
+    status === 'MISSING_RUN' ? 'ไม่พบหลักฐานรอบ Sync ตามกำหนด' :
+    status === 'RECOVERY_LOG_ONLY' ? 'พบ Sync Log ใหม่หลัง Error (เว็บยังไม่ยืนยัน)' :
+    'ยังตรวจผลหน้าเว็บไม่ครบ';
   const thaiStamp = new Date(createdAt).toLocaleString('th-TH', {
     timeZone: 'Asia/Bangkok',
     day: '2-digit',
@@ -945,8 +950,14 @@ export async function syncOwnerPushIncident(env,{pipeline,source,runKey,createdA
     ? 'ปัญหา: ' + safeText(missing || 'Sync Log ระบุข้อผิดพลาด', 150)
     : (missing ? 'ปัญหา: ' + safeText(missing, 150) : 'ปัญหา: ยังไม่ยืนยันข้อมูลบนเว็บหลังล็อกอิน');
 
-  const actionText = 'สิ่งที่ต้องดำเนินการต่อ: ตรวจสอบและแก้ไข Sync ของ ' + pipelineLabel +
-    ' ให้ข้อมูลตรงกับ Master และหน้าเว็บ พร้อมยืนยันผลจริงตาม SOP โดยห้ามกระทบระบบอื่น';
+  const actionText = status==='MISSING_RUN'
+    ? 'สิ่งที่ต้องดำเนินการต่อ: ตรวจ Execution และ Sync Log ของ '+pipelineLabel+
+      ' เทียบรอบจริง ข้อมูลอาจไม่เปลี่ยน จึงยังสรุปว่า Sync ล้มเหลวไม่ได้'
+    : status==='RECOVERY_LOG_ONLY'
+    ? 'สิ่งที่ต้องดำเนินการต่อ: ตรวจ Source, Database และหน้าเว็บของ '+pipelineLabel+
+      ' ก่อนยืนยันว่ากลับมาปกติ'
+    : 'สิ่งที่ต้องดำเนินการต่อ: ตรวจสอบและแก้ไข Sync ของ ' + pipelineLabel +
+      ' ให้ข้อมูลตรงกับ Master และหน้าเว็บ พร้อมยืนยันผลจริงตาม SOP โดยห้ามกระทบระบบอื่น';
 
   const lines = [
     '3 Kings | Sync Alert',
@@ -979,6 +990,99 @@ export async function syncOwnerPushIncident(env,{pipeline,source,runKey,createdA
   }catch{return {mode:'HOLD_ACK_FAILED',http};}
   return {mode:delivered?'OWNER_ACCEPTED':'OWNER_UNCERTAIN',http};
 }
+
+/** Monitoring-only evidence gap detector. Never invokes GAS or writes source data.
+ * Absence of a DB audit entry is a warning, not proof that a trigger failed.
+ * One deterministic warning per pipeline per Bangkok calendar day.
+ */
+async function syncOwnerContinuityTick(env,{enabled,runs,hash,transport,now}){
+  const stats={missingRunAlerts:0,recoveryLogAlerts:0,ownerAccepted:0,hold:0};
+  // Existing production monitor is managed by its dedicated config secret.
+  // Legacy standalone tests/callers do not opt in to continuity alerts.
+  if(!env.SYNC_OWNER_MONITOR_CONFIG)return stats;
+  const time=Object.fromEntries(new Intl.DateTimeFormat('en-US',{
+    timeZone:'Asia/Bangkok',weekday:'short',year:'numeric',month:'2-digit',
+    day:'2-digit',hour:'2-digit',hourCycle:'h23'
+  }).formatToParts(now).map(p=>[p.type,p.value]));
+  const hour=Number(time.hour);
+  if(time.weekday==='Sun'||hour<10||hour>21)return stats;
+  const dateKey=time.year+time.month+time.day;
+  const thresholds={defects:3,materials:5,schedule:3,photos:7,
+    daily_site_report:10,work_order:5};
+  const nowEpoch=now.getTime();
+  for(const pipeline of Object.keys(thresholds)){
+    if(!enabled.has(pipeline))continue;
+    let sources=pipeline==='work_order'?['defect_work_order_snapshot']:
+      pipeline==='daily_site_report'?
+        (env.SYNC_OWNER_DAILY_SOURCE_ID?[env.SYNC_OWNER_DAILY_SOURCE_ID]:[]):
+        (SYNC_OWNER_CANONICAL_SOURCES[pipeline]||[]);
+    if(!sources.length){stats.hold++;continue;}
+    let stale=[];
+    if(pipeline==='work_order'){
+      // A snapshot import timestamp is ONLY a freshness signal.
+      // It is NOT a unique Apps Script execution ID or Web parity proof.
+      let last=null;
+      try{
+        const url=env.SUPABASE_URL.replace(/\/$/,'')+
+          '/rest/v1/defect_work_order_snapshot?select=imported_at&order=imported_at.desc&limit=1';
+        const response=await transport(url,{method:'GET',headers:supabaseHeaders(env),
+          signal:AbortSignal.timeout(10000)});
+        if(!response.ok){stats.hold++;continue;}
+        const rows=await response.json();
+        if(!Array.isArray(rows)){stats.hold++;continue;}
+        last=rows.length?syncOwnerAuditDate(rows[0].imported_at):null;
+      }catch{stats.hold++;continue;}
+      if(last===null||nowEpoch-last>thresholds[pipeline]*3600000)
+        stale.push('Work Order snapshot '+(last===null?'ไม่มีเวลา Import':
+          'Import ล่าสุด '+new Date(last).toISOString()));
+    }else{
+      // Schedule tracks multiple Plot files, but this alert is pipeline-level.
+      // Do not report an entire pipeline missing while an approved Plot
+      // has just produced a real log; per-Plot QA stays in SOP 13.
+      const matching=runs.filter(r=>r.pipeline===pipeline&&sources.includes(r.source));
+      const newest=matching.length?
+        syncOwnerAuditDate(matching[matching.length-1].createdAt):null;
+      if(newest===null||nowEpoch-newest>thresholds[pipeline]*3600000)
+        stale.push(pipeline+' '+(newest===null?'ไม่มี Sync Log ในหน้าต่างตรวจ':
+          'Log ล่าสุด '+new Date(newest).toISOString()));
+    }
+    if(!stale.length)continue;
+    const result=await syncOwnerPushIncident(env,{
+      pipeline,source:'Sync Evidence',
+      runKey:'missing-run:'+dateKey+':'+pipeline,
+      createdAt:now.toISOString(),status:'MISSING_RUN',now,
+      missing:'ยังไม่พบหลักฐานรอบล่าสุด: '+stale.slice(0,3).join('; ')+
+        (stale.length>3?'; และอีก '+(stale.length-3)+' แหล่ง':'')+
+        ' (ไม่ยืนยันว่า Sync ล้มเหลว)'
+    },hash,transport);
+    if(result.mode==='OWNER_ACCEPTED'){
+      stats.missingRunAlerts++;stats.ownerAccepted++;
+    }else if(result.mode!=='DEDUP_OR_IN_FLIGHT')stats.hold++;
+  }
+  // Send one guarded "log resumed" notification per failure-to-success
+  // transition. This is NOT an end-to-end recovery certificate.
+  const previous=new Map();
+  for(const run of runs){
+    if(!enabled.has(run.pipeline)||!run.source)continue;
+    const key=run.pipeline+'|'+run.source;
+    const earlier=previous.get(key);
+    previous.set(key,run);
+    if(run.status!=='success'||!earlier||
+       !['error','failed','failure'].includes(earlier.status))continue;
+    const result=await syncOwnerPushIncident(env,{
+      pipeline:run.pipeline,source:run.source,
+      runKey:'recovery-log:'+run.runKey,createdAt:run.createdAt,
+      status:'RECOVERY_LOG_ONLY',now,
+      missing:'รอบก่อนหน้า '+earlier.runKey+' เป็น '+earlier.status+
+        '; รอบใหม่ '+run.runKey+' สำเร็จใน Log แต่ยังไม่ได้อ่านกลับเว็บ'
+    },hash,transport);
+    if(result.mode==='OWNER_ACCEPTED'){
+      stats.recoveryLogAlerts++;stats.ownerAccepted++;
+    }else if(result.mode!=='DEDUP_OR_IN_FLIGHT')stats.hold++;
+  }
+  return stats;
+}
+
 async function syncOwnerRealScheduledTick(env,{enabled,activatedAt,hash,transport,now}){
   const evidence=await syncOwnerReadEvidence(env,enabled,activatedAt,now,transport);
   if(evidence.status!=='READ_COMPLETE')
@@ -1086,6 +1190,13 @@ async function syncOwnerRealScheduledTick(env,{enabled,activatedAt,hash,transpor
         alert_status:'pending',schedule_verified:false});
     }catch{stats.hold++;}
   }
+  const continuity=await syncOwnerContinuityTick(env,{
+    enabled,runs:evidence.runs,hash,transport,now
+  });
+  stats.ownerAccepted+=continuity.ownerAccepted;
+  stats.hold+=continuity.hold;
+  stats.missingRunAlerts=continuity.missingRunAlerts;
+  stats.recoveryLogAlerts=continuity.recoveryLogAlerts;
   return {mode:stats.hold||stats.unsupported.length?'SYNC_MONITOR_PARTIAL':
     'SYNC_MONITOR_OBSERVED',delivered:stats.ownerAccepted>0,...stats};
 }
@@ -1190,6 +1301,10 @@ export async function syncOwnerMonitorTick(env,{hash,transport=fetch,now=new Dat
   const allowedPipelines=new Set(
     (env.SYNC_OWNER_ENABLED_PIPELINES||'').split(',').map(s=>s.trim().toLowerCase()).filter(Boolean)
   );
+  // Work Order is an active Defect companion. Monitor its snapshot freshness
+  // without modifying its importer or pretending snapshots prove GAS execution.
+  if(env.SYNC_OWNER_MONITOR_CONFIG&&allowedPipelines.has('defects'))
+    allowedPipelines.add('work_order');
   if(forcePipeline && !allowedPipelines.has(String(forcePipeline).toLowerCase()))
     return {...base,mode:'PIPELINE_NOT_ENABLED'};
   if(allowedPipelines.size===0)return {...base,mode:'NO_PIPELINES_ENABLED'};
