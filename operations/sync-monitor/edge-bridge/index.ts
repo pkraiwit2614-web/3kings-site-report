@@ -29,7 +29,9 @@ const columns: Record<string,string> = {
   express_register_runs: "id,created_at,completed_at,state,source_fingerprint,document_count",
   condo_room_status: "room_no", materials: "id",
   schedule_tasks: "id", drive_photo_index: "id",
-  daily_reports: "id", express_register_rows: "batch_id"
+  daily_reports: "id", express_register_rows: "batch_id",
+  // Owner Monitoring may inspect only the latest Work Order import timestamp.
+  defect_work_order_snapshot: "imported_at"
 };
 const rpcKeys: Record<string,string[]> = {
   line_sync_owner_get_pending: ["p_pipeline"],
@@ -85,6 +87,9 @@ function allowedRead(path:string):boolean{
     (columns[table]==="id"?1:table==="drive_sync_runs"?200:100))return false;
   const audit=["drive_sync_runs","daily_site_report_sync_audit","express_register_runs"]
     .includes(table);
+  if(table==="defect_work_order_snapshot")
+    return limit===1&&params.get("order")==="imported_at.desc"&&
+      params.get("created_at")===null;
   if(!audit)return params.get("order")===null&&params.get("created_at")===null;
   if(params.get("order")!=="created_at.desc")return false;
   const d=params.get("created_at")||"";
@@ -100,7 +105,8 @@ function allowedRpc(name:string,args:unknown):boolean{
   if(keys.some(k=>!names.includes(k))||keys.length!==names.length)return false;
   const v=args as Record<string,unknown>;
   if("p_pipeline" in v && v.p_pipeline!==null &&
-     !allowed.has(String(v.p_pipeline)))return false;
+     !allowed.has(String(v.p_pipeline))&&
+     !(name==="line_sync_owner_claim"&&v.p_pipeline==="work_order"))return false;
   if("p_summary" in v && String(v.p_summary||"").length>600)return false;
   if("p_missing_evidence" in v &&
      String(v.p_missing_evidence||"").length>1000)return false;
