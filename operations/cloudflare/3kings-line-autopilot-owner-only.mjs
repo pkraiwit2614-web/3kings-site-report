@@ -1020,7 +1020,7 @@ async function syncOwnerContinuityTick(env,{enabled,runs,hash,transport,now}){
       // It is NOT a unique Apps Script execution ID or Web parity proof.
       let last=null;
       try{
-        const url=env.SUPABASE_URL.replace(/\\/$/,'')+
+        const url=env.SUPABASE_URL.replace(/\/$/,'')+
           '/rest/v1/defect_work_order_snapshot?select=imported_at&order=imported_at.desc&limit=1';
         const response=await transport(url,{method:'GET',headers:supabaseHeaders(env),
           signal:AbortSignal.timeout(10000)});
