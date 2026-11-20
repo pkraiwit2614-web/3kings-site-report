@@ -177,10 +177,13 @@ function setupStandardMocks(overrides = {}) {
     ['23/10/2026 08:50:00', '23/10/2026', 'Above Villa', 'Plot 8', 'ทีมโทน', '6', '0', '6', 'Work Tone 2 (0 sup)']
   ];
 
+  global.MimeType = { GOOGLE_SHEETS: 'application/vnd.google-apps.spreadsheet' };
+
   global.SpreadsheetApp = {
     openById: (id) => ({
       getSheetByName: (name) => {
         if (overrides.missingTab && name === overrides.missingTab) return null;
+        if (name && name.endsWith('_Store')) return null;
         if (name === GATEWAY_CFG.FORM_TAB_NAME) {
           if (overrides.formEmpty) {
             return { getLastRow: () => 0 };
@@ -282,6 +285,7 @@ function setupStandardMocks(overrides = {}) {
         return makeIterator([{
           getId: () => 'found_file_id',
           getName: () => name,
+          getMimeType: () => 'application/vnd.google-apps.spreadsheet',
           getBlob: () => ({
             getBytes: () => (name.includes('.pdf') ? validPdfBytes : validPngBytes)
           })

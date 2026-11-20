@@ -73,6 +73,11 @@ const GATEWAY_CFG = Object.freeze({
  * Never accepts authentication tokens in URL parameters to prevent log / referrer leakage.
  */
 function doGet(e) {
+  if (e && e.parameter && e.parameter.module === 'defect_writer') {
+    if (typeof defectWriterCoordinationDoGet_ === 'function') {
+      return defectWriterCoordinationDoGet_(e);
+    }
+  }
   return ContentService.createTextOutput(JSON.stringify({
     service: '3kings_daily_line_gateway_executor',
     status: 'ACTIVE',
@@ -95,6 +100,12 @@ function doPost(e) {
       payload = JSON.parse(e.postData.contents);
     } catch (parseErr) {
       return jsonResponse_({ error: 'INVALID_JSON', message: 'Body must be valid JSON' }, 400);
+    }
+
+    if (payload && (payload.module === 'defect_writer' || payload.module === 'global_writer')) {
+      if (typeof defectWriterCoordinationDoPost_ === 'function') {
+        return defectWriterCoordinationDoPost_(payload);
+      }
     }
 
     // 1. Authentication Check (Server-side constant time)
@@ -264,7 +275,7 @@ function dailyLineGatewayScheduled0730(now) {
     const result = runGatewayFlow_('stage_and_finalize', false, reportDate);
     console.log('dailyLineGatewayScheduled0730 completed: ' + JSON.stringify(result));
 
-    if (result && (result.status === 'PENDING_SOURCE_FILES' || result.status === 'HOLD_QA_EVIDENCE_INCOMPLETE')) {
+    if (result && (result.status === 'PENDING_SOURCE_FILES' || result.status === 'HOLD_PNG_TOO_LARGE' || result.status === 'HOLD_QA_EVIDENCE_INCOMPLETE')) {
       // Schedule pre-LINE catch-up trigger in 10 minutes (target 07:40, strictly before 07:45 LINE window)
       scheduleCatchUpTriggerIfNeeded_(10);
     } else if (result && (result.status === 'SUCCESS' || result.status === 'ALREADY_READY')) {
@@ -310,7 +321,7 @@ function dailyLineGatewayCatchUp(now) {
     if (result && (result.status === 'SUCCESS' || result.status === 'ALREADY_READY')) {
       console.log('dailyLineGatewayCatchUp succeeded: ' + result.status);
       cleanUpCatchUpTriggers_();
-    } else if (result && (result.status === 'PENDING_SOURCE_FILES' || result.status === 'HOLD_QA_EVIDENCE_INCOMPLETE')) {
+    } else if (result && (result.status === 'PENDING_SOURCE_FILES' || result.status === 'HOLD_PNG_TOO_LARGE' || result.status === 'HOLD_QA_EVIDENCE_INCOMPLETE')) {
       if (bkkHour === 7 && bkkMinute <= 35) {
         scheduleCatchUpTriggerIfNeeded_(10); // Target 07:40
       } else if (bkkHour === 7 && bkkMinute > 35) {
@@ -391,52 +402,6 @@ function findFileInFolder_(folderId, fileName) {
 }
 
 /**
- * Resolves the Monthly Master Spreadsheet ID for a given year and month.
- * Hierarchy:
- * 1. ScriptProperties 'MASTER_SPREADSHEET_ID_' + yyyy + '_' + mm
- * 2. Dynamic search in DAILY_REPORT_FOLDER_ID (1pLZ33h2J2CHZEOLV5KJLddP1pE7CynFW) for "Daily Report - <Mon> <YY>"
- * 3. Fallback to GATEWAY_CFG.MASTER_SPREADSHEET_ID
- */
-function resolveMasterSpreadsheet_(dailyReportRootId, yyyy, mm) {
-  const monthAbbrs = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const mIdx = parseInt(mm, 10) - 1;
-  const monthAbbr = (mIdx >= 0 && mIdx < 12) ? monthAbbrs[mIdx] : null;
-  const yy = String(yyyy).slice(-2);
-
-  // 1. ScriptProperties override
-  try {
-    const props = PropertiesService.getScriptProperties();
-    if (props) {
-      const propKey = 'MASTER_SPREADSHEET_ID_' + yyyy + '_' + mm;
-      const propVal = props.getProperty(propKey);
-      if (propVal) return propVal;
-    }
-  } catch (propErr) {
-    // Ignore and proceed to Drive lookup
-  }
-
-  // 2. Drive lookup in 0-Daily Report root
-  if (dailyReportRootId && monthAbbr) {
-    try {
-      const rootFolder = DriveApp.getFolderById(dailyReportRootId);
-      if (rootFolder) {
-        const expectedName = 'Daily Report - ' + monthAbbr + ' ' + yy;
-        const files = rootFolder.getFilesByName(expectedName);
-        if (files && files.hasNext()) {
-          const f = files.next();
-          return f.getId();
-        }
-      }
-    } catch (e) {
-      console.warn('resolveMasterSpreadsheet_ lookup warning: ' + (e.message || e));
-    }
-  }
-
-  // 3. Fallback to GATEWAY_CFG.MASTER_SPREADSHEET_ID
-  return GATEWAY_CFG.MASTER_SPREADSHEET_ID;
-}
-
-/**
  * Resolves the verified date subfolder (e.g. "24102026", "26102026") inside
  * 3Kings Construction/0-Daily Report/<Month YYYY>/DDMMYYYY/.
  * Strict parent chain check: dateFolder must reside directly inside the verified Month folder
@@ -493,8 +458,8 @@ function installDailyLineGatewayTrigger() {
   }
   ScriptApp.newTrigger(name)
     .timeBased()
-    .atHour(7)
-    .nearMinute(30)
+    .atHour(6)
+    .nearMinute(45)
     .everyDays(1)
     .inTimezone('Asia/Bangkok')
     .create();
@@ -560,13 +525,13 @@ function verifyPdfProperties_(bytes) {
 }
 
 /**
- * Determines whether a Form response row belongs to the main 4-site Daily Report.
- * Excludes auxiliary projects (e.g. สบายดีวิลเลจ2) that have dedicated project tabs.
+ * Determines whether a project scope belongs to the main 4-site Daily Report.
+ * Excludes auxiliary projects (e.g. สบายดีวิลเลจ2, บ้านคุณอ๊อฟ 116/163) that have dedicated project tabs.
  */
 function isMain4SiteProject_(projectName) {
   if (!projectName) return true;
-  const p = String(projectName).trim().toLowerCase();
-  if (p.includes('สบายดี') || p.includes('sabaidee')) {
+  const p = String(projectName).trim().toLowerCase().replace(/\s+/g, '');
+  if (p.includes('สบายดีวิลเลจ') || p.includes('sabaidee') || ((p.includes('บ้านคุณอ๊อฟ') || p.includes('บ้านคุณออฟ')) && p.includes('116/163'))) {
     return false;
   }
   return true;
@@ -575,7 +540,7 @@ function isMain4SiteProject_(projectName) {
 /**
  * Verifies Form response entries reconcile with the given reportDate.
  */
-function verifyFormReconciliation_(formSpreadsheetId, formTabName, reportDate, masterData) {
+function verifyFormReconciliation_(formSpreadsheetId, formTabName, reportDate, masterData, masterSpreadsheetId) {
   try {
     const ss = SpreadsheetApp.openById(formSpreadsheetId);
     const sheet = ss.getSheetByName(formTabName);
@@ -598,7 +563,68 @@ function verifyFormReconciliation_(formSpreadsheetId, formTabName, reportDate, m
     // 0: Timestamp, 1: วันที่รายงาน, 2: โครงการ, 3: พื้นที่, 4: ทีม/ผู้รับผิดชอบ, 5: ชาย, 6: หญิง, 7: รวม, 8: รายละเอียด
     const rows = sheet.getRange(startRow, 1, numRows, 9).getDisplayValues();
 
+    // The 4-site Owner LINE report and independently published extra reports
+    // use the same Form. Reconcile ONLY rows belonging to the main report.
+    // An unknown or ambiguous row remains in scope and therefore fails QA,
+    // never silently disappearing from the main source reconciliation.
+    const normalized_ = v => String(v || '').trim().toLowerCase().replace(/\s+/g, '');
+    const isTargetDate_ = row => {
+      const value = (row[1] || '').trim();
+      return value === targetDateSlash || value === targetDateShortSlash || value === reportDate;
+    };
+    const isSabaideeExtra_ = row => !isMain4SiteProject_((row[2] || '') + ' ' + (row[3] || ''));
+    const storeExcludedIndices = new Set();
+    if (masterSpreadsheetId) {
+      // A _Store tab is evidence of an independent deliverable, not another
+      // Hennessy/Owner LINE site. Match its team + actual worker count exactly;
+      // fail closed if more than one Form row could be the Store crew.
+      try {
+        const masterBook = SpreadsheetApp.openById(masterSpreadsheetId);
+        const baseTab = dd + mm + yyyy.slice(2);
+        const storeTab = masterBook.getSheetByName(baseTab + '_Store');
+        if (storeTab) {
+          const storeRows = storeTab.getRange(10, 2, Math.max(1, storeTab.getLastRow() - 9), 3)
+            .getDisplayValues()
+            .filter(r => normalized_(r[0]) && Number(r[1]) > 0);
+          const storeWorkers = Number(storeTab.getRange('A6').getValue());
+          const storeSupervisors = Number(storeTab.getRange('C6').getValue());
+          const storeTeams = Number(storeTab.getRange('G6').getValue());
+          const rosterWorkers = storeRows.reduce((n,r) => n + Number(r[1]), 0);
+          const rosterSupervisors = storeRows.reduce((n,r) => n + Number(r[2] || 0), 0);
+          if (storeRows.length !== storeTeams || rosterWorkers !== storeWorkers ||
+              rosterSupervisors !== storeSupervisors) {
+            return { verified:false, reason:'STORE_MASTER_ROSTER_MISMATCH', reportDate };
+          }
+          for (const store of storeRows) {
+            const candidates = [];
+            for (let i = 0; i < rows.length; i++) {
+              const row = rows[i];
+              if (!isTargetDate_(row) || isSabaideeExtra_(row) || storeExcludedIndices.has(i)) continue;
+              const men = parseInt(row[5] || '0',10) || 0;
+              const women = parseInt(row[6] || '0',10) || 0;
+              const workers = parseInt(row[7] || '0',10) || (men + women);
+              const team = String(row[4] || '');
+              const supervisor = (team.includes('โทน') || team.includes('พี่ภาร')) ? 0 : 1;
+              if (normalized_(team) === normalized_(store[0]) &&
+                  workers === Number(store[1]) && supervisor === Number(store[2] || 0)) {
+                candidates.push(i);
+              }
+            }
+            if (candidates.length !== 1) {
+              return { verified:false, reason:'STORE_FORM_SCOPE_AMBIGUOUS: ' +
+                normalized_(store[0]) + ', matches=' + candidates.length, reportDate };
+            }
+            storeExcludedIndices.add(candidates[0]);
+          }
+        }
+      } catch (storeErr) {
+        return { verified:false, reason:'STORE_SCOPE_READ_ERROR: ' +
+          String(storeErr.message || storeErr), reportDate };
+      }
+    }
+
     let matchingRows = 0;
+    let separatedExtraRows = 0;
     const onTimeRows = [];
     const retroactiveRows = [];
 
@@ -611,10 +637,9 @@ function verifyFormReconciliation_(formSpreadsheetId, formTabName, reportDate, m
       const row = rows[i];
       const ts = (row[0] || '').trim();
       const dateVal = (row[1] || '').trim();
-      const projectName = (row[2] || '').trim();
       if (dateVal === targetDateSlash || dateVal === targetDateShortSlash || dateVal === reportDate) {
-        if (!isMain4SiteProject_(projectName)) {
-          // Auxiliary project (e.g. สบายดีวิลเลจ2) has its own dedicated tab; exclude from main 4-site reconciliation
+        if (isSabaideeExtra_(row) || storeExcludedIndices.has(i)) {
+          separatedExtraRows++;
           continue;
         }
         matchingRows++;
@@ -774,6 +799,7 @@ function verifyFormReconciliation_(formSpreadsheetId, formTabName, reportDate, m
         entries: retroactiveRows
       },
       manualEditsPreserved: manualEditsPreserved,
+      excludedSeparateReportRows: separatedExtraRows,
       reconciliationDetails: reconciliationDetails
     };
 
@@ -811,7 +837,9 @@ function runGatewayFlow_(action, force, targetDate) {
     throw new Error('MISSING_CREDENTIAL: SUPABASE_SERVICE_ROLE_KEY not found in Script Properties');
   }
 
-  let tabName, pdfFile, pdfFileName, pdfFileId, assetsConfig, masterSpreadsheetId;
+  const parts = reportDate.split('-');
+  const yyyy = parts[0], mm = parts[1], dd = parts[2];
+  let tabName, pdfFile, pdfFileName, pdfFileId, assetsConfig;
 
   if (reportDate === GATEWAY_CFG.REPORT_DATE && !targetDate) {
     tabName = GATEWAY_CFG.MASTER_TAB_NAME;
@@ -819,13 +847,9 @@ function runGatewayFlow_(action, force, targetDate) {
     pdfFileName = GATEWAY_CFG.PDF_FILE_NAME;
     pdfFile = DriveApp.getFileById(pdfFileId);
     assetsConfig = GATEWAY_CFG.PNG_ASSETS;
-    masterSpreadsheetId = GATEWAY_CFG.MASTER_SPREADSHEET_ID;
   } else {
-    const parts = reportDate.split('-');
-    const yyyy = parts[0], mm = parts[1], dd = parts[2];
     tabName = dd + mm + yyyy.slice(2);
     pdfFileName = 'Daily_Site_Report_' + dd + '-' + mm + '-' + yyyy + '.pdf';
-    masterSpreadsheetId = resolveMasterSpreadsheet_(GATEWAY_CFG.DAILY_REPORT_FOLDER_ID, yyyy, mm);
 
     // 1. Strict Date Subfolder Resolution in 0-Daily Report
     const dateFolderName = dd + mm + yyyy;
@@ -884,7 +908,8 @@ function runGatewayFlow_(action, force, targetDate) {
   // 1. Verify Master Sheet tab headcount and formula preservation
   let masterQa;
   try {
-    masterQa = verifyMasterTab_(masterSpreadsheetId, tabName);
+    var masterId = resolveMasterSpreadsheetId_(GATEWAY_CFG.DAILY_REPORT_FOLDER_ID, yyyy, mm);
+    masterQa = verifyMasterTab_(masterId, tabName);
   } catch (sheetErr) {
     return {
       status: 'PENDING_SOURCE_FILES',
@@ -927,7 +952,8 @@ function runGatewayFlow_(action, force, targetDate) {
     };
   }
 
-  // 3. Read and verify 4 PNG assets from Drive
+  // 3. Read, validate and safe-hold 4 PNG assets from Drive
+  const oversizedAssets = [];
   const assets = assetsConfig.map(cfg => {
     const file = DriveApp.getFileById(cfg.id);
     const blob = file.getBlob();
@@ -937,7 +963,7 @@ function runGatewayFlow_(action, force, targetDate) {
       throw new Error('ASSET_TOO_SMALL: ' + cfg.site + ' bytes=' + bytes.length);
     }
     if (bytes.length > GATEWAY_CFG.MAX_PNG_BYTES) {
-      throw new Error('ASSET_TOO_LARGE: ' + cfg.site + ' bytes=' + bytes.length + ' exceeds 1MB limit');
+      oversizedAssets.push({ site: cfg.site, bytes: bytes.length, limit: GATEWAY_CFG.MAX_PNG_BYTES });
     }
 
     const dims = getPngDimensions_(bytes);
@@ -960,6 +986,16 @@ function runGatewayFlow_(action, force, targetDate) {
       base64: Utilities.base64Encode(bytes)
     };
   });
+
+  if (oversizedAssets.length > 0) {
+    return {
+      status: 'HOLD_PNG_TOO_LARGE',
+      reportDate: reportDate,
+      reason: 'PNG_BYTES_EXCEEDS_1MB: ' + oversizedAssets.map(function(o) { return o.site + '(' + o.bytes + ' bytes > ' + o.limit + ' limit)'; }).join(', '),
+      oversized: oversizedAssets,
+      message: 'PNG assets exceed 1MB endpoint limit. Automatic HOLD engaged; optimization or re-export required before staging.'
+    };
+  }
 
   // Verify SOP documents access
   let sopIndexVerified = false;
@@ -989,7 +1025,7 @@ function runGatewayFlow_(action, force, targetDate) {
   // Verify Form responses reconciliation against verified masterQa (Defect 1)
   let formQa;
   try {
-    formQa = verifyFormReconciliation_(GATEWAY_CFG.FORM_SPREADSHEET_ID, GATEWAY_CFG.FORM_TAB_NAME, reportDate, masterQa);
+    formQa = verifyFormReconciliation_(GATEWAY_CFG.FORM_SPREADSHEET_ID, GATEWAY_CFG.FORM_TAB_NAME, reportDate, masterQa, masterId);
   } catch (e) {
     formQa = { verified: false, reason: String(e.message || e) };
   }
@@ -1195,6 +1231,40 @@ function runGatewayFlow_(action, force, targetDate) {
 /**
  * Verify Master Spreadsheet tab data and formula preservation.
  */
+function resolveMasterSpreadsheetId_(dailyReportRootId, yyyy, mm) {
+  // 1. ScriptProperties override check
+  try {
+    const props = PropertiesService.getScriptProperties();
+    if (props) {
+      const propKey = 'MASTER_SPREADSHEET_ID_' + yyyy + '_' + mm;
+      const propVal = props.getProperty(propKey);
+      if (propVal) return propVal;
+    }
+  } catch (propErr) {}
+
+  // 2. Dynamic lookup in 0-Daily Report root
+  if (dailyReportRootId) {
+    try {
+      var shortMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      var mIdx = parseInt(mm, 10) - 1;
+      var expectedName = 'Daily Report - ' + shortMonths[mIdx] + ' ' + String(yyyy).slice(-2);
+      var rootFolder = DriveApp.getFolderById(dailyReportRootId);
+      if (rootFolder) {
+        var mFiles = rootFolder.getFilesByName(expectedName);
+        while (mFiles.hasNext()) {
+          var mf = mFiles.next();
+          if (mf.getMimeType() === MimeType.GOOGLE_SHEETS) {
+            return mf.getId();
+          }
+        }
+      }
+    } catch(dynErr) {
+      console.warn('resolveMasterSpreadsheetId_ error: ' + dynErr);
+    }
+  }
+  return GATEWAY_CFG.MASTER_SPREADSHEET_ID;
+}
+
 function verifyMasterTab_(masterId, tabName) {
   const ss = SpreadsheetApp.openById(masterId);
   const sheet = ss.getSheetByName(tabName);
@@ -1333,7 +1403,8 @@ if (typeof module !== 'undefined' && module.exports) {
     dailyLineGatewayScheduled0730,
     dailyLineGatewayCatchUp,
     installDailyLineGatewayTrigger,
-    resolveMasterSpreadsheet_,
+    resolveMasterSpreadsheetId_,
+    resolveMasterSpreadsheet_: resolveMasterSpreadsheetId_,
     isMain4SiteProject_
   };
 }
