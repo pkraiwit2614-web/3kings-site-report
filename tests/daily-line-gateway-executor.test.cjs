@@ -693,12 +693,12 @@ test('14. Catch-Up Trigger: schedules pre-LINE 10-minute catch-up on PENDING_SOU
   setupStandardMocks({ missingTab: '261026' });
   mockCreatedTriggers = [];
 
-  const nowTuesday0730 = new Date('2026-10-27T00:30:00Z'); // Tuesday 07:30 Bangkok -> reportDate 2026-10-26
-  const res = dailyLineGatewayScheduled0730(nowTuesday0730);
+  const nowTuesday0650 = new Date('2026-10-26T23:50:00Z'); // Tuesday 06:50 Bangkok -> reportDate 2026-10-26
+  const res = dailyLineGatewayScheduled0730(nowTuesday0650);
   assert.equal(res.status, 'PENDING_SOURCE_FILES');
   assert.equal(mockCreatedTriggers.length, 1, 'Must schedule one catch-up trigger');
   assert.equal(mockCreatedTriggers[0].getHandlerFunction(), 'dailyLineGatewayCatchUp');
-  assert.equal(mockCreatedTriggers[0].delayMs, 10 * 60 * 1000, 'Must schedule for 10 minutes (07:40, strictly before 07:45 LINE window)');
+  assert.equal(mockCreatedTriggers[0].delayMs, 10 * 60 * 1000, 'Must schedule for 10 minutes (07:00, strictly before 07:15 LINE window)');
 });
 
 test('15. Folder Resolver & Strict Parent Chain: rejects duplicate folders and wrong parent chain', () => {
@@ -878,17 +878,31 @@ test('22. Multi-Site Form Reconciliation: ignores auxiliary project entries when
   assert.equal(recon.onTimeTotals.teams, 11);
 });
 
-test('23. Auto-Recovery Timing: Recoverable HOLD_QA_EVIDENCE_INCOMPLETE schedules 07:40 pre-LINE catch-up trigger', () => {
+test('23. Auto-Recovery Timing: Recoverable HOLD_QA_EVIDENCE_INCOMPLETE schedules pre-LINE 10m catch-up and post-schedule 07:45 catch-up', () => {
   // Master sheet tab has formula/headcount failure
   setupStandardMocks({ noFormula: true, headcountMismatch: true });
   mockCreatedTriggers = [];
 
-  const nowTuesday0730 = new Date('2026-10-27T00:30:00Z');
-  const res = dailyLineGatewayScheduled0730(nowTuesday0730);
+  const nowTuesday0650 = new Date('2026-10-26T23:50:00Z'); // Tuesday 06:50 Bangkok
+  const res = dailyLineGatewayScheduled0730(nowTuesday0650);
   assert.equal(res.status, 'HOLD_QA_EVIDENCE_INCOMPLETE');
   assert.equal(mockCreatedTriggers.length, 1, 'Must schedule one catch-up trigger');
   assert.equal(mockCreatedTriggers[0].getHandlerFunction(), 'dailyLineGatewayCatchUp');
-  assert.equal(mockCreatedTriggers[0].delayMs, 10 * 60 * 1000, 'Must schedule for 10 minutes (07:40 target)');
+  assert.equal(mockCreatedTriggers[0].delayMs, 10 * 60 * 1000, 'Must schedule for 10 minutes (07:00 target, strictly before 07:15)');
+
+  // When catch-up runs at 07:00 and still holds, schedules another 10m pre-LINE catch-up (07:10)
+  mockCreatedTriggers = [];
+  const res0700 = dailyLineGatewayCatchUp(new Date('2026-10-27T00:00:00Z')); // Tuesday 07:00 Bangkok
+  assert.equal(res0700.status, 'HOLD_QA_EVIDENCE_INCOMPLETE');
+  assert.equal(mockCreatedTriggers.length, 1);
+  assert.equal(mockCreatedTriggers[0].delayMs, 10 * 60 * 1000);
+
+  // When catch-up runs at 07:10 and still holds, targets 07:45 post-schedule recovery window (35 minutes)
+  mockCreatedTriggers = [];
+  const res0710 = dailyLineGatewayCatchUp(new Date('2026-10-27T00:10:00Z')); // Tuesday 07:10 Bangkok
+  assert.equal(res0710.status, 'HOLD_QA_EVIDENCE_INCOMPLETE');
+  assert.equal(mockCreatedTriggers.length, 1);
+  assert.equal(mockCreatedTriggers[0].delayMs, 35 * 60 * 1000, 'Must target 07:45 post-schedule recovery window');
 });
 
 test('24. Trigger Cleanup on SUCCESS: dailyLineGatewayCatchUp clears temporary triggers on successful completion', () => {

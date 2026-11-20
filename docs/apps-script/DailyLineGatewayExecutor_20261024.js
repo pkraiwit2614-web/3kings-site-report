@@ -16,7 +16,7 @@
  * - Holds execution with HOLD_QA_EVIDENCE_INCOMPLETE if any QA evidence is missing or unverified.
  * - Verifies STAGED_READBACK for all 4 assets, QA_FINALIZED from finalize, and ready=true with
  *   matching report_date, PDF SHA-256, and asset SHA-256 before returning SUCCESS.
- * - Automatic handoff & native catch-up trigger if source files are pending at 07:30.
+ * - Automatic handoff & native catch-up trigger if source files are pending at 06:45-06:55 (target 06:50-07:00 READY before 07:15 LINE window).
  * - Zero external crons, workers, or senders created.
  */
 
@@ -255,8 +255,9 @@ function inspectDailyLineGateway20261023() {
 }
 
 /**
- * Automated 07:30 Bangkok time scheduled executor.
- * Runs on native Google Apps Script Time-Driven Trigger.
+ * Automated 06:45-07:00 Bangkok time scheduled executor (retains handler name for existing trigger).
+ * Runs on native Google Apps Script Time-Driven Trigger after 06:30-06:50 Publisher window.
+ * Target completion: 06:50-07:00 (readiness buffer 07:00-07:15 before 07:15 Owner LINE cron).
  * Zero external action required, zero redundant workers/crons.
  */
 function dailyLineGatewayScheduled0730(now) {
@@ -276,7 +277,7 @@ function dailyLineGatewayScheduled0730(now) {
     console.log('dailyLineGatewayScheduled0730 completed: ' + JSON.stringify(result));
 
     if (result && (result.status === 'PENDING_SOURCE_FILES' || result.status === 'HOLD_PNG_TOO_LARGE' || result.status === 'HOLD_QA_EVIDENCE_INCOMPLETE')) {
-      // Schedule pre-LINE catch-up trigger in 10 minutes (target 07:40, strictly before 07:45 LINE window)
+      // Schedule pre-LINE catch-up trigger in 10 minutes (target 06:55-07:05, strictly before 07:15 LINE window)
       scheduleCatchUpTriggerIfNeeded_(10);
     } else if (result && (result.status === 'SUCCESS' || result.status === 'ALREADY_READY')) {
       cleanUpCatchUpTriggers_();
@@ -288,7 +289,7 @@ function dailyLineGatewayScheduled0730(now) {
 }
 
 /**
- * Catch-up handler for when source files were not yet ready at 07:30.
+ * Catch-up handler for when source files were not yet ready during the 06:45-07:00 primary window.
  * Runs on a temporary Time-Driven Trigger. Stops after 18:00 Bangkok window.
  */
 function dailyLineGatewayCatchUp(now) {
@@ -322,12 +323,14 @@ function dailyLineGatewayCatchUp(now) {
       console.log('dailyLineGatewayCatchUp succeeded: ' + result.status);
       cleanUpCatchUpTriggers_();
     } else if (result && (result.status === 'PENDING_SOURCE_FILES' || result.status === 'HOLD_PNG_TOO_LARGE' || result.status === 'HOLD_QA_EVIDENCE_INCOMPLETE')) {
-      if (bkkHour === 7 && bkkMinute <= 35) {
-        scheduleCatchUpTriggerIfNeeded_(10); // Target 07:40
-      } else if (bkkHour === 7 && bkkMinute > 35) {
-        // Target 08:15 post-schedule recovery window
-        const delayTo0815 = Math.max(10, (8 * 60 + 15) - (bkkHour * 60 + bkkMinute));
-        scheduleCatchUpTriggerIfNeeded_(delayTo0815);
+      const bkkTotalMins = bkkHour * 60 + bkkMinute;
+      if (bkkTotalMins <= 7 * 60 + 5) {
+        // Before 07:05 -> schedule 10-minute pre-LINE catch-up (strictly before 07:15 Owner LINE window)
+        scheduleCatchUpTriggerIfNeeded_(10);
+      } else if (bkkTotalMins <= 7 * 60 + 35) {
+        // Between 07:06 and 07:35 -> target 07:45 post-schedule recovery window
+        const delayTo0745 = Math.max(10, (7 * 60 + 45) - bkkTotalMins);
+        scheduleCatchUpTriggerIfNeeded_(delayTo0745);
       } else if (bkkHour < 12) {
         scheduleCatchUpTriggerIfNeeded_(30);
       } else if (bkkHour < 18) {
@@ -447,7 +450,7 @@ function resolveDateFolder_(dailyReportRootId, dateFolderName, yyyy, mm) {
 }
 
 /**
- * Trigger installer for daily 07:30 Asia/Bangkok execution.
+ * Trigger installer for daily 06:45-07:00 Asia/Bangkok execution (READY before 07:15 LINE window).
  */
 function installDailyLineGatewayTrigger() {
   const name = 'dailyLineGatewayScheduled0730';
@@ -463,7 +466,7 @@ function installDailyLineGatewayTrigger() {
     .everyDays(1)
     .inTimezone('Asia/Bangkok')
     .create();
-  return { status: 'INSTALLED', handler: name, targetTime: '07:30 Asia/Bangkok' };
+  return { status: 'INSTALLED', handler: name, targetTime: '06:45-07:00 Asia/Bangkok (READY before 07:15)' };
 }
 
 /**

@@ -160,17 +160,17 @@ test('LINE webhook HMAC rejects invalid or tampered input; valid signed empty ev
 });
 
 
-test('LINE AutoPilot triggers at exactly 07:45 Bangkok and blocks sends before 07:45', async() => {
-  const at0745 = fixture();
-  // 00:45 UTC is 07:45 Asia/Bangkok
-  const res0745 = await run(at0745, new Date('2026-10-21T00:45:00Z'));
-  assert.equal(res0745.mode, 'OWNER_BUNDLE_ACCEPTED');
-  assert.equal(at0745.calls.filter(x => x.url.includes('/message/push')).length, 1);
-  assert.equal(at0745.ack[0].p_status, 'delivered');
+test('LINE AutoPilot triggers at exactly 07:15 Bangkok (15 0 * * 1-6 UTC) and blocks sends before 07:15', async() => {
+  const at0715 = fixture();
+  // 00:15 UTC is 07:15 Asia/Bangkok
+  const res0715 = await run(at0715, new Date('2026-10-21T00:15:00Z'));
+  assert.equal(res0715.mode, 'OWNER_BUNDLE_ACCEPTED');
+  assert.equal(at0715.calls.filter(x => x.url.includes('/message/push')).length, 1);
+  assert.equal(at0715.ack[0].p_status, 'delivered');
 
-  const before0745 = fixture();
-  // 00:44 UTC is 07:44 Asia/Bangkok -> must be blocked
-  const resBefore = await run(before0745, new Date('2026-10-21T00:44:00Z'));
+  const before0715 = fixture();
+  // 00:14 UTC is 07:14 Asia/Bangkok -> must be blocked
+  const resBefore = await run(before0715, new Date('2026-10-21T00:14:00Z'));
   assert.equal(resBefore.mode, 'OWNER_OFF');
-  assert.equal(before0745.calls.length, 0);
+  assert.equal(before0715.calls.length, 0);
 });
